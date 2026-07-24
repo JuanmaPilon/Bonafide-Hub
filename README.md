@@ -57,3 +57,8 @@ Variables minimas para registrar comandos de prueba:
 - DISCORD_BOT_TOKEN
 - DISCORD_APPLICATION_ID
 - DISCORD_GUILD_ID
+
+Configuracion de canal de logs de miembros:
+
+- Usa el comando `/setlogchannel` dentro del servidor para elegir el canal.
+- Requiere permiso `Manage Server`.
