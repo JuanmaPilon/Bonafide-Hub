@@ -12,7 +12,7 @@ La idea del repositorio es crecer como un monorepo pequeno desde el principio, p
 ```text
 apps/
   api/          Backend/API futura
-  discord-bot/  Bot de Discord
+  discord-bot/  Bot de Discord (base TypeScript inicial)
   web/          Frontend / Guild Hub
 
 packages/
@@ -33,3 +33,19 @@ La siguiente capa natural seria definir:
 ## Estado
 
 Repositorio en fase de arranque.
+
+## Arranque rapido del bot
+
+1. Ir a la carpeta del bot.
+2. Instalar dependencias.
+3. Crear archivo .env desde .env.example.
+4. Ejecutar en modo desarrollo.
+
+Comandos:
+
+```bash
+cd apps/discord-bot
+npm install
+copy .env.example .env
+npm run dev
+```
