@@ -28,6 +28,12 @@ export const commandDefinitions = [
         .setRequired(true)
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
     ),
+  new SlashCommandBuilder()
+    .setName("getlogchannel")
+    .setDescription("Muestra el canal de logs configurado"),
+  new SlashCommandBuilder()
+    .setName("testmemberlog")
+    .setDescription("Envia un mensaje de prueba al canal de logs"),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {
@@ -45,6 +51,8 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/ping",
         "/help",
         "/setlogchannel",
+        "/getlogchannel",
+        "/testmemberlog",
       ].join("\n"),
     );
   },

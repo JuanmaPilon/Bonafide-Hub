@@ -23,25 +23,42 @@ async function sendMemberLog(
 
   const guildConfig = await getGuildConfig(guildId);
   const configuredChannelId = guildConfig.memberLogChannelId;
-  const targetChannelId = configuredChannelId ?? fallbackChannelId;
+  const candidateChannelIds = [configuredChannelId, fallbackChannelId].filter(
+    (channelId): channelId is string => Boolean(channelId),
+  );
 
-  if (!targetChannelId) {
+  if (candidateChannelIds.length === 0) {
     console.log(`[discord-bot] ${message}`);
     return;
   }
 
-  const channel = await guild.channels.fetch(targetChannelId).catch(() => null);
-  if (!channel || !channel.isTextBased()) {
-    console.warn(
-      "[discord-bot] Member log channel is not available or not text-based",
-    );
-    console.log(`[discord-bot] ${message}`);
-    return;
+  for (const channelId of candidateChannelIds) {
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) {
+      continue;
+    }
+
+    const sent = await channel
+      .send(message)
+      .then(() => true)
+      .catch((error: unknown) => {
+        console.error("[discord-bot] Failed to send member log message", {
+          guildId,
+          channelId,
+          error,
+        });
+        return false;
+      });
+
+    if (sent) {
+      return;
+    }
   }
 
-  await channel.send(message).catch((error: unknown) => {
-    console.error("[discord-bot] Failed to send member log message", error);
-  });
+  console.warn(
+    "[discord-bot] No available channel to send member log. Falling back to console.",
+  );
+  console.log(`[discord-bot] ${message}`);
 }
 
 client.once(Events.ClientReady, (readyClient) => {
@@ -72,7 +89,49 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const channel = interaction.options.getChannel("canal", true);
     await setGuildMemberLogChannelId(interaction.guildId, channel.id);
-    await interaction.reply(`Canal de logs configurado en <#${channel.id}>.`);
+    await interaction.reply(
+      `Canal de logs configurado en <#${channel.id}>. Puedes probar con /testmemberlog.`,
+    );
+    return;
+  }
+
+  if (interaction.commandName === "getlogchannel") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const guildConfig = await getGuildConfig(interaction.guildId);
+    const configuredChannelId = guildConfig.memberLogChannelId;
+    if (!configuredChannelId) {
+      await interaction.reply(
+        "No hay canal de logs configurado. Usa /setlogchannel.",
+      );
+      return;
+    }
+
+    await interaction.reply(`Canal de logs actual: <#${configuredChannelId}>.`);
+    return;
+  }
+
+  if (interaction.commandName === "testmemberlog") {
+    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await sendMemberLog(
+      interaction.guildId,
+      interaction.guild.systemChannelId,
+      `Prueba de log ejecutada por <@${interaction.user.id}>.`,
+    );
+    await interaction.reply("Mensaje de prueba enviado al canal de logs.");
     return;
   }
 
