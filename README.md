@@ -38,8 +38,9 @@ Repositorio en fase de arranque.
 
 1. Ir a la carpeta del bot.
 2. Instalar dependencias.
-3. Crear archivo .env desde .env.example.
-4. Ejecutar en modo desarrollo.
+3. Crear archivo .env desde .env.example y completar valores.
+4. Registrar comandos slash en el servidor de pruebas.
+5. Ejecutar en modo desarrollo.
 
 Comandos:
 
@@ -47,5 +48,12 @@ Comandos:
 cd apps/discord-bot
 npm install
 copy .env.example .env
+npm run register
 npm run dev
 ```
+
+Variables minimas para registrar comandos de prueba:
+
+- DISCORD_BOT_TOKEN
+- DISCORD_APPLICATION_ID
+- DISCORD_GUILD_ID

@@ -4,7 +4,15 @@ import { z } from "zod";
 loadEnv();
 
 const envSchema = z.object({
-  DISCORD_BOT_TOKEN: z.string().min(1, "DISCORD_BOT_TOKEN is required")
+  DISCORD_BOT_TOKEN: z.string().min(1, "DISCORD_BOT_TOKEN is required"),
+  DISCORD_APPLICATION_ID: z
+    .string()
+    .regex(/^\d+$/, "DISCORD_APPLICATION_ID must be numeric")
+    .optional(),
+  DISCORD_GUILD_ID: z
+    .string()
+    .regex(/^\d+$/, "DISCORD_GUILD_ID must be numeric")
+    .optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
