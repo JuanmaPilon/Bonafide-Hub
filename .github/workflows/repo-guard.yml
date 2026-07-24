@@ -22,8 +22,12 @@ jobs:
 
       - name: Block committed .env files
         run: |
-          if git ls-files | grep -E "(^|/)\.env($|\.)"; then
-            echo "Tracked .env files are not allowed"
+          tracked_env_files=$(git ls-files | grep -E "(^|/)\.env($|\.)" || true)
+          disallowed_env_files=$(printf "%s\n" "$tracked_env_files" | grep -Ev "(^|/)\.env\.example$" || true)
+
+          if [ -n "$disallowed_env_files" ]; then
+            echo "Tracked .env files are not allowed (except .env.example)"
+            echo "$disallowed_env_files"
             exit 1
           fi
 
