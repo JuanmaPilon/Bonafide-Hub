@@ -34,6 +34,25 @@ export const commandDefinitions = [
   new SlashCommandBuilder()
     .setName("testmemberlog")
     .setDescription("Envia un mensaje de prueba al canal de logs"),
+  new SlashCommandBuilder()
+    .setName("publicarcomunicado")
+    .setDescription("Publica un comunicado desde docs/comunicados")
+    .addStringOption((option) =>
+      option
+        .setName("archivo")
+        .setDescription(
+          "Ruta relativa dentro de docs/comunicados (ej: reclutamiento/raid-off.md)",
+        )
+        .setRequired(true)
+        .setAutocomplete(true),
+    )
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal de destino (opcional, por defecto canal actual)")
+        .setRequired(false)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+    ),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {
@@ -53,6 +72,7 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/setlogchannel",
         "/getlogchannel",
         "/testmemberlog",
+        "/publicarcomunicado",
       ].join("\n"),
     );
   },

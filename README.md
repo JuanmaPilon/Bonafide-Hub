@@ -62,3 +62,9 @@ Configuracion de canal de logs de miembros:
 
 - Usa el comando `/setlogchannel` dentro del servidor para elegir el canal.
 - Requiere permiso `Manage Server`.
+
+Comunicados desde documentacion:
+
+- Guarda archivos en `apps/discord-bot/docs/comunicados`.
+- Publica con `/publicarcomunicado`.
+- Ejemplo de ruta: `reclutamiento/raid-off.md`.
