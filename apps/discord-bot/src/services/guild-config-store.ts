@@ -2,7 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 type GuildConfig = {
+  dynamicVoiceCreateChannelId?: string;
   memberLogChannelId?: string;
+  temporaryVoiceChannelIds?: string[];
 };
 
 type GuildConfigStore = Record<string, GuildConfig>;
@@ -48,4 +50,84 @@ export async function setGuildMemberLogChannelId(
   };
 
   await writeStore(store);
+}
+
+export async function setGuildDynamicVoiceCreateChannelId(
+  guildId: string,
+  channelId: string,
+): Promise<void> {
+  const store = await readStore();
+
+  store[guildId] = {
+    ...store[guildId],
+    dynamicVoiceCreateChannelId: channelId,
+  };
+
+  await writeStore(store);
+}
+
+export async function clearGuildDynamicVoiceCreateChannelId(
+  guildId: string,
+): Promise<void> {
+  const store = await readStore();
+  const current = store[guildId];
+
+  if (!current) {
+    return;
+  }
+
+  const { dynamicVoiceCreateChannelId: _ignored, ...restConfig } = current;
+  store[guildId] = restConfig;
+  await writeStore(store);
+}
+
+export async function addTemporaryVoiceChannelId(
+  guildId: string,
+  channelId: string,
+): Promise<void> {
+  const store = await readStore();
+  const current = store[guildId] ?? {};
+  const existingIds = current.temporaryVoiceChannelIds ?? [];
+
+  if (existingIds.includes(channelId)) {
+    return;
+  }
+
+  store[guildId] = {
+    ...current,
+    temporaryVoiceChannelIds: [...existingIds, channelId],
+  };
+
+  await writeStore(store);
+}
+
+export async function removeTemporaryVoiceChannelId(
+  guildId: string,
+  channelId: string,
+): Promise<void> {
+  const store = await readStore();
+  const current = store[guildId];
+
+  if (!current?.temporaryVoiceChannelIds?.length) {
+    return;
+  }
+
+  const updatedIds = current.temporaryVoiceChannelIds.filter(
+    (id) => id !== channelId,
+  );
+
+  store[guildId] = {
+    ...current,
+    temporaryVoiceChannelIds: updatedIds,
+  };
+
+  await writeStore(store);
+}
+
+export async function isTemporaryVoiceChannel(
+  guildId: string,
+  channelId: string,
+): Promise<boolean> {
+  const config = await getGuildConfig(guildId);
+  return config.temporaryVoiceChannelIds?.includes(channelId) ?? false;
 }

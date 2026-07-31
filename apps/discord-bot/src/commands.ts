@@ -35,6 +35,22 @@ export const commandDefinitions = [
     .setName("testmemberlog")
     .setDescription("Envia un mensaje de prueba al canal de logs"),
   new SlashCommandBuilder()
+    .setName("setvoicecreator")
+    .setDescription("Configura el canal de voz que crea salas temporales")
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal de voz disparador")
+        .setRequired(true)
+        .addChannelTypes(ChannelType.GuildVoice),
+    ),
+  new SlashCommandBuilder()
+    .setName("getvoicecreator")
+    .setDescription("Muestra el canal disparador de salas temporales"),
+  new SlashCommandBuilder()
+    .setName("clearvoicecreator")
+    .setDescription("Limpia el canal disparador de salas temporales"),
+  new SlashCommandBuilder()
     .setName("publicarcomunicado")
     .setDescription("Publica un comunicado desde docs/comunicados")
     .addStringOption((option) =>
@@ -72,6 +88,9 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/setlogchannel",
         "/getlogchannel",
         "/testmemberlog",
+        "/setvoicecreator",
+        "/getvoicecreator",
+        "/clearvoicecreator",
         "/publicarcomunicado",
       ].join("\n"),
     );
