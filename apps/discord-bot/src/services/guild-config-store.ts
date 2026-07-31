@@ -4,7 +4,15 @@ import path from "node:path";
 type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   memberLogChannelId?: string;
+  reactionRoles?: ReactionRoleRule[];
   temporaryVoiceChannelIds?: string[];
+};
+
+export type ReactionRoleRule = {
+  channelId?: string;
+  emojiKey: string;
+  messageId: string;
+  roleId: string;
 };
 
 type GuildConfigStore = Record<string, GuildConfig>;
@@ -130,4 +138,73 @@ export async function isTemporaryVoiceChannel(
 ): Promise<boolean> {
   const config = await getGuildConfig(guildId);
   return config.temporaryVoiceChannelIds?.includes(channelId) ?? false;
+}
+
+export async function upsertReactionRoleRule(
+  guildId: string,
+  rule: ReactionRoleRule,
+): Promise<void> {
+  const store = await readStore();
+  const current = store[guildId] ?? {};
+  const existingRules = current.reactionRoles ?? [];
+
+  const filteredRules = existingRules.filter(
+    (existingRule) =>
+      !(
+        existingRule.messageId === rule.messageId &&
+        existingRule.emojiKey === rule.emojiKey
+      ),
+  );
+
+  store[guildId] = {
+    ...current,
+    reactionRoles: [...filteredRules, rule],
+  };
+
+  await writeStore(store);
+}
+
+export async function removeReactionRoleRule(
+  guildId: string,
+  messageId: string,
+  emojiKey: string,
+): Promise<boolean> {
+  const store = await readStore();
+  const current = store[guildId];
+  const existingRules = current?.reactionRoles ?? [];
+  const updatedRules = existingRules.filter(
+    (rule) => !(rule.messageId === messageId && rule.emojiKey === emojiKey),
+  );
+
+  if (updatedRules.length === existingRules.length) {
+    return false;
+  }
+
+  store[guildId] = {
+    ...(current ?? {}),
+    reactionRoles: updatedRules,
+  };
+  await writeStore(store);
+
+  return true;
+}
+
+export async function listReactionRoleRules(
+  guildId: string,
+): Promise<ReactionRoleRule[]> {
+  const config = await getGuildConfig(guildId);
+  return config.reactionRoles ?? [];
+}
+
+export async function findReactionRoleRule(
+  guildId: string,
+  messageId: string,
+  emojiKey: string,
+): Promise<ReactionRoleRule | null> {
+  const rules = await listReactionRoleRules(guildId);
+  const rule = rules.find(
+    (entry) => entry.messageId === messageId && entry.emojiKey === emojiKey,
+  );
+
+  return rule ?? null;
 }

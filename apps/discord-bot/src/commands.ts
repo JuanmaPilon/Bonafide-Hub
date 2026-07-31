@@ -51,6 +51,108 @@ export const commandDefinitions = [
     .setName("clearvoicecreator")
     .setDescription("Limpia el canal disparador de salas temporales"),
   new SlashCommandBuilder()
+    .setName("setreactionrole")
+    .setDescription("Asocia reaccion en un mensaje a un rol")
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal de texto donde esta el mensaje")
+        .setRequired(true)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("mensaje_id")
+        .setDescription("ID del mensaje objetivo")
+        .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("emoji")
+        .setDescription("Emoji unicode o custom (<:name:id>)")
+        .setRequired(true),
+    )
+    .addRoleOption((option) =>
+      option
+        .setName("rol")
+        .setDescription("Rol a asignar cuando reaccionen")
+        .setRequired(true),
+    ),
+  new SlashCommandBuilder()
+    .setName("removereactionrole")
+    .setDescription("Elimina una regla de reaction role")
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal de texto donde esta el mensaje")
+        .setRequired(true)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("mensaje_id")
+        .setDescription("ID del mensaje objetivo")
+        .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("emoji")
+        .setDescription("Emoji unicode o custom (<:name:id>)")
+        .setRequired(true),
+    ),
+  new SlashCommandBuilder()
+    .setName("listreactionroles")
+    .setDescription("Lista reglas configuradas de reaction role"),
+  new SlashCommandBuilder()
+    .setName("createreactionpanel")
+    .setDescription("Crea panel de roles y configura reglas automaticamente")
+    .addStringOption((option) =>
+      option
+        .setName("titulo")
+        .setDescription("Titulo del panel")
+        .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("emoji_1")
+        .setDescription("Emoji para el rol 1")
+        .setRequired(true),
+    )
+    .addRoleOption((option) =>
+      option.setName("rol_1").setDescription("Rol 1").setRequired(true),
+    )
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal de texto destino (opcional, por defecto actual)")
+        .setRequired(false)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("descripcion")
+        .setDescription("Texto opcional del panel")
+        .setRequired(false),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("emoji_2")
+        .setDescription("Emoji para el rol 2")
+        .setRequired(false),
+    )
+    .addRoleOption((option) =>
+      option.setName("rol_2").setDescription("Rol 2").setRequired(false),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("emoji_3")
+        .setDescription("Emoji para el rol 3")
+        .setRequired(false),
+    )
+    .addRoleOption((option) =>
+      option.setName("rol_3").setDescription("Rol 3").setRequired(false),
+    ),
+  new SlashCommandBuilder()
     .setName("publicarcomunicado")
     .setDescription("Publica un comunicado desde docs/comunicados")
     .addStringOption((option) =>
@@ -91,6 +193,10 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/setvoicecreator",
         "/getvoicecreator",
         "/clearvoicecreator",
+        "/setreactionrole",
+        "/removereactionrole",
+        "/listreactionroles",
+        "/createreactionpanel",
         "/publicarcomunicado",
       ].join("\n"),
     );

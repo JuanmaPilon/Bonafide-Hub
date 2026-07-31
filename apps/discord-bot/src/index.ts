@@ -4,17 +4,22 @@ import {
   Client,
   Events,
   GatewayIntentBits,
+  Partials,
 } from "discord.js";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
 import {
   addTemporaryVoiceChannelId,
   clearGuildDynamicVoiceCreateChannelId,
+  findReactionRoleRule,
   getGuildConfig,
   isTemporaryVoiceChannel,
+  listReactionRoleRules,
+  removeReactionRoleRule,
   removeTemporaryVoiceChannelId,
   setGuildDynamicVoiceCreateChannelId,
   setGuildMemberLogChannelId,
+  upsertReactionRoleRule,
 } from "./services/guild-config-store.js";
 import {
   getCommunicationContent,
@@ -26,9 +31,43 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildVoiceStates,
   ],
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
+
+function normalizeEmojiKey(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const customEmojiMatch = trimmed.match(/^<a?:\w+:(\d+)>$/);
+  if (customEmojiMatch) {
+    return `custom:${customEmojiMatch[1]}`;
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return `custom:${trimmed}`;
+  }
+
+  return `unicode:${trimmed}`;
+}
+
+function reactionEmojiKey(reaction: {
+  emoji: { id: string | null; name: string | null };
+}): string | null {
+  if (reaction.emoji.id) {
+    return `custom:${reaction.emoji.id}`;
+  }
+
+  if (reaction.emoji.name) {
+    return `unicode:${reaction.emoji.name}`;
+  }
+
+  return null;
+}
 
 async function sendMemberLog(
   guildId: string,
@@ -247,6 +286,51 @@ function isVoiceBasedChannelLike(
     isObjectRecord(value.members) &&
     typeof value.members.size === "number"
   );
+}
+
+function isReactionRoleTextChannelLike(value: unknown): value is {
+  id: string;
+  messages: { fetch: (messageId: string) => Promise<unknown> };
+} {
+  return (
+    isObjectRecord(value) &&
+    typeof value.id === "string" &&
+    isObjectRecord(value.messages) &&
+    typeof value.messages.fetch === "function"
+  );
+}
+
+function isSendableTextChannelLike(value: unknown): value is {
+  id: string;
+  send: (content: string) => Promise<unknown>;
+} {
+  return (
+    isObjectRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.send === "function"
+  );
+}
+
+function isReactableMessageLike(value: unknown): value is {
+  id: string;
+  react: (emoji: string) => Promise<unknown>;
+} {
+  return (
+    isObjectRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.react === "function"
+  );
+}
+
+function parseEmojiForReaction(input: string): string {
+  const trimmed = input.trim();
+  const customEmojiMatch = trimmed.match(/^<a?:\w+:(\d+)>$/);
+
+  if (customEmojiMatch) {
+    return customEmojiMatch[1];
+  }
+
+  return trimmed;
 }
 
 async function createDynamicVoiceChannelForMember(newState: {
@@ -592,6 +676,322 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === "setreactionrole") {
+    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has("ManageRoles")) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Roles para usar este comando.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const targetChannel = interaction.options.getChannel("canal", true);
+    const messageId = interaction.options.getString("mensaje_id", true).trim();
+    const emojiRaw = interaction.options.getString("emoji", true);
+    const role = interaction.options.getRole("rol", true);
+    const emojiKey = normalizeEmojiKey(emojiRaw);
+
+    if (!isReactionRoleTextChannelLike(targetChannel)) {
+      await interaction.reply({
+        content: "El canal seleccionado no es un canal de texto valido.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const targetMessage = await targetChannel.messages
+      .fetch(messageId)
+      .catch(() => null);
+
+    if (!targetMessage) {
+      await interaction.reply({
+        content:
+          "No pude encontrar ese mensaje en el canal indicado. Revisa canal e ID.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!emojiKey) {
+      await interaction.reply({
+        content: "Emoji invalido. Usa un emoji unicode o custom (<:name:id>).",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const me = await interaction.guild.members.fetchMe().catch(() => null);
+    if (!me?.permissions.has("ManageRoles")) {
+      await interaction.reply({
+        content: "El bot necesita permiso Manage Roles para asignar roles.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (role.position >= me.roles.highest.position) {
+      await interaction.reply({
+        content:
+          "No puedo asignar ese rol porque esta por encima (o al mismo nivel) de mi rol mas alto.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await upsertReactionRoleRule(interaction.guildId, {
+      channelId: targetChannel.id,
+      emojiKey,
+      messageId,
+      roleId: role.id,
+    });
+
+    if (isReactableMessageLike(targetMessage)) {
+      await targetMessage
+        .react(parseEmojiForReaction(emojiRaw))
+        .catch(() => null);
+    }
+
+    await interaction.reply({
+      content: `Reaction role guardado en <#${targetChannel.id}>. Mensaje: ${messageId}, emoji: ${emojiRaw}, rol: <@&${role.id}>.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "createreactionpanel") {
+    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has("ManageRoles")) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Roles para usar este comando.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const selectedChannel = interaction.options.getChannel("canal");
+    const targetChannel = selectedChannel ?? interaction.channel;
+
+    if (!isSendableTextChannelLike(targetChannel)) {
+      await interaction.reply({
+        content: "No se pudo resolver un canal de texto valido para publicar.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const title = interaction.options.getString("titulo", true).trim();
+    const description = interaction.options.getString("descripcion")?.trim();
+
+    const entries = [1, 2, 3]
+      .map((index) => {
+        const emojiRaw = interaction.options.getString(`emoji_${index}`);
+        const role = interaction.options.getRole(`rol_${index}`);
+
+        return {
+          emojiRaw: emojiRaw?.trim() ?? null,
+          role,
+        };
+      })
+      .filter((entry) => Boolean(entry.emojiRaw) || Boolean(entry.role));
+
+    if (entries.length === 0) {
+      await interaction.reply({
+        content: "Debes configurar al menos un par emoji + rol.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const invalidPair = entries.find((entry) => !entry.emojiRaw || !entry.role);
+    if (invalidPair) {
+      await interaction.reply({
+        content:
+          "Cada entrada debe tener ambos valores: emoji y rol (sin pares incompletos).",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const normalizedEntries = entries.map((entry) => ({
+      emojiRaw: entry.emojiRaw as string,
+      role: entry.role as { id: string; position: number },
+      emojiKey: normalizeEmojiKey(entry.emojiRaw as string),
+      reactionValue: parseEmojiForReaction(entry.emojiRaw as string),
+    }));
+
+    if (normalizedEntries.some((entry) => !entry.emojiKey)) {
+      await interaction.reply({
+        content: "Uno o mas emojis son invalidos.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const me = await interaction.guild.members.fetchMe().catch(() => null);
+    if (!me?.permissions.has("ManageRoles")) {
+      await interaction.reply({
+        content: "El bot necesita permiso Manage Roles para asignar roles.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const roleAboveMe = normalizedEntries.find(
+      (entry) => entry.role.position >= me.roles.highest.position,
+    );
+    if (roleAboveMe) {
+      await interaction.reply({
+        content:
+          "Hay un rol configurado por encima (o al mismo nivel) de mi rol mas alto.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const panelLines = normalizedEntries.map(
+      (entry) => `${entry.emojiRaw} <@&${entry.role.id}>`,
+    );
+    const panelMessageText = [
+      `## ${title}`,
+      description ?? "",
+      "Reacciona para recibir o quitar tu rol:",
+      ...panelLines,
+    ]
+      .filter((line) => Boolean(line))
+      .join("\n");
+
+    const sentMessage = await targetChannel
+      .send(panelMessageText)
+      .catch(() => null);
+    if (!isReactableMessageLike(sentMessage)) {
+      await interaction.reply({
+        content: "No pude publicar el panel en el canal seleccionado.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    for (const entry of normalizedEntries) {
+      await sentMessage.react(entry.reactionValue).catch(() => null);
+
+      await upsertReactionRoleRule(interaction.guildId, {
+        channelId: targetChannel.id,
+        emojiKey: entry.emojiKey as string,
+        messageId: sentMessage.id,
+        roleId: entry.role.id,
+      });
+    }
+
+    await interaction.reply({
+      content: `Panel creado en <#${targetChannel.id}>. Mensaje: ${sentMessage.id}.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "removereactionrole") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has("ManageRoles")) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Roles para usar este comando.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const targetChannel = interaction.options.getChannel("canal", true);
+    const messageId = interaction.options.getString("mensaje_id", true).trim();
+    const emojiRaw = interaction.options.getString("emoji", true);
+    const emojiKey = normalizeEmojiKey(emojiRaw);
+
+    if (!isReactionRoleTextChannelLike(targetChannel)) {
+      await interaction.reply({
+        content: "El canal seleccionado no es un canal de texto valido.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!emojiKey) {
+      await interaction.reply({
+        content: "Emoji invalido. Usa un emoji unicode o custom (<:name:id>).",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const removed = await removeReactionRoleRule(
+      interaction.guildId,
+      messageId,
+      emojiKey,
+    );
+
+    await interaction.reply({
+      content: removed
+        ? "Regla reaction role eliminada."
+        : "No existia una regla para ese mensaje + emoji.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "listreactionroles") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const rules = await listReactionRoleRules(interaction.guildId);
+    if (rules.length === 0) {
+      await interaction.reply({
+        content: "No hay reaction roles configurados.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const lines = rules.slice(0, 20).map((rule, index) => {
+      const emojiLabel = rule.emojiKey
+        .replace(/^custom:/, "custom:")
+        .replace(/^unicode:/, "unicode:");
+      const channelLabel = rule.channelId
+        ? `<#${rule.channelId}>`
+        : "(canal desconocido)";
+      return `${index + 1}. ${channelLabel} msg:${rule.messageId} | ${emojiLabel} => <@&${rule.roleId}>`;
+    });
+
+    await interaction.reply({
+      content: ["Reaction roles:", ...lines].join("\n"),
+      ephemeral: true,
+    });
+    return;
+  }
+
   const handler = commandHandlers[interaction.commandName];
   if (!handler) {
     await interaction.reply({
@@ -642,6 +1042,94 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       });
     });
   }
+});
+
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  if (user.bot) {
+    return;
+  }
+
+  const guildId = reaction.message.guildId;
+  if (!guildId) {
+    return;
+  }
+
+  const emojiKey = reactionEmojiKey(reaction);
+  if (!emojiKey) {
+    return;
+  }
+
+  const rule = await findReactionRoleRule(
+    guildId,
+    reaction.message.id,
+    emojiKey,
+  );
+  if (!rule) {
+    return;
+  }
+
+  const guild = reaction.message.guild;
+  if (!guild) {
+    return;
+  }
+
+  const member = await guild.members.fetch(user.id).catch(() => null);
+  if (!member) {
+    return;
+  }
+
+  await member.roles.add(rule.roleId).catch((error: unknown) => {
+    console.error("[discord-bot] Failed to add reaction role", {
+      guildId,
+      userId: user.id,
+      roleId: rule.roleId,
+      error,
+    });
+  });
+});
+
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  if (user.bot) {
+    return;
+  }
+
+  const guildId = reaction.message.guildId;
+  if (!guildId) {
+    return;
+  }
+
+  const emojiKey = reactionEmojiKey(reaction);
+  if (!emojiKey) {
+    return;
+  }
+
+  const rule = await findReactionRoleRule(
+    guildId,
+    reaction.message.id,
+    emojiKey,
+  );
+  if (!rule) {
+    return;
+  }
+
+  const guild = reaction.message.guild;
+  if (!guild) {
+    return;
+  }
+
+  const member = await guild.members.fetch(user.id).catch(() => null);
+  if (!member) {
+    return;
+  }
+
+  await member.roles.remove(rule.roleId).catch((error: unknown) => {
+    console.error("[discord-bot] Failed to remove reaction role", {
+      guildId,
+      userId: user.id,
+      roleId: rule.roleId,
+      error,
+    });
+  });
 });
 
 client.login(env.DISCORD_BOT_TOKEN).catch((error: unknown) => {
