@@ -9,6 +9,13 @@ import {
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
 import {
+  cancelReminder,
+  createReminder,
+  listDueReminders,
+  listGuildReminders,
+  markReminderSent,
+} from "./services/reminders-store.js";
+import {
   addTemporaryVoiceChannelId,
   clearGuildDynamicVoiceCreateChannelId,
   findReactionRoleRule,
@@ -343,6 +350,73 @@ function parseReactionRoleMode(input: string | null): ReactionRoleMode {
   return "multiple";
 }
 
+const REMINDER_POLL_INTERVAL_MS = 30_000;
+let reminderPollTimer: NodeJS.Timeout | null = null;
+let isProcessingReminderQueue = false;
+
+async function processDueReminders(): Promise<void> {
+  if (isProcessingReminderQueue) {
+    return;
+  }
+
+  isProcessingReminderQueue = true;
+  try {
+    const dueReminders = await listDueReminders(new Date().toISOString());
+
+    for (const reminder of dueReminders) {
+      const guild = await client.guilds
+        .fetch(reminder.guildId)
+        .catch(() => null);
+      if (!guild) {
+        continue;
+      }
+
+      const channel = await guild.channels
+        .fetch(reminder.channelId)
+        .catch(() => null);
+      if (!isSendableTextChannelLike(channel)) {
+        continue;
+      }
+
+      const roleMention = reminder.roleId ? `<@&${reminder.roleId}> ` : "";
+      const content = `${roleMention}⏰ Recordatorio: ${reminder.message}`;
+
+      const delivered = await channel
+        .send(content)
+        .then(() => true)
+        .catch((error: unknown) => {
+          console.error("[discord-bot] Failed to deliver reminder", {
+            guildId: reminder.guildId,
+            channelId: reminder.channelId,
+            reminderId: reminder.id,
+            error,
+          });
+          return false;
+        });
+
+      if (!delivered) {
+        continue;
+      }
+
+      await markReminderSent(reminder.guildId, reminder.id);
+    }
+  } finally {
+    isProcessingReminderQueue = false;
+  }
+}
+
+function startReminderScheduler(): void {
+  if (reminderPollTimer) {
+    return;
+  }
+
+  reminderPollTimer = setInterval(() => {
+    void processDueReminders();
+  }, REMINDER_POLL_INTERVAL_MS);
+
+  void processDueReminders();
+}
+
 async function createDynamicVoiceChannelForMember(newState: {
   guild: {
     id: string;
@@ -452,6 +526,7 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`[discord-bot] Online as ${readyClient.user.tag}`);
+  startReminderScheduler();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -1066,6 +1141,117 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     await interaction.reply({
       content: `Panel actualizado: ${updated} regla/s cambiadas a modo ${mode}.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "setreminder") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has("ManageGuild")) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Server para usar este comando.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const selectedChannel = interaction.options.getChannel("canal");
+    const targetChannel = selectedChannel ?? interaction.channel;
+    if (!isSendableTextChannelLike(targetChannel)) {
+      await interaction.reply({
+        content:
+          "No se pudo resolver un canal de texto valido para recordatorio.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const minutes = interaction.options.getInteger("minutos", true);
+    const message = interaction.options.getString("mensaje", true).trim();
+    const mentionRole = interaction.options.getRole("mencionar_rol");
+
+    const reminder = await createReminder({
+      guildId: interaction.guildId,
+      channelId: targetChannel.id,
+      createdByUserId: interaction.user.id,
+      message,
+      minutesFromCreation: minutes,
+      roleId: mentionRole?.id,
+    });
+
+    const dueUnix = Math.floor(new Date(reminder.dueAt).getTime() / 1000);
+    await interaction.reply({
+      content: `Recordatorio creado (ID: ${reminder.id}). Se enviara en <#${targetChannel.id}> <t:${dueUnix}:R>.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "listreminders") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const reminders = await listGuildReminders(interaction.guildId);
+    const pending = reminders.filter((entry) => !entry.sentAt);
+
+    if (pending.length === 0) {
+      await interaction.reply({
+        content: "No hay recordatorios pendientes.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const lines = pending.slice(0, 20).map((entry) => {
+      const dueUnix = Math.floor(new Date(entry.dueAt).getTime() / 1000);
+      const roleText = entry.roleId ? ` | rol: <@&${entry.roleId}>` : "";
+      return `${entry.id} | <#${entry.channelId}> | <t:${dueUnix}:R>${roleText} | ${entry.message}`;
+    });
+
+    await interaction.reply({
+      content: ["Recordatorios pendientes:", ...lines].join("\n"),
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "cancelreminder") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has("ManageGuild")) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Server para usar este comando.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const reminderId = interaction.options.getString("id", true).trim();
+    const removed = await cancelReminder(interaction.guildId, reminderId);
+
+    await interaction.reply({
+      content: removed
+        ? `Recordatorio ${reminderId} cancelado.`
+        : "No existe un recordatorio con ese ID.",
       ephemeral: true,
     });
     return;

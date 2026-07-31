@@ -142,6 +142,48 @@ export const commandDefinitions = [
         ),
     ),
   new SlashCommandBuilder()
+    .setName("setreminder")
+    .setDescription("Crea un recordatorio en minutos")
+    .addIntegerOption((option) =>
+      option
+        .setName("minutos")
+        .setDescription("Cuantos minutos faltan para enviar")
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(43_200),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("mensaje")
+        .setDescription("Mensaje del recordatorio")
+        .setRequired(true),
+    )
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal destino (opcional, por defecto canal actual)")
+        .setRequired(false)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+    )
+    .addRoleOption((option) =>
+      option
+        .setName("mencionar_rol")
+        .setDescription("Rol opcional para mencionar cuando se envie")
+        .setRequired(false),
+    ),
+  new SlashCommandBuilder()
+    .setName("listreminders")
+    .setDescription("Lista recordatorios de este servidor"),
+  new SlashCommandBuilder()
+    .setName("cancelreminder")
+    .setDescription("Cancela un recordatorio por ID")
+    .addStringOption((option) =>
+      option
+        .setName("id")
+        .setDescription("ID del recordatorio")
+        .setRequired(true),
+    ),
+  new SlashCommandBuilder()
     .setName("createreactionpanel")
     .setDescription("Crea panel de roles y configura reglas automaticamente")
     .addStringOption((option) =>
@@ -246,6 +288,9 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/removereactionrole",
         "/listreactionroles",
         "/setreactionpanelmode",
+        "/setreminder",
+        "/listreminders",
+        "/cancelreminder",
         "/createreactionpanel",
         "/publicarcomunicado",
       ].join("\n"),
