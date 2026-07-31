@@ -77,6 +77,17 @@ export const commandDefinitions = [
         .setName("rol")
         .setDescription("Rol a asignar cuando reaccionen")
         .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("modo")
+        .setDescription("Comportamiento: multiple, unique o additive")
+        .setRequired(false)
+        .addChoices(
+          { name: "Multiple", value: "multiple" },
+          { name: "Unique", value: "unique" },
+          { name: "Additive", value: "additive" },
+        ),
     ),
   new SlashCommandBuilder()
     .setName("removereactionrole")
@@ -104,6 +115,33 @@ export const commandDefinitions = [
     .setName("listreactionroles")
     .setDescription("Lista reglas configuradas de reaction role"),
   new SlashCommandBuilder()
+    .setName("setreactionpanelmode")
+    .setDescription("Cambia el modo de todas las reglas de un panel")
+    .addChannelOption((option) =>
+      option
+        .setName("canal")
+        .setDescription("Canal de texto donde esta el panel")
+        .setRequired(true)
+        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("mensaje_id")
+        .setDescription("ID del mensaje del panel")
+        .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("modo")
+        .setDescription("Nuevo modo: multiple, unique o additive")
+        .setRequired(true)
+        .addChoices(
+          { name: "Multiple", value: "multiple" },
+          { name: "Unique", value: "unique" },
+          { name: "Additive", value: "additive" },
+        ),
+    ),
+  new SlashCommandBuilder()
     .setName("createreactionpanel")
     .setDescription("Crea panel de roles y configura reglas automaticamente")
     .addStringOption((option) =>
@@ -120,6 +158,17 @@ export const commandDefinitions = [
     )
     .addRoleOption((option) =>
       option.setName("rol_1").setDescription("Rol 1").setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("modo")
+        .setDescription("Comportamiento del panel: multiple, unique o additive")
+        .setRequired(false)
+        .addChoices(
+          { name: "Multiple", value: "multiple" },
+          { name: "Unique", value: "unique" },
+          { name: "Additive", value: "additive" },
+        ),
     )
     .addChannelOption((option) =>
       option
@@ -196,6 +245,7 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/setreactionrole",
         "/removereactionrole",
         "/listreactionroles",
+        "/setreactionpanelmode",
         "/createreactionpanel",
         "/publicarcomunicado",
       ].join("\n"),

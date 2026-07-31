@@ -15,10 +15,12 @@ import {
   getGuildConfig,
   isTemporaryVoiceChannel,
   listReactionRoleRules,
+  type ReactionRoleMode,
   removeReactionRoleRule,
   removeTemporaryVoiceChannelId,
   setGuildDynamicVoiceCreateChannelId,
   setGuildMemberLogChannelId,
+  updateReactionRoleModeForMessage,
   upsertReactionRoleRule,
 } from "./services/guild-config-store.js";
 import {
@@ -331,6 +333,14 @@ function parseEmojiForReaction(input: string): string {
   }
 
   return trimmed;
+}
+
+function parseReactionRoleMode(input: string | null): ReactionRoleMode {
+  if (input === "unique" || input === "additive") {
+    return input;
+  }
+
+  return "multiple";
 }
 
 async function createDynamicVoiceChannelForMember(newState: {
@@ -697,6 +707,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const messageId = interaction.options.getString("mensaje_id", true).trim();
     const emojiRaw = interaction.options.getString("emoji", true);
     const role = interaction.options.getRole("rol", true);
+    const mode = parseReactionRoleMode(interaction.options.getString("modo"));
     const emojiKey = normalizeEmojiKey(emojiRaw);
 
     if (!isReactionRoleTextChannelLike(targetChannel)) {
@@ -750,6 +761,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       channelId: targetChannel.id,
       emojiKey,
       messageId,
+      mode,
       roleId: role.id,
     });
 
@@ -760,7 +772,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     await interaction.reply({
-      content: `Reaction role guardado en <#${targetChannel.id}>. Mensaje: ${messageId}, emoji: ${emojiRaw}, rol: <@&${role.id}>.`,
+      content: `Reaction role guardado en <#${targetChannel.id}>. Mensaje: ${messageId}, emoji: ${emojiRaw}, rol: <@&${role.id}>, modo: ${mode}.`,
       ephemeral: true,
     });
     return;
@@ -796,6 +808,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const title = interaction.options.getString("titulo", true).trim();
     const description = interaction.options.getString("descripcion")?.trim();
+    const mode = parseReactionRoleMode(interaction.options.getString("modo"));
 
     const entries = [1, 2, 3]
       .map((index) => {
@@ -893,12 +906,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         channelId: targetChannel.id,
         emojiKey: entry.emojiKey as string,
         messageId: sentMessage.id,
+        mode,
         roleId: entry.role.id,
       });
     }
 
     await interaction.reply({
-      content: `Panel creado en <#${targetChannel.id}>. Mensaje: ${sentMessage.id}.`,
+      content: `Panel creado en <#${targetChannel.id}>. Mensaje: ${sentMessage.id}. Modo: ${mode}.`,
       ephemeral: true,
     });
     return;
@@ -979,14 +993,79 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const emojiLabel = rule.emojiKey
         .replace(/^custom:/, "custom:")
         .replace(/^unicode:/, "unicode:");
+      const modeLabel = rule.mode ?? "multiple";
       const channelLabel = rule.channelId
         ? `<#${rule.channelId}>`
         : "(canal desconocido)";
-      return `${index + 1}. ${channelLabel} msg:${rule.messageId} | ${emojiLabel} => <@&${rule.roleId}>`;
+      return `${index + 1}. ${channelLabel} msg:${rule.messageId} | ${emojiLabel} => <@&${rule.roleId}> [${modeLabel}]`;
     });
 
     await interaction.reply({
       content: ["Reaction roles:", ...lines].join("\n"),
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "setreactionpanelmode") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (!interaction.memberPermissions?.has("ManageRoles")) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Roles para usar este comando.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const targetChannel = interaction.options.getChannel("canal", true);
+    const messageId = interaction.options.getString("mensaje_id", true).trim();
+    const mode = parseReactionRoleMode(interaction.options.getString("modo"));
+
+    if (!isReactionRoleTextChannelLike(targetChannel)) {
+      await interaction.reply({
+        content: "El canal seleccionado no es un canal de texto valido.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const messageExists = await targetChannel.messages
+      .fetch(messageId)
+      .then(() => true)
+      .catch(() => false);
+    if (!messageExists) {
+      await interaction.reply({
+        content:
+          "No pude encontrar ese mensaje en el canal indicado. Revisa canal e ID.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const updated = await updateReactionRoleModeForMessage(
+      interaction.guildId,
+      messageId,
+      mode,
+    );
+
+    if (updated === 0) {
+      await interaction.reply({
+        content:
+          "No hay reglas reaction role para ese mensaje. Crea primero las reglas del panel.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.reply({
+      content: `Panel actualizado: ${updated} regla/s cambiadas a modo ${mode}.`,
       ephemeral: true,
     });
     return;
@@ -1078,6 +1157,31 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     return;
   }
 
+  const mode = rule.mode ?? "multiple";
+
+  if (mode === "unique") {
+    const panelRules = await listReactionRoleRules(guildId);
+    const siblingRoleIds = Array.from(
+      new Set(
+        panelRules
+          .filter((entry) => entry.messageId === reaction.message.id)
+          .map((entry) => entry.roleId)
+          .filter((roleId) => roleId !== rule.roleId),
+      ),
+    );
+
+    if (siblingRoleIds.length > 0) {
+      await member.roles.remove(siblingRoleIds).catch((error: unknown) => {
+        console.error("[discord-bot] Failed to enforce unique reaction role", {
+          guildId,
+          userId: user.id,
+          roleIds: siblingRoleIds,
+          error,
+        });
+      });
+    }
+  }
+
   await member.roles.add(rule.roleId).catch((error: unknown) => {
     console.error("[discord-bot] Failed to add reaction role", {
       guildId,
@@ -1119,6 +1223,11 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
 
   const member = await guild.members.fetch(user.id).catch(() => null);
   if (!member) {
+    return;
+  }
+
+  const mode = rule.mode ?? "multiple";
+  if (mode === "additive") {
     return;
   }
 

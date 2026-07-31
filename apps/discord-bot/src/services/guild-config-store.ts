@@ -12,8 +12,11 @@ export type ReactionRoleRule = {
   channelId?: string;
   emojiKey: string;
   messageId: string;
+  mode?: ReactionRoleMode;
   roleId: string;
 };
+
+export type ReactionRoleMode = "multiple" | "unique" | "additive";
 
 type GuildConfigStore = Record<string, GuildConfig>;
 
@@ -207,4 +210,39 @@ export async function findReactionRoleRule(
   );
 
   return rule ?? null;
+}
+
+export async function updateReactionRoleModeForMessage(
+  guildId: string,
+  messageId: string,
+  mode: ReactionRoleMode,
+): Promise<number> {
+  const store = await readStore();
+  const current = store[guildId];
+  const existingRules = current?.reactionRoles ?? [];
+  let updatedCount = 0;
+
+  const updatedRules = existingRules.map((rule) => {
+    if (rule.messageId !== messageId) {
+      return rule;
+    }
+
+    updatedCount += 1;
+    return {
+      ...rule,
+      mode,
+    };
+  });
+
+  if (updatedCount === 0) {
+    return 0;
+  }
+
+  store[guildId] = {
+    ...(current ?? {}),
+    reactionRoles: updatedRules,
+  };
+  await writeStore(store);
+
+  return updatedCount;
 }
