@@ -68,3 +68,44 @@ Comunicados desde documentacion:
 - Guarda archivos en `apps/discord-bot/docs/comunicados`.
 - Publica con `/publicarcomunicado`.
 - Ejemplo de ruta: `reclutamiento/raid-off.md`.
+
+## Arranque rapido de la API
+
+1. Ir a la carpeta de la API.
+2. Instalar dependencias.
+3. Crear archivo `.env` desde `.env.example` y completar valores de Discord.
+4. Ejecutar en modo desarrollo.
+
+Comandos:
+
+```bash
+cd apps/api
+npm install
+copy .env.example .env
+npm run dev
+```
+
+Variables minimas para login con Discord:
+
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `DISCORD_REDIRECT_URI`
+- `SESSION_SECRET`
+
+## Arranque rapido de la web
+
+1. Ir a la carpeta de la web.
+2. Instalar dependencias.
+3. Crear archivo `.env` desde `.env.example` si queres cambiar la URL de la API.
+4. Ejecutar en modo desarrollo.
+
+Comandos:
+
+```bash
+cd apps/web
+npm install
+copy .env.example .env
+npm run dev
+```
+
+La web usa `/api` como base por defecto y Vite lo proxya hacia la API local en desarrollo.
