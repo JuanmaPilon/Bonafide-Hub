@@ -1,5 +1,11 @@
 import Fastify from "fastify";
+import type { FastifyRequest } from "fastify";
 import { env } from "./config/env.js";
+import {
+  getGuildConfig,
+  type GuildConfig,
+  upsertGuildConfig,
+} from "./services/guild-config-store.js";
 import {
   buildClearCookie,
   buildCookieHeader,
@@ -61,6 +67,33 @@ export function buildApp() {
     return getDiscordSession(sessionId ?? undefined);
   }
 
+  function requireSession(request: FastifyRequest) {
+    return getSessionFromRequest(request.headers.cookie);
+  }
+
+  function canManageGuild(
+    session: NonNullable<ReturnType<typeof getSessionFromRequest>>,
+    guildId: string,
+  ): boolean {
+    return session.guilds.some((guild) => {
+      if (guild.id !== guildId) {
+        return false;
+      }
+
+      if (guild.owner) {
+        return true;
+      }
+
+      try {
+        const permissions = BigInt(guild.permissions);
+        const manageGuildBit = 1n << 5n;
+        return (permissions & manageGuildBit) === manageGuildBit;
+      } catch {
+        return false;
+      }
+    });
+  }
+
   app.get("/health", async () => ({
     ok: true,
     service: "api",
@@ -77,6 +110,7 @@ export function buildApp() {
       "/auth/discord/callback",
       "/me",
       "/guilds",
+      "/guilds/:guildId/config",
     ],
   }));
 
@@ -236,6 +270,74 @@ export function buildApp() {
     return {
       ok: true,
       guilds: getManageGuildFilter(session.guilds),
+    };
+  });
+
+  app.get("/guilds/:guildId/config", async (request, reply) => {
+    const session = requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      config,
+    };
+  });
+
+  app.patch("/guilds/:guildId/config", async (request, reply) => {
+    const session = requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = request.body as Partial<GuildConfig>;
+    const allowedBody: GuildConfig = {};
+
+    if (body.memberLogChannelId !== undefined) {
+      allowedBody.memberLogChannelId = body.memberLogChannelId;
+    }
+
+    if (body.dynamicVoiceCreateChannelId !== undefined) {
+      allowedBody.dynamicVoiceCreateChannelId =
+        body.dynamicVoiceCreateChannelId;
+    }
+
+    if (body.reactionRolesChannelId !== undefined) {
+      allowedBody.reactionRolesChannelId = body.reactionRolesChannelId;
+    }
+
+    if (body.enabledModules !== undefined) {
+      allowedBody.enabledModules = body.enabledModules;
+    }
+
+    const config = await upsertGuildConfig(params.guildId, allowedBody);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      config,
     };
   });
 
