@@ -51,6 +51,33 @@ export const commandDefinitions = [
     .setName("clearvoicecreator")
     .setDescription("Limpia el canal disparador de salas temporales"),
   new SlashCommandBuilder()
+    .setName("memberstats")
+    .setDescription("Muestra estadisticas de miembros del servidor")
+    .addBooleanOption((option) =>
+      option
+        .setName("publico")
+        .setDescription("Si es true, publica el resultado en el canal")
+        .setRequired(false),
+    ),
+  new SlashCommandBuilder()
+    .setName("rolstats")
+    .setDescription("Muestra cantidad de miembros por rol y listado opcional")
+    .addRoleOption((option) =>
+      option.setName("rol").setDescription("Rol a consultar").setRequired(true),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("listar")
+        .setDescription("Si es true, lista miembros del rol")
+        .setRequired(false),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("publico")
+        .setDescription("Si es true, publica el resultado en el canal")
+        .setRequired(false),
+    ),
+  new SlashCommandBuilder()
     .setName("setreactionrole")
     .setDescription("Asocia reaccion en un mensaje a un rol")
     .addChannelOption((option) =>
@@ -284,6 +311,8 @@ export const commandHandlers: Record<string, CommandHandler> = {
         "/setvoicecreator",
         "/getvoicecreator",
         "/clearvoicecreator",
+        "/memberstats",
+        "/rolstats",
         "/setreactionrole",
         "/removereactionrole",
         "/listreactionroles",

@@ -2,6 +2,11 @@ import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
 import { env } from "./config/env.js";
 import {
+  cancelReminder,
+  createReminder,
+  listGuildReminders,
+} from "./services/reminders-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   upsertGuildConfig,
@@ -111,6 +116,8 @@ export function buildApp() {
       "/me",
       "/guilds",
       "/guilds/:guildId/config",
+      "/guilds/:guildId/reminders",
+      "/guilds/:guildId/reminders/:reminderId",
     ],
   }));
 
@@ -340,6 +347,125 @@ export function buildApp() {
       config,
     };
   });
+
+  app.get("/guilds/:guildId/reminders", async (request, reply) => {
+    const session = requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const reminders = await listGuildReminders(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      reminders,
+    };
+  });
+
+  app.post("/guilds/:guildId/reminders", async (request, reply) => {
+    const session = requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = request.body as {
+      channelId?: string;
+      message?: string;
+      minutesFromCreation?: number;
+      roleId?: string;
+    };
+
+    const channelId = body.channelId?.trim();
+    const message = body.message?.trim();
+    const minutesFromCreation = body.minutesFromCreation;
+    const roleId = body.roleId?.trim() || undefined;
+
+    if (!channelId || !message || !minutesFromCreation) {
+      return reply.code(400).send({
+        ok: false,
+        error: "channelId, message y minutesFromCreation son requeridos",
+      });
+    }
+
+    if (!Number.isInteger(minutesFromCreation) || minutesFromCreation < 1) {
+      return reply.code(400).send({
+        ok: false,
+        error: "minutesFromCreation debe ser entero positivo",
+      });
+    }
+
+    const reminder = await createReminder({
+      channelId,
+      createdByUserId: session.user.id,
+      guildId: params.guildId,
+      message,
+      minutesFromCreation,
+      roleId,
+    });
+
+    return reply.code(201).send({
+      ok: true,
+      guildId: params.guildId,
+      reminder,
+    });
+  });
+
+  app.delete(
+    "/guilds/:guildId/reminders/:reminderId",
+    async (request, reply) => {
+      const session = requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        reminderId?: string;
+      };
+      if (!params.guildId || !params.reminderId) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Missing guildId/reminderId" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await cancelReminder(params.guildId, params.reminderId);
+      if (!deleted) {
+        return reply.code(404).send({
+          ok: false,
+          error: "Reminder not found",
+        });
+      }
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        reminderId: params.reminderId,
+      };
+    },
+  );
 
   app.post("/auth/logout", async (request, reply) => {
     const cookies = parseCookieHeader(request.headers.cookie);

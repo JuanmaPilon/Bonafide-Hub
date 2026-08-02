@@ -40,6 +40,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildVoiceStates,
   ],
@@ -691,6 +692,106 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     await clearGuildDynamicVoiceCreateChannelId(interaction.guildId);
     await interaction.reply("Canal creador de voz limpiado.");
+    return;
+  }
+
+  if (interaction.commandName === "memberstats") {
+    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const members = await interaction.guild.members.fetch().catch(() => null);
+    if (!members) {
+      await interaction.reply({
+        content: "No pude obtener los miembros del servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const total = members.size;
+    const isPublic = interaction.options.getBoolean("publico") ?? false;
+    let connected = 0;
+    let offline = 0;
+
+    for (const member of members.values()) {
+      const status = member.presence?.status ?? "offline";
+      if (status === "offline" || status === "invisible") {
+        offline += 1;
+      } else {
+        connected += 1;
+      }
+    }
+
+    await interaction.reply({
+      content: [
+        "Estadisticas de miembros:",
+        `Total: ${total}`,
+        `Conectados (online/idle/dnd): ${connected}`,
+        `Offline/invisible: ${offline}`,
+      ].join("\n"),
+      ephemeral: !isPublic,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "rolstats") {
+    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const role = interaction.options.getRole("rol", true);
+    const shouldListMembers = interaction.options.getBoolean("listar") ?? false;
+    const isPublic = interaction.options.getBoolean("publico") ?? false;
+
+    await interaction.guild.members.fetch().catch(() => null);
+
+    const guildRole = interaction.guild.roles.cache.get(role.id);
+    if (!guildRole) {
+      await interaction.reply({
+        content: "No pude resolver ese rol en este servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const roleMembers = guildRole.members.map((member) => ({
+      displayName: member.displayName,
+      id: member.id,
+    }));
+    const count = roleMembers.length;
+
+    if (!shouldListMembers) {
+      await interaction.reply({
+        content: `El rol <@&${guildRole.id}> tiene ${count} miembro/s.`,
+        ephemeral: !isPublic,
+      });
+      return;
+    }
+
+    const limitedMembers = roleMembers.slice(0, 40);
+    const header = `El rol <@&${guildRole.id}> tiene ${count} miembro/s.`;
+    const memberLines = limitedMembers.map(
+      (memberInfo, index) =>
+        `${index + 1}. ${memberInfo.displayName} (<@${memberInfo.id}>)`,
+    );
+    const truncatedText =
+      count > limitedMembers.length
+        ? `\n... y ${count - limitedMembers.length} mas.`
+        : "";
+
+    await interaction.reply({
+      content: `${header}\n${memberLines.join("\n")}${truncatedText}`,
+      ephemeral: !isPublic,
+    });
     return;
   }
 
