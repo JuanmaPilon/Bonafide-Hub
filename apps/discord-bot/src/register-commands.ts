@@ -10,10 +10,15 @@ if (!env.DISCORD_GUILD_ID) {
   throw new Error("DISCORD_GUILD_ID is required to register commands");
 }
 
+if (!env.DISCORD_BOT_TOKEN) {
+  throw new Error("DISCORD_BOT_TOKEN is required to register commands");
+}
+
 const applicationId = env.DISCORD_APPLICATION_ID;
 const guildId = env.DISCORD_GUILD_ID;
+const botToken = env.DISCORD_BOT_TOKEN;
 
-const rest = new REST({ version: "10" }).setToken(env.DISCORD_BOT_TOKEN);
+const rest = new REST({ version: "10" }).setToken(botToken);
 
 async function registerGuildCommands(): Promise<void> {
   await rest.put(Routes.applicationGuildCommands(applicationId, guildId), {

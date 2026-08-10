@@ -1558,15 +1558,19 @@ client.on(Events.MessageReactionRemove, async (reaction, user) => {
   });
 });
 
-client.login(env.DISCORD_BOT_TOKEN).catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : "Unknown error";
+if (env.BOT_DISABLED) {
+  console.log("[discord-bot] BOT_DISABLED is enabled. Skipping Discord login.");
+} else {
+  client.login(env.DISCORD_BOT_TOKEN!).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "Unknown error";
 
-  if (message.includes("Used disallowed intents")) {
-    console.error(
-      "[discord-bot] Enable required intents. For member logs, enable Server Members Intent in Discord Developer Portal > Bot.",
-    );
-  }
+    if (message.includes("Used disallowed intents")) {
+      console.error(
+        "[discord-bot] Enable required intents. For member logs, enable Server Members Intent in Discord Developer Portal > Bot.",
+      );
+    }
 
-  console.error("[discord-bot] Failed to login", error);
-  process.exit(1);
-});
+    console.error("[discord-bot] Failed to login", error);
+    process.exit(1);
+  });
+}
