@@ -298,6 +298,24 @@ function isVoiceBasedChannelLike(
   );
 }
 
+function countConnectedMembersInChannel(
+  voiceStates: {
+    cache?: {
+      filter: (
+        predicate: (state: { channelId?: string | null }) => boolean,
+      ) => { size: number };
+    };
+  } | null,
+  channelId: string,
+): number | null {
+  if (!voiceStates?.cache) {
+    return null;
+  }
+
+  return voiceStates.cache.filter((state) => state.channelId === channelId)
+    .size;
+}
+
 function isReactionRoleTextChannelLike(value: unknown): value is {
   id: string;
   messages: { fetch: (messageId: string) => Promise<unknown> };
@@ -484,6 +502,13 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
   guild: {
     id: string;
     channels: { fetch: (channelId: string) => Promise<unknown> };
+    voiceStates?: {
+      cache: {
+        filter: (
+          predicate: (state: { channelId?: string | null }) => boolean,
+        ) => { size: number };
+      };
+    };
   };
   channelId: string | null;
 }): Promise<void> {
@@ -513,8 +538,13 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
     return;
   }
 
-  const members = channel.members;
-  if (members.size > 0) {
+  const connectedMemberCount = countConnectedMembersInChannel(
+    channelState.guild.voiceStates ?? null,
+    channelId,
+  );
+  const memberCount = connectedMemberCount ?? channel.members.size;
+
+  if (memberCount > 0) {
     return;
   }
 

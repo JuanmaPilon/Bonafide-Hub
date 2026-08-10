@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { prisma } from "../db/prisma.js";
 
 export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
@@ -8,48 +7,55 @@ export type GuildConfig = {
   reactionRolesChannelId?: string;
 };
 
-type GuildConfigStore = Record<string, GuildConfig>;
-
-const dataDirPath = path.resolve(process.cwd(), "data");
-const configFilePath = path.resolve(dataDirPath, "guild-config.json");
-
-async function readStore(): Promise<GuildConfigStore> {
-  try {
-    const raw = await readFile(configFilePath, "utf8");
-    return JSON.parse(raw) as GuildConfigStore;
-  } catch (error: unknown) {
-    const maybeFsError = error as NodeJS.ErrnoException;
-    if (maybeFsError.code === "ENOENT") {
-      return {};
-    }
-
-    throw error;
+function toGuildConfig(
+  record: {
+    dynamicVoiceCreateChannelId: string | null;
+    enabledModules: string[];
+    memberLogChannelId: string | null;
+    reactionRolesChannelId: string | null;
+  } | null,
+): GuildConfig {
+  if (!record) {
+    return {};
   }
-}
 
-async function writeStore(store: GuildConfigStore): Promise<void> {
-  await mkdir(dataDirPath, { recursive: true });
-  await writeFile(configFilePath, JSON.stringify(store, null, 2), "utf8");
+  return {
+    dynamicVoiceCreateChannelId:
+      record.dynamicVoiceCreateChannelId ?? undefined,
+    enabledModules: record.enabledModules,
+    memberLogChannelId: record.memberLogChannelId ?? undefined,
+    reactionRolesChannelId: record.reactionRolesChannelId ?? undefined,
+  };
 }
 
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
-  const store = await readStore();
-  return store[guildId] ?? {};
+  const record = await prisma.guildConfig.findUnique({
+    where: { guildId },
+  });
+
+  return toGuildConfig(record);
 }
 
 export async function upsertGuildConfig(
   guildId: string,
   partialConfig: GuildConfig,
 ): Promise<GuildConfig> {
-  const store = await readStore();
-  const current = store[guildId] ?? {};
-  const next = {
-    ...current,
-    ...partialConfig,
-  };
+  const record = await prisma.guildConfig.upsert({
+    where: { guildId },
+    create: {
+      guildId,
+      memberLogChannelId: partialConfig.memberLogChannelId,
+      dynamicVoiceCreateChannelId: partialConfig.dynamicVoiceCreateChannelId,
+      reactionRolesChannelId: partialConfig.reactionRolesChannelId,
+      enabledModules: partialConfig.enabledModules ?? [],
+    },
+    update: {
+      memberLogChannelId: partialConfig.memberLogChannelId,
+      dynamicVoiceCreateChannelId: partialConfig.dynamicVoiceCreateChannelId,
+      reactionRolesChannelId: partialConfig.reactionRolesChannelId,
+      enabledModules: partialConfig.enabledModules,
+    },
+  });
 
-  store[guildId] = next;
-  await writeStore(store);
-
-  return next;
+  return toGuildConfig(record);
 }

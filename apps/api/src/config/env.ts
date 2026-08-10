@@ -12,6 +12,9 @@ const envSchema = z.object({
   SESSION_SECRET: z
     .string()
     .min(16, "SESSION_SECRET must be at least 16 chars"),
+  DATABASE_URL: z
+    .string()
+    .url("DATABASE_URL must be a valid PostgreSQL connection URL"),
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().min(1).default("0.0.0.0"),
   NODE_ENV: z
