@@ -26,6 +26,14 @@ const configFilePath = path.resolve(dataDirPath, "guild-config.json");
 const remoteApiBaseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
 const remoteApiToken = env.BOT_CONFIG_API_TOKEN?.trim();
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
 function isRemoteStoreEnabled(): boolean {
   return Boolean(remoteApiBaseUrl && remoteApiToken);
 }
@@ -37,6 +45,20 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     reactionRoles: input.reactionRoles ?? [],
     temporaryVoiceChannelIds: input.temporaryVoiceChannelIds ?? [],
   };
+}
+
+async function readLocalGuildConfig(guildId: string): Promise<GuildConfig> {
+  const store = await readStore();
+  return normalizeGuildConfig(store[guildId] ?? {});
+}
+
+async function writeLocalGuildConfig(
+  guildId: string,
+  config: GuildConfig,
+): Promise<void> {
+  const store = await readStore();
+  store[guildId] = normalizeGuildConfig(config);
+  await writeStore(store);
 }
 
 async function fetchRemoteGuildConfig(guildId: string): Promise<GuildConfig> {
@@ -127,11 +149,18 @@ async function writeStore(store: GuildConfigStore): Promise<void> {
 
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
   if (isRemoteStoreEnabled()) {
-    return fetchRemoteGuildConfig(guildId);
+    try {
+      const remoteConfig = await fetchRemoteGuildConfig(guildId);
+      await writeLocalGuildConfig(guildId, remoteConfig);
+      return remoteConfig;
+    } catch (error: unknown) {
+      console.warn(
+        `[discord-bot] Remote config unavailable for guild ${guildId}, using local fallback: ${getErrorMessage(error)}`,
+      );
+    }
   }
 
-  const store = await readStore();
-  return normalizeGuildConfig(store[guildId] ?? {});
+  return readLocalGuildConfig(guildId);
 }
 
 async function mutateGuildConfig(
@@ -139,9 +168,17 @@ async function mutateGuildConfig(
   updater: (current: GuildConfig) => GuildConfig,
 ): Promise<GuildConfig> {
   if (isRemoteStoreEnabled()) {
-    const current = await fetchRemoteGuildConfig(guildId);
-    const next = normalizeGuildConfig(updater(current));
-    return saveRemoteGuildConfig(guildId, next);
+    try {
+      const current = await fetchRemoteGuildConfig(guildId);
+      const next = normalizeGuildConfig(updater(current));
+      const saved = await saveRemoteGuildConfig(guildId, next);
+      await writeLocalGuildConfig(guildId, saved);
+      return saved;
+    } catch (error: unknown) {
+      console.warn(
+        `[discord-bot] Remote config update failed for guild ${guildId}, using local fallback: ${getErrorMessage(error)}`,
+      );
+    }
   }
 
   const store = await readStore();
