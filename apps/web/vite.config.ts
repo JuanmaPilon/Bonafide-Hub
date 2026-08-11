@@ -13,4 +13,7 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    allowedHosts: [".railway.app", "localhost", "127.0.0.1"],
+  },
 });
