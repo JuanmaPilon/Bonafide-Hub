@@ -1,48 +1,65 @@
 # Bonafide Platform
 
-Base inicial minima para construir dos piezas conectadas:
+Plataforma privada para una comunidad de Discord, construida como monorepo con tres piezas principales:
 
-- Bonafide BOT: automatizacion y logica dentro de Discord.
-- Bonafide Hub: futura aplicacion web para la comunidad.
+1. Discord bot (operacion dentro de Discord)
+2. API backend (OAuth, configuracion y persistencia)
+3. Web hub (panel para gestion de guild)
 
-La idea del repositorio es crecer como un monorepo pequeno desde el principio, para evitar duplicar logica entre bot, backend y frontend cuando llegue la integracion.
+## Estado actual
 
-## Estructura actual
+El bot y la API ya estan operativos con:
+
+1. Eventos de entrada/salida de miembros
+2. Logs configurables por guild
+3. Canales de voz dinamicos
+4. Reaction roles
+5. Recordatorios
+6. OAuth Discord en API
+7. Persistencia principal en PostgreSQL via Prisma (API)
+8. Fallback local del bot cuando la API no responde
+
+## Estructura del repo
 
 ```text
 apps/
-  api/          Backend/API futura
-  discord-bot/  Bot de Discord (base TypeScript inicial)
-  web/          Frontend / Guild Hub
+  api/          Fastify + Prisma + OAuth Discord
+  discord-bot/  discord.js + comandos slash + eventos
+  web/          React/Vite (Guild Hub)
 
 packages/
-  shared/       Tipos, utilidades o logica compartida
+  shared/       Espacio para codigo compartido
+
+docs/
+  development/  Documentacion tecnica y operativa
 ```
 
-## Objetivo de esta base
+## Arquitectura resumida
 
-Por ahora solo dejamos una estructura minima y clara para empezar a trabajar sin sobreingenieria.
+```text
+Discord Users
+    |
+    v
+Discord Bot (apps/discord-bot)
+    |
+    |  internal bot config API (x-bot-token)
+    v
+API (apps/api) ------------------> PostgreSQL (Railway)
+    |
+    | OAuth + JSON API
+    v
+Web (apps/web)
+```
 
-La siguiente capa natural seria definir:
+Notas importantes:
 
-1. El stack tecnico inicial.
-2. El setup del bot.
-3. El setup del frontend.
-4. La forma de compartir configuracion y tipos.
+1. El bot intenta usar configuracion remota en API/DB.
+2. Si la API no responde, usa fallback local en `apps/discord-bot/data/guild-config.json`.
+3. Cuando remoto vuelve, el bot puede sincronizar configuracion local al remoto.
 
-## Estado
+## Quick start local
 
-Repositorio en fase de arranque.
-
-## Arranque rapido del bot
-
-1. Ir a la carpeta del bot.
-2. Instalar dependencias.
-3. Crear archivo .env desde .env.example y completar valores.
-4. Registrar comandos slash en el servidor de pruebas.
-5. Ejecutar en modo desarrollo.
-
-Comandos:
+### Bot
 
 ```bash
 cd apps/discord-bot
@@ -52,31 +69,7 @@ npm run register
 npm run dev
 ```
 
-Variables minimas para registrar comandos de prueba:
-
-- DISCORD_BOT_TOKEN
-- DISCORD_APPLICATION_ID
-- DISCORD_GUILD_ID
-
-Configuracion de canal de logs de miembros:
-
-- Usa el comando `/setlogchannel` dentro del servidor para elegir el canal.
-- Requiere permiso `Manage Server`.
-
-Comunicados desde documentacion:
-
-- Guarda archivos en `apps/discord-bot/docs/comunicados`.
-- Publica con `/publicarcomunicado`.
-- Ejemplo de ruta: `reclutamiento/raid-off.md`.
-
-## Arranque rapido de la API
-
-1. Ir a la carpeta de la API.
-2. Instalar dependencias.
-3. Crear archivo `.env` desde `.env.example` y completar valores de Discord.
-4. Ejecutar en modo desarrollo.
-
-Comandos:
+### API
 
 ```bash
 cd apps/api
@@ -85,21 +78,7 @@ copy .env.example .env
 npm run dev
 ```
 
-Variables minimas para login con Discord:
-
-- `DISCORD_CLIENT_ID`
-- `DISCORD_CLIENT_SECRET`
-- `DISCORD_REDIRECT_URI`
-- `SESSION_SECRET`
-
-## Arranque rapido de la web
-
-1. Ir a la carpeta de la web.
-2. Instalar dependencias.
-3. Crear archivo `.env` desde `.env.example` si queres cambiar la URL de la API.
-4. Ejecutar en modo desarrollo.
-
-Comandos:
+### Web
 
 ```bash
 cd apps/web
@@ -108,4 +87,30 @@ copy .env.example .env
 npm run dev
 ```
 
-La web usa `/api` como base por defecto y Vite lo proxya hacia la API local en desarrollo.
+## Build commands
+
+```bash
+cd apps/discord-bot && npm run build
+cd apps/api && npm run build
+cd apps/web && npm run build
+```
+
+## Documentacion tecnica
+
+1. `docs/development/architecture.md`
+2. `docs/development/discord-bot.md`
+3. `docs/development/api.md`
+4. `docs/development/railway-operations.md`
+
+## Consideraciones de seguridad
+
+1. Nunca commitear `.env` con secretos.
+2. Mantener secretos en Railway Variables.
+3. Rotar tokens/credentials cuando se exponen.
+4. Mantener permisos del bot con principio de minimo privilegio cuando sea posible.
+
+## Consideraciones operativas
+
+1. Si cambias comandos slash, volver a correr `npm run register`.
+2. Si el bot no puede llegar a API, entra en fallback local automaticamente.
+3. En Railway, confirmar variables por servicio y por environment antes de redeploy.
