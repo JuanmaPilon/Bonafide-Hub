@@ -14,6 +14,14 @@ export type GuildConfig = {
   reactionRolesChannelId?: string;
 };
 
+export type GuildWidgetStatus = {
+  available: boolean;
+  guildId: string;
+  inviteUrl: string | null;
+  name?: string;
+  presenceCount: number | null;
+};
+
 export type SessionResponse = {
   expiresAt: number;
   ok: true;
@@ -89,6 +97,19 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
   );
 
   return data.config;
+}
+
+export async function getGuildWidgetStatus(
+  guildId: string,
+): Promise<GuildWidgetStatus> {
+  const data = await requestJson<GuildWidgetStatus>(
+    `/guilds/${guildId}/widget`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data;
 }
 
 export async function saveGuildConfig(

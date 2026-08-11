@@ -16,6 +16,12 @@ const envSchema = z.object({
     .string()
     .url("DATABASE_URL must be a valid PostgreSQL connection URL"),
   BOT_API_TOKEN: z.string().min(16).optional(),
+  CORS_ORIGINS: z.string().default("http://localhost:5173"),
+  COOKIE_SAME_SITE: z.enum(["Lax", "Strict", "None"]).default("Lax"),
+  FRONTEND_APP_URL: z
+    .string()
+    .url("FRONTEND_APP_URL must be a valid URL")
+    .default("http://localhost:5173"),
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().min(1).default("0.0.0.0"),
   NODE_ENV: z

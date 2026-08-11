@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
+import cors from "@fastify/cors";
 import { env } from "./config/env.js";
 import {
   cancelReminder,
@@ -36,6 +37,13 @@ type DiscordTokenResponse = {
   token_type: string;
 };
 
+type DiscordGuildWidgetResponse = {
+  id: string;
+  name: string;
+  instant_invite?: string;
+  presence_count?: number;
+};
+
 async function fetchDiscordJson<T>(
   path: string,
   accessToken: string,
@@ -60,7 +68,28 @@ export function buildApp() {
     logger: true,
   });
 
+  const allowedOrigins = env.CORS_ORIGINS.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   const isSecureCookie = env.NODE_ENV === "production";
+  const cookieSameSite = env.COOKIE_SAME_SITE;
+
+  void app.register(cors, {
+    credentials: true,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin not allowed by CORS"), false);
+    },
+  });
 
   function getSessionFromRequest(cookieHeader: string | undefined) {
     const cookies = parseCookieHeader(cookieHeader);
@@ -142,6 +171,7 @@ export function buildApp() {
       "/auth/discord/callback",
       "/me",
       "/guilds",
+      "/guilds/:guildId/widget",
       "/guilds/:guildId/config",
       "/guilds/:guildId/reminders",
       "/guilds/:guildId/reminders/:reminderId",
@@ -225,7 +255,7 @@ export function buildApp() {
         httpOnly: true,
         maxAgeSeconds: 600,
         path: "/",
-        sameSite: "Lax",
+        sameSite: cookieSameSite,
         secure: isSecureCookie,
       }),
     );
@@ -329,18 +359,13 @@ export function buildApp() {
           httpOnly: true,
           maxAgeSeconds: token.expires_in,
           path: "/",
-          sameSite: "Lax",
+          sameSite: cookieSameSite,
           secure: isSecureCookie,
         },
       ),
     ]);
 
-    return reply.send({
-      ok: true,
-      user: session.user,
-      guilds: getManageGuildFilter(session.guilds),
-      expiresAt: session.expiresAt,
-    });
+    return reply.redirect(env.FRONTEND_APP_URL);
   });
 
   app.get("/me", async (request, reply) => {
@@ -365,6 +390,47 @@ export function buildApp() {
     return {
       ok: true,
       guilds: getManageGuildFilter(session.guilds),
+    };
+  });
+
+  app.get("/guilds/:guildId/widget", async (request, reply) => {
+    const session = requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const widgetResponse = await fetch(
+      `https://discord.com/api/guilds/${params.guildId}/widget.json`,
+    );
+
+    if (!widgetResponse.ok) {
+      return reply.code(200).send({
+        ok: true,
+        guildId: params.guildId,
+        available: false,
+        presenceCount: null,
+        inviteUrl: null,
+      });
+    }
+
+    const widget = (await widgetResponse.json()) as DiscordGuildWidgetResponse;
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      available: true,
+      presenceCount: widget.presence_count ?? null,
+      inviteUrl: widget.instant_invite ?? null,
+      name: widget.name,
     };
   });
 

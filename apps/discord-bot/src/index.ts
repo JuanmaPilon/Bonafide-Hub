@@ -282,7 +282,7 @@ function buildTemporaryVoiceChannelName(displayName: string): string {
     return "Sala temporal";
   }
 
-  return `${trimmed.slice(0, 70)} room`;
+  return `Sala de ${trimmed.slice(0, 80)}`;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
