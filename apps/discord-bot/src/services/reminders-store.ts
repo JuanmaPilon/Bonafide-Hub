@@ -1,14 +1,15 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export type ReminderKind = "kd" | "daily" | "custom";
+export type ReminderKind = "kd" | "kdaily" | "custom";
+type ReminderKindStored = ReminderKind | "daily";
 
 export type Reminder = {
   id: string;
   guildId: string;
   channelId: string;
   deliveryType?: "channel" | "dm";
-  reminderKind?: ReminderKind;
+  reminderKind?: ReminderKindStored;
   repeat?: boolean;
   message: string;
   minutesFromCreation: number;
@@ -48,7 +49,11 @@ async function writeStore(store: ReminderStore): Promise<void> {
   await writeFile(remindersFilePath, JSON.stringify(store, null, 2), "utf8");
 }
 
-function inferReminderKind(reminder: Reminder): ReminderKind {
+export function resolveReminderKind(reminder: Reminder): ReminderKind {
+  if (reminder.reminderKind === "daily") {
+    return "kdaily";
+  }
+
   if (reminder.reminderKind) {
     return reminder.reminderKind;
   }
@@ -58,7 +63,7 @@ function inferReminderKind(reminder: Reminder): ReminderKind {
   }
 
   if (reminder.minutesFromCreation === 12 * 60) {
-    return "daily";
+    return "kdaily";
   }
 
   return "custom";
@@ -68,7 +73,7 @@ export async function createReminder(input: {
   guildId: string;
   channelId: string;
   deliveryType?: "channel" | "dm";
-  reminderKind?: ReminderKind;
+  reminderKind?: ReminderKindStored;
   repeat?: boolean;
   message: string;
   minutesFromCreation: number;
@@ -143,7 +148,7 @@ export async function removeUserReminders(input: {
       return false;
     }
 
-    return inferReminderKind(entry) !== input.reminderKind;
+    return resolveReminderKind(entry) !== input.reminderKind;
   });
 
   const removedCount = existing.length - filtered.length;

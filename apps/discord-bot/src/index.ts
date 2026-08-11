@@ -17,6 +17,7 @@ import {
   removeUserReminders,
   rescheduleReminder,
   type ReminderKind,
+  resolveReminderKind,
 } from "./services/reminders-store.js";
 import {
   addTemporaryVoiceChannelId,
@@ -383,14 +384,18 @@ const KD_REMINDER_TEMPLATES = [
   "🫖 Senior, Karpindomo le recuerda que KD esta listo.",
   "🫖 Senior, Karpindomo confirma que su KD ya esta disponible.",
   "🫖 Senior, momento ideal para tirar KD.",
+  "🫖 Senior, Karpindomo sugiere activar KD en este preciso instante.",
+  "🫖 Senior, su ventana de KD esta abierta.",
 ] as const;
 
-const DAILY_REMINDER_TEMPLATES = [
-  "🫖 Senior, su daily ya esta listo.",
-  "🫖 Senior, Karpindomo le recuerda que puede hacer daily.",
-  "🫖 Senior, llego la hora de su daily.",
-  "🫖 Senior, Karpindomo anuncia que su daily quedo habilitado.",
-  "🫖 Senior, su daily aguarda por usted.",
+const KDAILY_REMINDER_TEMPLATES = [
+  "🫖 Senior, su KDaily ya esta listo.",
+  "🫖 Senior, Karpindomo le recuerda que puede hacer KDaily.",
+  "🫖 Senior, llego la hora de su KDaily.",
+  "🫖 Senior, Karpindomo anuncia que su KDaily quedo habilitado.",
+  "🫖 Senior, su KDaily aguarda por usted.",
+  "🫖 Senior, Karpindomo confirma que ya puede cobrar su KDaily.",
+  "🫖 Senior, su KDaily quedo en punto para ejecutarse.",
 ] as const;
 
 const CUSTOM_REMINDER_TEMPLATES = [
@@ -399,6 +404,8 @@ const CUSTOM_REMINDER_TEMPLATES = [
   "🫖 Senior, es momento de atender su recordatorio de {duration}.",
   "🫖 Senior, Karpindomo le avisa que se cumplio el plazo de {duration}.",
   "🫖 Senior, su aviso configurado para {duration} esta listo.",
+  "🫖 Senior, Karpindomo notifica que el temporizador de {duration} finalizo.",
+  "🫖 Senior, su cita con el recordatorio de {duration} ha llegado.",
 ] as const;
 
 const REMINDER_POLL_INTERVAL_MS = 30_000;
@@ -1420,15 +1427,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const lines = pending.slice(0, 20).map((entry) => {
+      const kind = resolveReminderKind(entry);
+      const typeLabel =
+        kind === "kd" ? "kd" : kind === "kdaily" ? "kdaily" : "custom";
+      const intervalText =
+        entry.minutesFromCreation % 60 === 0
+          ? `${entry.minutesFromCreation / 60} hora${entry.minutesFromCreation / 60 === 1 ? "" : "s"}`
+          : `${entry.minutesFromCreation} minuto${entry.minutesFromCreation === 1 ? "" : "s"}`;
       const dueUnix = Math.floor(new Date(entry.dueAt).getTime() / 1000);
-      const deliveryText =
-        entry.deliveryType === "dm" ? "DM" : `<#${entry.channelId}>`;
-      const kindText = entry.reminderKind
-        ? ` | tipo: ${entry.reminderKind}`
-        : "";
-      const repeatText = entry.repeat ? " | repetir: si" : "";
-      const roleText = entry.roleId ? ` | rol: <@&${entry.roleId}>` : "";
-      return `${entry.id} | ${deliveryText} | <t:${dueUnix}:R>${kindText}${repeatText}${roleText} | ${entry.message}`;
+      return `${typeLabel} | tiempo: ${intervalText} | falta: <t:${dueUnix}:R>`;
     });
 
     await interaction.reply({
@@ -1479,7 +1486,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const reminderKindInput = interaction.options.getString("tipo");
     const reminderKind =
       reminderKindInput === "kd" ||
-      reminderKindInput === "daily" ||
+      reminderKindInput === "kdaily" ||
       reminderKindInput === "custom"
         ? reminderKindInput
         : undefined;
@@ -1529,9 +1536,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (reminderType === "kd") {
       minutesFromCreation = 30;
       reminderMessage = pickRandom(KD_REMINDER_TEMPLATES);
-    } else if (reminderType === "daily") {
+    } else if (reminderType === "kdaily") {
       minutesFromCreation = 12 * 60;
-      reminderMessage = pickRandom(DAILY_REMINDER_TEMPLATES);
+      reminderMessage = pickRandom(KDAILY_REMINDER_TEMPLATES);
     } else if (reminderType === "custom") {
       if (customMinutes && customHours) {
         await interaction.reply({

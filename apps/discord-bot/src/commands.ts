@@ -196,7 +196,7 @@ export const commandDefinitions = [
         .setRequired(false)
         .addChoices(
           { name: "KD", value: "kd" },
-          { name: "Daily", value: "daily" },
+          { name: "KDaily", value: "kdaily" },
           { name: "Custom", value: "custom" },
         ),
     ),
@@ -218,8 +218,8 @@ export const commandDefinitions = [
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("daily")
-        .setDescription("Recordatorio Daily con tiempo fijo (12 horas)")
+        .setName("kdaily")
+        .setDescription("Recordatorio KDaily con tiempo fijo (12 horas)")
         .addBooleanOption((option) =>
           option
             .setName("repetir")
