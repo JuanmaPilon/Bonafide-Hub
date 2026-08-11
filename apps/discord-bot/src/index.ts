@@ -14,6 +14,7 @@ import {
   listDueReminders,
   listGuildReminders,
   markReminderSent,
+  type Reminder,
   removeUserReminders,
   rescheduleReminder,
   type ReminderKind,
@@ -408,6 +409,49 @@ const CUSTOM_REMINDER_TEMPLATES = [
   "🫖 Senior, su cita con el recordatorio de {duration} ha llegado.",
 ] as const;
 
+const reminderTemplateCursorByKind: Record<ReminderKind, number> = {
+  kd: 0,
+  kdaily: 0,
+  custom: 0,
+};
+
+function formatReminderDuration(minutesFromCreation: number): string {
+  if (minutesFromCreation % 60 === 0) {
+    const hours = minutesFromCreation / 60;
+    return `${hours} hora${hours === 1 ? "" : "s"}`;
+  }
+
+  return `${minutesFromCreation} minuto${minutesFromCreation === 1 ? "" : "s"}`;
+}
+
+function pickCyclingTemplate<T extends string>(
+  kind: ReminderKind,
+  templates: readonly T[],
+): T {
+  const currentIndex = reminderTemplateCursorByKind[kind] % templates.length;
+  reminderTemplateCursorByKind[kind] =
+    (reminderTemplateCursorByKind[kind] + 1) % templates.length;
+  return templates[currentIndex];
+}
+
+function buildDmReminderMessage(reminder: Reminder): string {
+  const kind = resolveReminderKind(reminder);
+
+  if (kind === "kd") {
+    return pickCyclingTemplate("kd", KD_REMINDER_TEMPLATES);
+  }
+
+  if (kind === "kdaily") {
+    return `${pickCyclingTemplate("kdaily", KDAILY_REMINDER_TEMPLATES)}\nhttps://karuta.com/vote`;
+  }
+
+  const durationText = formatReminderDuration(reminder.minutesFromCreation);
+  return pickCyclingTemplate("custom", CUSTOM_REMINDER_TEMPLATES).replace(
+    "{duration}",
+    durationText,
+  );
+}
+
 const REMINDER_POLL_INTERVAL_MS = 30_000;
 let reminderPollTimer: NodeJS.Timeout | null = null;
 let isProcessingReminderQueue = false;
@@ -430,8 +474,9 @@ async function processDueReminders(): Promise<void> {
           continue;
         }
 
+        const reminderText = buildDmReminderMessage(reminder);
         const delivered = await user
-          .send(reminder.message)
+          .send(reminderText)
           .then(() => true)
           .catch((error: unknown) => {
             console.error("[discord-bot] Failed to deliver inbox reminder", {
@@ -1403,10 +1448,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (
-    interaction.commandName === "listreminders" ||
-    interaction.commandName === "listreminder"
-  ) {
+  if (interaction.commandName === "listreminder") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -1430,10 +1472,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const kind = resolveReminderKind(entry);
       const typeLabel =
         kind === "kd" ? "kd" : kind === "kdaily" ? "kdaily" : "custom";
-      const intervalText =
-        entry.minutesFromCreation % 60 === 0
-          ? `${entry.minutesFromCreation / 60} hora${entry.minutesFromCreation / 60 === 1 ? "" : "s"}`
-          : `${entry.minutesFromCreation} minuto${entry.minutesFromCreation === 1 ? "" : "s"}`;
+      const intervalText = formatReminderDuration(entry.minutesFromCreation);
       const dueUnix = Math.floor(new Date(entry.dueAt).getTime() / 1000);
       return `${typeLabel} | tiempo: ${intervalText} | falta: <t:${dueUnix}:R>`;
     });
@@ -1484,6 +1523,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const reminderKindInput = interaction.options.getString("tipo");
+    const removeAll = reminderKindInput === "all" || !reminderKindInput;
     const reminderKind =
       reminderKindInput === "kd" ||
       reminderKindInput === "kdaily" ||
@@ -1494,23 +1534,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const removedCount = await removeUserReminders({
       guildId: interaction.guildId,
       userId: interaction.user.id,
-      reminderKind: reminderKind as ReminderKind | undefined,
+      reminderKind: removeAll
+        ? undefined
+        : (reminderKind as ReminderKind | undefined),
     });
 
     if (removedCount === 0) {
       await interaction.reply({
-        content: reminderKind
-          ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
-          : "No tienes recordatorios para eliminar.",
+        content: removeAll
+          ? "No tienes recordatorios para eliminar."
+          : reminderKind
+            ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
+            : "No tienes recordatorios para eliminar.",
         ephemeral: true,
       });
       return;
     }
 
     await interaction.reply({
-      content: reminderKind
-        ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
-        : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
+      content: removeAll
+        ? `Se eliminaron ${removedCount} recordatorio/s tuyos.`
+        : reminderKind
+          ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
+          : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
       ephemeral: true,
     });
     return;
@@ -1573,7 +1619,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    const reminder = await createReminder({
+    await createReminder({
       guildId: interaction.guildId,
       channelId: interaction.channelId,
       createdByUserId: interaction.user.id,
@@ -1584,12 +1630,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       minutesFromCreation,
     });
 
-    const dueUnix = Math.floor(new Date(reminder.dueAt).getTime() / 1000);
+    const dueUnix = Math.floor(
+      (Date.now() + minutesFromCreation * 60_000) / 1000,
+    );
     const repeatText = repeat
       ? " Este recordatorio se repetira automaticamente."
       : "";
     await interaction.reply({
-      content: `Recordatorio privado programado (ID: ${reminder.id}). Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
+      content: `Recordatorio privado programado. Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
       ephemeral: true,
     });
     return;

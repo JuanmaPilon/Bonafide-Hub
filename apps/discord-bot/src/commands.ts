@@ -172,9 +172,6 @@ export const commandDefinitions = [
         ),
     ),
   new SlashCommandBuilder()
-    .setName("listreminders")
-    .setDescription("Lista recordatorios de este servidor"),
-  new SlashCommandBuilder()
     .setName("listreminder")
     .setDescription("Lista recordatorios activos"),
   new SlashCommandBuilder()
@@ -195,6 +192,7 @@ export const commandDefinitions = [
         .setDescription("Filtra por tipo (opcional)")
         .setRequired(false)
         .addChoices(
+          { name: "Todos", value: "all" },
           { name: "KD", value: "kd" },
           { name: "KDaily", value: "kdaily" },
           { name: "Custom", value: "custom" },
