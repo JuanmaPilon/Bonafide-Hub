@@ -184,6 +184,20 @@ export const commandDefinitions = [
         .setRequired(true),
     ),
   new SlashCommandBuilder()
+    .setName("removereminder")
+    .setDescription("Elimina tus recordatorios (todos o por tipo)")
+    .addStringOption((option) =>
+      option
+        .setName("tipo")
+        .setDescription("Filtra por tipo (opcional)")
+        .setRequired(false)
+        .addChoices(
+          { name: "KD", value: "kd" },
+          { name: "Daily", value: "daily" },
+          { name: "Custom", value: "custom" },
+        ),
+    ),
+  new SlashCommandBuilder()
     .setName("setreminder")
     .setDescription("Programa un recordatorio privado de Karpindomo")
     .addStringOption((option) =>
@@ -212,6 +226,12 @@ export const commandDefinitions = [
         .setRequired(false)
         .setMinValue(1)
         .setMaxValue(720),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("repetir")
+        .setDescription("Si es true, repite el recordatorio automaticamente")
+        .setRequired(false),
     ),
   new SlashCommandBuilder()
     .setName("createreactionpanel")

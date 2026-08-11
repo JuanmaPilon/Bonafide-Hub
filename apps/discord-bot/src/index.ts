@@ -14,6 +14,9 @@ import {
   listDueReminders,
   listGuildReminders,
   markReminderSent,
+  removeUserReminders,
+  rescheduleReminder,
+  type ReminderKind,
 } from "./services/reminders-store.js";
 import {
   addTemporaryVoiceChannelId,
@@ -378,18 +381,24 @@ const KD_REMINDER_TEMPLATES = [
   "🫖 Senior, puede tirar KD cuando guste.",
   "🫖 Senior, su KD ya esta servido.",
   "🫖 Senior, Karpindomo le recuerda que KD esta listo.",
+  "🫖 Senior, Karpindomo confirma que su KD ya esta disponible.",
+  "🫖 Senior, momento ideal para tirar KD.",
 ] as const;
 
 const DAILY_REMINDER_TEMPLATES = [
   "🫖 Senior, su daily ya esta listo.",
   "🫖 Senior, Karpindomo le recuerda que puede hacer daily.",
   "🫖 Senior, llego la hora de su daily.",
+  "🫖 Senior, Karpindomo anuncia que su daily quedo habilitado.",
+  "🫖 Senior, su daily aguarda por usted.",
 ] as const;
 
 const CUSTOM_REMINDER_TEMPLATES = [
   "🫖 Senior, su recordatorio de {duration} ha llegado.",
   "🫖 Senior, Karpindomo anuncia que vencio su recordatorio de {duration}.",
   "🫖 Senior, es momento de atender su recordatorio de {duration}.",
+  "🫖 Senior, Karpindomo le avisa que se cumplio el plazo de {duration}.",
+  "🫖 Senior, su aviso configurado para {duration} esta listo.",
 ] as const;
 
 const REMINDER_POLL_INTERVAL_MS = 30_000;
@@ -431,7 +440,11 @@ async function processDueReminders(): Promise<void> {
           continue;
         }
 
-        await markReminderSent(reminder.guildId, reminder.id);
+        if (reminder.repeat) {
+          await rescheduleReminder(reminder.guildId, reminder.id);
+        } else {
+          await markReminderSent(reminder.guildId, reminder.id);
+        }
         continue;
       }
 
@@ -469,7 +482,11 @@ async function processDueReminders(): Promise<void> {
         continue;
       }
 
-      await markReminderSent(reminder.guildId, reminder.id);
+      if (reminder.repeat) {
+        await rescheduleReminder(reminder.guildId, reminder.id);
+      } else {
+        await markReminderSent(reminder.guildId, reminder.id);
+      }
     }
   } finally {
     isProcessingReminderQueue = false;
@@ -1403,8 +1420,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const dueUnix = Math.floor(new Date(entry.dueAt).getTime() / 1000);
       const deliveryText =
         entry.deliveryType === "dm" ? "DM" : `<#${entry.channelId}>`;
+      const kindText = entry.reminderKind
+        ? ` | tipo: ${entry.reminderKind}`
+        : "";
+      const repeatText = entry.repeat ? " | repetir: si" : "";
       const roleText = entry.roleId ? ` | rol: <@&${entry.roleId}>` : "";
-      return `${entry.id} | ${deliveryText} | <t:${dueUnix}:R>${roleText} | ${entry.message}`;
+      return `${entry.id} | ${deliveryText} | <t:${dueUnix}:R>${kindText}${repeatText}${roleText} | ${entry.message}`;
     });
 
     await interaction.reply({
@@ -1443,6 +1464,48 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === "removereminder") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const reminderKindInput = interaction.options.getString("tipo");
+    const reminderKind =
+      reminderKindInput === "kd" ||
+      reminderKindInput === "daily" ||
+      reminderKindInput === "custom"
+        ? reminderKindInput
+        : undefined;
+
+    const removedCount = await removeUserReminders({
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      reminderKind: reminderKind as ReminderKind | undefined,
+    });
+
+    if (removedCount === 0) {
+      await interaction.reply({
+        content: reminderKind
+          ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
+          : "No tienes recordatorios para eliminar.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await interaction.reply({
+      content: reminderKind
+        ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
+        : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
   if (interaction.commandName === "setreminder") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
@@ -1455,6 +1518,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const reminderType = interaction.options.getString("tipo", true);
     const customMinutes = interaction.options.getInteger("minutos");
     const customHours = interaction.options.getInteger("horas");
+    const repeat = interaction.options.getBoolean("repetir") ?? false;
 
     let minutesFromCreation: number;
     let reminderMessage: string;
@@ -1522,13 +1586,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       channelId: interaction.channelId,
       createdByUserId: interaction.user.id,
       deliveryType: "dm",
+      reminderKind: reminderType as ReminderKind,
+      repeat,
       message: reminderMessage,
       minutesFromCreation,
     });
 
     const dueUnix = Math.floor(new Date(reminder.dueAt).getTime() / 1000);
+    const repeatText = repeat
+      ? " Este recordatorio se repetira automaticamente."
+      : "";
     await interaction.reply({
-      content: `Recordatorio privado programado (ID: ${reminder.id}). Karpindomo te escribira por DM <t:${dueUnix}:R>.`,
+      content: `Recordatorio privado programado (ID: ${reminder.id}). Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
       ephemeral: true,
     });
     return;
