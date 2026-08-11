@@ -295,6 +295,16 @@ function hasDeleteMethod(
   return isObjectRecord(value) && typeof value.delete === "function";
 }
 
+function hasRawPosition(value: unknown): value is { rawPosition: number } {
+  return isObjectRecord(value) && typeof value.rawPosition === "number";
+}
+
+function hasSetPosition(value: unknown): value is {
+  setPosition: (position: number) => Promise<unknown>;
+} {
+  return isObjectRecord(value) && typeof value.setPosition === "function";
+}
+
 function isVoiceBasedChannelLike(
   value: unknown,
 ): value is { isVoiceBased: () => boolean; members: { size: number } } {
@@ -609,13 +619,18 @@ function startReminderScheduler(): void {
 async function createDynamicVoiceChannelForMember(newState: {
   guild: {
     id: string;
+    afkChannelId?: string | null;
     channels: {
       create: (options: {
         name: string;
         type: ChannelType.GuildVoice;
         parent?: string | null;
+        position?: number;
         reason: string;
-      }) => Promise<{ id: string }>;
+      }) => Promise<{
+        id: string;
+        setPosition?: (position: number) => Promise<unknown>;
+      }>;
       fetch: (channelId: string) => Promise<unknown>;
     };
   };
@@ -639,12 +654,27 @@ async function createDynamicVoiceChannelForMember(newState: {
     return;
   }
 
+  let targetPosition = 0;
+  if (newState.guild.afkChannelId) {
+    const afkChannel = await newState.guild.channels
+      .fetch(newState.guild.afkChannelId)
+      .catch(() => null);
+    if (hasRawPosition(afkChannel)) {
+      targetPosition = Math.max(afkChannel.rawPosition - 1, 0);
+    }
+  }
+
   const createdChannel = await newState.guild.channels.create({
     name: buildTemporaryVoiceChannelName(newState.member.displayName),
     type: ChannelType.GuildVoice,
     parent: creatorChannel.parentId ?? null,
+    position: targetPosition,
     reason: `Dynamic voice room for ${newState.member.id}`,
   });
+
+  if (hasSetPosition(createdChannel)) {
+    await createdChannel.setPosition(targetPosition).catch(() => undefined);
+  }
 
   await addTemporaryVoiceChannelId(newState.guild.id, createdChannel.id);
 
