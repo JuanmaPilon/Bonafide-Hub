@@ -5,6 +5,7 @@ export type Reminder = {
   id: string;
   guildId: string;
   channelId: string;
+  deliveryType?: "channel" | "dm";
   message: string;
   minutesFromCreation: number;
   dueAt: string;
@@ -46,6 +47,7 @@ async function writeStore(store: ReminderStore): Promise<void> {
 export async function createReminder(input: {
   guildId: string;
   channelId: string;
+  deliveryType?: "channel" | "dm";
   message: string;
   minutesFromCreation: number;
   createdByUserId: string;
@@ -58,6 +60,7 @@ export async function createReminder(input: {
     id: createReminderId(),
     guildId: input.guildId,
     channelId: input.channelId,
+    deliveryType: input.deliveryType ?? "channel",
     message: input.message,
     minutesFromCreation: input.minutesFromCreation,
     dueAt: dueAtDate.toISOString(),

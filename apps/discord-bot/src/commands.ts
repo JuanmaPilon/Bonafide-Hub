@@ -172,36 +172,6 @@ export const commandDefinitions = [
         ),
     ),
   new SlashCommandBuilder()
-    .setName("setreminder")
-    .setDescription("Crea un recordatorio en minutos")
-    .addIntegerOption((option) =>
-      option
-        .setName("minutos")
-        .setDescription("Cuantos minutos faltan para enviar")
-        .setRequired(true)
-        .setMinValue(1)
-        .setMaxValue(43_200),
-    )
-    .addStringOption((option) =>
-      option
-        .setName("mensaje")
-        .setDescription("Mensaje del recordatorio")
-        .setRequired(true),
-    )
-    .addChannelOption((option) =>
-      option
-        .setName("canal")
-        .setDescription("Canal destino (opcional, por defecto canal actual)")
-        .setRequired(false)
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
-    )
-    .addRoleOption((option) =>
-      option
-        .setName("mencionar_rol")
-        .setDescription("Rol opcional para mencionar cuando se envie")
-        .setRequired(false),
-    ),
-  new SlashCommandBuilder()
     .setName("listreminders")
     .setDescription("Lista recordatorios de este servidor"),
   new SlashCommandBuilder()
@@ -212,6 +182,34 @@ export const commandDefinitions = [
         .setName("id")
         .setDescription("ID del recordatorio")
         .setRequired(true),
+    ),
+  new SlashCommandBuilder()
+    .setName("setreminder")
+    .setDescription("Programa un recordatorio privado de Karpindomo")
+    .addStringOption((option) =>
+      option
+        .setName("tipo")
+        .setDescription("Tipo de recordatorio")
+        .setRequired(true)
+        .addChoices(
+          { name: "KD (30 min)", value: "kd" },
+          { name: "Kvote (24 horas)", value: "kvote" },
+          { name: "Custom", value: "custom" },
+        ),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("minutos")
+        .setDescription("Solo para custom: minutos hasta el aviso")
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(43_200),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("mensaje")
+        .setDescription("Solo para custom: mensaje personalizado")
+        .setRequired(false),
     ),
   new SlashCommandBuilder()
     .setName("createreactionpanel")

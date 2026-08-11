@@ -370,6 +370,28 @@ function parseReactionRoleMode(input: string | null): ReactionRoleMode {
   return "multiple";
 }
 
+function pickRandom<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+const KD_REMINDER_TEMPLATES = [
+  "🫖 Senior, puede tirar KD cuando guste.",
+  "🫖 Senior, su KD ya esta servido.",
+  "🫖 Senior, Karpindomo le recuerda que KD esta listo.",
+] as const;
+
+const KVOTE_REMINDER_TEMPLATES = [
+  "🫖 Senior, le recuerdo que ya puede votar en Kvote.",
+  "🫖 Senior, su turno de Kvote ha llegado.",
+  "🫖 Senior, Karpindomo le avisa que Kvote ya esta disponible.",
+] as const;
+
+const CUSTOM_REMINDER_TEMPLATES = [
+  "🫖 Senior, su recordatorio de {minutes} minutos ha llegado.",
+  "🫖 Senior, Karpindomo anuncia que vencio su recordatorio de {minutes} minutos.",
+  "🫖 Senior, es momento de atender su recordatorio de {minutes} minutos.",
+] as const;
+
 const REMINDER_POLL_INTERVAL_MS = 30_000;
 let reminderPollTimer: NodeJS.Timeout | null = null;
 let isProcessingReminderQueue = false;
@@ -384,6 +406,35 @@ async function processDueReminders(): Promise<void> {
     const dueReminders = await listDueReminders(new Date().toISOString());
 
     for (const reminder of dueReminders) {
+      if (reminder.deliveryType === "dm") {
+        const user = await client.users
+          .fetch(reminder.createdByUserId)
+          .catch(() => null);
+        if (!user) {
+          continue;
+        }
+
+        const delivered = await user
+          .send(reminder.message)
+          .then(() => true)
+          .catch((error: unknown) => {
+            console.error("[discord-bot] Failed to deliver inbox reminder", {
+              guildId: reminder.guildId,
+              userId: reminder.createdByUserId,
+              reminderId: reminder.id,
+              error,
+            });
+            return false;
+          });
+
+        if (!delivered) {
+          continue;
+        }
+
+        await markReminderSent(reminder.guildId, reminder.id);
+        continue;
+      }
+
       const guild = await client.guilds
         .fetch(reminder.guildId)
         .catch(() => null);
@@ -1328,55 +1379,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (interaction.commandName === "setreminder") {
-    if (!interaction.inGuild() || !interaction.guildId) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!interaction.memberPermissions?.has("ManageGuild")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Server para usar este comando.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const selectedChannel = interaction.options.getChannel("canal");
-    const targetChannel = selectedChannel ?? interaction.channel;
-    if (!isSendableTextChannelLike(targetChannel)) {
-      await interaction.reply({
-        content:
-          "No se pudo resolver un canal de texto valido para recordatorio.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const minutes = interaction.options.getInteger("minutos", true);
-    const message = interaction.options.getString("mensaje", true).trim();
-    const mentionRole = interaction.options.getRole("mencionar_rol");
-
-    const reminder = await createReminder({
-      guildId: interaction.guildId,
-      channelId: targetChannel.id,
-      createdByUserId: interaction.user.id,
-      message,
-      minutesFromCreation: minutes,
-      roleId: mentionRole?.id,
-    });
-
-    const dueUnix = Math.floor(new Date(reminder.dueAt).getTime() / 1000);
-    await interaction.reply({
-      content: `Recordatorio creado (ID: ${reminder.id}). Se enviara en <#${targetChannel.id}> <t:${dueUnix}:R>.`,
-      ephemeral: true,
-    });
-    return;
-  }
-
   if (interaction.commandName === "listreminders") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
@@ -1399,8 +1401,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const lines = pending.slice(0, 20).map((entry) => {
       const dueUnix = Math.floor(new Date(entry.dueAt).getTime() / 1000);
+      const deliveryText =
+        entry.deliveryType === "dm" ? "DM" : `<#${entry.channelId}>`;
       const roleText = entry.roleId ? ` | rol: <@&${entry.roleId}>` : "";
-      return `${entry.id} | <#${entry.channelId}> | <t:${dueUnix}:R>${roleText} | ${entry.message}`;
+      return `${entry.id} | ${deliveryText} | <t:${dueUnix}:R>${roleText} | ${entry.message}`;
     });
 
     await interaction.reply({
@@ -1434,6 +1438,66 @@ client.on(Events.InteractionCreate, async (interaction) => {
       content: removed
         ? `Recordatorio ${reminderId} cancelado.`
         : "No existe un recordatorio con ese ID.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (interaction.commandName === "setreminder") {
+    if (!interaction.inGuild() || !interaction.guildId) {
+      await interaction.reply({
+        content: "Este comando solo se puede usar dentro de un servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const reminderType = interaction.options.getString("tipo", true);
+    const customMinutes = interaction.options.getInteger("minutos");
+    const customMessage = interaction.options.getString("mensaje")?.trim();
+
+    let minutesFromCreation: number;
+    let reminderMessage: string;
+
+    if (reminderType === "kd") {
+      minutesFromCreation = 30;
+      reminderMessage = pickRandom(KD_REMINDER_TEMPLATES);
+    } else if (reminderType === "kvote") {
+      minutesFromCreation = 24 * 60;
+      reminderMessage = pickRandom(KVOTE_REMINDER_TEMPLATES);
+    } else if (reminderType === "custom") {
+      if (!customMinutes) {
+        await interaction.reply({
+          content: "Para tipo custom debes indicar el parametro minutos.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      minutesFromCreation = customMinutes;
+      const customBaseTemplate = pickRandom(CUSTOM_REMINDER_TEMPLATES);
+      const details = customMessage ? `\nDetalle: ${customMessage}` : "";
+      reminderMessage = `${customBaseTemplate.replace("{minutes}", String(minutesFromCreation))}${details}`;
+    } else {
+      await interaction.reply({
+        content: "Tipo de reminder no soportado.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const reminder = await createReminder({
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+      createdByUserId: interaction.user.id,
+      deliveryType: "dm",
+      message: reminderMessage,
+      minutesFromCreation,
+    });
+
+    const dueUnix = Math.floor(new Date(reminder.dueAt).getTime() / 1000);
+    await interaction.reply({
+      content: `Recordatorio privado programado (ID: ${reminder.id}). Rapindomo te escribira por DM <t:${dueUnix}:R>.`,
       ephemeral: true,
     });
     return;
