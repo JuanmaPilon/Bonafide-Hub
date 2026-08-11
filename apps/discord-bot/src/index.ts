@@ -14,7 +14,6 @@ import {
   listDueReminders,
   listGuildReminders,
   markReminderSent,
-  removeGuildReminders,
   type Reminder,
   removeUserReminders,
   rescheduleReminder,
@@ -185,16 +184,18 @@ function formatLeaveMessage(
   details: MemberLeaveDetails,
 ): string {
   if (details.kind === "leave") {
-    return `${username} se retiro del servidor.`;
+    return `🚪 **Salida**\n${username} se retiro del servidor.`;
   }
 
   const actionText = details.kind === "kick" ? "expulsado" : "baneado";
+  const actionTitle = details.kind === "kick" ? "Expulsion" : "Ban";
+  const actionEmoji = details.kind === "kick" ? "⛔" : "🔨";
   const moderatorText = details.moderatorId
     ? `<@${details.moderatorId}>`
     : "desconocido";
   const reasonText = details.reason?.trim() || "sin razon informada";
 
-  return `<@${memberId}> (${username}) fue ${actionText} por ${moderatorText}. Razon: ${reasonText}.`;
+  return `${actionEmoji} **${actionTitle}**\nUsuario: <@${memberId}> (${username})\nEstado: ${actionText}\nModerador: ${moderatorText}\nRazon: ${reasonText}.`;
 }
 
 async function resolveMemberLeaveDetails(
@@ -410,6 +411,13 @@ const CUSTOM_REMINDER_TEMPLATES = [
   "🫖 Senior, su cita con el recordatorio de {duration} ha llegado.",
 ] as const;
 
+const WELCOME_TEMPLATES = [
+  "🫖 **Karpindomo se presenta, Senior.**\nBienvenido <@{memberId}> a la comunidad.\nLa casa queda a su disposicion.",
+  "🎩 **Karpindomo, mayordomo capincho, al servicio.**\nUn placer recibir a <@{memberId}> en el servidor.\nQue tenga una estancia impecable.",
+  "🛎️ **Atencion, atencion:** Karpindomo confirma llegada de <@{memberId}>.\nBienvenido a esta distinguida comunidad.",
+  "🍵 **Recepcion oficial de Karpindomo.**\n<@{memberId}> ya esta en casa.\nPongase comodo y disfrute la estadia.",
+] as const;
+
 function formatReminderDuration(minutesFromCreation: number): string {
   if (minutesFromCreation % 60 === 0) {
     const hours = minutesFromCreation / 60;
@@ -480,6 +488,10 @@ function buildDmReminderMessage(reminder: Reminder): {
     content: next.template.replace("{duration}", durationText),
     rotationIndex: next.index,
   };
+}
+
+function buildWelcomeMessage(memberId: string): string {
+  return pickRandom(WELCOME_TEMPLATES).replace("{memberId}", memberId);
 }
 
 const REMINDER_POLL_INTERVAL_MS = 30_000;
@@ -1560,19 +1572,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const reminderKindInput = interaction.options.getString("tipo");
-    const scopeInput = interaction.options.getString("alcance");
-    const removeGuildWide = scopeInput === "all";
-
-    if (removeGuildWide && !interaction.memberPermissions?.has("ManageGuild")) {
-      await interaction.reply({
-        content:
-          "Necesitas el permiso Manage Server para eliminar recordatorios de todo el servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const removeAll = reminderKindInput === "all" || !reminderKindInput;
+    const removeAll = interaction.options.getBoolean("all") ?? false;
     const reminderKind =
       reminderKindInput === "kd" ||
       reminderKindInput === "kdaily" ||
@@ -1580,51 +1580,41 @@ client.on(Events.InteractionCreate, async (interaction) => {
         ? reminderKindInput
         : undefined;
 
-    const removedCount = removeGuildWide
-      ? await removeGuildReminders({
-          guildId: interaction.guildId,
-          reminderKind: removeAll
-            ? undefined
-            : (reminderKind as ReminderKind | undefined),
-        })
-      : await removeUserReminders({
-          guildId: interaction.guildId,
-          userId: interaction.user.id,
-          reminderKind: removeAll
-            ? undefined
-            : (reminderKind as ReminderKind | undefined),
-        });
+    if (!removeAll && !reminderKind) {
+      await interaction.reply({
+        content:
+          "Debes indicar tipo (kd, kdaily o custom), o usar all:true para eliminar todos tus recordatorios.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const removedCount = await removeUserReminders({
+      guildId: interaction.guildId,
+      userId: interaction.user.id,
+      reminderKind: removeAll
+        ? undefined
+        : (reminderKind as ReminderKind | undefined),
+    });
 
     if (removedCount === 0) {
       await interaction.reply({
-        content: removeGuildWide
-          ? removeAll
-            ? "No hay recordatorios en el servidor para eliminar."
-            : reminderKind
-              ? `No hay recordatorios de tipo ${reminderKind} en el servidor para eliminar.`
-              : "No hay recordatorios en el servidor para eliminar."
-          : removeAll
-            ? "No tienes recordatorios para eliminar."
-            : reminderKind
-              ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
-              : "No tienes recordatorios para eliminar.",
+        content: removeAll
+          ? "No tienes recordatorios para eliminar."
+          : reminderKind
+            ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
+            : "No tienes recordatorios para eliminar.",
         ephemeral: true,
       });
       return;
     }
 
     await interaction.reply({
-      content: removeGuildWide
-        ? removeAll
-          ? `Se eliminaron ${removedCount} recordatorio/s del servidor.`
-          : reminderKind
-            ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind} del servidor.`
-            : `Se eliminaron ${removedCount} recordatorio/s del servidor.`
-        : removeAll
-          ? `Se eliminaron ${removedCount} recordatorio/s tuyos.`
-          : reminderKind
-            ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
-            : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
+      content: removeAll
+        ? `Se eliminaron ${removedCount} recordatorio/s tuyos.`
+        : reminderKind
+          ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
+          : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
       ephemeral: true,
     });
     return;
@@ -1724,7 +1714,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
-  const message = `Bienvenido <@${member.id}> al servidor.`;
+  const message = buildWelcomeMessage(member.id);
 
   await sendMemberLog(member.guild.id, member.guild.systemChannelId, message);
 });

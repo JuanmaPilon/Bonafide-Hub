@@ -162,31 +162,6 @@ export async function removeUserReminders(input: {
   return removedCount;
 }
 
-export async function removeGuildReminders(input: {
-  guildId: string;
-  reminderKind?: ReminderKind;
-}): Promise<number> {
-  const store = await readStore();
-  const existing = store[input.guildId] ?? [];
-
-  const filtered = existing.filter((entry) => {
-    if (!input.reminderKind) {
-      return false;
-    }
-
-    return resolveReminderKind(entry) !== input.reminderKind;
-  });
-
-  const removedCount = existing.length - filtered.length;
-  if (removedCount === 0) {
-    return 0;
-  }
-
-  store[input.guildId] = filtered;
-  await writeStore(store);
-  return removedCount;
-}
-
 export async function listDueReminders(nowIso: string): Promise<Reminder[]> {
   const store = await readStore();
   const nowMs = new Date(nowIso).getTime();
