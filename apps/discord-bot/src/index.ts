@@ -1396,7 +1396,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (interaction.commandName === "listreminders") {
+  if (
+    interaction.commandName === "listreminders" ||
+    interaction.commandName === "listreminder"
+  ) {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -1515,7 +1518,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    const reminderType = interaction.options.getString("tipo", true);
+    const reminderType = interaction.options.getSubcommand(true);
     const customMinutes = interaction.options.getInteger("minutos");
     const customHours = interaction.options.getInteger("horas");
     const repeat = interaction.options.getBoolean("repetir") ?? false;
@@ -1524,27 +1527,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     let reminderMessage: string;
 
     if (reminderType === "kd") {
-      if (customMinutes || customHours) {
-        await interaction.reply({
-          content:
-            "KD ya tiene tiempo fijo (30 min). No uses minutos/horas para este tipo.",
-          ephemeral: true,
-        });
-        return;
-      }
-
       minutesFromCreation = 30;
       reminderMessage = pickRandom(KD_REMINDER_TEMPLATES);
     } else if (reminderType === "daily") {
-      if (customMinutes || customHours) {
-        await interaction.reply({
-          content:
-            "Daily ya tiene tiempo fijo (12 horas). No uses minutos/horas para este tipo.",
-          ephemeral: true,
-        });
-        return;
-      }
-
       minutesFromCreation = 12 * 60;
       reminderMessage = pickRandom(DAILY_REMINDER_TEMPLATES);
     } else if (reminderType === "custom") {

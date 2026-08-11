@@ -175,6 +175,9 @@ export const commandDefinitions = [
     .setName("listreminders")
     .setDescription("Lista recordatorios de este servidor"),
   new SlashCommandBuilder()
+    .setName("listreminder")
+    .setDescription("Lista recordatorios activos"),
+  new SlashCommandBuilder()
     .setName("cancelreminder")
     .setDescription("Cancela un recordatorio por ID")
     .addStringOption((option) =>
@@ -200,38 +203,60 @@ export const commandDefinitions = [
   new SlashCommandBuilder()
     .setName("setreminder")
     .setDescription("Programa un recordatorio privado de Karpindomo")
-    .addStringOption((option) =>
-      option
-        .setName("tipo")
-        .setDescription("Tipo de recordatorio")
-        .setRequired(true)
-        .addChoices(
-          { name: "KD (30 min)", value: "kd" },
-          { name: "Daily (12 horas)", value: "daily" },
-          { name: "Custom", value: "custom" },
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("kd")
+        .setDescription("Recordatorio KD con tiempo fijo (30 min)")
+        .addBooleanOption((option) =>
+          option
+            .setName("repetir")
+            .setDescription(
+              "Si es true, repite el recordatorio automaticamente",
+            )
+            .setRequired(false),
         ),
     )
-    .addIntegerOption((option) =>
-      option
-        .setName("minutos")
-        .setDescription("Solo custom: minutos hasta el aviso")
-        .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(43_200),
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("daily")
+        .setDescription("Recordatorio Daily con tiempo fijo (12 horas)")
+        .addBooleanOption((option) =>
+          option
+            .setName("repetir")
+            .setDescription(
+              "Si es true, repite el recordatorio automaticamente",
+            )
+            .setRequired(false),
+        ),
     )
-    .addIntegerOption((option) =>
-      option
-        .setName("horas")
-        .setDescription("Solo custom: horas hasta el aviso")
-        .setRequired(false)
-        .setMinValue(1)
-        .setMaxValue(720),
-    )
-    .addBooleanOption((option) =>
-      option
-        .setName("repetir")
-        .setDescription("Si es true, repite el recordatorio automaticamente")
-        .setRequired(false),
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("custom")
+        .setDescription("Recordatorio personalizado en minutos u horas")
+        .addIntegerOption((option) =>
+          option
+            .setName("minutos")
+            .setDescription("Minutos hasta el aviso")
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(43_200),
+        )
+        .addIntegerOption((option) =>
+          option
+            .setName("horas")
+            .setDescription("Horas hasta el aviso")
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(720),
+        )
+        .addBooleanOption((option) =>
+          option
+            .setName("repetir")
+            .setDescription(
+              "Si es true, repite el recordatorio automaticamente",
+            )
+            .setRequired(false),
+        ),
     ),
   new SlashCommandBuilder()
     .setName("createreactionpanel")
