@@ -185,7 +185,7 @@ export const commandDefinitions = [
     ),
   new SlashCommandBuilder()
     .setName("removereminder")
-    .setDescription("Elimina tus recordatorios (todos o por tipo)")
+    .setDescription("Elimina recordatorios (propios o de todo el servidor)")
     .addStringOption((option) =>
       option
         .setName("tipo")
@@ -196,6 +196,16 @@ export const commandDefinitions = [
           { name: "KD", value: "kd" },
           { name: "KDaily", value: "kdaily" },
           { name: "Custom", value: "custom" },
+        ),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("alcance")
+        .setDescription("A quien se eliminan los reminders")
+        .setRequired(false)
+        .addChoices(
+          { name: "Mios", value: "mine" },
+          { name: "Todo el servidor", value: "all" },
         ),
     ),
   new SlashCommandBuilder()

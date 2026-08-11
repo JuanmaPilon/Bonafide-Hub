@@ -11,6 +11,7 @@ export type Reminder = {
   deliveryType?: "channel" | "dm";
   reminderKind?: ReminderKindStored;
   repeat?: boolean;
+  rotationIndex?: number;
   message: string;
   minutesFromCreation: number;
   dueAt: string;
@@ -161,6 +162,31 @@ export async function removeUserReminders(input: {
   return removedCount;
 }
 
+export async function removeGuildReminders(input: {
+  guildId: string;
+  reminderKind?: ReminderKind;
+}): Promise<number> {
+  const store = await readStore();
+  const existing = store[input.guildId] ?? [];
+
+  const filtered = existing.filter((entry) => {
+    if (!input.reminderKind) {
+      return false;
+    }
+
+    return resolveReminderKind(entry) !== input.reminderKind;
+  });
+
+  const removedCount = existing.length - filtered.length;
+  if (removedCount === 0) {
+    return 0;
+  }
+
+  store[input.guildId] = filtered;
+  await writeStore(store);
+  return removedCount;
+}
+
 export async function listDueReminders(nowIso: string): Promise<Reminder[]> {
   const store = await readStore();
   const nowMs = new Date(nowIso).getTime();
@@ -211,16 +237,17 @@ export async function markReminderSent(
   return true;
 }
 
-export async function rescheduleReminder(
-  guildId: string,
-  reminderId: string,
-): Promise<boolean> {
+export async function rescheduleReminder(input: {
+  guildId: string;
+  reminderId: string;
+  rotationIndex?: number;
+}): Promise<boolean> {
   const store = await readStore();
-  const existing = store[guildId] ?? [];
+  const existing = store[input.guildId] ?? [];
   let updated = false;
 
   const next = existing.map((entry) => {
-    if (entry.id !== reminderId) {
+    if (entry.id !== input.reminderId) {
       return entry;
     }
 
@@ -231,6 +258,10 @@ export async function rescheduleReminder(
 
     return {
       ...entry,
+      rotationIndex:
+        input.rotationIndex !== undefined
+          ? input.rotationIndex
+          : entry.rotationIndex,
       dueAt: nextDueAt,
       sentAt: undefined,
     };
@@ -240,7 +271,7 @@ export async function rescheduleReminder(
     return false;
   }
 
-  store[guildId] = next;
+  store[input.guildId] = next;
   await writeStore(store);
   return true;
 }

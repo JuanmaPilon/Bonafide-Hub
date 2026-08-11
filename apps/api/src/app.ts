@@ -513,7 +513,7 @@ export function buildApp() {
     return reply.code(201).send({
       ok: true,
       guildId: params.guildId,
-      reminder,
+      reminderScheduledFor: reminder.dueAt,
     });
   });
 

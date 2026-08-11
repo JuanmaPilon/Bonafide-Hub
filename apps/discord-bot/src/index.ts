@@ -14,6 +14,7 @@ import {
   listDueReminders,
   listGuildReminders,
   markReminderSent,
+  removeGuildReminders,
   type Reminder,
   removeUserReminders,
   rescheduleReminder,
@@ -409,12 +410,6 @@ const CUSTOM_REMINDER_TEMPLATES = [
   "🫖 Senior, su cita con el recordatorio de {duration} ha llegado.",
 ] as const;
 
-const reminderTemplateCursorByKind: Record<ReminderKind, number> = {
-  kd: 0,
-  kdaily: 0,
-  custom: 0,
-};
-
 function formatReminderDuration(minutesFromCreation: number): string {
   if (minutesFromCreation % 60 === 0) {
     const hours = minutesFromCreation / 60;
@@ -424,32 +419,67 @@ function formatReminderDuration(minutesFromCreation: number): string {
   return `${minutesFromCreation} minuto${minutesFromCreation === 1 ? "" : "s"}`;
 }
 
-function pickCyclingTemplate<T extends string>(
-  kind: ReminderKind,
+function pickRandomTemplateAvoidingLast<T extends string>(
   templates: readonly T[],
-): T {
-  const currentIndex = reminderTemplateCursorByKind[kind] % templates.length;
-  reminderTemplateCursorByKind[kind] =
-    (reminderTemplateCursorByKind[kind] + 1) % templates.length;
-  return templates[currentIndex];
+  lastIndex?: number,
+): { template: T; index: number } {
+  if (templates.length === 1) {
+    return { template: templates[0], index: 0 };
+  }
+
+  const normalizedLastIndex =
+    typeof lastIndex === "number" && lastIndex >= 0
+      ? lastIndex % templates.length
+      : undefined;
+
+  let nextIndex = Math.floor(Math.random() * templates.length);
+  if (normalizedLastIndex !== undefined && nextIndex === normalizedLastIndex) {
+    nextIndex =
+      (nextIndex + 1 + Math.floor(Math.random() * (templates.length - 1))) %
+      templates.length;
+  }
+
+  return {
+    template: templates[nextIndex],
+    index: nextIndex,
+  };
 }
 
-function buildDmReminderMessage(reminder: Reminder): string {
+function buildDmReminderMessage(reminder: Reminder): {
+  content: string;
+  rotationIndex: number;
+} {
   const kind = resolveReminderKind(reminder);
+  const lastIndex = reminder.rotationIndex;
 
   if (kind === "kd") {
-    return pickCyclingTemplate("kd", KD_REMINDER_TEMPLATES);
+    const next = pickRandomTemplateAvoidingLast(
+      KD_REMINDER_TEMPLATES,
+      lastIndex,
+    );
+    return { content: next.template, rotationIndex: next.index };
   }
 
   if (kind === "kdaily") {
-    return `${pickCyclingTemplate("kdaily", KDAILY_REMINDER_TEMPLATES)}\nhttps://karuta.com/vote`;
+    const next = pickRandomTemplateAvoidingLast(
+      KDAILY_REMINDER_TEMPLATES,
+      lastIndex,
+    );
+    return {
+      content: `${next.template}\nhttps://karuta.com/vote`,
+      rotationIndex: next.index,
+    };
   }
 
   const durationText = formatReminderDuration(reminder.minutesFromCreation);
-  return pickCyclingTemplate("custom", CUSTOM_REMINDER_TEMPLATES).replace(
-    "{duration}",
-    durationText,
+  const next = pickRandomTemplateAvoidingLast(
+    CUSTOM_REMINDER_TEMPLATES,
+    lastIndex,
   );
+  return {
+    content: next.template.replace("{duration}", durationText),
+    rotationIndex: next.index,
+  };
 }
 
 const REMINDER_POLL_INTERVAL_MS = 30_000;
@@ -474,9 +504,9 @@ async function processDueReminders(): Promise<void> {
           continue;
         }
 
-        const reminderText = buildDmReminderMessage(reminder);
+        const reminderMessage = buildDmReminderMessage(reminder);
         const delivered = await user
-          .send(reminderText)
+          .send(reminderMessage.content)
           .then(() => true)
           .catch((error: unknown) => {
             console.error("[discord-bot] Failed to deliver inbox reminder", {
@@ -493,7 +523,11 @@ async function processDueReminders(): Promise<void> {
         }
 
         if (reminder.repeat) {
-          await rescheduleReminder(reminder.guildId, reminder.id);
+          await rescheduleReminder({
+            guildId: reminder.guildId,
+            reminderId: reminder.id,
+            rotationIndex: reminderMessage.rotationIndex,
+          });
         } else {
           await markReminderSent(reminder.guildId, reminder.id);
         }
@@ -535,7 +569,10 @@ async function processDueReminders(): Promise<void> {
       }
 
       if (reminder.repeat) {
-        await rescheduleReminder(reminder.guildId, reminder.id);
+        await rescheduleReminder({
+          guildId: reminder.guildId,
+          reminderId: reminder.id,
+        });
       } else {
         await markReminderSent(reminder.guildId, reminder.id);
       }
@@ -1523,6 +1560,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     const reminderKindInput = interaction.options.getString("tipo");
+    const scopeInput = interaction.options.getString("alcance");
+    const removeGuildWide = scopeInput === "all";
+
+    if (removeGuildWide && !interaction.memberPermissions?.has("ManageGuild")) {
+      await interaction.reply({
+        content:
+          "Necesitas el permiso Manage Server para eliminar recordatorios de todo el servidor.",
+        ephemeral: true,
+      });
+      return;
+    }
+
     const removeAll = reminderKindInput === "all" || !reminderKindInput;
     const reminderKind =
       reminderKindInput === "kd" ||
@@ -1531,32 +1580,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
         ? reminderKindInput
         : undefined;
 
-    const removedCount = await removeUserReminders({
-      guildId: interaction.guildId,
-      userId: interaction.user.id,
-      reminderKind: removeAll
-        ? undefined
-        : (reminderKind as ReminderKind | undefined),
-    });
+    const removedCount = removeGuildWide
+      ? await removeGuildReminders({
+          guildId: interaction.guildId,
+          reminderKind: removeAll
+            ? undefined
+            : (reminderKind as ReminderKind | undefined),
+        })
+      : await removeUserReminders({
+          guildId: interaction.guildId,
+          userId: interaction.user.id,
+          reminderKind: removeAll
+            ? undefined
+            : (reminderKind as ReminderKind | undefined),
+        });
 
     if (removedCount === 0) {
       await interaction.reply({
-        content: removeAll
-          ? "No tienes recordatorios para eliminar."
-          : reminderKind
-            ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
-            : "No tienes recordatorios para eliminar.",
+        content: removeGuildWide
+          ? removeAll
+            ? "No hay recordatorios en el servidor para eliminar."
+            : reminderKind
+              ? `No hay recordatorios de tipo ${reminderKind} en el servidor para eliminar.`
+              : "No hay recordatorios en el servidor para eliminar."
+          : removeAll
+            ? "No tienes recordatorios para eliminar."
+            : reminderKind
+              ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
+              : "No tienes recordatorios para eliminar.",
         ephemeral: true,
       });
       return;
     }
 
     await interaction.reply({
-      content: removeAll
-        ? `Se eliminaron ${removedCount} recordatorio/s tuyos.`
-        : reminderKind
-          ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
-          : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
+      content: removeGuildWide
+        ? removeAll
+          ? `Se eliminaron ${removedCount} recordatorio/s del servidor.`
+          : reminderKind
+            ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind} del servidor.`
+            : `Se eliminaron ${removedCount} recordatorio/s del servidor.`
+        : removeAll
+          ? `Se eliminaron ${removedCount} recordatorio/s tuyos.`
+          : reminderKind
+            ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
+            : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
       ephemeral: true,
     });
     return;
@@ -1637,7 +1705,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       ? " Este recordatorio se repetira automaticamente."
       : "";
     await interaction.reply({
-      content: `Recordatorio privado programado. Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
+      content: `Recordatorio privado creado. Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
       ephemeral: true,
     });
     return;
