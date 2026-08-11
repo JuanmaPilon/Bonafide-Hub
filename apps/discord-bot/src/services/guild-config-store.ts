@@ -25,6 +25,7 @@ const dataDirPath = path.resolve(process.cwd(), "data");
 const configFilePath = path.resolve(dataDirPath, "guild-config.json");
 const remoteApiBaseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
 const remoteApiToken = env.BOT_CONFIG_API_TOKEN?.trim();
+const remoteTimeoutMs = 4000;
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -47,6 +48,21 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
   };
 }
 
+function hasAnyConfigData(config: GuildConfig): boolean {
+  return Boolean(
+    config.dynamicVoiceCreateChannelId ||
+    config.memberLogChannelId ||
+    (config.reactionRoles?.length ?? 0) > 0 ||
+    (config.temporaryVoiceChannelIds?.length ?? 0) > 0,
+  );
+}
+
+function createTimeoutController(timeoutMs: number): AbortController {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller;
+}
+
 async function readLocalGuildConfig(guildId: string): Promise<GuildConfig> {
   const store = await readStore();
   return normalizeGuildConfig(store[guildId] ?? {});
@@ -66,6 +82,7 @@ async function fetchRemoteGuildConfig(guildId: string): Promise<GuildConfig> {
     throw new Error("Remote bot config store is not configured");
   }
 
+  const controller = createTimeoutController(remoteTimeoutMs);
   const response = await fetch(
     `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(guildId)}/config`,
     {
@@ -73,6 +90,7 @@ async function fetchRemoteGuildConfig(guildId: string): Promise<GuildConfig> {
         "x-bot-token": remoteApiToken,
       },
       method: "GET",
+      signal: controller.signal,
     },
   );
 
@@ -99,6 +117,7 @@ async function saveRemoteGuildConfig(
     throw new Error("Remote bot config store is not configured");
   }
 
+  const controller = createTimeoutController(remoteTimeoutMs);
   const response = await fetch(
     `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(guildId)}/config`,
     {
@@ -108,6 +127,7 @@ async function saveRemoteGuildConfig(
         "x-bot-token": remoteApiToken,
       },
       method: "PUT",
+      signal: controller.signal,
     },
   );
 
@@ -148,9 +168,21 @@ async function writeStore(store: GuildConfigStore): Promise<void> {
 }
 
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
+  const localConfig = await readLocalGuildConfig(guildId);
+
   if (isRemoteStoreEnabled()) {
     try {
       const remoteConfig = await fetchRemoteGuildConfig(guildId);
+
+      if (!hasAnyConfigData(remoteConfig) && hasAnyConfigData(localConfig)) {
+        const syncedConfig = await saveRemoteGuildConfig(guildId, localConfig);
+        await writeLocalGuildConfig(guildId, syncedConfig);
+        console.log(
+          `[discord-bot] Synced local fallback config to remote store for guild ${guildId}.`,
+        );
+        return syncedConfig;
+      }
+
       await writeLocalGuildConfig(guildId, remoteConfig);
       return remoteConfig;
     } catch (error: unknown) {
@@ -160,7 +192,7 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
     }
   }
 
-  return readLocalGuildConfig(guildId);
+  return localConfig;
 }
 
 async function mutateGuildConfig(
