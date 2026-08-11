@@ -380,16 +380,16 @@ const KD_REMINDER_TEMPLATES = [
   "🫖 Senior, Karpindomo le recuerda que KD esta listo.",
 ] as const;
 
-const KVOTE_REMINDER_TEMPLATES = [
-  "🫖 Senior, le recuerdo que ya puede votar en Kvote.",
-  "🫖 Senior, su turno de Kvote ha llegado.",
-  "🫖 Senior, Karpindomo le avisa que Kvote ya esta disponible.",
+const DAILY_REMINDER_TEMPLATES = [
+  "🫖 Senior, su daily ya esta listo.",
+  "🫖 Senior, Karpindomo le recuerda que puede hacer daily.",
+  "🫖 Senior, llego la hora de su daily.",
 ] as const;
 
 const CUSTOM_REMINDER_TEMPLATES = [
-  "🫖 Senior, su recordatorio de {minutes} minutos ha llegado.",
-  "🫖 Senior, Karpindomo anuncia que vencio su recordatorio de {minutes} minutos.",
-  "🫖 Senior, es momento de atender su recordatorio de {minutes} minutos.",
+  "🫖 Senior, su recordatorio de {duration} ha llegado.",
+  "🫖 Senior, Karpindomo anuncia que vencio su recordatorio de {duration}.",
+  "🫖 Senior, es momento de atender su recordatorio de {duration}.",
 ] as const;
 
 const REMINDER_POLL_INTERVAL_MS = 30_000;
@@ -1454,30 +1454,61 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const reminderType = interaction.options.getString("tipo", true);
     const customMinutes = interaction.options.getInteger("minutos");
-    const customMessage = interaction.options.getString("mensaje")?.trim();
+    const customHours = interaction.options.getInteger("horas");
 
     let minutesFromCreation: number;
     let reminderMessage: string;
 
     if (reminderType === "kd") {
-      minutesFromCreation = 30;
-      reminderMessage = pickRandom(KD_REMINDER_TEMPLATES);
-    } else if (reminderType === "kvote") {
-      minutesFromCreation = 24 * 60;
-      reminderMessage = pickRandom(KVOTE_REMINDER_TEMPLATES);
-    } else if (reminderType === "custom") {
-      if (!customMinutes) {
+      if (customMinutes || customHours) {
         await interaction.reply({
-          content: "Para tipo custom debes indicar el parametro minutos.",
+          content:
+            "KD ya tiene tiempo fijo (30 min). No uses minutos/horas para este tipo.",
           ephemeral: true,
         });
         return;
       }
 
-      minutesFromCreation = customMinutes;
+      minutesFromCreation = 30;
+      reminderMessage = pickRandom(KD_REMINDER_TEMPLATES);
+    } else if (reminderType === "daily") {
+      if (customMinutes || customHours) {
+        await interaction.reply({
+          content:
+            "Daily ya tiene tiempo fijo (12 horas). No uses minutos/horas para este tipo.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      minutesFromCreation = 12 * 60;
+      reminderMessage = pickRandom(DAILY_REMINDER_TEMPLATES);
+    } else if (reminderType === "custom") {
+      if (customMinutes && customHours) {
+        await interaction.reply({
+          content: "Para custom indica solo uno: minutos o horas (no ambos).",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (!customMinutes && !customHours) {
+        await interaction.reply({
+          content: "Para custom debes indicar minutos o horas.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const durationText = customHours
+        ? `${customHours} hora${customHours === 1 ? "" : "s"}`
+        : `${customMinutes} minuto${customMinutes === 1 ? "" : "s"}`;
+
+      minutesFromCreation = customHours
+        ? customHours * 60
+        : (customMinutes as number);
       const customBaseTemplate = pickRandom(CUSTOM_REMINDER_TEMPLATES);
-      const details = customMessage ? `\nDetalle: ${customMessage}` : "";
-      reminderMessage = `${customBaseTemplate.replace("{minutes}", String(minutesFromCreation))}${details}`;
+      reminderMessage = customBaseTemplate.replace("{duration}", durationText);
     } else {
       await interaction.reply({
         content: "Tipo de reminder no soportado.",
@@ -1497,7 +1528,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const dueUnix = Math.floor(new Date(reminder.dueAt).getTime() / 1000);
     await interaction.reply({
-      content: `Recordatorio privado programado (ID: ${reminder.id}). Rapindomo te escribira por DM <t:${dueUnix}:R>.`,
+      content: `Recordatorio privado programado (ID: ${reminder.id}). Karpindomo te escribira por DM <t:${dueUnix}:R>.`,
       ephemeral: true,
     });
     return;

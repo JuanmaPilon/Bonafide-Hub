@@ -193,23 +193,25 @@ export const commandDefinitions = [
         .setRequired(true)
         .addChoices(
           { name: "KD (30 min)", value: "kd" },
-          { name: "Kvote (24 horas)", value: "kvote" },
+          { name: "Daily (12 horas)", value: "daily" },
           { name: "Custom", value: "custom" },
         ),
     )
     .addIntegerOption((option) =>
       option
         .setName("minutos")
-        .setDescription("Solo para custom: minutos hasta el aviso")
+        .setDescription("Solo custom: minutos hasta el aviso")
         .setRequired(false)
         .setMinValue(1)
         .setMaxValue(43_200),
     )
-    .addStringOption((option) =>
+    .addIntegerOption((option) =>
       option
-        .setName("mensaje")
-        .setDescription("Solo para custom: mensaje personalizado")
-        .setRequired(false),
+        .setName("horas")
+        .setDescription("Solo custom: horas hasta el aviso")
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(720),
     ),
   new SlashCommandBuilder()
     .setName("createreactionpanel")
