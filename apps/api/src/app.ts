@@ -9,6 +9,7 @@ import {
 import {
   getGuildConfig,
   type GuildConfig,
+  replaceGuildConfig,
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
 import {
@@ -99,6 +100,32 @@ export function buildApp() {
     });
   }
 
+  function getBotAuthToken(request: FastifyRequest): string | null {
+    const rawHeader = request.headers["x-bot-token"];
+    if (!rawHeader) {
+      return null;
+    }
+
+    if (Array.isArray(rawHeader)) {
+      return rawHeader[0] ?? null;
+    }
+
+    return rawHeader;
+  }
+
+  function isAuthorizedBotRequest(request: FastifyRequest): boolean {
+    if (!env.BOT_API_TOKEN) {
+      return false;
+    }
+
+    const token = getBotAuthToken(request);
+    if (!token) {
+      return false;
+    }
+
+    return token === env.BOT_API_TOKEN;
+  }
+
   app.get("/health", async () => ({
     ok: true,
     service: "api",
@@ -118,8 +145,69 @@ export function buildApp() {
       "/guilds/:guildId/config",
       "/guilds/:guildId/reminders",
       "/guilds/:guildId/reminders/:reminderId",
+      "/internal/guilds/:guildId/config",
     ],
   }));
+
+  app.get("/internal/guilds/:guildId/config", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      config,
+    };
+  });
+
+  app.put("/internal/guilds/:guildId/config", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const body = request.body as { config?: GuildConfig };
+    if (!body?.config || typeof body.config !== "object") {
+      return reply.code(400).send({
+        ok: false,
+        error: "Missing config object",
+      });
+    }
+
+    const config = await replaceGuildConfig(params.guildId, body.config);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      config,
+    };
+  });
 
   app.get("/auth/discord/start", async (_request, reply) => {
     const state = createOAuthState();

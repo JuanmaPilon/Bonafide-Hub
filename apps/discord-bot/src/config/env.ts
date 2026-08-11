@@ -16,6 +16,8 @@ const envSchema = z.object({
     .string()
     .regex(/^\d+$/, "DISCORD_GUILD_ID must be numeric")
     .optional(),
+  BOT_CONFIG_API_URL: z.string().url().optional(),
+  BOT_CONFIG_API_TOKEN: z.string().min(16).optional(),
   BOT_DISABLED: z.string().optional(),
 });
 

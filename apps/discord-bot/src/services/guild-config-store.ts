@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { env } from "../config/env.js";
 
 type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
@@ -22,6 +23,86 @@ type GuildConfigStore = Record<string, GuildConfig>;
 
 const dataDirPath = path.resolve(process.cwd(), "data");
 const configFilePath = path.resolve(dataDirPath, "guild-config.json");
+const remoteApiBaseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+const remoteApiToken = env.BOT_CONFIG_API_TOKEN?.trim();
+
+function isRemoteStoreEnabled(): boolean {
+  return Boolean(remoteApiBaseUrl && remoteApiToken);
+}
+
+function normalizeGuildConfig(input: GuildConfig): GuildConfig {
+  return {
+    dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
+    memberLogChannelId: input.memberLogChannelId,
+    reactionRoles: input.reactionRoles ?? [],
+    temporaryVoiceChannelIds: input.temporaryVoiceChannelIds ?? [],
+  };
+}
+
+async function fetchRemoteGuildConfig(guildId: string): Promise<GuildConfig> {
+  if (!remoteApiBaseUrl || !remoteApiToken) {
+    throw new Error("Remote bot config store is not configured");
+  }
+
+  const response = await fetch(
+    `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(guildId)}/config`,
+    {
+      headers: {
+        "x-bot-token": remoteApiToken,
+      },
+      method: "GET",
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "unknown");
+    throw new Error(
+      `Remote guild config fetch failed (${response.status}): ${details}`,
+    );
+  }
+
+  const payload = (await response.json()) as {
+    config?: GuildConfig;
+    ok?: boolean;
+  };
+
+  return normalizeGuildConfig(payload.config ?? {});
+}
+
+async function saveRemoteGuildConfig(
+  guildId: string,
+  config: GuildConfig,
+): Promise<GuildConfig> {
+  if (!remoteApiBaseUrl || !remoteApiToken) {
+    throw new Error("Remote bot config store is not configured");
+  }
+
+  const response = await fetch(
+    `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(guildId)}/config`,
+    {
+      body: JSON.stringify({ config: normalizeGuildConfig(config) }),
+      headers: {
+        "content-type": "application/json",
+        "x-bot-token": remoteApiToken,
+      },
+      method: "PUT",
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "unknown");
+    throw new Error(
+      `Remote guild config save failed (${response.status}): ${details}`,
+    );
+  }
+
+  const payload = (await response.json()) as {
+    config?: GuildConfig;
+    ok?: boolean;
+  };
+
+  return normalizeGuildConfig(payload.config ?? config);
+}
 
 async function readStore(): Promise<GuildConfigStore> {
   try {
@@ -45,94 +126,94 @@ async function writeStore(store: GuildConfigStore): Promise<void> {
 }
 
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
+  if (isRemoteStoreEnabled()) {
+    return fetchRemoteGuildConfig(guildId);
+  }
+
   const store = await readStore();
-  return store[guildId] ?? {};
+  return normalizeGuildConfig(store[guildId] ?? {});
+}
+
+async function mutateGuildConfig(
+  guildId: string,
+  updater: (current: GuildConfig) => GuildConfig,
+): Promise<GuildConfig> {
+  if (isRemoteStoreEnabled()) {
+    const current = await fetchRemoteGuildConfig(guildId);
+    const next = normalizeGuildConfig(updater(current));
+    return saveRemoteGuildConfig(guildId, next);
+  }
+
+  const store = await readStore();
+  const current = normalizeGuildConfig(store[guildId] ?? {});
+  const next = normalizeGuildConfig(updater(current));
+  store[guildId] = next;
+  await writeStore(store);
+
+  return next;
 }
 
 export async function setGuildMemberLogChannelId(
   guildId: string,
   channelId: string,
 ): Promise<void> {
-  const store = await readStore();
-
-  store[guildId] = {
-    ...store[guildId],
+  await mutateGuildConfig(guildId, (current) => ({
+    ...current,
     memberLogChannelId: channelId,
-  };
-
-  await writeStore(store);
+  }));
 }
 
 export async function setGuildDynamicVoiceCreateChannelId(
   guildId: string,
   channelId: string,
 ): Promise<void> {
-  const store = await readStore();
-
-  store[guildId] = {
-    ...store[guildId],
+  await mutateGuildConfig(guildId, (current) => ({
+    ...current,
     dynamicVoiceCreateChannelId: channelId,
-  };
-
-  await writeStore(store);
+  }));
 }
 
 export async function clearGuildDynamicVoiceCreateChannelId(
   guildId: string,
 ): Promise<void> {
-  const store = await readStore();
-  const current = store[guildId];
-
-  if (!current) {
-    return;
-  }
-
-  const { dynamicVoiceCreateChannelId: _ignored, ...restConfig } = current;
-  store[guildId] = restConfig;
-  await writeStore(store);
+  await mutateGuildConfig(guildId, (current) => {
+    const { dynamicVoiceCreateChannelId: _ignored, ...restConfig } = current;
+    return restConfig;
+  });
 }
 
 export async function addTemporaryVoiceChannelId(
   guildId: string,
   channelId: string,
 ): Promise<void> {
-  const store = await readStore();
-  const current = store[guildId] ?? {};
-  const existingIds = current.temporaryVoiceChannelIds ?? [];
+  await mutateGuildConfig(guildId, (current) => {
+    const existingIds = current.temporaryVoiceChannelIds ?? [];
+    if (existingIds.includes(channelId)) {
+      return current;
+    }
 
-  if (existingIds.includes(channelId)) {
-    return;
-  }
-
-  store[guildId] = {
-    ...current,
-    temporaryVoiceChannelIds: [...existingIds, channelId],
-  };
-
-  await writeStore(store);
+    return {
+      ...current,
+      temporaryVoiceChannelIds: [...existingIds, channelId],
+    };
+  });
 }
 
 export async function removeTemporaryVoiceChannelId(
   guildId: string,
   channelId: string,
 ): Promise<void> {
-  const store = await readStore();
-  const current = store[guildId];
+  await mutateGuildConfig(guildId, (current) => {
+    const existingIds = current.temporaryVoiceChannelIds ?? [];
+    if (!existingIds.length) {
+      return current;
+    }
 
-  if (!current?.temporaryVoiceChannelIds?.length) {
-    return;
-  }
-
-  const updatedIds = current.temporaryVoiceChannelIds.filter(
-    (id) => id !== channelId,
-  );
-
-  store[guildId] = {
-    ...current,
-    temporaryVoiceChannelIds: updatedIds,
-  };
-
-  await writeStore(store);
+    return {
+      ...current,
+      temporaryVoiceChannelIds: existingIds.filter((id) => id !== channelId),
+    };
+  });
 }
 
 export async function isTemporaryVoiceChannel(
@@ -147,24 +228,21 @@ export async function upsertReactionRoleRule(
   guildId: string,
   rule: ReactionRoleRule,
 ): Promise<void> {
-  const store = await readStore();
-  const current = store[guildId] ?? {};
-  const existingRules = current.reactionRoles ?? [];
+  await mutateGuildConfig(guildId, (current) => {
+    const existingRules = current.reactionRoles ?? [];
+    const filteredRules = existingRules.filter(
+      (existingRule) =>
+        !(
+          existingRule.messageId === rule.messageId &&
+          existingRule.emojiKey === rule.emojiKey
+        ),
+    );
 
-  const filteredRules = existingRules.filter(
-    (existingRule) =>
-      !(
-        existingRule.messageId === rule.messageId &&
-        existingRule.emojiKey === rule.emojiKey
-      ),
-  );
-
-  store[guildId] = {
-    ...current,
-    reactionRoles: [...filteredRules, rule],
-  };
-
-  await writeStore(store);
+    return {
+      ...current,
+      reactionRoles: [...filteredRules, rule],
+    };
+  });
 }
 
 export async function removeReactionRoleRule(
@@ -172,9 +250,8 @@ export async function removeReactionRoleRule(
   messageId: string,
   emojiKey: string,
 ): Promise<boolean> {
-  const store = await readStore();
-  const current = store[guildId];
-  const existingRules = current?.reactionRoles ?? [];
+  const current = await getGuildConfig(guildId);
+  const existingRules = current.reactionRoles ?? [];
   const updatedRules = existingRules.filter(
     (rule) => !(rule.messageId === messageId && rule.emojiKey === emojiKey),
   );
@@ -183,11 +260,10 @@ export async function removeReactionRoleRule(
     return false;
   }
 
-  store[guildId] = {
-    ...(current ?? {}),
+  await mutateGuildConfig(guildId, (draft) => ({
+    ...draft,
     reactionRoles: updatedRules,
-  };
-  await writeStore(store);
+  }));
 
   return true;
 }
@@ -217,9 +293,8 @@ export async function updateReactionRoleModeForMessage(
   messageId: string,
   mode: ReactionRoleMode,
 ): Promise<number> {
-  const store = await readStore();
-  const current = store[guildId];
-  const existingRules = current?.reactionRoles ?? [];
+  const current = await getGuildConfig(guildId);
+  const existingRules = current.reactionRoles ?? [];
   let updatedCount = 0;
 
   const updatedRules = existingRules.map((rule) => {
@@ -234,15 +309,12 @@ export async function updateReactionRoleModeForMessage(
     };
   });
 
-  if (updatedCount === 0) {
-    return 0;
+  if (updatedCount > 0) {
+    await mutateGuildConfig(guildId, (draft) => ({
+      ...draft,
+      reactionRoles: updatedRules,
+    }));
   }
-
-  store[guildId] = {
-    ...(current ?? {}),
-    reactionRoles: updatedRules,
-  };
-  await writeStore(store);
 
   return updatedCount;
 }
