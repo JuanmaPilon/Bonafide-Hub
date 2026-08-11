@@ -10,46 +10,49 @@ type CommandHandler = (
 
 export const commandDefinitions = [
   new SlashCommandBuilder()
-    .setName("saludo")
-    .setDescription("Responde con un saludo"),
-  new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Chequea si el bot esta online"),
-  new SlashCommandBuilder()
-    .setName("help")
-    .setDescription("Muestra comandos disponibles"),
-  new SlashCommandBuilder()
-    .setName("setlogchannel")
-    .setDescription("Configura el canal de logs de entradas y salidas")
+    .setName("setroomchannel")
+    .setDescription("Configura canal de logs o canal creador de rooms")
+    .addStringOption((option) =>
+      option
+        .setName("tipo")
+        .setDescription("Que tipo de canal quieres configurar")
+        .setRequired(true)
+        .addChoices(
+          { name: "Logs", value: "logs" },
+          { name: "Rooms", value: "rooms" },
+        ),
+    )
     .addChannelOption((option) =>
       option
         .setName("canal")
-        .setDescription("Canal de texto para logs")
+        .setDescription("Canal a configurar segun el tipo")
         .setRequired(true)
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
+        .addChannelTypes(
+          ChannelType.GuildText,
+          ChannelType.GuildAnnouncement,
+          ChannelType.GuildVoice,
+        ),
     ),
   new SlashCommandBuilder()
     .setName("getlogchannel")
     .setDescription("Muestra el canal de logs configurado"),
   new SlashCommandBuilder()
-    .setName("testmemberlog")
-    .setDescription("Envia un mensaje de prueba al canal de logs"),
-  new SlashCommandBuilder()
-    .setName("setvoicecreator")
-    .setDescription("Configura el canal de voz que crea salas temporales")
-    .addChannelOption((option) =>
-      option
-        .setName("canal")
-        .setDescription("Canal de voz disparador")
-        .setRequired(true)
-        .addChannelTypes(ChannelType.GuildVoice),
-    ),
-  new SlashCommandBuilder()
-    .setName("getvoicecreator")
+    .setName("getroomchannel")
     .setDescription("Muestra el canal disparador de salas temporales"),
   new SlashCommandBuilder()
-    .setName("clearvoicecreator")
-    .setDescription("Limpia el canal disparador de salas temporales"),
+    .setName("clearchannel")
+    .setDescription("Limpia un canal configurado por tipo")
+    .addStringOption((option) =>
+      option
+        .setName("tipo")
+        .setDescription("Que tipo de canal quieres limpiar")
+        .setRequired(true)
+        .addChoices(
+          { name: "Logs", value: "logs" },
+          { name: "Rooms", value: "rooms" },
+          { name: "Todos", value: "all" },
+        ),
+    ),
   new SlashCommandBuilder()
     .setName("memberstats")
     .setDescription("Muestra estadisticas de miembros del servidor")
@@ -291,38 +294,4 @@ export const commandDefinitions = [
     ),
 ].map((command) => command.toJSON());
 
-export const commandHandlers: Record<string, CommandHandler> = {
-  saludo: async (interaction) => {
-    await interaction.reply("Hola");
-  },
-  ping: async (interaction) => {
-    await interaction.reply("Pong");
-  },
-  help: async (interaction) => {
-    await interaction.reply(
-      [
-        "Comandos disponibles:",
-        "/saludo",
-        "/ping",
-        "/help",
-        "/setlogchannel",
-        "/getlogchannel",
-        "/testmemberlog",
-        "/setvoicecreator",
-        "/getvoicecreator",
-        "/clearvoicecreator",
-        "/memberstats",
-        "/rolstats",
-        "/setreactionrole",
-        "/removereactionrole",
-        "/listreactionroles",
-        "/setreactionpanelmode",
-        "/setreminder",
-        "/listreminders",
-        "/cancelreminder",
-        "/createreactionpanel",
-        "/publicarcomunicado",
-      ].join("\n"),
-    );
-  },
-};
+export const commandHandlers: Record<string, CommandHandler> = {};

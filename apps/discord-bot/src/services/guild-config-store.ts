@@ -232,6 +232,15 @@ export async function setGuildMemberLogChannelId(
   }));
 }
 
+export async function clearGuildMemberLogChannelId(
+  guildId: string,
+): Promise<void> {
+  await mutateGuildConfig(guildId, (current) => {
+    const { memberLogChannelId: _ignored, ...restConfig } = current;
+    return restConfig;
+  });
+}
+
 export async function setGuildDynamicVoiceCreateChannelId(
   guildId: string,
   channelId: string,

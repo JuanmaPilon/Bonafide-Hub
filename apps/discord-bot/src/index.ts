@@ -18,6 +18,7 @@ import {
 import {
   addTemporaryVoiceChannelId,
   clearGuildDynamicVoiceCreateChannelId,
+  clearGuildMemberLogChannelId,
   findReactionRoleRule,
   getGuildConfig,
   isTemporaryVoiceChannel,
@@ -589,7 +590,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (interaction.commandName === "setlogchannel") {
+  if (interaction.commandName === "setroomchannel") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -598,19 +599,68 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (!interaction.memberPermissions?.has("ManageGuild")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Server para usar este comando.",
-        ephemeral: true,
-      });
+    const channelType = interaction.options.getString("tipo", true);
+    const channel = interaction.options.getChannel("canal", true);
+
+    if (channelType === "logs") {
+      if (!interaction.memberPermissions?.has("ManageGuild")) {
+        await interaction.reply({
+          content: "Necesitas el permiso Manage Server para configurar logs.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (
+        channel.type !== ChannelType.GuildText &&
+        channel.type !== ChannelType.GuildAnnouncement
+      ) {
+        await interaction.reply({
+          content: "Para logs debes elegir un canal de texto.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await setGuildMemberLogChannelId(interaction.guildId, channel.id);
+      await interaction.reply(
+        `<#${channel.id}> ha sido seteado como log channel.`,
+      );
       return;
     }
 
-    const channel = interaction.options.getChannel("canal", true);
-    await setGuildMemberLogChannelId(interaction.guildId, channel.id);
-    await interaction.reply(
-      `Canal de logs configurado en <#${channel.id}>. Puedes probar con /testmemberlog.`,
-    );
+    if (channelType === "rooms") {
+      if (!interaction.memberPermissions?.has("ManageChannels")) {
+        await interaction.reply({
+          content:
+            "Necesitas el permiso Manage Channels para configurar rooms.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      if (channel.type !== ChannelType.GuildVoice) {
+        await interaction.reply({
+          content: "Para rooms debes elegir un canal de voz.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      await setGuildDynamicVoiceCreateChannelId(
+        interaction.guildId,
+        channel.id,
+      );
+      await interaction.reply(
+        `<#${channel.id}> ha sido seteado como canal para rooms.`,
+      );
+      return;
+    }
+
+    await interaction.reply({
+      content: "Tipo de canal no soportado.",
+      ephemeral: true,
+    });
     return;
   }
 
@@ -627,60 +677,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const configuredChannelId = guildConfig.memberLogChannelId;
     if (!configuredChannelId) {
       await interaction.reply(
-        "No hay canal de logs configurado. Usa /setlogchannel.",
+        "No hay log channel configurado. Usa /setroomchannel tipo:logs.",
       );
       return;
     }
 
-    await interaction.reply(`Canal de logs actual: <#${configuredChannelId}>.`);
+    await interaction.reply(`Log channel actual: <#${configuredChannelId}>.`);
     return;
   }
 
-  if (interaction.commandName === "testmemberlog") {
-    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    await sendMemberLog(
-      interaction.guildId,
-      interaction.guild.systemChannelId,
-      `Prueba de log ejecutada por <@${interaction.user.id}>.`,
-    );
-    await interaction.reply("Mensaje de prueba enviado al canal de logs.");
-    return;
-  }
-
-  if (interaction.commandName === "setvoicecreator") {
-    if (!interaction.inGuild() || !interaction.guildId) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!interaction.memberPermissions?.has("ManageChannels")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Channels para usar este comando.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const channel = interaction.options.getChannel("canal", true);
-
-    await setGuildDynamicVoiceCreateChannelId(interaction.guildId, channel.id);
-    await interaction.reply(
-      `Canal creador de voz configurado en <#${channel.id}>.`,
-    );
-    return;
-  }
-
-  if (interaction.commandName === "getvoicecreator") {
+  if (interaction.commandName === "getroomchannel") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -692,18 +698,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const guildConfig = await getGuildConfig(interaction.guildId);
     if (!guildConfig.dynamicVoiceCreateChannelId) {
       await interaction.reply(
-        "No hay canal creador configurado. Usa /setvoicecreator.",
+        "No hay canal de rooms configurado. Usa /setroomchannel tipo:rooms.",
       );
       return;
     }
 
     await interaction.reply(
-      `Canal creador actual: <#${guildConfig.dynamicVoiceCreateChannelId}>.`,
+      `Canal para rooms actual: <#${guildConfig.dynamicVoiceCreateChannelId}>.`,
     );
     return;
   }
 
-  if (interaction.commandName === "clearvoicecreator") {
+  if (interaction.commandName === "clearchannel") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -712,16 +718,61 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (!interaction.memberPermissions?.has("ManageChannels")) {
+    const channelType = interaction.options.getString("tipo", true);
+    const needsManageGuild = channelType === "logs" || channelType === "all";
+    const needsManageChannels =
+      channelType === "rooms" || channelType === "all";
+
+    if (
+      needsManageGuild &&
+      !interaction.memberPermissions?.has("ManageGuild")
+    ) {
       await interaction.reply({
-        content: "Necesitas el permiso Manage Channels para usar este comando.",
+        content: "Necesitas el permiso Manage Server para limpiar logs.",
         ephemeral: true,
       });
       return;
     }
 
-    await clearGuildDynamicVoiceCreateChannelId(interaction.guildId);
-    await interaction.reply("Canal creador de voz limpiado.");
+    if (
+      needsManageChannels &&
+      !interaction.memberPermissions?.has("ManageChannels")
+    ) {
+      await interaction.reply({
+        content: "Necesitas el permiso Manage Channels para limpiar rooms.",
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (channelType === "logs") {
+      await clearGuildMemberLogChannelId(interaction.guildId);
+      await interaction.reply("Log channel limpiado.");
+      return;
+    }
+
+    if (channelType === "rooms") {
+      await clearGuildDynamicVoiceCreateChannelId(interaction.guildId);
+      await interaction.reply("Canal de rooms limpiado.");
+      return;
+    }
+
+    if (channelType === "all") {
+      await Promise.all([
+        clearGuildMemberLogChannelId(interaction.guildId),
+        clearGuildDynamicVoiceCreateChannelId(interaction.guildId),
+      ]);
+
+      await interaction.reply(
+        "Se limpiaron los canales configurados (logs y rooms).",
+      );
+      return;
+    }
+
+    await interaction.reply({
+      content: "Tipo no soportado.",
+      ephemeral: true,
+    });
     return;
   }
 
