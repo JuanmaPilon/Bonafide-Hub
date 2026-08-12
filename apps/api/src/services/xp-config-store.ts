@@ -80,7 +80,7 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
               ? "replace"
               : "stack") as "stack" | "replace",
         }))
-        .filter((entry) => entry.level > 0 && entry.roleId)
+        .filter((entry) => entry.level >= 0 && entry.roleId)
         .sort((left, right) => left.level - right.level)
     : [];
 
@@ -126,7 +126,7 @@ function normalizeLevelRoles(
   return levelRoles
     .map((rule) => ({
       addRoleIds: normalizeRoleIds(rule.addRoleIds),
-      level: Math.max(1, Math.floor(Number(rule.level) || 0)),
+      level: Math.max(0, Math.floor(Number(rule.level) || 0)),
       nicknamePrefix:
         typeof rule.nicknamePrefix === "string" && rule.nicknamePrefix.trim()
           ? rule.nicknamePrefix.trim()

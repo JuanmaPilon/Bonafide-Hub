@@ -488,7 +488,7 @@ function App() {
         return current;
       }
 
-      if (nextLevel <= 0) {
+      if (nextLevel < 0) {
         return current;
       }
 
@@ -502,11 +502,9 @@ function App() {
 
       return {
         ...current,
-        levelRoles: current.levelRoles
-          .map((rule) =>
-            rule.level === currentLevel ? { ...rule, level: nextLevel } : rule,
-          )
-          .sort((left, right) => left.level - right.level),
+        levelRoles: current.levelRoles.map((rule) =>
+          rule.level === currentLevel ? { ...rule, level: nextLevel } : rule,
+        ),
       };
     });
   }
@@ -948,6 +946,27 @@ function App() {
                 </label>
 
                 <label>
+                  <span>Rol de entrada del servidor</span>
+                  <select
+                    className="select"
+                    value={config.defaultRoleId ?? ""}
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        defaultRoleId: event.target.value || undefined,
+                      }))
+                    }
+                  >
+                    <option value="">Sin rol de entrada</option>
+                    {guildRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
                   <span>Canal para creación dinámica de salas (voz)</span>
                   <select
                     className="select"
@@ -1106,13 +1125,13 @@ function App() {
                         Aún no hay roles por nivel configurados.
                       </div>
                     ) : (
-                      xpConfig.levelRoles.map((rule) => (
-                        <div className="xp-role-row" key={rule.level}>
+                      xpConfig.levelRoles.map((rule, index) => (
+                        <div className="xp-role-row" key={index}>
                           <label className="xp-role-level-input">
                             <span>Nivel</span>
                             <input
                               type="number"
-                              min="1"
+                              min="0"
                               value={rule.level}
                               onChange={(event) =>
                                 changeXpRoleLevel(

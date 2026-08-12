@@ -2140,6 +2140,23 @@ client.on(Events.GuildMemberAdd, async (member) => {
   const message = buildWelcomeMessage(member.id);
 
   await sendMemberLog(member.guild.id, member.guild.systemChannelId, message);
+
+  const guildConfig = await getGuildConfig(member.guild.id).catch(() => null);
+  const defaultRoleId = guildConfig?.defaultRoleId;
+  if (!defaultRoleId) {
+    return;
+  }
+
+  await member.roles
+    .add(defaultRoleId, "Rol de entrada del servidor")
+    .catch((error: unknown) => {
+      console.error("[discord-bot] Failed to assign entry role", {
+        error,
+        guildId: member.guild.id,
+        memberId: member.id,
+        roleId: defaultRoleId,
+      });
+    });
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {

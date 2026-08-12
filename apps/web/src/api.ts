@@ -8,6 +8,7 @@ export type ApiGuild = {
 };
 
 export type GuildConfig = {
+  defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   memberLogChannelId?: string;

@@ -1066,6 +1066,10 @@ export function buildApp() {
       allowedBody.reactionRolesChannelId = body.reactionRolesChannelId;
     }
 
+    if (body.defaultRoleId !== undefined) {
+      allowedBody.defaultRoleId = body.defaultRoleId;
+    }
+
     if (body.enabledModules !== undefined) {
       allowedBody.enabledModules = body.enabledModules;
     }

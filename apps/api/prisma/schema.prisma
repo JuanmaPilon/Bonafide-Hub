@@ -12,6 +12,7 @@ model GuildConfig {
   memberLogChannelId          String?
   dynamicVoiceCreateChannelId String?
   reactionRolesChannelId      String?
+  defaultRoleId               String?
   enabledModules              String[] @default([])
   temporaryVoiceChannelIds    String[] @default([])
   createdAt                   DateTime @default(now())

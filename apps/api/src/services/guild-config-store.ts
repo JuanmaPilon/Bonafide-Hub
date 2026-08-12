@@ -11,6 +11,7 @@ export type ReactionRoleRule = {
 };
 
 export type GuildConfig = {
+  defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   memberLogChannelId?: string;
@@ -21,6 +22,7 @@ export type GuildConfig = {
 
 function toGuildConfig(
   record: {
+    defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
     memberLogChannelId: string | null;
@@ -37,6 +39,7 @@ function toGuildConfig(
   }
 
   return {
+    defaultRoleId: record.defaultRoleId ?? undefined,
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
@@ -71,6 +74,7 @@ function normalizeReactionRoleRule(
 }
 
 type NormalizedGuildConfig = {
+  defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
   memberLogChannelId?: string;
@@ -85,6 +89,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     .filter((rule): rule is ReactionRoleRule => Boolean(rule));
 
   return {
+    defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
     memberLogChannelId: config.memberLogChannelId,
@@ -130,6 +135,7 @@ export async function replaceGuildConfig(
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
+        defaultRoleId: normalized.defaultRoleId,
         enabledModules: normalized.enabledModules,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
       },
@@ -137,6 +143,7 @@ export async function replaceGuildConfig(
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
+        defaultRoleId: normalized.defaultRoleId,
         enabledModules: normalized.enabledModules,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
       },

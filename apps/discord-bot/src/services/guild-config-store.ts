@@ -3,6 +3,7 @@ import path from "node:path";
 import { env } from "../config/env.js";
 
 type GuildConfig = {
+  defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   memberLogChannelId?: string;
   reactionRoles?: ReactionRoleRule[];
@@ -41,6 +42,7 @@ function isRemoteStoreEnabled(): boolean {
 
 function normalizeGuildConfig(input: GuildConfig): GuildConfig {
   return {
+    defaultRoleId: input.defaultRoleId,
     dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
     memberLogChannelId: input.memberLogChannelId,
     reactionRoles: input.reactionRoles ?? [],
