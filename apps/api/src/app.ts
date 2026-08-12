@@ -91,7 +91,7 @@ export function buildApp() {
     },
   });
 
-  function getSessionFromRequest(cookieHeader: string | undefined) {
+  async function getSessionFromRequest(cookieHeader: string | undefined) {
     const cookies = parseCookieHeader(cookieHeader);
     const signedSessionId = cookies[getSessionCookieName()];
     const sessionId = verifySignedSessionId(
@@ -102,12 +102,12 @@ export function buildApp() {
     return getDiscordSession(sessionId ?? undefined);
   }
 
-  function requireSession(request: FastifyRequest) {
+  async function requireSession(request: FastifyRequest) {
     return getSessionFromRequest(request.headers.cookie);
   }
 
   function canManageGuild(
-    session: NonNullable<ReturnType<typeof getSessionFromRequest>>,
+    session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
     guildId: string,
   ): boolean {
     return session.guilds.some((guild) => {
@@ -240,7 +240,7 @@ export function buildApp() {
   });
 
   app.get("/auth/discord/start", async (_request, reply) => {
-    const state = createOAuthState();
+    const state = await createOAuthState();
     const authorizeUrl = new URL("https://discord.com/api/oauth2/authorize");
 
     authorizeUrl.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
@@ -288,7 +288,10 @@ export function buildApp() {
 
     const cookies = parseCookieHeader(request.headers.cookie);
     const stateCookie = cookies[getStateCookieName()];
-    if (stateCookie !== query.state || !consumeOAuthState(query.state)) {
+    if (
+      stateCookie !== query.state ||
+      !(await consumeOAuthState(query.state))
+    ) {
       return reply.code(400).send({
         ok: false,
         error: "Invalid OAuth state",
@@ -344,7 +347,7 @@ export function buildApp() {
       >("/users/@me/guilds", token.access_token),
     ]);
 
-    const session = createDiscordSession({
+    const session = await createDiscordSession({
       accessTokenExpiresInSeconds: token.expires_in,
       guilds,
       user,
@@ -369,7 +372,7 @@ export function buildApp() {
   });
 
   app.get("/me", async (request, reply) => {
-    const session = getSessionFromRequest(request.headers.cookie);
+    const session = await getSessionFromRequest(request.headers.cookie);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -382,7 +385,7 @@ export function buildApp() {
   });
 
   app.get("/guilds", async (request, reply) => {
-    const session = getSessionFromRequest(request.headers.cookie);
+    const session = await getSessionFromRequest(request.headers.cookie);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -394,7 +397,7 @@ export function buildApp() {
   });
 
   app.get("/guilds/:guildId/widget", async (request, reply) => {
-    const session = requireSession(request);
+    const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -435,7 +438,7 @@ export function buildApp() {
   });
 
   app.get("/guilds/:guildId/config", async (request, reply) => {
-    const session = requireSession(request);
+    const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -459,7 +462,7 @@ export function buildApp() {
   });
 
   app.patch("/guilds/:guildId/config", async (request, reply) => {
-    const session = requireSession(request);
+    const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -503,7 +506,7 @@ export function buildApp() {
   });
 
   app.get("/guilds/:guildId/reminders", async (request, reply) => {
-    const session = requireSession(request);
+    const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -527,7 +530,7 @@ export function buildApp() {
   });
 
   app.post("/guilds/:guildId/reminders", async (request, reply) => {
-    const session = requireSession(request);
+    const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
@@ -586,7 +589,7 @@ export function buildApp() {
   app.delete(
     "/guilds/:guildId/reminders/:reminderId",
     async (request, reply) => {
-      const session = requireSession(request);
+      const session = await requireSession(request);
       if (!session) {
         return reply.code(401).send({ ok: false, error: "Unauthorized" });
       }
@@ -630,7 +633,7 @@ export function buildApp() {
     );
 
     if (sessionId) {
-      clearDiscordSession(sessionId);
+      await clearDiscordSession(sessionId);
     }
 
     reply.header("Set-Cookie", [

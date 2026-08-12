@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { prisma } from "../db/prisma.js";
 
 export type DiscordUser = {
   avatar: string | null;
@@ -25,16 +26,9 @@ export type DiscordSession = {
   user: DiscordUser;
 };
 
-export type OAuthState = {
-  createdAt: number;
-};
-
 const SESSION_COOKIE_NAME = "bonafide_session";
 const OAUTH_STATE_COOKIE_NAME = "bonafide_oauth_state";
 const STATE_TTL_MS = 10 * 60 * 1000;
-
-const sessions = new Map<string, DiscordSession>();
-const oauthStates = new Map<string, OAuthState>();
 
 type CookieOptions = {
   httpOnly?: boolean;
@@ -94,28 +88,33 @@ export function buildCookieHeader(
   return segments.join("; ");
 }
 
-export function createOAuthState(): string {
+export async function createOAuthState(): Promise<string> {
   const state = randomUUID();
-  oauthStates.set(state, { createdAt: Date.now() });
+  await prisma.oAuthState.create({
+    data: {
+      state,
+      createdAt: new Date(),
+    },
+  });
   return state;
 }
 
-export function consumeOAuthState(state: string): boolean {
-  const entry = oauthStates.get(state);
+export async function consumeOAuthState(state: string): Promise<boolean> {
+  const entry = await prisma.oAuthState.findUnique({ where: { state } });
   if (!entry) {
     return false;
   }
 
-  const isExpired = Date.now() - entry.createdAt > STATE_TTL_MS;
-  oauthStates.delete(state);
+  const isExpired = Date.now() - entry.createdAt.getTime() > STATE_TTL_MS;
+  await prisma.oAuthState.delete({ where: { state } });
   return !isExpired;
 }
 
-export function createDiscordSession(input: {
+export async function createDiscordSession(input: {
   guilds: DiscordGuild[];
   user: DiscordUser;
   accessTokenExpiresInSeconds: number;
-}): DiscordSession {
+}): Promise<DiscordSession> {
   const session: DiscordSession = {
     createdAt: Date.now(),
     expiresAt: Date.now() + input.accessTokenExpiresInSeconds * 1000,
@@ -124,32 +123,54 @@ export function createDiscordSession(input: {
     user: input.user,
   };
 
-  sessions.set(session.id, session);
+  await prisma.discordSession.create({
+    data: {
+      id: session.id,
+      createdAt: new Date(session.createdAt),
+      expiresAt: new Date(session.expiresAt),
+      user: session.user,
+      guilds: session.guilds,
+    },
+  });
+
   return session;
 }
 
-export function clearDiscordSession(sessionId: string): void {
-  sessions.delete(sessionId);
+export async function clearDiscordSession(sessionId: string): Promise<void> {
+  await prisma.discordSession.delete({ where: { id: sessionId } }).catch(() => {
+    // La sesion puede no existir; no es un error fatal.
+  });
 }
 
-export function getDiscordSession(
+export async function getDiscordSession(
   sessionId: string | undefined,
-): DiscordSession | null {
+): Promise<DiscordSession | null> {
   if (!sessionId) {
     return null;
   }
 
-  const session = sessions.get(sessionId);
-  if (!session) {
+  const record = await prisma.discordSession.findUnique({
+    where: { id: sessionId },
+  });
+  if (!record) {
     return null;
   }
 
-  if (session.expiresAt <= Date.now()) {
-    sessions.delete(sessionId);
+  const expiresAt = record.expiresAt.getTime();
+  if (expiresAt <= Date.now()) {
+    await prisma.discordSession
+      .delete({ where: { id: sessionId } })
+      .catch(() => undefined);
     return null;
   }
 
-  return session;
+  return {
+    createdAt: record.createdAt.getTime(),
+    expiresAt,
+    guilds: record.guilds as DiscordGuild[],
+    id: record.id,
+    user: record.user as DiscordUser,
+  };
 }
 
 export function signSessionId(sessionId: string, secret: string): string {

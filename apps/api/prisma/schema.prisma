@@ -37,3 +37,20 @@ model ReactionRoleRule {
   @@id([guildId, messageId, emojiKey])
   @@map("reaction_role_rules")
 }
+
+model DiscordSession {
+  id        String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user      Json
+  guilds    Json
+
+  @@map("discord_sessions")
+}
+
+model OAuthState {
+  state     String   @id
+  createdAt DateTime @default(now())
+
+  @@map("oauth_states")
+}
