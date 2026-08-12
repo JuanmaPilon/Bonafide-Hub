@@ -88,26 +88,34 @@ export function buildCookieHeader(
   return segments.join("; ");
 }
 
-export async function createOAuthState(): Promise<string> {
+export async function createOAuthState(input: {
+  callbackUrl?: string;
+}): Promise<string> {
   const state = randomUUID();
   await prisma.oAuthState.create({
     data: {
       state,
+      callbackUrl: input.callbackUrl ?? null,
       createdAt: new Date(),
     },
   });
   return state;
 }
 
-export async function consumeOAuthState(state: string): Promise<boolean> {
+export async function consumeOAuthState(
+  state: string,
+): Promise<{ callbackUrl?: string; valid: boolean }> {
   const entry = await prisma.oAuthState.findUnique({ where: { state } });
   if (!entry) {
-    return false;
+    return { valid: false };
   }
 
   const isExpired = Date.now() - entry.createdAt.getTime() > STATE_TTL_MS;
   await prisma.oAuthState.delete({ where: { state } });
-  return !isExpired;
+  return {
+    callbackUrl: entry.callbackUrl ?? undefined,
+    valid: !isExpired,
+  };
 }
 
 export async function createDiscordSession(input: {

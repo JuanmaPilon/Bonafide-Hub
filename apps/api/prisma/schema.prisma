@@ -49,8 +49,9 @@ model DiscordSession {
 }
 
 model OAuthState {
-  state     String   @id
-  createdAt DateTime @default(now())
+  state       String   @id
+  callbackUrl String?
+  createdAt   DateTime @default(now())
 
   @@map("oauth_states")
 }

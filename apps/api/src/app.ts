@@ -91,6 +91,26 @@ export function buildApp() {
     },
   });
 
+  function resolveCallbackUrl(request: FastifyRequest): string {
+    const referer = request.headers.referer;
+    const originHeader = request.headers.origin;
+    const candidateSource = (referer ?? originHeader) as string | undefined;
+
+    if (candidateSource) {
+      try {
+        const candidateUrl = new URL(candidateSource);
+        const candidateOrigin = candidateUrl.origin;
+        if (allowedOrigins.includes(candidateOrigin)) {
+          return `${candidateOrigin}/api/auth/discord/callback`;
+        }
+      } catch {
+        // URL inválida; ignorar y usar el valor por defecto.
+      }
+    }
+
+    return env.DISCORD_REDIRECT_URI;
+  }
+
   async function getSessionFromRequest(cookieHeader: string | undefined) {
     const cookies = parseCookieHeader(cookieHeader);
     const signedSessionId = cookies[getSessionCookieName()];
@@ -239,12 +259,13 @@ export function buildApp() {
     };
   });
 
-  app.get("/auth/discord/start", async (_request, reply) => {
-    const state = await createOAuthState();
+  app.get("/auth/discord/start", async (request, reply) => {
+    const callbackUrl = resolveCallbackUrl(request);
+    const state = await createOAuthState({ callbackUrl });
     const authorizeUrl = new URL("https://discord.com/api/oauth2/authorize");
 
     authorizeUrl.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
-    authorizeUrl.searchParams.set("redirect_uri", env.DISCORD_REDIRECT_URI);
+    authorizeUrl.searchParams.set("redirect_uri", callbackUrl);
     authorizeUrl.searchParams.set("response_type", "code");
     authorizeUrl.searchParams.set("scope", "identify guilds");
     authorizeUrl.searchParams.set("state", state);
@@ -288,10 +309,8 @@ export function buildApp() {
 
     const cookies = parseCookieHeader(request.headers.cookie);
     const stateCookie = cookies[getStateCookieName()];
-    if (
-      stateCookie !== query.state ||
-      !(await consumeOAuthState(query.state))
-    ) {
+    const consumedState = await consumeOAuthState(query.state);
+    if (stateCookie !== query.state || !consumedState.valid) {
       return reply.code(400).send({
         ok: false,
         error: "Invalid OAuth state",
@@ -303,7 +322,7 @@ export function buildApp() {
       client_secret: env.DISCORD_CLIENT_SECRET,
       code: query.code,
       grant_type: "authorization_code",
-      redirect_uri: env.DISCORD_REDIRECT_URI,
+      redirect_uri: consumedState.callbackUrl ?? env.DISCORD_REDIRECT_URI,
     });
 
     const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
