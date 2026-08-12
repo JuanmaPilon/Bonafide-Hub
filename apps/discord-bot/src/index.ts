@@ -521,10 +521,30 @@ const LEVEL_UP_TEMPLATES = [
   "🍵 **Brindis de Karpindomo.**\nPor <@{memberId}>, que llega al nivel {level}.\nSalud y más XP.",
   "🛎️ **Atencion:** <@{memberId}> alcanzó el nivel {level}.\nEl mayordomo capincho lo celebra.",
   "📈 **Progreso registrado.**\n<@{memberId}> ahora es nivel {level}.\nSiga así, que el techo es alto.",
+  "🪧 **Anuncio de Karpindomo.**\n<@{memberId}> acaba de llegar al nivel {level}.\nEl servidor tiene nuevo talento.",
+  "🥂 **Por los logros.**\n<@{memberId}> alcanzó el nivel {level}.\nKarpindomo levanta la copa de te.",
+  "🎖️ **Honor a quien honor merece.**\n<@{memberId}> se ganó el nivel {level}.\nEl mayordomo capincho lo aplaude.",
+  "✨ **Brillo en el horizonte.**\n<@{memberId}> llega al nivel {level}.\nKarpindomo sonríe con aprobación.",
+  "📜 **Acta de Karpindomo.**\nQueda registrado que <@{memberId}> subió al nivel {level}.\nEs un placer servirle.",
+  "🫖 **La casa se enorgullece.**\n<@{memberId}> alcanzó el nivel {level}.\nQue siga el camino del carpincho.",
+  "🗝️ **Escalando posiciones.**\n<@{memberId}> desbloqueó el nivel {level}.\nKarpindomo custodia sus llaves de la sala VIP.",
+  "🌱 **Crecer es el objetivo.**\n<@{memberId}> alcanzó el nivel {level}.\nKarpindomo nota el esfuerzo, Senior.",
+  "🎩 **Otra vez impresionante.**\n<@{memberId}> sube al nivel {level}.\nEl mayordomo ajusta su moño de orgullo.",
+  "🏆 **Trofeo al progreso.**\n<@{memberId}> ganó el nivel {level}.\nKarpindomo lo coloca en el estante de honor.",
+  "☕ **Pausa para celebrar.**\n<@{memberId}> llegó al nivel {level}.\nEl te de Karpindomo espera por el festejo.",
+  "🪙 **Moneda de Karpindomo:**\n<@{memberId}> alcanzó el nivel {level}.\nSiga acumulando, Senior.",
+  "🛡️ **Guardianes del rango.**\n<@{memberId}> superó el nivel {level}.\nKarpindomo le da la bienvenida al club.",
 ] as const;
 
+let lastLevelUpTemplateIndex: number | undefined;
+
 function buildLevelUpMessage(memberId: string, level: number): string {
-  return pickRandom(LEVEL_UP_TEMPLATES)
+  const next = pickRandomTemplateAvoidingLast(
+    LEVEL_UP_TEMPLATES,
+    lastLevelUpTemplateIndex,
+  );
+  lastLevelUpTemplateIndex = next.index;
+  return next.template
     .replace("{memberId}", memberId)
     .replace("{level}", String(level));
 }
