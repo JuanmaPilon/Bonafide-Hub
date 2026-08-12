@@ -10,50 +10,6 @@ type CommandHandler = (
 
 export const commandDefinitions = [
   new SlashCommandBuilder()
-    .setName("setroomchannel")
-    .setDescription("Configura canal de logs o canal creador de rooms")
-    .addStringOption((option) =>
-      option
-        .setName("tipo")
-        .setDescription("Que tipo de canal quieres configurar")
-        .setRequired(true)
-        .addChoices(
-          { name: "Logs", value: "logs" },
-          { name: "Rooms", value: "rooms" },
-        ),
-    )
-    .addChannelOption((option) =>
-      option
-        .setName("canal")
-        .setDescription("Canal a configurar segun el tipo")
-        .setRequired(true)
-        .addChannelTypes(
-          ChannelType.GuildText,
-          ChannelType.GuildAnnouncement,
-          ChannelType.GuildVoice,
-        ),
-    ),
-  new SlashCommandBuilder()
-    .setName("getlogchannel")
-    .setDescription("Muestra el canal de logs configurado"),
-  new SlashCommandBuilder()
-    .setName("getroomchannel")
-    .setDescription("Muestra el canal disparador de salas temporales"),
-  new SlashCommandBuilder()
-    .setName("clearchannel")
-    .setDescription("Limpia un canal configurado por tipo")
-    .addStringOption((option) =>
-      option
-        .setName("tipo")
-        .setDescription("Que tipo de canal quieres limpiar")
-        .setRequired(true)
-        .addChoices(
-          { name: "Logs", value: "logs" },
-          { name: "Rooms", value: "rooms" },
-          { name: "Todos", value: "all" },
-        ),
-    ),
-  new SlashCommandBuilder()
     .setName("memberstats")
     .setDescription("Muestra estadisticas de miembros del servidor")
     .addBooleanOption((option) =>
