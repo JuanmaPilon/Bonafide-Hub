@@ -37,6 +37,21 @@ type HubTab =
   | "muro"
   | "admin";
 
+const VALID_TABS: HubTab[] = [
+  "dashboard",
+  "comunicados",
+  "raids",
+  "eventos",
+  "memes",
+  "muro",
+  "admin",
+];
+
+function tabFromHash(): HubTab {
+  const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
+  return (VALID_TABS as string[]).includes(raw) ? (raw as HubTab) : "dashboard";
+}
+
 type ToastKind = "success" | "error";
 
 type ToastItem = {
@@ -238,7 +253,7 @@ function App() {
     level: number;
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<HubTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
   const [loadingGuildData, setLoadingGuildData] = useState(false);
@@ -592,6 +607,24 @@ function App() {
       setActiveTab("dashboard");
     }
   }, [activeTab, adminEnabled]);
+
+  useEffect(() => {
+    const onHashChange = (): void => {
+      setActiveTab(tabFromHash());
+    };
+
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const target = `#/${activeTab}`;
+    if (window.location.hash !== target) {
+      window.location.hash = target;
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
