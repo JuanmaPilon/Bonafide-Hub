@@ -1,11 +1,17 @@
 import { prisma } from "../db/prisma.js";
 
+export type XpRoleMultiplier = {
+  multiplier: number;
+  roleId: string;
+};
+
 export type XpRoleRule = {
+  addRoleIds: string[];
   level: number;
+  nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
   stacking: "stack" | "replace";
-  xpMultiplier: number;
 };
 
 export type XpConfig = {
@@ -15,6 +21,7 @@ export type XpConfig = {
   levelRoles: XpRoleRule[];
   maxLevel: number;
   messageXp: number;
+  roleMultipliers: XpRoleMultiplier[];
   roleStacking: "stack" | "replace";
   voiceXpPerMinute: number;
 };
@@ -25,6 +32,7 @@ const DEFAULT_CONFIG: Omit<XpConfig, "guildId"> = {
   levelRoles: [],
   maxLevel: 0,
   messageXp: 15,
+  roleMultipliers: [],
   roleStacking: "stack",
   voiceXpPerMinute: 3,
 };
@@ -36,6 +44,7 @@ type XpConfigRecord = {
   levelRoles: unknown;
   maxLevel: number;
   messageXp: number;
+  roleMultipliers: unknown;
   roleStacking: string;
   voiceXpPerMinute: number;
 };
@@ -56,7 +65,13 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
             typeof entry === "object" && entry !== null,
         )
         .map((entry) => ({
+          addRoleIds: normalizeRoleIds(entry.addRoleIds),
           level: Number(entry.level) || 0,
+          nicknamePrefix:
+            typeof entry.nicknamePrefix === "string" &&
+            entry.nicknamePrefix.trim()
+              ? entry.nicknamePrefix.trim()
+              : undefined,
           removeRoleIds: normalizeRoleIds(entry.removeRoleIds),
           roleId: String(entry.roleId ?? ""),
           stacking: (entry.stacking === "replace"
@@ -64,10 +79,22 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
             : record?.roleStacking === "replace"
               ? "replace"
               : "stack") as "stack" | "replace",
-          xpMultiplier: Number(entry.xpMultiplier) || 1,
         }))
         .filter((entry) => entry.level > 0 && entry.roleId)
         .sort((left, right) => left.level - right.level)
+    : [];
+
+  const roleMultipliers = Array.isArray(record?.roleMultipliers)
+    ? (record.roleMultipliers as unknown[])
+        .filter(
+          (entry): entry is Record<string, unknown> =>
+            typeof entry === "object" && entry !== null,
+        )
+        .map((entry) => ({
+          multiplier: Math.max(1, Number(entry.multiplier) || 1),
+          roleId: String(entry.roleId ?? "").trim(),
+        }))
+        .filter((entry) => entry.roleId)
     : [];
 
   return {
@@ -77,6 +104,7 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
     levelRoles,
     maxLevel: record?.maxLevel ?? DEFAULT_CONFIG.maxLevel,
     messageXp: record?.messageXp ?? DEFAULT_CONFIG.messageXp,
+    roleMultipliers,
     roleStacking: record?.roleStacking === "replace" ? "replace" : "stack",
     voiceXpPerMinute:
       record?.voiceXpPerMinute ?? DEFAULT_CONFIG.voiceXpPerMinute,
@@ -97,16 +125,35 @@ function normalizeLevelRoles(
 
   return levelRoles
     .map((rule) => ({
+      addRoleIds: normalizeRoleIds(rule.addRoleIds),
       level: Math.max(1, Math.floor(Number(rule.level) || 0)),
+      nicknamePrefix:
+        typeof rule.nicknamePrefix === "string" && rule.nicknamePrefix.trim()
+          ? rule.nicknamePrefix.trim()
+          : undefined,
       removeRoleIds: normalizeRoleIds(rule.removeRoleIds),
       roleId: String(rule.roleId ?? "").trim(),
       stacking: (rule.stacking === "replace" ? "replace" : "stack") as
         | "stack"
         | "replace",
-      xpMultiplier: Math.max(1, Number(rule.xpMultiplier) || 1),
     }))
     .filter((rule) => rule.roleId)
     .sort((left, right) => left.level - right.level);
+}
+
+function normalizeRoleMultipliers(
+  roleMultipliers: XpRoleMultiplier[] | undefined,
+): XpRoleMultiplier[] {
+  if (!roleMultipliers) {
+    return [];
+  }
+
+  return roleMultipliers
+    .map((entry) => ({
+      multiplier: Math.max(1, Number(entry.multiplier) || 1),
+      roleId: String(entry.roleId ?? "").trim(),
+    }))
+    .filter((entry) => entry.roleId);
 }
 
 export async function upsertXpConfig(input: {
@@ -116,6 +163,7 @@ export async function upsertXpConfig(input: {
   levelRoles?: XpRoleRule[];
   maxLevel?: number;
   messageXp?: number;
+  roleMultipliers?: XpRoleMultiplier[];
   roleStacking?: "stack" | "replace";
   voiceXpPerMinute?: number;
 }): Promise<XpConfig> {
@@ -128,6 +176,9 @@ export async function upsertXpConfig(input: {
       : current.levelRoles,
     maxLevel: input.maxLevel ?? current.maxLevel,
     messageXp: input.messageXp ?? current.messageXp,
+    roleMultipliers: input.roleMultipliers
+      ? normalizeRoleMultipliers(input.roleMultipliers)
+      : current.roleMultipliers,
     roleStacking: input.roleStacking ?? current.roleStacking,
     voiceXpPerMinute: input.voiceXpPerMinute ?? current.voiceXpPerMinute,
   };
@@ -140,6 +191,7 @@ export async function upsertXpConfig(input: {
       levelRoles: next.levelRoles,
       maxLevel: next.maxLevel,
       messageXp: next.messageXp,
+      roleMultipliers: next.roleMultipliers,
       roleStacking: next.roleStacking,
       voiceXpPerMinute: next.voiceXpPerMinute,
     },

@@ -1,11 +1,17 @@
 import { env } from "../config/env.js";
 
+export type XpRoleMultiplier = {
+  multiplier: number;
+  roleId: string;
+};
+
 export type XpRoleRule = {
+  addRoleIds: string[];
   level: number;
+  nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
   stacking: "stack" | "replace";
-  xpMultiplier: number;
 };
 
 export type XpConfig = {
@@ -15,6 +21,7 @@ export type XpConfig = {
   levelRoles: XpRoleRule[];
   maxLevel: number;
   messageXp: number;
+  roleMultipliers: XpRoleMultiplier[];
   roleStacking: "stack" | "replace";
   voiceXpPerMinute: number;
 };
@@ -56,6 +63,7 @@ function normalizeXpConfig(input: Partial<XpConfig>): XpConfig {
     levelRoles: input.levelRoles ?? [],
     maxLevel: input.maxLevel ?? 0,
     messageXp: input.messageXp ?? 15,
+    roleMultipliers: input.roleMultipliers ?? [],
     roleStacking: input.roleStacking === "replace" ? "replace" : "stack",
     voiceXpPerMinute: input.voiceXpPerMinute ?? 3,
   };
@@ -140,6 +148,31 @@ export async function addRemoteXp(input: {
     previousLevel: payload.previousLevel ?? 0,
     xp: payload.xp ?? 0,
   };
+}
+
+/**
+ * Calcula el multiplicador de XP de un miembro a partir de sus roles.
+ * Se multiplican los multiplicadores de todos los roles de la config que el
+ * miembro tenga (por ejemplo Booster x3 * VIP x2 = x6).
+ */
+export function computeXpMultiplier(
+  config: XpConfig,
+  memberRoleIds: ReadonlySet<string> | string[],
+): number {
+  if (!config.roleMultipliers || config.roleMultipliers.length === 0) {
+    return 1;
+  }
+
+  const roleSet = new Set(memberRoleIds);
+
+  let multiplier = 1;
+  for (const entry of config.roleMultipliers) {
+    if (roleSet.has(entry.roleId) && entry.multiplier > 1) {
+      multiplier *= entry.multiplier;
+    }
+  }
+
+  return multiplier;
 }
 
 export { getErrorMessage, isRemoteStoreEnabled };

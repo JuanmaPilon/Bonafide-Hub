@@ -1,25 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  exportGuildConfig,
   getGuildConfig,
   getGuildRoles,
   getGuilds,
+  getGuildTextChannels,
   getGuildVoiceChannels,
   getGuildWidgetStatus,
   getLeaderboard,
   getMe,
   getXpConfig,
+  importGuildConfig,
   loginUrl,
   logout,
   saveGuildConfig,
   saveXpConfig,
   type ApiGuild,
+  type GuildChannel,
   type GuildConfig,
   type GuildRole,
-  type GuildVoiceChannel,
   type GuildWidgetStatus,
   type LeaderboardEntry,
   type XpConfig,
+  type XpRoleMultiplier,
   type XpRoleRule,
 } from "./api";
 import "./styles.css";
@@ -225,18 +229,21 @@ function App() {
   const [widgetStatus, setWidgetStatus] = useState<GuildWidgetStatus | null>(
     null,
   );
-  const [voiceChannels, setVoiceChannels] = useState<GuildVoiceChannel[]>([]);
+  const [voiceChannels, setVoiceChannels] = useState<GuildChannel[]>([]);
+  const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
-  const [removeRolesForLevel, setRemoveRolesForLevel] = useState<number | null>(
-    null,
-  );
+  const [roleModal, setRoleModal] = useState<{
+    kind: "add" | "remove";
+    level: number;
+  } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>("dashboard");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
   const [loadingGuildData, setLoadingGuildData] = useState(false);
   const loading = loadingSession || loadingGuildData;
+  const importFileRef = useRef<HTMLInputElement | null>(null);
 
   function pushToast(message: string, kind: ToastKind = "success"): void {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -356,6 +363,88 @@ function App() {
     }
   }
 
+  async function handleExportConfig(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setLoadingGuildData(true);
+    try {
+      const payload = await exportGuildConfig(selectedGuildId);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `bonafide-config-${selectedGuildId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      pushToast("Configuración exportada.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo exportar la configuración.", "error");
+    } finally {
+      setLoadingGuildData(false);
+    }
+  }
+
+  async function handleImportFile(
+    event: ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !selectedGuildId) {
+      return;
+    }
+
+    const text = await file.text().catch(() => null);
+    if (!text) {
+      pushToast("No se pudo leer el archivo.", "error");
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      pushToast("El archivo no es un JSON válido.", "error");
+      return;
+    }
+
+    const payload = parsed as {
+      config?: Partial<GuildConfig>;
+      xpConfig?: Partial<XpConfig>;
+    };
+
+    if (!payload.config && !payload.xpConfig) {
+      pushToast("El archivo no contiene configuración válida.", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Importar esta configuración? Se reemplazarán los ajustes actuales del servidor.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setLoadingGuildData(true);
+    try {
+      const result = await importGuildConfig(selectedGuildId, payload);
+      setConfig(result.config);
+      setXpConfig(result.xpConfig);
+      pushToast("Configuración importada.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo importar la configuración.", "error");
+    } finally {
+      setLoadingGuildData(false);
+    }
+  }
+
   function updateXpRole(level: number, patch: Partial<XpRoleRule>): void {
     setXpConfig((current) => {
       if (!current) {
@@ -386,11 +475,12 @@ function App() {
         levelRoles: [
           ...current.levelRoles,
           {
+            addRoleIds: [],
             level: nextLevel,
+            nicknamePrefix: "",
             removeRoleIds: [],
             roleId: "",
             stacking: "stack",
-            xpMultiplier: 1,
           },
         ],
       };
@@ -406,6 +496,65 @@ function App() {
       return {
         ...current,
         levelRoles: current.levelRoles.filter((rule) => rule.level !== level),
+      };
+    });
+  }
+
+  function updateXpMultiplier(
+    roleId: string,
+    patch: Partial<XpRoleMultiplier>,
+  ): void {
+    setXpConfig((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        roleMultipliers: current.roleMultipliers.map((entry) =>
+          entry.roleId === roleId ? { ...entry, ...patch } : entry,
+        ),
+      };
+    });
+  }
+
+  function addXpMultiplier(): void {
+    setXpConfig((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const usedRoleIds = new Set(
+        current.roleMultipliers.map((entry) => entry.roleId),
+      );
+      const availableRole = guildRoles.find(
+        (role) => !usedRoleIds.has(role.id),
+      );
+
+      return {
+        ...current,
+        roleMultipliers: [
+          ...current.roleMultipliers,
+          {
+            multiplier: 2,
+            roleId: availableRole?.id ?? "",
+          },
+        ],
+      };
+    });
+  }
+
+  function removeXpMultiplier(roleId: string): void {
+    setXpConfig((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        roleMultipliers: current.roleMultipliers.filter(
+          (entry) => entry.roleId !== roleId,
+        ),
       };
     });
   }
@@ -447,6 +596,7 @@ function App() {
   useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
       setVoiceChannels([]);
+      setTextChannels([]);
       setGuildRoles([]);
       setXpConfig(null);
       return;
@@ -455,15 +605,17 @@ function App() {
     let cancelled = false;
     Promise.all([
       getGuildVoiceChannels(selectedGuildId),
+      getGuildTextChannels(selectedGuildId),
       getGuildRoles(selectedGuildId),
       getXpConfig(selectedGuildId),
     ])
-      .then(([channels, roles, xp]) => {
+      .then(([channels, textCh, roles, xp]) => {
         if (cancelled) {
           return;
         }
 
         setVoiceChannels(channels);
+        setTextChannels(textCh);
         setGuildRoles(roles);
         setXpConfig(xp);
       })
@@ -471,6 +623,7 @@ function App() {
         if (!cancelled) {
           void error;
           setVoiceChannels([]);
+          setTextChannels([]);
           setGuildRoles([]);
           setXpConfig(null);
           pushToast(
@@ -525,11 +678,10 @@ function App() {
   }
 
   const panelDesc = panelDescription(activeTab);
-  const removeRolesTarget =
-    removeRolesForLevel != null
-      ? xpConfig?.levelRoles.find(
-          (rule) => rule.level === removeRolesForLevel,
-        ) ?? null
+  const roleModalTarget =
+    roleModal != null
+      ? (xpConfig?.levelRoles.find((rule) => rule.level === roleModal.level) ??
+        null)
       : null;
 
   return (
@@ -704,10 +856,35 @@ function App() {
 
           {activeTab === "admin" && selectedGuild && adminEnabled ? (
             <>
+              <div className="import-export">
+                <button
+                  className="ghost-button"
+                  onClick={() => void handleExportConfig()}
+                  type="button"
+                >
+                  Exportar configuración
+                </button>
+                <button
+                  className="ghost-button"
+                  onClick={() => importFileRef.current?.click()}
+                  type="button"
+                >
+                  Importar configuración
+                </button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={(event) => void handleImportFile(event)}
+                />
+              </div>
+
               <div className="form-grid">
                 <label>
                   <span>Canal principal de Karpindomo</span>
-                  <input
+                  <select
+                    className="select"
                     value={config.memberLogChannelId ?? ""}
                     onChange={(event) =>
                       setConfig((current) => ({
@@ -715,8 +892,14 @@ function App() {
                         memberLogChannelId: event.target.value || undefined,
                       }))
                     }
-                    placeholder="Canal donde Karpindomo publica"
-                  />
+                  >
+                    <option value="">Sin canal configurado</option>
+                    {textChannels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label>
@@ -869,8 +1052,7 @@ function App() {
                         }
                       />
                     </label>
-
-</div>
+                  </div>
 
                   <h4>Roles por nivel</h4>
                   <div className="xp-roles">
@@ -900,15 +1082,16 @@ function App() {
                               </option>
                             ))}
                           </select>
-                          <label className="xp-multiplier">
-                            <span>Multiplicador</span>
+                          <label className="xp-nickname-prefix">
+                            <span>Prefijo de nombre</span>
                             <input
-                              type="number"
-                              min="1"
-                              value={rule.xpMultiplier}
+                              type="text"
+                              maxLength={8}
+                              placeholder="⭐ "
+                              value={rule.nicknamePrefix ?? ""}
                               onChange={(event) =>
                                 updateXpRole(rule.level, {
-                                  xpMultiplier: Number(event.target.value) || 1,
+                                  nicknamePrefix: event.target.value,
                                 })
                               }
                             />
@@ -945,9 +1128,23 @@ function App() {
                           <button
                             type="button"
                             className="ghost-button xp-remove-trigger"
-                            onClick={() => setRemoveRolesForLevel(rule.level)}
+                            onClick={() =>
+                              setRoleModal({ kind: "add", level: rule.level })
+                            }
                           >
-                            Quitar roles ({rule.removeRoleIds.length})
+                            Dar roles extra ({rule.addRoleIds.length})
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost-button xp-remove-trigger"
+                            onClick={() =>
+                              setRoleModal({
+                                kind: "remove",
+                                level: rule.level,
+                              })
+                            }
+                          >
+                            Quitar roles extra ({rule.removeRoleIds.length})
                           </button>
                           <button
                             className="ghost-button danger"
@@ -966,6 +1163,78 @@ function App() {
                       type="button"
                     >
                       + Agregar rol de nivel
+                    </button>
+                  </div>
+
+                  <p className="xp-hint">
+                    Al subir de nivel se asigna el rol del nivel y, si definís
+                    un "Prefijo de nombre", el bot lo agrega delante del
+                    nickname (ej. ⭐ Juanma). "Acumular" mantiene los roles de
+                    nivel anteriores; "Reemplazar" los quita. "Dar roles extra"
+                    agrega roles adicionales (ej. DJ) y "Quitar roles extra" los
+                    remueve al alcanzar el nivel. Los roles de "Multiplicadores
+                    de XP" nunca se quitan al subir.
+                  </p>
+
+                  <h4>Multiplicadores de XP por rol</h4>
+                  <div className="xp-roles">
+                    {xpConfig.roleMultipliers.length === 0 ? (
+                      <div className="empty-state">
+                        Aún no hay roles con multiplicador de XP.
+                      </div>
+                    ) : (
+                      xpConfig.roleMultipliers.map((entry) => (
+                        <div
+                          className="xp-role-row xp-multiplier-row"
+                          key={entry.roleId}
+                        >
+                          <select
+                            className="select"
+                            value={entry.roleId}
+                            onChange={(event) =>
+                              updateXpMultiplier(entry.roleId, {
+                                roleId: event.target.value,
+                              })
+                            }
+                          >
+                            <option value="">Sin rol</option>
+                            {guildRoles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="xp-multiplier">
+                            <span>Multiplicador (x)</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="0.5"
+                              value={entry.multiplier}
+                              onChange={(event) =>
+                                updateXpMultiplier(entry.roleId, {
+                                  multiplier: Number(event.target.value) || 1,
+                                })
+                              }
+                            />
+                          </label>
+                          <button
+                            className="ghost-button danger"
+                            onClick={() => removeXpMultiplier(entry.roleId)}
+                            type="button"
+                          >
+                            Borrar
+                          </button>
+                        </div>
+                      ))
+                    )}
+
+                    <button
+                      className="ghost-button"
+                      onClick={addXpMultiplier}
+                      type="button"
+                    >
+                      + Agregar multiplicador
                     </button>
                   </div>
 
@@ -995,11 +1264,8 @@ function App() {
           )}
         </section>
       </main>
-      {removeRolesForLevel != null ? (
-        <div
-          className="modal-overlay"
-          onClick={() => setRemoveRolesForLevel(null)}
-        >
+      {roleModal != null ? (
+        <div className="modal-overlay" onClick={() => setRoleModal(null)}>
           <div
             className="modal"
             onClick={(event) => event.stopPropagation()}
@@ -1007,25 +1273,32 @@ function App() {
             aria-modal="true"
           >
             <h4>
-              Roles que se quitan al ganar el nivel {removeRolesForLevel}
+              {roleModal.kind === "add"
+                ? `Roles extra que se dan al ganar el nivel ${roleModal.level}`
+                : `Roles extra que se quitan al ganar el nivel ${roleModal.level}`}
             </h4>
-            {removeRolesTarget ? (
+            {roleModalTarget ? (
               <div className="modal-role-list">
                 {guildRoles.map((role) => {
-                  const checked =
-                    removeRolesTarget.removeRoleIds.includes(role.id);
+                  const currentIds =
+                    roleModal.kind === "add"
+                      ? roleModalTarget.addRoleIds
+                      : roleModalTarget.removeRoleIds;
+                  const checked = currentIds.includes(role.id);
                   return (
                     <label className="xp-remove-check" key={role.id}>
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={(event) => {
-                          const removeRoleIds = event.target.checked
-                            ? [...removeRolesTarget.removeRoleIds, role.id]
-                            : removeRolesTarget.removeRoleIds.filter(
-                                (id) => id !== role.id,
-                              );
-                          updateXpRole(removeRolesForLevel, { removeRoleIds });
+                          const nextIds = event.target.checked
+                            ? [...currentIds, role.id]
+                            : currentIds.filter((id) => id !== role.id);
+                          updateXpRole(roleModal.level, {
+                            ...(roleModal.kind === "add"
+                              ? { addRoleIds: nextIds }
+                              : { removeRoleIds: nextIds }),
+                          });
                         }}
                       />
                       {role.name}
@@ -1041,7 +1314,7 @@ function App() {
             <div className="form-actions">
               <button
                 className="primary-button"
-                onClick={() => setRemoveRolesForLevel(null)}
+                onClick={() => setRoleModal(null)}
                 type="button"
               >
                 Listo

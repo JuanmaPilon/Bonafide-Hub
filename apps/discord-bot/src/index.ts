@@ -5,6 +5,7 @@ import {
   Events,
   GatewayIntentBits,
   Partials,
+  PermissionFlagsBits,
 } from "discord.js";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
@@ -39,9 +40,12 @@ import {
 } from "./services/communications-store.js";
 import {
   addRemoteXp,
+  computeXpMultiplier,
   fetchRemoteXpConfig,
   getErrorMessage,
   isRemoteStoreEnabled,
+  type XpConfig,
+  type XpRoleRule,
 } from "./services/xp-service.js";
 
 const client = new Client({
@@ -1593,10 +1597,22 @@ async function awardXpForVoiceMinutes(input: {
 
   try {
     const xpConfig = await fetchRemoteXpConfig(input.guildId);
-    const amount = Math.max(0, Math.floor(xpConfig.voiceXpPerMinute)) * minutes;
-    if (amount <= 0) {
-      return;
-    }
+    const guild = await client.guilds.fetch(input.guildId).catch(() => null);
+    const member = guild
+      ? await guild.members.fetch(input.userId).catch(() => null)
+      : null;
+    const multiplier = computeXpMultiplier(
+      xpConfig,
+      member ? Array.from(member.roles.cache.keys()) : [],
+    );
+    const amount = Math.max(
+      1,
+      Math.round(
+        Math.max(0, Math.floor(xpConfig.voiceXpPerMinute)) *
+          minutes *
+          multiplier,
+      ),
+    );
 
     const result = await addRemoteXp({
       amount,
@@ -1609,6 +1625,16 @@ async function awardXpForVoiceMinutes(input: {
       console.log(
         `[discord-bot] User ${input.userId} leveled up to level ${result.level} via voice (guild ${input.guildId}).`,
       );
+      void applyNicknameForLevel({
+        guildId: input.guildId,
+        level: result.level,
+        userId: input.userId,
+      });
+      void applyLevelRoles({
+        guildId: input.guildId,
+        level: result.level,
+        userId: input.userId,
+      });
     }
   } catch (error: unknown) {
     console.warn(
@@ -1682,11 +1708,210 @@ function startVoiceXpTracker(): void {
   }, VOICE_XP_TICK_INTERVAL_MS);
 }
 
-async function awardXpForMessage(message: {
-  author: { bot: boolean; id: string };
-  channelId: string;
-  guildId: string | null;
+function findNicknameRuleForLevel(
+  xpConfig: XpConfig,
+  level: number,
+): XpRoleRule | null {
+  const candidates = (xpConfig.levelRoles ?? [])
+    .filter(
+      (rule) => rule.level <= level && Boolean(rule.nicknamePrefix?.trim()),
+    )
+    .sort((left, right) => right.level - left.level);
+
+  return candidates[0] ?? null;
+}
+
+function stripKnownNicknamePrefixes(
+  currentName: string,
+  prefixes: string[],
+): string {
+  let name = currentName.trim();
+  let changed = true;
+
+  while (changed && prefixes.length > 0) {
+    changed = false;
+    for (const prefix of prefixes) {
+      if (name.startsWith(prefix)) {
+        name = name.slice(prefix.length).trim();
+        changed = true;
+        break;
+      }
+    }
+  }
+
+  return name;
+}
+
+async function applyNicknameForLevel(input: {
+  guildId: string;
+  level: number;
+  userId: string;
 }): Promise<void> {
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  try {
+    const xpConfig = await fetchRemoteXpConfig(input.guildId);
+    const rule = findNicknameRuleForLevel(xpConfig, input.level);
+    const prefix = rule?.nicknamePrefix?.trim();
+    if (!rule || !prefix) {
+      return;
+    }
+
+    const guild = await client.guilds.fetch(input.guildId).catch(() => null);
+    if (!guild) {
+      return;
+    }
+
+    const member = await guild.members.fetch(input.userId).catch(() => null);
+    if (!member) {
+      return;
+    }
+
+    const prefixes = (xpConfig.levelRoles ?? [])
+      .map((entry) => entry.nicknamePrefix?.trim() ?? "")
+      .filter(Boolean);
+
+    const baseName = member.nickname?.trim()
+      ? stripKnownNicknamePrefixes(member.nickname, prefixes)
+      : member.user.globalName?.trim() || member.user.username.trim();
+
+    if (!baseName) {
+      return;
+    }
+
+    const nextNickname = `${prefix}${baseName}`.slice(0, 32);
+    if (member.nickname === nextNickname) {
+      return;
+    }
+
+    await member.setNickname(nextNickname, `Level up to ${input.level}`);
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Failed to apply nickname prefix: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+async function applyLevelRoles(input: {
+  guildId: string;
+  level: number;
+  userId: string;
+}): Promise<void> {
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  try {
+    const xpConfig = await fetchRemoteXpConfig(input.guildId);
+    const candidateRules = (xpConfig.levelRoles ?? []).filter(
+      (rule) => rule.level <= input.level && rule.roleId,
+    );
+    if (candidateRules.length === 0) {
+      return;
+    }
+
+    const currentRule = candidateRules.sort(
+      (left, right) => right.level - left.level,
+    )[0];
+    if (!currentRule?.roleId) {
+      return;
+    }
+
+    const guild = await client.guilds.fetch(input.guildId).catch(() => null);
+    if (!guild) {
+      return;
+    }
+
+    const member = await guild.members.fetch(input.userId).catch(() => null);
+    if (!member) {
+      return;
+    }
+
+    const me = await guild.members.fetchMe().catch(() => null);
+    if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      console.warn(
+        `[discord-bot] Bot lacks ManageRoles permission to apply level roles (guild ${input.guildId}).`,
+      );
+      return;
+    }
+
+    const botHighestPosition = me.roles.highest.position;
+    const memberRoleIds = new Set(member.roles.cache.keys());
+    const roleIdsToAdd = new Set<string>();
+    const roleIdsToRemove = new Set<string>();
+
+    roleIdsToAdd.add(currentRule.roleId);
+
+    for (const extraRoleId of currentRule.addRoleIds ?? []) {
+      if (extraRoleId) {
+        roleIdsToAdd.add(extraRoleId);
+      }
+    }
+
+    if (currentRule.stacking === "replace") {
+      for (const rule of xpConfig.levelRoles ?? []) {
+        if (rule.roleId && rule.roleId !== currentRule.roleId) {
+          roleIdsToRemove.add(rule.roleId);
+        }
+      }
+    }
+
+    for (const extraRoleId of currentRule.removeRoleIds ?? []) {
+      if (extraRoleId) {
+        roleIdsToRemove.add(extraRoleId);
+      }
+    }
+
+    for (const roleId of roleIdsToAdd) {
+      roleIdsToRemove.delete(roleId);
+    }
+
+    const roleIdsToActuallyAdd = [...roleIdsToAdd].filter((roleId) => {
+      const role = guild.roles.cache.get(roleId);
+      if (!role || role.position >= botHighestPosition) {
+        return false;
+      }
+      return !memberRoleIds.has(roleId);
+    });
+
+    const roleIdsToActuallyRemove = [...roleIdsToRemove].filter((roleId) => {
+      const role = guild.roles.cache.get(roleId);
+      if (!role || role.position >= botHighestPosition) {
+        return false;
+      }
+      return memberRoleIds.has(roleId);
+    });
+
+    if (roleIdsToActuallyAdd.length > 0) {
+      await member.roles.add(
+        roleIdsToActuallyAdd,
+        `Level up to ${input.level}`,
+      );
+    }
+
+    if (roleIdsToActuallyRemove.length > 0) {
+      await member.roles.remove(
+        roleIdsToActuallyRemove,
+        `Level up to ${input.level}`,
+      );
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Failed to apply level roles: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+async function awardXpForMessage(
+  message: {
+    author: { bot: boolean; id: string };
+    channelId: string;
+    guildId: string | null;
+  },
+  memberRoles?: ReadonlySet<string> | string[],
+): Promise<void> {
   if (message.author.bot || !message.guildId) {
     return;
   }
@@ -1708,8 +1933,11 @@ async function awardXpForMessage(message: {
       return;
     }
 
+    const multiplier = computeXpMultiplier(xpConfig, memberRoles ?? []);
+    const amount = Math.max(1, Math.round(xpConfig.messageXp * multiplier));
+
     const result = await addRemoteXp({
-      amount: xpConfig.messageXp,
+      amount,
       guildId: message.guildId,
       source: "message",
       userId: message.author.id,
@@ -1721,6 +1949,16 @@ async function awardXpForMessage(message: {
       console.log(
         `[discord-bot] User ${message.author.id} leveled up to level ${result.level} (guild ${message.guildId}).`,
       );
+      void applyNicknameForLevel({
+        guildId: message.guildId,
+        level: result.level,
+        userId: message.author.id,
+      });
+      void applyLevelRoles({
+        guildId: message.guildId,
+        level: result.level,
+        userId: message.author.id,
+      });
     }
   } catch (error: unknown) {
     console.warn(
@@ -1730,7 +1968,10 @@ async function awardXpForMessage(message: {
 }
 
 client.on(Events.MessageCreate, (message) => {
-  void awardXpForMessage(message);
+  const memberRoles = message.member
+    ? Array.from(message.member.roles.cache.keys())
+    : undefined;
+  void awardXpForMessage(message, memberRoles);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {

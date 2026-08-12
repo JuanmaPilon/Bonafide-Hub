@@ -65,6 +65,7 @@ model XpConfig {
   maxLevel           Int            @default(0)
   roleStacking       String         @default("stack")
   levelRoles         Json           @default("[]")
+  roleMultipliers    Json           @default("[]")
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 

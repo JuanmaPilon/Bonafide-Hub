@@ -697,9 +697,19 @@ export function buildApp() {
       }))
       .sort((left, right) => left.name.localeCompare(right.name));
 
+    const textChannels = channels
+      .filter((channel) => channel.type === 0 || channel.type === 5)
+      .map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+
     return {
       ok: true,
       guildId: params.guildId,
+      textChannels,
       voiceChannels,
     };
   });
@@ -862,6 +872,94 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       leaderboard: enrichedLeaderboard,
+    };
+  });
+
+  app.get("/guilds/:guildId/export", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const [config, xpConfig] = await Promise.all([
+      getGuildConfig(params.guildId),
+      getXpConfig(params.guildId),
+    ]);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      config,
+      xpConfig,
+    };
+  });
+
+  app.post("/guilds/:guildId/import", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      config?: GuildConfig;
+      xpConfig?: Partial<XpConfig>;
+    };
+
+    if (!body.config && !body.xpConfig) {
+      return reply.code(400).send({
+        ok: false,
+        error: "No se encontró config ni xpConfig para importar",
+      });
+    }
+
+    if (body.config) {
+      await replaceGuildConfig(params.guildId, body.config);
+    }
+
+    if (body.xpConfig) {
+      await upsertXpConfig({
+        guildId: params.guildId,
+        cooldownSeconds: body.xpConfig.cooldownSeconds,
+        levelBaseXp: body.xpConfig.levelBaseXp,
+        levelRoles: body.xpConfig.levelRoles as XpRoleRule[] | undefined,
+        maxLevel: body.xpConfig.maxLevel,
+        messageXp: body.xpConfig.messageXp,
+        roleMultipliers: body.xpConfig.roleMultipliers,
+        roleStacking: body.xpConfig.roleStacking,
+        voiceXpPerMinute: body.xpConfig.voiceXpPerMinute,
+      });
+    }
+
+    const [config, xpConfig] = await Promise.all([
+      getGuildConfig(params.guildId),
+      getXpConfig(params.guildId),
+    ]);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      config,
+      xpConfig,
     };
   });
 

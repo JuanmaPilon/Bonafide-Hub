@@ -331,14 +331,19 @@ a:hover {
 }
 
 .xp-role-row {
-  display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) auto auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: end;
   padding: 12px;
   border-radius: 14px;
   background: rgba(12, 19, 37, 0.55);
   border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.xp-role-row > .select {
+  flex: 1;
+  min-width: 150px;
 }
 
 .xp-role-level {
@@ -443,6 +448,39 @@ a:hover {
 
 .xp-multiplier input {
   width: 90px;
+}
+
+.xp-nickname-prefix {
+  display: grid;
+  gap: 6px;
+}
+
+.xp-nickname-prefix span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.xp-nickname-prefix input {
+  width: 110px;
+}
+
+.xp-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.xp-multiplier-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.xp-multiplier-row > .select {
+  flex: 1;
+  min-width: 180px;
 }
 
 .toast-viewport {
@@ -574,6 +612,13 @@ a:hover {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.import-export {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
 }
 
 .form-actions {

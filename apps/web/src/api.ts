@@ -31,12 +31,18 @@ export type GuildRole = {
   position: number;
 };
 
+export type XpRoleMultiplier = {
+  multiplier: number;
+  roleId: string;
+};
+
 export type XpRoleRule = {
+  addRoleIds: string[];
   level: number;
+  nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
   stacking: "stack" | "replace";
-  xpMultiplier: number;
 };
 
 export type XpConfig = {
@@ -46,6 +52,7 @@ export type XpConfig = {
   levelRoles: XpRoleRule[];
   maxLevel: number;
   messageXp: number;
+  roleMultipliers: XpRoleMultiplier[];
   roleStacking: "stack" | "replace";
   voiceXpPerMinute: number;
 };
@@ -140,7 +147,7 @@ export async function getGuildWidgetStatus(
   return data;
 }
 
-export type GuildVoiceChannel = {
+export type GuildChannel = {
   id: string;
   name: string;
   type: number;
@@ -148,8 +155,8 @@ export type GuildVoiceChannel = {
 
 export async function getGuildVoiceChannels(
   guildId: string,
-): Promise<GuildVoiceChannel[]> {
-  const data = await requestJson<{ voiceChannels: GuildVoiceChannel[] }>(
+): Promise<GuildChannel[]> {
+  const data = await requestJson<{ voiceChannels: GuildChannel[] }>(
     `/guilds/${guildId}/channels`,
     {
       method: "GET",
@@ -157,6 +164,19 @@ export async function getGuildVoiceChannels(
   );
 
   return data.voiceChannels;
+}
+
+export async function getGuildTextChannels(
+  guildId: string,
+): Promise<GuildChannel[]> {
+  const data = await requestJson<{ textChannels: GuildChannel[] }>(
+    `/guilds/${guildId}/channels`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.textChannels;
 }
 
 export async function getGuildRoles(guildId: string): Promise<GuildRole[]> {
@@ -219,6 +239,46 @@ export async function getLeaderboard(
   );
 
   return data.leaderboard;
+}
+
+export type GuildExportPayload = {
+  config: GuildConfig;
+  exportedAt: string;
+  guildId: string;
+  ok: boolean;
+  version: number;
+  xpConfig: XpConfig;
+};
+
+export async function exportGuildConfig(
+  guildId: string,
+): Promise<GuildExportPayload> {
+  const data = await requestJson<GuildExportPayload>(
+    `/guilds/${guildId}/export`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data;
+}
+
+export async function importGuildConfig(
+  guildId: string,
+  payload: {
+    config?: Partial<GuildConfig>;
+    xpConfig?: Partial<XpConfig>;
+  },
+): Promise<{ config: GuildConfig; xpConfig: XpConfig }> {
+  const data = await requestJson<{
+    config: GuildConfig;
+    xpConfig: XpConfig;
+  }>(`/guilds/${guildId}/import`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  return data;
 }
 
 export async function saveGuildConfig(
