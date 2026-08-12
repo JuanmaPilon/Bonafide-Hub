@@ -245,6 +245,107 @@ a:hover {
   font-size: 1.05rem;
 }
 
+.user-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.xp-panel {
+  margin-top: 24px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 20px;
+}
+
+.xp-panel h3 {
+  margin: 0 0 14px;
+}
+
+.xp-panel h4 {
+  margin: 20px 0 12px;
+  color: var(--muted);
+}
+
+.xp-roles {
+  display: grid;
+  gap: 12px;
+}
+
+.xp-role-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.xp-role-level {
+  font-weight: 700;
+  white-space: nowrap;
+  padding-bottom: 10px;
+}
+
+.xp-multiplier {
+  display: grid;
+  gap: 6px;
+}
+
+.xp-multiplier span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.xp-multiplier input {
+  width: 90px;
+}
+
+.toast-viewport {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  width: 100%;
+  max-width: min(420px, calc(100vw - 40px));
+  pointer-events: none;
+}
+
+.toast {
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: rgba(9, 18, 30, 0.95);
+  box-shadow: 0 16px 40px rgba(2, 8, 13, 0.5);
+  color: var(--text);
+  padding: 12px 16px;
+  font-size: 0.92rem;
+  animation: toast-in 220ms ease;
+}
+
+.toast-success {
+  border-color: rgba(74, 222, 128, 0.5);
+}
+
+.toast-error {
+  border-color: rgba(252, 165, 165, 0.55);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .panel {
   border-radius: 24px;
   background: var(--panel);

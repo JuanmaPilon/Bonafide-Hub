@@ -55,3 +55,17 @@ model OAuthState {
 
   @@map("oauth_states")
 }
+
+model XpConfig {
+  guildId            String         @id
+  messageXp          Int            @default(15)
+  voiceXpPerMinute   Int            @default(3)
+  cooldownSeconds    Int            @default(60)
+  levelBaseXp        Int            @default(100)
+  roleStacking       String         @default("stack")
+  levelRoles         Json           @default("[]")
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@map("xp_configs")
+}

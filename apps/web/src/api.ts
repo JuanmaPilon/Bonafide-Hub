@@ -22,6 +22,30 @@ export type GuildWidgetStatus = {
   presenceCount: number | null;
 };
 
+export type GuildRole = {
+  color: number;
+  id: string;
+  managed: boolean;
+  name: string;
+  position: number;
+};
+
+export type XpRoleRule = {
+  level: number;
+  roleId: string;
+  xpMultiplier: number;
+};
+
+export type XpConfig = {
+  cooldownSeconds: number;
+  guildId: string;
+  levelBaseXp: number;
+  levelRoles: XpRoleRule[];
+  messageXp: number;
+  roleStacking: "stack" | "replace";
+  voiceXpPerMinute: number;
+};
+
 export type SessionResponse = {
   expiresAt: number;
   ok: true;
@@ -129,6 +153,43 @@ export async function getGuildVoiceChannels(
   );
 
   return data.voiceChannels;
+}
+
+export async function getGuildRoles(guildId: string): Promise<GuildRole[]> {
+  const data = await requestJson<{ roles: GuildRole[] }>(
+    `/guilds/${guildId}/roles`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.roles;
+}
+
+export async function getXpConfig(guildId: string): Promise<XpConfig> {
+  const data = await requestJson<{ xpConfig: XpConfig }>(
+    `/guilds/${guildId}/xp-config`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.xpConfig;
+}
+
+export async function saveXpConfig(
+  guildId: string,
+  xpConfig: Partial<XpConfig>,
+): Promise<XpConfig> {
+  const data = await requestJson<{ xpConfig: XpConfig }>(
+    `/guilds/${guildId}/xp-config`,
+    {
+      body: JSON.stringify(xpConfig),
+      method: "PATCH",
+    },
+  );
+
+  return data.xpConfig;
 }
 
 export async function saveGuildConfig(

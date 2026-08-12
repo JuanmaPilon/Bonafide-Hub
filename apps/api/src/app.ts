@@ -14,6 +14,12 @@ import {
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
 import {
+  getXpConfig,
+  type XpConfig,
+  type XpRoleRule,
+  upsertXpConfig,
+} from "./services/xp-config-store.js";
+import {
   buildClearCookie,
   buildCookieHeader,
   buildSessionCookie,
@@ -513,6 +519,127 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       voiceChannels,
+    };
+  });
+
+  app.get("/guilds/:guildId/roles", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (!env.DISCORD_BOT_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "DISCORD_BOT_TOKEN is not configured",
+      });
+    }
+
+    const rolesResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${params.guildId}/roles`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    );
+
+    if (!rolesResponse.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: `Discord API returned ${rolesResponse.status}`,
+      });
+    }
+
+    const roles = (await rolesResponse.json()) as Array<{
+      color: number;
+      id: string;
+      managed: boolean;
+      name: string;
+      position: number;
+    }>;
+
+    const normalRoles = roles
+      .filter((role) => role.id !== params.guildId)
+      .map((role) => ({
+        color: role.color,
+        id: role.id,
+        managed: role.managed,
+        name: role.name,
+        position: role.position,
+      }))
+      .sort((left, right) => right.position - left.position);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      roles: normalRoles,
+    };
+  });
+
+  app.get("/guilds/:guildId/xp-config", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const xpConfig = await getXpConfig(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      xpConfig,
+    };
+  });
+
+  app.patch("/guilds/:guildId/xp-config", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = request.body as Partial<XpConfig>;
+    const xpConfig = await upsertXpConfig({
+      guildId: params.guildId,
+      cooldownSeconds: body.cooldownSeconds,
+      levelBaseXp: body.levelBaseXp,
+      levelRoles: body.levelRoles as XpRoleRule[] | undefined,
+      messageXp: body.messageXp,
+      roleStacking: body.roleStacking,
+      voiceXpPerMinute: body.voiceXpPerMinute,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      xpConfig,
     };
   });
 
