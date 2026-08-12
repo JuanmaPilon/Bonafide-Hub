@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import {
   getGuildConfig,
   getGuilds,
+  getGuildVoiceChannels,
   getGuildWidgetStatus,
   getMe,
   loginUrl,
@@ -10,6 +11,7 @@ import {
   saveGuildConfig,
   type ApiGuild,
   type GuildConfig,
+  type GuildVoiceChannel,
   type GuildWidgetStatus,
 } from "./api";
 import "./styles.css";
@@ -210,6 +212,7 @@ function App() {
   const [widgetStatus, setWidgetStatus] = useState<GuildWidgetStatus | null>(
     null,
   );
+  const [voiceChannels, setVoiceChannels] = useState<GuildVoiceChannel[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>("dashboard");
   const [status, setStatus] = useState<string>("Listo para iniciar sesión.");
   const [loadingSession, setLoadingSession] = useState(false);
@@ -345,6 +348,32 @@ function App() {
       setActiveTab("dashboard");
     }
   }, [activeTab, adminEnabled]);
+
+  useEffect(() => {
+    if (activeTab !== "admin" || !selectedGuildId) {
+      setVoiceChannels([]);
+      return;
+    }
+
+    let cancelled = false;
+    getGuildVoiceChannels(selectedGuildId)
+      .then((channels) => {
+        if (!cancelled) {
+          setVoiceChannels(channels);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          void error;
+          setVoiceChannels([]);
+          setStatus("No se pudieron cargar los canales de voz.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
 
   if (!username) {
     return (
@@ -505,8 +534,9 @@ function App() {
               </label>
 
               <label>
-                <span>Dynamic voice channel ID</span>
-                <input
+                <span>Canal disparador de salas (voz)</span>
+                <select
+                  className="select"
                   value={config.dynamicVoiceCreateChannelId ?? ""}
                   onChange={(event) =>
                     setConfig((current) => ({
@@ -515,8 +545,14 @@ function App() {
                         event.target.value || undefined,
                     }))
                   }
-                  placeholder="Canal disparador de voz"
-                />
+                >
+                  <option value="">Sin canal configurado</option>
+                  {voiceChannels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               <label>

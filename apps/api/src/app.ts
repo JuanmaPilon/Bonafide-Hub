@@ -456,6 +456,66 @@ export function buildApp() {
     };
   });
 
+  app.get("/guilds/:guildId/channels", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (!env.DISCORD_BOT_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "DISCORD_BOT_TOKEN is not configured",
+      });
+    }
+
+    const channelsResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${params.guildId}/channels`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    );
+
+    if (!channelsResponse.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: `Discord API returned ${channelsResponse.status}`,
+      });
+    }
+
+    const channels = (await channelsResponse.json()) as Array<{
+      id: string;
+      name: string;
+      type: number;
+    }>;
+
+    const voiceChannels = channels
+      .filter((channel) => channel.type === 2)
+      .map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      voiceChannels,
+    };
+  });
+
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {

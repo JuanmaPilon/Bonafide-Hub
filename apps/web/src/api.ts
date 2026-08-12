@@ -112,6 +112,25 @@ export async function getGuildWidgetStatus(
   return data;
 }
 
+export type GuildVoiceChannel = {
+  id: string;
+  name: string;
+  type: number;
+};
+
+export async function getGuildVoiceChannels(
+  guildId: string,
+): Promise<GuildVoiceChannel[]> {
+  const data = await requestJson<{ voiceChannels: GuildVoiceChannel[] }>(
+    `/guilds/${guildId}/channels`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.voiceChannels;
+}
+
 export async function saveGuildConfig(
   guildId: string,
   config: GuildConfig,
