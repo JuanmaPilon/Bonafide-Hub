@@ -482,6 +482,35 @@ function App() {
     });
   }
 
+  function changeXpRoleLevel(currentLevel: number, nextLevel: number): void {
+    setXpConfig((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (nextLevel <= 0) {
+        return current;
+      }
+
+      const alreadyExists = current.levelRoles.some(
+        (rule) => rule.level === nextLevel && rule.level !== currentLevel,
+      );
+      if (alreadyExists) {
+        pushToast("Ese nivel ya está asignado a otro rol.", "error");
+        return current;
+      }
+
+      return {
+        ...current,
+        levelRoles: current.levelRoles
+          .map((rule) =>
+            rule.level === currentLevel ? { ...rule, level: nextLevel } : rule,
+          )
+          .sort((left, right) => left.level - right.level),
+      };
+    });
+  }
+
   function addXpRole(): void {
     setXpConfig((current) => {
       if (!current) {
@@ -1079,9 +1108,20 @@ function App() {
                     ) : (
                       xpConfig.levelRoles.map((rule) => (
                         <div className="xp-role-row" key={rule.level}>
-                          <span className="xp-role-level">
-                            Nivel {rule.level}
-                          </span>
+                          <label className="xp-role-level-input">
+                            <span>Nivel</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={rule.level}
+                              onChange={(event) =>
+                                changeXpRoleLevel(
+                                  rule.level,
+                                  Number(event.target.value) || 1,
+                                )
+                              }
+                            />
+                          </label>
                           <select
                             className="select"
                             value={rule.roleId}

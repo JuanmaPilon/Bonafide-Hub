@@ -352,6 +352,20 @@ a:hover {
   padding-bottom: 10px;
 }
 
+.xp-role-level-input {
+  display: grid;
+  gap: 6px;
+}
+
+.xp-role-level-input span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.xp-role-level-input input {
+  width: 76px;
+}
+
 .xp-remove-roles {
   grid-column: 1 / -1;
   display: grid;

@@ -1,6 +1,7 @@
 import {
   AuditLogEvent,
   ChannelType,
+  ChatInputCommandInteraction,
   Client,
   Events,
   GatewayIntentBits,
@@ -44,6 +45,7 @@ import {
   fetchRemoteXpConfig,
   getErrorMessage,
   isRemoteStoreEnabled,
+  setRemoteXpLevel,
   type XpConfig,
   type XpRoleRule,
 } from "./services/xp-service.js";
@@ -839,6 +841,70 @@ client.once(Events.ClientReady, (readyClient) => {
   startVoiceXpTracker();
 });
 
+async function handleXpLevelCommand(
+  interaction: ChatInputCommandInteraction,
+  action: "add" | "remove" | "set" | "reset",
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId) {
+    await interaction.reply({
+      content: "Este comando solo se puede usar dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    await interaction.reply({
+      content: "Necesitas el permiso Manage Server para usar este comando.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!isRemoteStoreEnabled()) {
+    await interaction.reply({
+      content: "El store remoto de XP no está configurado.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const targetUser = interaction.options.getUser("usuario", true);
+  const level =
+    action === "reset"
+      ? undefined
+      : (interaction.options.getInteger(
+          action === "set" ? "nivel" : "niveles",
+          true,
+        ) ?? 0);
+
+  try {
+    const result = await setRemoteXpLevel({
+      action,
+      guildId: interaction.guildId,
+      level,
+      userId: targetUser.id,
+    });
+
+    const actionText: Record<"add" | "remove" | "set" | "reset", string> = {
+      add: `Se agregaron ${level} nivel/es a <@${targetUser.id}>. Ahora es nivel ${result.level}.`,
+      remove: `Se quitaron ${level} nivel/es a <@${targetUser.id}>. Ahora es nivel ${result.level}.`,
+      set: `<@${targetUser.id}> ahora es nivel ${result.level}.`,
+      reset: `Se reinició el XP de <@${targetUser.id}>. Quedó en nivel 0.`,
+    };
+
+    await interaction.reply({
+      content: actionText[action],
+      ephemeral: true,
+    });
+  } catch (error: unknown) {
+    await interaction.reply({
+      content: `No se pudo actualizar el nivel: ${getErrorMessage(error)}`,
+      ephemeral: true,
+    });
+  }
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isAutocomplete()) {
     if (interaction.commandName !== "publicarcomunicado") {
@@ -1621,6 +1687,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
       content: `Recordatorio privado creado. Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
       ephemeral: true,
     });
+    return;
+  }
+
+  if (
+    interaction.commandName === "addlvl" ||
+    interaction.commandName === "removelvl" ||
+    interaction.commandName === "setlvl" ||
+    interaction.commandName === "resetlvl"
+  ) {
+    const action: "add" | "remove" | "set" | "reset" =
+      interaction.commandName === "addlvl"
+        ? "add"
+        : interaction.commandName === "removelvl"
+          ? "remove"
+          : interaction.commandName === "setlvl"
+            ? "set"
+            : "reset";
+    await handleXpLevelCommand(interaction, action);
     return;
   }
 

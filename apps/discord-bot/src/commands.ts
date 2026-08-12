@@ -296,6 +296,66 @@ export const commandDefinitions = [
         .setRequired(false)
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
     ),
+  new SlashCommandBuilder()
+    .setName("addlvl")
+    .setDescription("Agrega niveles de XP a un usuario")
+    .addUserOption((option) =>
+      option
+        .setName("usuario")
+        .setDescription("Usuario objetivo")
+        .setRequired(true),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("niveles")
+        .setDescription("Cantidad de niveles a agregar")
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(1000),
+    ),
+  new SlashCommandBuilder()
+    .setName("removelvl")
+    .setDescription("Resta niveles de XP a un usuario")
+    .addUserOption((option) =>
+      option
+        .setName("usuario")
+        .setDescription("Usuario objetivo")
+        .setRequired(true),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("niveles")
+        .setDescription("Cantidad de niveles a quitar")
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(1000),
+    ),
+  new SlashCommandBuilder()
+    .setName("setlvl")
+    .setDescription("Fija el nivel de XP de un usuario")
+    .addUserOption((option) =>
+      option
+        .setName("usuario")
+        .setDescription("Usuario objetivo")
+        .setRequired(true),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("nivel")
+        .setDescription("Nivel a fijar")
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(1000),
+    ),
+  new SlashCommandBuilder()
+    .setName("resetlvl")
+    .setDescription("Reinicia el XP de un usuario a cero")
+    .addUserOption((option) =>
+      option
+        .setName("usuario")
+        .setDescription("Usuario objetivo")
+        .setRequired(true),
+    ),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {};

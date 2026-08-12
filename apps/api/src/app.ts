@@ -22,8 +22,11 @@ import {
 import {
   addXp,
   getLeaderboard,
+  getXpProfile,
   importXpEntries,
   listXpProfiles,
+  resetXpProfile,
+  setXpLevel,
   type XpImportEntry,
 } from "./services/xp-store.js";
 import {
@@ -428,6 +431,65 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       ...result,
+    };
+  });
+
+  app.post("/internal/guilds/:guildId/xp/level", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const body = request.body as {
+      action?: string;
+      level?: number;
+      userId?: string;
+    };
+    const userId = body.userId?.trim();
+    if (!userId) {
+      return reply.code(400).send({ ok: false, error: "Missing userId" });
+    }
+
+    const action =
+      body.action === "add" ||
+      body.action === "remove" ||
+      body.action === "set" ||
+      body.action === "reset"
+        ? body.action
+        : "set";
+
+    if (action === "reset") {
+      const profile = await resetXpProfile(params.guildId, userId);
+      return { ok: true, guildId: params.guildId, profile };
+    }
+
+    const requestedLevel = Math.max(1, Math.floor(body.level ?? 0));
+    const current = await getXpProfile(params.guildId, userId);
+    let targetLevel = requestedLevel;
+
+    if (action === "add") {
+      targetLevel = (current?.level ?? 0) + requestedLevel;
+    } else if (action === "remove") {
+      targetLevel = Math.max(0, (current?.level ?? 0) - requestedLevel);
+    }
+
+    const profile = await setXpLevel(params.guildId, userId, targetLevel);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      profile,
     };
   });
 

@@ -290,3 +290,38 @@ export async function importXpEntries(
 
   return { imported };
 }
+
+/**
+ * Fija el nivel de un usuario calculando la XP acumulada correspondiente.
+ * Respeta el cap de nivel (maxLevel) si existe.
+ */
+export async function setXpLevel(
+  guildId: string,
+  userId: string,
+  level: number,
+): Promise<XpProfile> {
+  const xpConfig = await getXpConfig(guildId);
+  let safeLevel = Math.max(0, Math.floor(level));
+  if (xpConfig.maxLevel > 0) {
+    safeLevel = Math.min(safeLevel, xpConfig.maxLevel);
+  }
+
+  const xp = xpRequiredForLevel(safeLevel, xpConfig.levelBaseXp);
+  return setXpProfile({ guildId, userId, xp });
+}
+
+/**
+ * Reinicia el perfil de XP de un usuario a cero (nivel, XP, mensajes y voz).
+ */
+export async function resetXpProfile(
+  guildId: string,
+  userId: string,
+): Promise<XpProfile> {
+  return setXpProfile({
+    guildId,
+    messageCount: 0,
+    userId,
+    voiceMinutes: 0,
+    xp: 0,
+  });
+}

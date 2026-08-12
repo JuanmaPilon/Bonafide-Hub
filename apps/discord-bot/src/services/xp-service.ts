@@ -150,6 +150,52 @@ export async function addRemoteXp(input: {
   };
 }
 
+export async function setRemoteXpLevel(input: {
+  action: "add" | "remove" | "set" | "reset";
+  guildId: string;
+  level?: number;
+  userId: string;
+}): Promise<{ level: number; xp: number }> {
+  if (!remoteApiBaseUrl || !remoteApiToken) {
+    throw new Error("Remote bot xp store is not configured");
+  }
+
+  const controller = createTimeoutController(remoteTimeoutMs);
+  const response = await fetch(
+    `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(input.guildId)}/xp/level`,
+    {
+      body: JSON.stringify({
+        action: input.action,
+        level: input.level,
+        userId: input.userId,
+      }),
+      headers: {
+        "content-type": "application/json",
+        "x-bot-token": remoteApiToken,
+      },
+      method: "POST",
+      signal: controller.signal,
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "unknown");
+    throw new Error(
+      `Remote xp level update failed (${response.status}): ${details}`,
+    );
+  }
+
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    profile?: { level?: number; xp?: number };
+  };
+
+  return {
+    level: payload.profile?.level ?? 0,
+    xp: payload.profile?.xp ?? 0,
+  };
+}
+
 /**
  * Calcula el multiplicador de XP de un miembro a partir de sus roles.
  * Se multiplican los multiplicadores de todos los roles de la config que el
