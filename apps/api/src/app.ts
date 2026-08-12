@@ -70,6 +70,88 @@ async function fetchDiscordJson<T>(
   return (await response.json()) as T;
 }
 
+type DiscordGuildMember = {
+  avatar?: string | null;
+  nick?: string | null;
+  user?: {
+    avatar?: string | null;
+    id: string;
+    username: string;
+  } | null;
+};
+
+type LeaderboardUserInfo = {
+  avatarUrl: string | null;
+  nickname: string | null;
+  username: string;
+};
+
+async function fetchGuildMembersForLeaderboard(
+  guildId: string,
+): Promise<Map<string, LeaderboardUserInfo>> {
+  const result = new Map<string, LeaderboardUserInfo>();
+  if (!env.DISCORD_BOT_TOKEN) {
+    return result;
+  }
+
+  let after: string | undefined;
+  const members: DiscordGuildMember[] = [];
+
+  for (let page = 0; page < 10; page += 1) {
+    const query = new URLSearchParams({ limit: "1000" });
+    if (after) {
+      query.set("after", after);
+    }
+
+    const response = await fetch(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members?${query.toString()}`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Discord members fetch failed for guild ${guildId} (${response.status})`,
+      );
+    }
+
+    const pageMembers = (await response.json()) as DiscordGuildMember[];
+    members.push(...pageMembers);
+
+    if (pageMembers.length < 1000) {
+      break;
+    }
+
+    const lastMember = pageMembers[pageMembers.length - 1];
+    after = lastMember.user?.id;
+    if (!after) {
+      break;
+    }
+  }
+
+  for (const member of members) {
+    if (!member.user) {
+      continue;
+    }
+
+    const avatarHash = member.user.avatar ?? member.avatar;
+    const avatarUrl = avatarHash
+      ? `https://cdn.discordapp.com/avatars/${member.user.id}/${avatarHash}.png?size=64`
+      : null;
+
+    result.set(member.user.id, {
+      avatarUrl,
+      nickname: member.nick ?? null,
+      username: member.user.username,
+    });
+  }
+
+  return result;
+}
+
 export function buildApp() {
   const app = Fastify({
     logger: true,
@@ -514,6 +596,24 @@ export function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
+    const previewResponse = env.DISCORD_BOT_TOKEN
+      ? await fetch(
+          `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/preview`,
+          {
+            headers: {
+              Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+            },
+          },
+        ).catch(() => null)
+      : null;
+
+    const preview = previewResponse?.ok
+      ? ((await previewResponse.json()) as {
+          approximate_member_count?: number;
+        })
+      : null;
+    const memberCount = preview?.approximate_member_count ?? null;
+
     const widgetResponse = await fetch(
       `https://discord.com/api/guilds/${params.guildId}/widget.json`,
     );
@@ -523,6 +623,7 @@ export function buildApp() {
         ok: true,
         guildId: params.guildId,
         available: false,
+        memberCount,
         presenceCount: null,
         inviteUrl: null,
       });
@@ -534,6 +635,7 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       available: true,
+      memberCount,
       presenceCount: widget.presence_count ?? null,
       inviteUrl: widget.instant_invite ?? null,
       name: widget.name,
@@ -739,10 +841,25 @@ export function buildApp() {
 
     const leaderboard = await getLeaderboard(params.guildId);
 
+    const memberInfo = await fetchGuildMembersForLeaderboard(
+      params.guildId,
+    ).catch(() => new Map<string, LeaderboardUserInfo>());
+
+    const enrichedLeaderboard = leaderboard.map((entry) => {
+      const info = memberInfo.get(entry.userId);
+
+      return {
+        ...entry,
+        avatarUrl: info?.avatarUrl ?? null,
+        nickname: info?.nickname ?? null,
+        username: info?.username ?? null,
+      };
+    });
+
     return {
       ok: true,
       guildId: params.guildId,
-      leaderboard,
+      leaderboard: enrichedLeaderboard,
     };
   });
 
