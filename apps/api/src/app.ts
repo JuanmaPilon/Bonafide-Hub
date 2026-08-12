@@ -19,6 +19,7 @@ import {
   type XpRoleRule,
   upsertXpConfig,
 } from "./services/xp-config-store.js";
+import { addXp } from "./services/xp-store.js";
 import {
   buildClearCookie,
   buildCookieHeader,
@@ -262,6 +263,77 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       config,
+    };
+  });
+
+  app.get("/internal/guilds/:guildId/xp-config", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const xpConfig = await getXpConfig(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      xpConfig,
+    };
+  });
+
+  app.post("/internal/guilds/:guildId/xp/add", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const body = request.body as { amount?: number; userId?: string };
+    const userId = body.userId?.trim();
+    const amount = body.amount;
+
+    if (!userId) {
+      return reply.code(400).send({ ok: false, error: "Missing userId" });
+    }
+
+    if (!Number.isInteger(amount) || (amount as number) < 0) {
+      return reply.code(400).send({
+        ok: false,
+        error: "amount debe ser un entero no negativo",
+      });
+    }
+
+    const result = await addXp({
+      amount: amount as number,
+      guildId: params.guildId,
+      userId,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      ...result,
     };
   });
 

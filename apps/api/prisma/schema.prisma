@@ -69,3 +69,15 @@ model XpConfig {
 
   @@map("xp_configs")
 }
+
+model XpProfile {
+  guildId   String
+  userId    String
+  xp        Int      @default(0)
+  level     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, userId])
+  @@map("xp_profiles")
+}

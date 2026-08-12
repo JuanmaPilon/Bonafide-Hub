@@ -37,17 +37,27 @@ import {
   listCommunicationFiles,
   splitForDiscord,
 } from "./services/communications-store.js";
+import {
+  addRemoteXp,
+  fetchRemoteXpConfig,
+  getErrorMessage,
+  isRemoteStoreEnabled,
+} from "./services/xp-service.js";
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.MessageContent,
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
+
+const xpCooldowns = new Map<string, number>();
 
 function normalizeEmojiKey(input: string): string | null {
   const trimmed = input.trim();
@@ -1551,6 +1561,56 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   await handler(interaction);
+});
+
+async function awardXpForMessage(message: {
+  author: { bot: boolean; id: string };
+  channelId: string;
+  guildId: string | null;
+}): Promise<void> {
+  if (message.author.bot || !message.guildId) {
+    return;
+  }
+
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  const cooldownKey = `${message.guildId}:${message.author.id}`;
+  const now = Date.now();
+
+  let cooldownSeconds = 60;
+  try {
+    const xpConfig = await fetchRemoteXpConfig(message.guildId);
+    cooldownSeconds = xpConfig.cooldownSeconds;
+
+    const lastAward = xpCooldowns.get(cooldownKey);
+    if (lastAward && now - lastAward < cooldownSeconds * 1000) {
+      return;
+    }
+
+    const result = await addRemoteXp({
+      amount: xpConfig.messageXp,
+      guildId: message.guildId,
+      userId: message.author.id,
+    });
+
+    xpCooldowns.set(cooldownKey, now);
+
+    if (result.leveledUp) {
+      console.log(
+        `[discord-bot] User ${message.author.id} leveled up to level ${result.level} (guild ${message.guildId}).`,
+      );
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Failed to award xp for message: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+client.on(Events.MessageCreate, (message) => {
+  void awardXpForMessage(message);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
