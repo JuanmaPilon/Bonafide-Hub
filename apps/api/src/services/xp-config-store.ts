@@ -4,6 +4,7 @@ export type XpRoleRule = {
   level: number;
   removeRoleIds: string[];
   roleId: string;
+  stacking: "stack" | "replace";
   xpMultiplier: number;
 };
 
@@ -58,6 +59,11 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
           level: Number(entry.level) || 0,
           removeRoleIds: normalizeRoleIds(entry.removeRoleIds),
           roleId: String(entry.roleId ?? ""),
+          stacking: (entry.stacking === "replace"
+            ? "replace"
+            : record?.roleStacking === "replace"
+              ? "replace"
+              : "stack") as "stack" | "replace",
           xpMultiplier: Number(entry.xpMultiplier) || 1,
         }))
         .filter((entry) => entry.level > 0 && entry.roleId)
@@ -94,6 +100,9 @@ function normalizeLevelRoles(
       level: Math.max(1, Math.floor(Number(rule.level) || 0)),
       removeRoleIds: normalizeRoleIds(rule.removeRoleIds),
       roleId: String(rule.roleId ?? "").trim(),
+      stacking: (rule.stacking === "replace" ? "replace" : "stack") as
+        | "stack"
+        | "replace",
       xpMultiplier: Math.max(1, Number(rule.xpMultiplier) || 1),
     }))
     .filter((rule) => rule.roleId)

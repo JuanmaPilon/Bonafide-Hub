@@ -179,7 +179,7 @@ function panelDescription(tab: HubTab): string {
     return "Perfiles destacados, hall of fame y contribuciones clave.";
   }
 
-  return "Gestión de roles, reaction roles y configuración de la guild.";
+  return "";
 }
 
 function ServerStats({
@@ -200,10 +200,7 @@ function ServerStats({
     );
   }
 
-  const connected =
-    status?.available && status.presenceCount != null
-      ? status.presenceCount
-      : null;
+  const connected = status?.presenceCount != null ? status.presenceCount : null;
   const totalMembers = status?.memberCount ?? null;
 
   return (
@@ -231,6 +228,9 @@ function App() {
   const [voiceChannels, setVoiceChannels] = useState<GuildVoiceChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
+  const [removeRolesForLevel, setRemoveRolesForLevel] = useState<number | null>(
+    null,
+  );
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>("dashboard");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -389,6 +389,7 @@ function App() {
             level: nextLevel,
             removeRoleIds: [],
             roleId: "",
+            stacking: "stack",
             xpMultiplier: 1,
           },
         ],
@@ -524,6 +525,12 @@ function App() {
   }
 
   const panelDesc = panelDescription(activeTab);
+  const removeRolesTarget =
+    removeRolesForLevel != null
+      ? xpConfig?.levelRoles.find(
+          (rule) => rule.level === removeRolesForLevel,
+        ) ?? null
+      : null;
 
   return (
     <div className="app-shell">
@@ -699,7 +706,7 @@ function App() {
             <>
               <div className="form-grid">
                 <label>
-                  <span>Member log channel ID</span>
+                  <span>Canal principal de Karpindomo</span>
                   <input
                     value={config.memberLogChannelId ?? ""}
                     onChange={(event) =>
@@ -708,7 +715,7 @@ function App() {
                         memberLogChannelId: event.target.value || undefined,
                       }))
                     }
-                    placeholder="Canal de logs"
+                    placeholder="Canal donde Karpindomo publica"
                   />
                 </label>
 
@@ -863,34 +870,7 @@ function App() {
                       />
                     </label>
 
-                    <label>
-                      <span>Stacking de roles de nivel</span>
-                      <select
-                        className="select"
-                        value={xpConfig.roleStacking}
-                        onChange={(event) =>
-                          setXpConfig((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  roleStacking:
-                                    event.target.value === "replace"
-                                      ? "replace"
-                                      : "stack",
-                                }
-                              : current,
-                          )
-                        }
-                      >
-                        <option value="stack">
-                          Acumular (mantener roles anteriores)
-                        </option>
-                        <option value="replace">
-                          Reemplazar (solo rol del nivel actual)
-                        </option>
-                      </select>
-                    </label>
-                  </div>
+</div>
 
                   <h4>Roles por nivel</h4>
                   <div className="xp-roles">
@@ -933,37 +913,49 @@ function App() {
                               }
                             />
                           </label>
+                          <div
+                            className="xp-mode-toggle"
+                            title="Comportamiento al alcanzar este nivel"
+                          >
+                            <button
+                              type="button"
+                              className={
+                                rule.stacking !== "replace" ? "active" : ""
+                              }
+                              onClick={() =>
+                                updateXpRole(rule.level, { stacking: "stack" })
+                              }
+                            >
+                              Acumular
+                            </button>
+                            <button
+                              type="button"
+                              className={
+                                rule.stacking === "replace" ? "active" : ""
+                              }
+                              onClick={() =>
+                                updateXpRole(rule.level, {
+                                  stacking: "replace",
+                                })
+                              }
+                            >
+                              Reemplazar
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="ghost-button xp-remove-trigger"
+                            onClick={() => setRemoveRolesForLevel(rule.level)}
+                          >
+                            Quitar roles ({rule.removeRoleIds.length})
+                          </button>
                           <button
                             className="ghost-button danger"
                             onClick={() => removeXpRole(rule.level)}
                             type="button"
                           >
-                            Quitar
+                            Borrar
                           </button>
-                          <div className="xp-remove-roles">
-                            <span className="label">
-                              Roles que se quitan al ganar este nivel
-                            </span>
-                            {guildRoles.map((role) => (
-                              <label className="xp-remove-check" key={role.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={rule.removeRoleIds.includes(role.id)}
-                                  onChange={(event) => {
-                                    const removeRoleIds = event.target.checked
-                                      ? [...rule.removeRoleIds, role.id]
-                                      : rule.removeRoleIds.filter(
-                                          (id) => id !== role.id,
-                                        );
-                                    updateXpRole(rule.level, {
-                                      removeRoleIds,
-                                    });
-                                  }}
-                                />
-                                {role.name}
-                              </label>
-                            ))}
-                          </div>
                         </div>
                       ))
                     )}
@@ -1003,6 +995,61 @@ function App() {
           )}
         </section>
       </main>
+      {removeRolesForLevel != null ? (
+        <div
+          className="modal-overlay"
+          onClick={() => setRemoveRolesForLevel(null)}
+        >
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h4>
+              Roles que se quitan al ganar el nivel {removeRolesForLevel}
+            </h4>
+            {removeRolesTarget ? (
+              <div className="modal-role-list">
+                {guildRoles.map((role) => {
+                  const checked =
+                    removeRolesTarget.removeRoleIds.includes(role.id);
+                  return (
+                    <label className="xp-remove-check" key={role.id}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) => {
+                          const removeRoleIds = event.target.checked
+                            ? [...removeRolesTarget.removeRoleIds, role.id]
+                            : removeRolesTarget.removeRoleIds.filter(
+                                (id) => id !== role.id,
+                              );
+                          updateXpRole(removeRolesForLevel, { removeRoleIds });
+                        }}
+                      />
+                      {role.name}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-state">
+                No se encontró el rol de nivel configurado.
+              </div>
+            )}
+            <div className="form-actions">
+              <button
+                className="primary-button"
+                onClick={() => setRemoveRolesForLevel(null)}
+                type="button"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

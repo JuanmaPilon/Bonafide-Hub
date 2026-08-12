@@ -35,6 +35,7 @@ export type XpRoleRule = {
   level: number;
   removeRoleIds: string[];
   roleId: string;
+  stacking: "stack" | "replace";
   xpMultiplier: number;
 };
 
