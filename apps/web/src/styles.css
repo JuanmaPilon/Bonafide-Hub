@@ -139,12 +139,110 @@ a:hover {
   font-size: 0.86rem;
 }
 
-.hub-layout {
+.app-shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(6, 11, 22, 0.82);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.topbar-inner {
   max-width: 1320px;
   margin: 0 auto;
-  display: grid;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
   gap: 20px;
-  grid-template-columns: 1.15fr 0.85fr;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+.brand-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.top-nav {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.nav-link {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.nav-link:hover {
+  color: var(--text);
+}
+
+.nav-link.active {
+  background: rgba(106, 168, 255, 0.16);
+  border-color: rgba(106, 168, 255, 0.45);
+  color: var(--text);
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.guild-select {
+  width: auto;
+  padding: 8px 12px;
+}
+
+.user-chip {
+  background: rgba(12, 19, 37, 0.8);
+  border: 1px solid rgba(134, 158, 214, 0.24);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.page {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+}
+
+.page-hero {
+  margin-bottom: 24px;
+}
+
+.page-hero h1 {
+  margin: 0 0 8px;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  letter-spacing: -0.03em;
+}
+
+.page-hero p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 1.05rem;
 }
 
 .panel {
@@ -155,21 +253,10 @@ a:hover {
   backdrop-filter: blur(8px);
 }
 
-.welcome-panel,
-.preview-panel,
-.sidebar,
-.main-content {
+.content-panel {
   padding: 24px;
 }
 
-.welcome-panel h1 {
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 0.98;
-  margin: 0 0 14px;
-  letter-spacing: -0.03em;
-}
-
-.welcome-panel p,
 .section-header p,
 .meta-text {
   color: var(--muted);
@@ -182,16 +269,34 @@ a:hover {
   font-size: 0.88rem;
 }
 
-.eyebrow {
-  display: inline-flex;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.75rem;
-  color: var(--accent);
-  margin-bottom: 14px;
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.hero-actions,
+.stat-tile {
+  border-radius: 18px;
+  background: rgba(12, 19, 37, 0.66);
+  border: 1px solid rgba(134, 158, 214, 0.2);
+  padding: 18px;
+}
+
+.stat-tile strong {
+  font-size: 1.8rem;
+}
+
+.dashboard-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .form-actions {
   display: flex;
   gap: 12px;
@@ -200,8 +305,7 @@ a:hover {
 }
 
 .primary-button,
-.ghost-button,
-.tab-button {
+.ghost-button {
   border-radius: 999px;
   border: 1px solid transparent;
   text-decoration: none;
@@ -256,25 +360,6 @@ a:hover {
     linear-gradient(145deg, rgba(54, 89, 185, 0.46), rgba(223, 90, 61, 0.32));
 }
 
-.preview-grid,
-.sidebar,
-.cards-grid {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.cards-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.stacked-card {
-  border-radius: 16px;
-  background: rgba(12, 19, 37, 0.66);
-  border: 1px solid rgba(134, 158, 214, 0.2);
-  padding: 14px;
-}
-
 .label {
   display: block;
   margin-bottom: 6px;
@@ -288,34 +373,12 @@ a:hover {
   color: var(--accent);
 }
 
-.select-label {
-  display: grid;
-  gap: 8px;
-}
-
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 18px;
-}
-
-.tab-bar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.tab-button {
-  background: rgba(12, 19, 36, 0.8);
-  border-color: rgba(137, 160, 221, 0.25);
-  color: var(--text);
-}
-
-.tab-button.active {
-  background: rgba(106, 168, 255, 0.2);
-  border-color: rgba(106, 168, 255, 0.55);
 }
 
 .select,
@@ -362,15 +425,22 @@ input {
 }
 
 @media (max-width: 1080px) {
-  .hub-layout {
-    grid-template-columns: 1fr;
+  .topbar-inner {
+    flex-wrap: wrap;
   }
 
-  .cards-grid {
-    grid-template-columns: 1fr;
+  .top-nav {
+    order: 3;
+    flex-basis: 100%;
   }
 
-  .form-grid {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
     grid-template-columns: 1fr;
   }
 

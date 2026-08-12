@@ -14,7 +14,14 @@ import {
 } from "./api";
 import "./styles.css";
 
-type HubTab = "home" | "admin" | "raids" | "eventos" | "memes" | "muro";
+type HubTab =
+  | "dashboard"
+  | "comunicados"
+  | "raids"
+  | "eventos"
+  | "memes"
+  | "muro"
+  | "admin";
 
 const LANDING_PREVIEW_USERS = [
   "Azzaio",
@@ -62,12 +69,12 @@ function guildIconUrl(guild: ApiGuild | null): string | null {
 }
 
 function tabLabel(tab: HubTab): string {
-  if (tab === "home") {
-    return "Home";
+  if (tab === "dashboard") {
+    return "Dashboard";
   }
 
-  if (tab === "admin") {
-    return "Admin";
+  if (tab === "comunicados") {
+    return "Comunicados";
   }
 
   if (tab === "raids") {
@@ -82,108 +89,115 @@ function tabLabel(tab: HubTab): string {
     return "Memes";
   }
 
-  return "Muro";
+  if (tab === "muro") {
+    return "Muro";
+  }
+
+  return "Admin";
 }
 
 function panelTitle(tab: HubTab): string {
-  if (tab === "home") {
-    return "Resumen del Hub";
+  if (tab === "dashboard") {
+    return "Dashboard";
   }
 
-  if (tab === "admin") {
-    return "Panel de Admin";
+  if (tab === "comunicados") {
+    return "Comunicados";
   }
 
   if (tab === "raids") {
-    return "Panel de Raids";
+    return "Raids";
   }
 
   if (tab === "eventos") {
-    return "Panel de Eventos";
+    return "Eventos";
   }
 
   if (tab === "memes") {
-    return "Panel de Memes";
+    return "Memes";
   }
 
-  return "Muro de la Comunidad";
+  if (tab === "muro") {
+    return "Muro de la Comunidad";
+  }
+
+  return "Panel de Admin";
 }
 
 function panelDescription(tab: HubTab): string {
-  if (tab === "home") {
-    return "Vista general para coordinar Discord, bot y herramientas de comunidad.";
+  if (tab === "dashboard") {
+    return "Vista general del servidor: actividad, niveles y herramientas.";
   }
 
-  if (tab === "admin") {
-    return "Config base de guild, roles y módulos compartidos entre bot y web.";
+  if (tab === "comunicados") {
+    return "Anuncios y comunicados de la guild.";
   }
 
   if (tab === "raids") {
-    return "Próximo paso: roster, disponibilidad y composición por rol/spec.";
+    return "Roster, disponibilidad y composición por rol/spec.";
   }
 
   if (tab === "eventos") {
-    return "Próximo paso: calendario, estados de asistencia y sincronización con Discord.";
+    return "Calendario, estados de asistencia y sincronización con Discord.";
   }
 
   if (tab === "memes") {
-    return "Próximo paso: highlights, clips y contenido curado de la comunidad.";
+    return "Highlights, clips y contenido curado de la comunidad.";
   }
 
-  return "Próximo paso: perfiles destacados, hall of fame y contribuciones clave.";
+  if (tab === "muro") {
+    return "Perfiles destacados, hall of fame y contribuciones clave.";
+  }
+
+  return "Gestión de roles, reaction roles y configuración de la guild.";
 }
 
-function WidgetStatusCard({
+function ServerStats({
   status,
+  guilds,
+  modules,
   loading,
 }: {
   status: GuildWidgetStatus | null;
+  guilds: number;
+  modules: number;
   loading: boolean;
 }) {
   if (loading) {
     return (
-      <div className="stacked-card">
-        <span className="label">Discord en vivo</span>
-        <strong>Cargando estado...</strong>
+      <div className="stats-grid">
+        <div className="stat-tile">
+          <span className="label">Estado</span>
+          <strong>Cargando...</strong>
+        </div>
       </div>
     );
   }
 
-  if (!status) {
-    return (
-      <div className="stacked-card">
-        <span className="label">Discord en vivo</span>
-        <strong>Inicia sesión para ver métricas</strong>
-      </div>
-    );
-  }
-
-  if (!status.available) {
-    return (
-      <div className="stacked-card">
-        <span className="label">Discord en vivo</span>
-        <strong>Widget no disponible</strong>
-        <small className="meta-text">
-          Activa Server Widget en Discord para mostrar online en tiempo real.
-        </small>
-      </div>
-    );
-  }
+  const connected =
+    status?.available && status.presenceCount != null
+      ? status.presenceCount
+      : null;
+  const total = status?.available && status.name ? undefined : null;
 
   return (
-    <div className="stacked-card">
-      <span className="label">Discord en vivo</span>
-      <strong>{status.presenceCount ?? "N/D"} online</strong>
-      {status.inviteUrl ? (
-        <a
-          className="tiny-link"
-          href={status.inviteUrl}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Abrir invitación pública
-        </a>
-      ) : null}
+    <div className="stats-grid">
+      <div className="stat-tile">
+        <span className="label">Conectados</span>
+        <strong>{connected ?? "—"}</strong>
+      </div>
+      <div className="stat-tile">
+        <span className="label">Miembros totales</span>
+        <strong>{total ?? "—"}</strong>
+      </div>
+      <div className="stat-tile">
+        <span className="label">Guilds</span>
+        <strong>{guilds}</strong>
+      </div>
+      <div className="stat-tile">
+        <span className="label">Módulos activos</span>
+        <strong>{modules}</strong>
+      </div>
     </div>
   );
 }
@@ -196,7 +210,7 @@ function App() {
   const [widgetStatus, setWidgetStatus] = useState<GuildWidgetStatus | null>(
     null,
   );
-  const [activeTab, setActiveTab] = useState<HubTab>("home");
+  const [activeTab, setActiveTab] = useState<HubTab>("dashboard");
   const [status, setStatus] = useState<string>("Listo para iniciar sesión.");
   const [loadingSession, setLoadingSession] = useState(false);
   const [loadingGuildData, setLoadingGuildData] = useState(false);
@@ -316,12 +330,19 @@ function App() {
 
   const moduleText = config.enabledModules?.join(", ") ?? "";
   const enabledModuleCount = config.enabledModules?.length ?? 0;
-  const tabs: HubTab[] = ["home", "raids", "eventos", "memes", "muro"];
+  const tabs: HubTab[] = [
+    "dashboard",
+    "comunicados",
+    "raids",
+    "eventos",
+    "memes",
+    "muro",
+  ];
   const visibleTabs = adminEnabled ? ([...tabs, "admin"] as HubTab[]) : tabs;
 
   useEffect(() => {
     if (activeTab === "admin" && !adminEnabled) {
-      setActiveTab("home");
+      setActiveTab("dashboard");
     }
   }, [activeTab, adminEnabled]);
 
@@ -366,121 +387,106 @@ function App() {
   }
 
   return (
-    <div className="shell">
-      <main className="hub-layout">
-        <section className="panel welcome-panel">
-          <div className="eyebrow">Guild Hub</div>
-          <h1>{selectedGuild?.name ?? "Bonafide"}</h1>
-          <p>
-            Bienvenido {username}. Este hub será el centro para raids, eventos,
-            roles, XP y administración general de la comunidad.
-          </p>
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            {selectedGuildIcon ? (
+              <img
+                className="brand-icon"
+                src={selectedGuildIcon}
+                alt={selectedGuild?.name ?? "Bonafide"}
+              />
+            ) : null}
+            <strong>Bonafide</strong>
+          </div>
 
-          <div className="hero-actions">
+          <nav className="top-nav">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab}
+                className={`nav-link ${activeTab === tab ? "active" : ""}`}
+                onClick={() => setActiveTab(tab)}
+                type="button"
+              >
+                {tabLabel(tab)}
+              </button>
+            ))}
+          </nav>
+
+          <div className="topbar-user">
+            {guilds.length > 1 ? (
+              <select
+                className="select guild-select"
+                value={selectedGuildId ?? ""}
+                onChange={(event) => setSelectedGuildId(event.target.value)}
+              >
+                <option value="" disabled>
+                  Selecciona guild
+                </option>
+                {guilds.map((guild) => (
+                  <option key={guild.id} value={guild.id}>
+                    {formatGuildLabel(guild)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <span className="user-chip">{username}</span>
             <button
               className="ghost-button"
-              onClick={refreshSession}
-              disabled={loading}
-            >
-              Refrescar sesión
-            </button>
-            <button
-              className="ghost-button danger"
               onClick={handleLogout}
               disabled={loading}
             >
-              Cerrar sesión
+              Salir
             </button>
           </div>
+        </div>
+      </header>
 
+      <main className="page">
+        <section className="page-hero">
+          <h1>Bienvenido a Bonafide</h1>
+          <p>Bienvenido {username} a Bonafide Hub</p>
           <div className="status">{status}</div>
         </section>
 
-        <section className="panel preview-panel">
-          {selectedGuildIcon ? (
-            <img
-              className="guild-cover"
-              src={selectedGuildIcon}
-              alt="Icono de la guild"
-            />
-          ) : (
-            <div
-              className="cover-art"
-              role="img"
-              aria-label="Portada de guild"
-            />
-          )}
-
-          <div className="preview-grid">
-            <WidgetStatusCard
-              status={widgetStatus}
-              loading={loadingGuildData}
-            />
-            <div className="stacked-card">
-              <span className="label">Guilds administrables</span>
-              <strong>{guilds.length}</strong>
-            </div>
-            <div className="stacked-card">
-              <span className="label">Módulos activos</span>
-              <strong>{enabledModuleCount}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel sidebar">
-          <h2>Sesión</h2>
-          <div className="stacked-card">
-            <span className="label">Usuario</span>
-            <strong>{username}</strong>
-          </div>
-          <div className="stacked-card">
-            <span className="label">Guild activa</span>
-            <strong>{selectedGuild?.name ?? "Sin selección"}</strong>
-          </div>
-          <div className="stacked-card">
-            <span className="label">Estado</span>
-            <strong>{loading ? "Cargando..." : "Idle"}</strong>
-          </div>
-
-          <label className="select-label">
-            <span className="label">Cambiar guild</span>
-            <select
-              className="select"
-              value={selectedGuildId ?? ""}
-              onChange={(event) => setSelectedGuildId(event.target.value)}
-            >
-              <option value="" disabled>
-                Selecciona una guild
-              </option>
-              {guilds.map((guild) => (
-                <option key={guild.id} value={guild.id}>
-                  {formatGuildLabel(guild)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </section>
-
-        <section className="panel main-content tab-bar">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab}
-              className={`tab-button ${activeTab === tab ? "active" : ""}`}
-              onClick={() => setActiveTab(tab)}
-              type="button"
-            >
-              {tabLabel(tab)}
-            </button>
-          ))}
-        </section>
-
-        <section className="panel main-content">
+        <section className="panel content-panel">
           <div className="section-header">
             <div>
               <h2>{panelTitle(activeTab)}</h2>
               <p>{panelDescription(activeTab)}</p>
             </div>
           </div>
+
+          {activeTab === "dashboard" ? (
+            <div className="dashboard-stack">
+              <ServerStats
+                status={widgetStatus}
+                guilds={guilds.length}
+                modules={enabledModuleCount}
+                loading={loadingGuildData}
+              />
+              <div className="dashboard-actions">
+                <button
+                  className="ghost-button"
+                  onClick={refreshSession}
+                  disabled={loading}
+                >
+                  Refrescar sesión
+                </button>
+                {widgetStatus?.inviteUrl ? (
+                  <a
+                    className="primary-button"
+                    href={widgetStatus.inviteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Invitación del servidor
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           {activeTab === "admin" && selectedGuild && adminEnabled ? (
             <div className="form-grid">
@@ -554,38 +560,13 @@ function App() {
                 </button>
               </div>
             </div>
-          ) : activeTab === "home" ? (
-            <div className="cards-grid">
-              <div className="stacked-card">
-                <span className="label">Próximo bloque</span>
-                <strong>Gestión de eventos y raids</strong>
-                <small className="meta-text">
-                  Crear evento, cupos, estados de asistencia y sync con Discord.
-                </small>
-              </div>
-              <div className="stacked-card">
-                <span className="label">Objetivo admin</span>
-                <strong>Roles + Reaction Roles + XP</strong>
-                <small className="meta-text">
-                  Centralizar setup operativo para que no dependa solo de
-                  comandos.
-                </small>
-              </div>
-              <div className="stacked-card">
-                <span className="label">Arquitectura</span>
-                <strong>Una fuente de verdad (API + DB)</strong>
-                <small className="meta-text">
-                  Bot y Web consumen la misma lógica para evitar duplicaciones.
-                </small>
-              </div>
-            </div>
           ) : activeTab === "admin" ? (
             <div className="empty-state">
               {selectedGuild
                 ? "No tienes permisos para ver el panel Admin en esta guild."
                 : "No hay guild seleccionada o no tenes permisos para ver una."}
             </div>
-          ) : (
+          ) : activeTab === "dashboard" ? null : (
             <div className="empty-state">
               Módulo en preparación. Esta tab ya está lista para conectar su
               backend específico en la próxima iteración.
