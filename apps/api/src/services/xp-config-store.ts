@@ -2,6 +2,7 @@ import { prisma } from "../db/prisma.js";
 
 export type XpRoleRule = {
   level: number;
+  removeRoleIds: string[];
   roleId: string;
   xpMultiplier: number;
 };
@@ -11,6 +12,7 @@ export type XpConfig = {
   guildId: string;
   levelBaseXp: number;
   levelRoles: XpRoleRule[];
+  maxLevel: number;
   messageXp: number;
   roleStacking: "stack" | "replace";
   voiceXpPerMinute: number;
@@ -20,6 +22,7 @@ const DEFAULT_CONFIG: Omit<XpConfig, "guildId"> = {
   cooldownSeconds: 60,
   levelBaseXp: 100,
   levelRoles: [],
+  maxLevel: 0,
   messageXp: 15,
   roleStacking: "stack",
   voiceXpPerMinute: 3,
@@ -30,10 +33,19 @@ type XpConfigRecord = {
   guildId: string;
   levelBaseXp: number;
   levelRoles: unknown;
+  maxLevel: number;
   messageXp: number;
   roleStacking: string;
   voiceXpPerMinute: number;
 };
+
+function normalizeRoleIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw.map((entry) => String(entry).trim()).filter(Boolean);
+}
 
 function toXpConfig(record: XpConfigRecord | null): XpConfig {
   const levelRoles = Array.isArray(record?.levelRoles)
@@ -44,6 +56,7 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
         )
         .map((entry) => ({
           level: Number(entry.level) || 0,
+          removeRoleIds: normalizeRoleIds(entry.removeRoleIds),
           roleId: String(entry.roleId ?? ""),
           xpMultiplier: Number(entry.xpMultiplier) || 1,
         }))
@@ -56,6 +69,7 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
     guildId: record?.guildId ?? "",
     levelBaseXp: record?.levelBaseXp ?? DEFAULT_CONFIG.levelBaseXp,
     levelRoles,
+    maxLevel: record?.maxLevel ?? DEFAULT_CONFIG.maxLevel,
     messageXp: record?.messageXp ?? DEFAULT_CONFIG.messageXp,
     roleStacking: record?.roleStacking === "replace" ? "replace" : "stack",
     voiceXpPerMinute:
@@ -78,6 +92,7 @@ function normalizeLevelRoles(
   return levelRoles
     .map((rule) => ({
       level: Math.max(1, Math.floor(Number(rule.level) || 0)),
+      removeRoleIds: normalizeRoleIds(rule.removeRoleIds),
       roleId: String(rule.roleId ?? "").trim(),
       xpMultiplier: Math.max(1, Number(rule.xpMultiplier) || 1),
     }))
@@ -90,6 +105,7 @@ export async function upsertXpConfig(input: {
   cooldownSeconds?: number;
   levelBaseXp?: number;
   levelRoles?: XpRoleRule[];
+  maxLevel?: number;
   messageXp?: number;
   roleStacking?: "stack" | "replace";
   voiceXpPerMinute?: number;
@@ -101,6 +117,7 @@ export async function upsertXpConfig(input: {
     levelRoles: input.levelRoles
       ? normalizeLevelRoles(input.levelRoles)
       : current.levelRoles,
+    maxLevel: input.maxLevel ?? current.maxLevel,
     messageXp: input.messageXp ?? current.messageXp,
     roleStacking: input.roleStacking ?? current.roleStacking,
     voiceXpPerMinute: input.voiceXpPerMinute ?? current.voiceXpPerMinute,
@@ -112,6 +129,7 @@ export async function upsertXpConfig(input: {
       cooldownSeconds: next.cooldownSeconds,
       levelBaseXp: next.levelBaseXp,
       levelRoles: next.levelRoles,
+      maxLevel: next.maxLevel,
       messageXp: next.messageXp,
       roleStacking: next.roleStacking,
       voiceXpPerMinute: next.voiceXpPerMinute,

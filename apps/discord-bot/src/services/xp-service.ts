@@ -2,6 +2,7 @@ import { env } from "../config/env.js";
 
 export type XpRoleRule = {
   level: number;
+  removeRoleIds: string[];
   roleId: string;
   xpMultiplier: number;
 };
@@ -11,6 +12,7 @@ export type XpConfig = {
   guildId: string;
   levelBaseXp: number;
   levelRoles: XpRoleRule[];
+  maxLevel: number;
   messageXp: number;
   roleStacking: "stack" | "replace";
   voiceXpPerMinute: number;
@@ -51,6 +53,7 @@ function normalizeXpConfig(input: Partial<XpConfig>): XpConfig {
     guildId: input.guildId ?? "",
     levelBaseXp: input.levelBaseXp ?? 100,
     levelRoles: input.levelRoles ?? [],
+    maxLevel: input.maxLevel ?? 0,
     messageXp: input.messageXp ?? 15,
     roleStacking: input.roleStacking === "replace" ? "replace" : "stack",
     voiceXpPerMinute: input.voiceXpPerMinute ?? 3,
@@ -92,6 +95,7 @@ export async function fetchRemoteXpConfig(guildId: string): Promise<XpConfig> {
 export async function addRemoteXp(input: {
   amount: number;
   guildId: string;
+  source?: "message" | "voice";
   userId: string;
 }): Promise<AddXpResult> {
   if (!remoteApiBaseUrl || !remoteApiToken) {
@@ -104,6 +108,7 @@ export async function addRemoteXp(input: {
     {
       body: JSON.stringify({
         amount: input.amount,
+        source: input.source ?? "message",
         userId: input.userId,
       }),
       headers: {

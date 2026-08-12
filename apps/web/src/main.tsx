@@ -6,6 +6,7 @@ import {
   getGuilds,
   getGuildVoiceChannels,
   getGuildWidgetStatus,
+  getLeaderboard,
   getMe,
   getXpConfig,
   loginUrl,
@@ -17,6 +18,7 @@ import {
   type GuildRole,
   type GuildVoiceChannel,
   type GuildWidgetStatus,
+  type LeaderboardEntry,
   type XpConfig,
   type XpRoleRule,
 } from "./api";
@@ -241,6 +243,7 @@ function App() {
   const [voiceChannels, setVoiceChannels] = useState<GuildVoiceChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>("dashboard");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
@@ -301,14 +304,16 @@ function App() {
     Promise.all([
       getGuildConfig(selectedGuildId),
       getGuildWidgetStatus(selectedGuildId),
+      getLeaderboard(selectedGuildId),
     ])
-      .then(([nextConfig, nextWidgetStatus]) => {
+      .then(([nextConfig, nextWidgetStatus, nextLeaderboard]) => {
         if (cancelled) {
           return;
         }
 
         setConfig(nextConfig);
         setWidgetStatus(nextWidgetStatus);
+        setLeaderboard(nextLeaderboard);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -392,7 +397,12 @@ function App() {
         ...current,
         levelRoles: [
           ...current.levelRoles,
-          { level: nextLevel, roleId: "", xpMultiplier: 1 },
+          {
+            level: nextLevel,
+            removeRoleIds: [],
+            roleId: "",
+            xpMultiplier: 1,
+          },
         ],
       };
     });
@@ -608,6 +618,47 @@ function App() {
                 modules={enabledModuleCount}
                 loading={loadingGuildData}
               />
+
+              <div className="leaderboard-panel">
+                <h3>Leaderboard de XP</h3>
+                {loadingGuildData ? (
+                  <div className="empty-state">Cargando ranking...</div>
+                ) : leaderboard.length === 0 ? (
+                  <div className="empty-state">
+                    Todavía no hay XP registrado en este servidor.
+                  </div>
+                ) : (
+                  <table className="leaderboard-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Usuario</th>
+                        <th>Nivel</th>
+                        <th>XP</th>
+                        <th>Mensajes</th>
+                        <th>Min. voz</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((entry) => (
+                        <tr key={entry.userId}>
+                          <td>{entry.rank}</td>
+                          <td>
+                            <span className="user-mention">
+                              &lt;@{entry.userId}&gt;
+                            </span>
+                          </td>
+                          <td>{entry.level}</td>
+                          <td>{entry.xp}</td>
+                          <td>{entry.messageCount}</td>
+                          <td>{entry.voiceMinutes}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
               <div className="dashboard-actions">
                 <button
                   className="ghost-button"
@@ -778,6 +829,27 @@ function App() {
                     </label>
 
                     <label>
+                      <span>Cap de nivel (0 = sin límite)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={xpConfig.maxLevel}
+                        onChange={(event) =>
+                          setXpConfig((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  maxLevel:
+                                    Math.max(0, Number(event.target.value)) ||
+                                    0,
+                                }
+                              : current,
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label>
                       <span>Stacking de roles de nivel</span>
                       <select
                         className="select"
@@ -854,6 +926,30 @@ function App() {
                           >
                             Quitar
                           </button>
+                          <div className="xp-remove-roles">
+                            <span className="label">
+                              Roles que se quitan al ganar este nivel
+                            </span>
+                            {guildRoles.map((role) => (
+                              <label className="xp-remove-check" key={role.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={rule.removeRoleIds.includes(role.id)}
+                                  onChange={(event) => {
+                                    const removeRoleIds = event.target.checked
+                                      ? [...rule.removeRoleIds, role.id]
+                                      : rule.removeRoleIds.filter(
+                                          (id) => id !== role.id,
+                                        );
+                                    updateXpRole(rule.level, {
+                                      removeRoleIds,
+                                    });
+                                  }}
+                                />
+                                {role.name}
+                              </label>
+                            ))}
+                          </div>
                         </div>
                       ))
                     )}

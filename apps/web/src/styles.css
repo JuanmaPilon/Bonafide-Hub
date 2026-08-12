@@ -250,6 +250,42 @@ a:hover {
   font-weight: 700;
 }
 
+.leaderboard-panel {
+  margin-top: 20px;
+}
+
+.leaderboard-panel h3 {
+  margin: 0 0 12px;
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(134, 158, 214, 0.16);
+}
+
+.leaderboard-table th {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.leaderboard-table tr:last-child td {
+  border-bottom: none;
+}
+
+.user-mention {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .xp-panel {
   margin-top: 24px;
   border-top: 1px solid var(--panel-border);
@@ -285,6 +321,28 @@ a:hover {
   font-weight: 700;
   white-space: nowrap;
   padding-bottom: 10px;
+}
+
+.xp-remove-roles {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(6, 16, 24, 0.5);
+  border: 1px dashed rgba(134, 158, 214, 0.2);
+}
+
+.xp-remove-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.xp-remove-check input {
+  width: auto;
 }
 
 .xp-multiplier {

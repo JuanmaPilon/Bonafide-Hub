@@ -8,8 +8,10 @@ import {
 export type XpProfile = {
   guildId: string;
   level: number;
+  messageCount: number;
   updatedAt: string;
   userId: string;
+  voiceMinutes: number;
   xp: number;
 };
 
@@ -24,15 +26,19 @@ export type AddXpResult = {
 function toXpProfile(record: {
   guildId: string;
   level: number;
+  messageCount: number;
   updatedAt: Date;
   userId: string;
+  voiceMinutes: number;
   xp: number;
 }): XpProfile {
   return {
     guildId: record.guildId,
     level: record.level,
+    messageCount: record.messageCount,
     updatedAt: record.updatedAt.toISOString(),
     userId: record.userId,
+    voiceMinutes: record.voiceMinutes,
     xp: record.xp,
   };
 }
@@ -51,23 +57,29 @@ export async function getXpProfile(
 /**
  * Registra XP acumulada para un usuario en una guild y recalcula su nivel.
  * La XP es acumulativa: se suma al total y el nivel se deriva de la formula.
+ * Si hay un cap de nivel (maxLevel > 0), el nivel no sube mas alla del cap,
+ * pero la XP, mensajes y minutos se siguen acumulando.
  */
 export async function addXp(input: {
   amount: number;
   guildId: string;
+  source?: "message" | "voice";
   userId: string;
 }): Promise<AddXpResult> {
   const safeAmount = Math.max(0, Math.floor(input.amount));
+  const source = input.source ?? "message";
+
+  const existing = await getXpProfile(input.guildId, input.userId);
+  const xpConfig = await getXpConfig(input.guildId);
 
   if (safeAmount === 0) {
-    const existing = await getXpProfile(input.guildId, input.userId);
-    const levelBaseXp = (await getXpConfig(input.guildId)).levelBaseXp;
-
     const profile = existing ?? {
       guildId: input.guildId,
       level: 0,
+      messageCount: 0,
       updatedAt: new Date().toISOString(),
       userId: input.userId,
+      voiceMinutes: 0,
       xp: 0,
     };
 
@@ -80,21 +92,19 @@ export async function addXp(input: {
     };
   }
 
-  const xpConfig = await getXpConfig(input.guildId);
-  const current = await prisma.xpProfile.findUnique({
-    where: {
-      guildId_userId: {
-        guildId: input.guildId,
-        userId: input.userId,
-      },
-    },
-  });
-
-  const previousXp = current?.xp ?? 0;
+  const previousXp = existing?.xp ?? 0;
+  const previousLevel = existing?.level ?? 0;
   const nextXp = previousXp + safeAmount;
-  const nextLevel = levelForXp(nextXp, xpConfig.levelBaseXp);
-  const previousLevel =
-    current?.level ?? levelForXp(previousXp, xpConfig.levelBaseXp);
+
+  let nextLevel = levelForXp(nextXp, xpConfig.levelBaseXp);
+  if (xpConfig.maxLevel > 0) {
+    nextLevel = Math.min(nextLevel, xpConfig.maxLevel);
+  }
+
+  const nextMessageCount =
+    (existing?.messageCount ?? 0) + (source === "message" ? 1 : 0);
+  const nextVoiceMinutes =
+    (existing?.voiceMinutes ?? 0) + (source === "voice" ? 1 : 0);
 
   const record = await prisma.xpProfile.upsert({
     where: {
@@ -105,12 +115,16 @@ export async function addXp(input: {
     },
     update: {
       level: nextLevel,
+      messageCount: nextMessageCount,
+      voiceMinutes: nextVoiceMinutes,
       xp: nextXp,
     },
     create: {
       guildId: input.guildId,
       level: nextLevel,
+      messageCount: nextMessageCount,
       userId: input.userId,
+      voiceMinutes: nextVoiceMinutes,
       xp: nextXp,
     },
   });
@@ -141,4 +155,33 @@ export async function xpToNextLevel(
   return (
     xpRequiredForLevel(profile.level + 1, xpConfig.levelBaseXp) - profile.xp
   );
+}
+
+export type LeaderboardEntry = {
+  level: number;
+  messageCount: number;
+  rank: number;
+  userId: string;
+  voiceMinutes: number;
+  xp: number;
+};
+
+export async function getLeaderboard(
+  guildId: string,
+  limit = 20,
+): Promise<LeaderboardEntry[]> {
+  const records = await prisma.xpProfile.findMany({
+    where: { guildId },
+    orderBy: [{ xp: "desc" }],
+    take: Math.min(50, Math.max(1, limit)),
+  });
+
+  return records.map((record, index) => ({
+    level: record.level,
+    messageCount: record.messageCount,
+    rank: index + 1,
+    userId: record.userId,
+    voiceMinutes: record.voiceMinutes,
+    xp: record.xp,
+  }));
 }

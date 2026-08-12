@@ -764,6 +764,7 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`[discord-bot] Online as ${readyClient.user.tag}`);
   startReminderScheduler();
+  startVoiceXpTracker();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -1563,6 +1564,124 @@ client.on(Events.InteractionCreate, async (interaction) => {
   await handler(interaction);
 });
 
+const VOICE_XP_TICK_INTERVAL_MS = 60_000;
+const MAX_VOICE_MINUTES_PER_TICK = 10;
+let voiceXpTickTimer: NodeJS.Timeout | null = null;
+
+type VoiceSession = {
+  channelId: string;
+  guildId: string;
+  lastEarnedAt: number;
+  userId: string;
+};
+
+const voiceSessions = new Map<string, VoiceSession>();
+
+function voiceSessionKey(guildId: string, userId: string): string {
+  return `${guildId}:${userId}`;
+}
+
+async function awardXpForVoiceMinutes(input: {
+  guildId: string;
+  minutes: number;
+  userId: string;
+}): Promise<void> {
+  const minutes = Math.max(1, Math.floor(input.minutes));
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  try {
+    const xpConfig = await fetchRemoteXpConfig(input.guildId);
+    const amount = Math.max(0, Math.floor(xpConfig.voiceXpPerMinute)) * minutes;
+    if (amount <= 0) {
+      return;
+    }
+
+    const result = await addRemoteXp({
+      amount,
+      guildId: input.guildId,
+      source: "voice",
+      userId: input.userId,
+    });
+
+    if (result.leveledUp) {
+      console.log(
+        `[discord-bot] User ${input.userId} leveled up to level ${result.level} via voice (guild ${input.guildId}).`,
+      );
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Failed to award xp for voice: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+function openVoiceSession(
+  guildId: string,
+  userId: string,
+  channelId: string,
+): void {
+  voiceSessions.set(voiceSessionKey(guildId, userId), {
+    channelId,
+    guildId,
+    lastEarnedAt: Date.now(),
+    userId,
+  });
+}
+
+function closeVoiceSession(
+  guildId: string,
+  userId: string,
+  channelId: string,
+): void {
+  const key = voiceSessionKey(guildId, userId);
+  const session = voiceSessions.get(key);
+  if (!session) {
+    return;
+  }
+
+  voiceSessions.delete(key);
+
+  const minutes = Math.floor((Date.now() - session.lastEarnedAt) / 60_000);
+  const cappedMinutes = Math.min(minutes, MAX_VOICE_MINUTES_PER_TICK);
+  for (let index = 0; index < cappedMinutes; index += 1) {
+    void awardXpForVoiceMinutes({
+      guildId,
+      minutes: 1,
+      userId,
+    });
+  }
+}
+
+function startVoiceXpTracker(): void {
+  if (voiceXpTickTimer) {
+    return;
+  }
+
+  voiceXpTickTimer = setInterval(() => {
+    const now = Date.now();
+
+    for (const session of voiceSessions.values()) {
+      const minutes = Math.floor((now - session.lastEarnedAt) / 60_000);
+      if (minutes <= 0) {
+        continue;
+      }
+
+      const cappedMinutes = Math.min(minutes, MAX_VOICE_MINUTES_PER_TICK);
+      session.lastEarnedAt += cappedMinutes * 60_000;
+
+      for (let index = 0; index < cappedMinutes; index += 1) {
+        void awardXpForVoiceMinutes({
+          guildId: session.guildId,
+          minutes: 1,
+          userId: session.userId,
+        });
+      }
+    }
+  }, VOICE_XP_TICK_INTERVAL_MS);
+}
+
 async function awardXpForMessage(message: {
   author: { bot: boolean; id: string };
   channelId: string;
@@ -1592,6 +1711,7 @@ async function awardXpForMessage(message: {
     const result = await addRemoteXp({
       amount: xpConfig.messageXp,
       guildId: message.guildId,
+      source: "message",
       userId: message.author.id,
     });
 
@@ -1630,7 +1750,26 @@ client.on(Events.GuildMemberRemove, async (member) => {
 });
 
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-  if (newState.channelId && newState.channelId !== oldState.channelId) {
+  const guildId = newState.guild.id;
+  const userId = oldState.id ?? newState.member?.id;
+  const oldChannelId = oldState.channelId;
+  const newChannelId = newState.channelId;
+
+  if (userId) {
+    if (oldChannelId && oldChannelId !== newChannelId) {
+      closeVoiceSession(guildId, userId, oldChannelId);
+    }
+
+    if (newChannelId && newChannelId !== oldChannelId) {
+      const isBot = Boolean(newState.member?.user.bot);
+      const isAfkChannel = newChannelId === newState.guild.afkChannelId;
+      if (!isBot && !isAfkChannel) {
+        openVoiceSession(guildId, userId, newChannelId);
+      }
+    }
+  }
+
+  if (newChannelId && newChannelId !== oldChannelId) {
     await createDynamicVoiceChannelForMember(newState).catch(
       (error: unknown) => {
         console.error("[discord-bot] Failed to create dynamic voice channel", {
@@ -1642,7 +1781,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     );
   }
 
-  if (oldState.channelId && oldState.channelId !== newState.channelId) {
+  if (oldChannelId && oldChannelId !== newChannelId) {
     await maybeDeleteTemporaryVoiceChannel(oldState).catch((error: unknown) => {
       console.error("[discord-bot] Failed to delete dynamic voice channel", {
         guildId: oldState.guild.id,

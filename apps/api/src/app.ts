@@ -19,7 +19,7 @@ import {
   type XpRoleRule,
   upsertXpConfig,
 } from "./services/xp-config-store.js";
-import { addXp } from "./services/xp-store.js";
+import { addXp, getLeaderboard } from "./services/xp-store.js";
 import {
   buildClearCookie,
   buildCookieHeader,
@@ -309,9 +309,14 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    const body = request.body as { amount?: number; userId?: string };
+    const body = request.body as {
+      amount?: number;
+      source?: "message" | "voice";
+      userId?: string;
+    };
     const userId = body.userId?.trim();
     const amount = body.amount;
+    const source = body.source === "voice" ? "voice" : "message";
 
     if (!userId) {
       return reply.code(400).send({ ok: false, error: "Missing userId" });
@@ -327,6 +332,7 @@ export function buildApp() {
     const result = await addXp({
       amount: amount as number,
       guildId: params.guildId,
+      source,
       userId,
     });
 
@@ -703,6 +709,7 @@ export function buildApp() {
       cooldownSeconds: body.cooldownSeconds,
       levelBaseXp: body.levelBaseXp,
       levelRoles: body.levelRoles as XpRoleRule[] | undefined,
+      maxLevel: body.maxLevel,
       messageXp: body.messageXp,
       roleStacking: body.roleStacking,
       voiceXpPerMinute: body.voiceXpPerMinute,
@@ -712,6 +719,30 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       xpConfig,
+    };
+  });
+
+  app.get("/guilds/:guildId/xp/leaderboard", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const leaderboard = await getLeaderboard(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      leaderboard,
     };
   });
 

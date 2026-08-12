@@ -32,6 +32,7 @@ export type GuildRole = {
 
 export type XpRoleRule = {
   level: number;
+  removeRoleIds: string[];
   roleId: string;
   xpMultiplier: number;
 };
@@ -41,6 +42,7 @@ export type XpConfig = {
   guildId: string;
   levelBaseXp: number;
   levelRoles: XpRoleRule[];
+  maxLevel: number;
   messageXp: number;
   roleStacking: "stack" | "replace";
   voiceXpPerMinute: number;
@@ -190,6 +192,28 @@ export async function saveXpConfig(
   );
 
   return data.xpConfig;
+}
+
+export type LeaderboardEntry = {
+  level: number;
+  messageCount: number;
+  rank: number;
+  userId: string;
+  voiceMinutes: number;
+  xp: number;
+};
+
+export async function getLeaderboard(
+  guildId: string,
+): Promise<LeaderboardEntry[]> {
+  const data = await requestJson<{ leaderboard: LeaderboardEntry[] }>(
+    `/guilds/${guildId}/xp/leaderboard`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.leaderboard;
 }
 
 export async function saveGuildConfig(

@@ -62,6 +62,7 @@ model XpConfig {
   voiceXpPerMinute   Int            @default(3)
   cooldownSeconds    Int            @default(60)
   levelBaseXp        Int            @default(100)
+  maxLevel           Int            @default(0)
   roleStacking       String         @default("stack")
   levelRoles         Json           @default("[]")
   createdAt          DateTime       @default(now())
@@ -71,12 +72,14 @@ model XpConfig {
 }
 
 model XpProfile {
-  guildId   String
-  userId    String
-  xp        Int      @default(0)
-  level     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  guildId      String
+  userId       String
+  xp           Int      @default(0)
+  level        Int      @default(0)
+  messageCount Int      @default(0)
+  voiceMinutes Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@id([guildId, userId])
   @@map("xp_profiles")
