@@ -618,7 +618,10 @@ a:hover {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  margin-top: 26px;
   margin-bottom: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--panel-border);
 }
 
 .form-actions {

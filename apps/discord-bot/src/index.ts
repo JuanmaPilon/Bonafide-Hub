@@ -514,6 +514,54 @@ function buildWelcomeMessage(memberId: string): string {
   return pickRandom(WELCOME_TEMPLATES).replace("{memberId}", memberId);
 }
 
+const LEVEL_UP_TEMPLATES = [
+  "🫖 **¡Felicitaciones, Senior!**\n<@{memberId}> alcanzó el nivel {level}.\nKarpindomo queda impresionado.",
+  "🎩 **Karpindomo saluda el ascenso.**\n<@{memberId}> subió al nivel {level}.\nQue siga creciendo la leyenda.",
+  "⭐ **Nivel subido, {level}!**\n<@{memberId}> sigue escalando.\nKarpindomo aprueba semejante dedicación.",
+  "🍵 **Brindis de Karpindomo.**\nPor <@{memberId}>, que llega al nivel {level}.\nSalud y más XP.",
+  "🛎️ **Atencion:** <@{memberId}> alcanzó el nivel {level}.\nEl mayordomo capincho lo celebra.",
+  "📈 **Progreso registrado.**\n<@{memberId}> ahora es nivel {level}.\nSiga así, que el techo es alto.",
+] as const;
+
+function buildLevelUpMessage(memberId: string, level: number): string {
+  return pickRandom(LEVEL_UP_TEMPLATES)
+    .replace("{memberId}", memberId)
+    .replace("{level}", String(level));
+}
+
+async function announceLevelUp(input: {
+  guildId: string;
+  level: number;
+  userId: string;
+}): Promise<void> {
+  try {
+    const guild = await client.guilds.fetch(input.guildId).catch(() => null);
+    if (!guild) {
+      return;
+    }
+
+    const guildConfig = await getGuildConfig(input.guildId);
+    const channelId = guildConfig.memberLogChannelId;
+    if (!channelId) {
+      console.log(
+        `[discord-bot] <@${input.userId}> subió al nivel ${input.level} (sin canal de Karpindomo configurado).`,
+      );
+      return;
+    }
+
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    if (!isSendableTextChannelLike(channel)) {
+      return;
+    }
+
+    await channel.send(buildLevelUpMessage(input.userId, input.level));
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Failed to announce level up: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
 const REMINDER_POLL_INTERVAL_MS = 30_000;
 let reminderPollTimer: NodeJS.Timeout | null = null;
 let isProcessingReminderQueue = false;
@@ -1635,6 +1683,11 @@ async function awardXpForVoiceMinutes(input: {
         level: result.level,
         userId: input.userId,
       });
+      void announceLevelUp({
+        guildId: input.guildId,
+        level: result.level,
+        userId: input.userId,
+      });
     }
   } catch (error: unknown) {
     console.warn(
@@ -1955,6 +2008,11 @@ async function awardXpForMessage(
         userId: message.author.id,
       });
       void applyLevelRoles({
+        guildId: message.guildId,
+        level: result.level,
+        userId: message.author.id,
+      });
+      void announceLevelUp({
         guildId: message.guildId,
         level: result.level,
         userId: message.author.id,

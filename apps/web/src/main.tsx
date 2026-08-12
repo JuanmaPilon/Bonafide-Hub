@@ -1103,7 +1103,7 @@ function App() {
                             <input
                               type="text"
                               maxLength={8}
-                              placeholder="⭐ "
+                              placeholder="🪧"
                               value={rule.nicknamePrefix ?? ""}
                               onChange={(event) =>
                                 updateXpRole(rule.level, {
@@ -1181,16 +1181,6 @@ function App() {
                       + Agregar rol de nivel
                     </button>
                   </div>
-
-                  <p className="xp-hint">
-                    Al subir de nivel se asigna el rol del nivel y, si definís
-                    un "Prefijo de nombre", el bot lo agrega delante del
-                    nickname (ej. ⭐ Juanma). "Acumular" mantiene los roles de
-                    nivel anteriores; "Reemplazar" los quita. "Dar roles extra"
-                    agrega roles adicionales (ej. DJ) y "Quitar roles extra" los
-                    remueve al alcanzar el nivel. Los roles de "Multiplicadores
-                    de XP" nunca se quitan al subir.
-                  </p>
 
                   <h4>Multiplicadores de XP por rol</h4>
                   <div className="xp-roles">
