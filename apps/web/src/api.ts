@@ -241,20 +241,32 @@ export async function getLeaderboard(
   return data.leaderboard;
 }
 
-export type GuildExportPayload = {
-  config: GuildConfig;
+export type XpProfileExportEntry = {
+  messageCount: number;
+  userId: string;
+  voiceMinutes: number;
+  xp: number;
+};
+
+export type XpExportPayload = {
+  entries: XpProfileExportEntry[];
   exportedAt: string;
   guildId: string;
   ok: boolean;
   version: number;
-  xpConfig: XpConfig;
 };
 
-export async function exportGuildConfig(
-  guildId: string,
-): Promise<GuildExportPayload> {
-  const data = await requestJson<GuildExportPayload>(
-    `/guilds/${guildId}/export`,
+export type XpImportEntry = {
+  messageCount?: number;
+  userId: string;
+  voiceMinutes?: number;
+  xp?: number;
+  level?: number;
+};
+
+export async function exportXpData(guildId: string): Promise<XpExportPayload> {
+  const data = await requestJson<XpExportPayload>(
+    `/guilds/${guildId}/xp/export`,
     {
       method: "GET",
     },
@@ -263,20 +275,17 @@ export async function exportGuildConfig(
   return data;
 }
 
-export async function importGuildConfig(
+export async function importXpData(
   guildId: string,
-  payload: {
-    config?: Partial<GuildConfig>;
-    xpConfig?: Partial<XpConfig>;
-  },
-): Promise<{ config: GuildConfig; xpConfig: XpConfig }> {
-  const data = await requestJson<{
-    config: GuildConfig;
-    xpConfig: XpConfig;
-  }>(`/guilds/${guildId}/import`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  entries: XpImportEntry[],
+): Promise<{ imported: number }> {
+  const data = await requestJson<{ imported: number }>(
+    `/guilds/${guildId}/xp/import`,
+    {
+      method: "POST",
+      body: JSON.stringify({ entries }),
+    },
+  );
 
   return data;
 }

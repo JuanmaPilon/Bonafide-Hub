@@ -185,3 +185,108 @@ export async function getLeaderboard(
     xp: record.xp,
   }));
 }
+
+/**
+ * Lista todos los perfiles de XP de una guild (para exportar/migrar).
+ */
+export async function listXpProfiles(guildId: string): Promise<XpProfile[]> {
+  const records = await prisma.xpProfile.findMany({
+    where: { guildId },
+    orderBy: [{ xp: "desc" }],
+  });
+
+  return records.map(toXpProfile);
+}
+
+export type XpImportEntry = {
+  messageCount?: number;
+  userId: string;
+  voiceMinutes?: number;
+  xp?: number;
+  level?: number;
+};
+
+/**
+ * Fija (upsert) el perfil de XP de un usuario con valores absolutos.
+ * El nivel se recalcula desde la XP (respetando el cap si existe).
+ */
+export async function setXpProfile(input: {
+  guildId: string;
+  messageCount?: number;
+  userId: string;
+  voiceMinutes?: number;
+  xp: number;
+}): Promise<XpProfile> {
+  const safeXp = Math.max(0, Math.floor(input.xp));
+  const xpConfig = await getXpConfig(input.guildId);
+
+  let nextLevel = levelForXp(safeXp, xpConfig.levelBaseXp);
+  if (xpConfig.maxLevel > 0) {
+    nextLevel = Math.min(nextLevel, xpConfig.maxLevel);
+  }
+
+  const existing = await getXpProfile(input.guildId, input.userId);
+  const nextMessageCount = input.messageCount ?? existing?.messageCount ?? 0;
+  const nextVoiceMinutes = input.voiceMinutes ?? existing?.voiceMinutes ?? 0;
+
+  const record = await prisma.xpProfile.upsert({
+    where: {
+      guildId_userId: { guildId: input.guildId, userId: input.userId },
+    },
+    update: {
+      level: nextLevel,
+      messageCount: nextMessageCount,
+      voiceMinutes: nextVoiceMinutes,
+      xp: safeXp,
+    },
+    create: {
+      guildId: input.guildId,
+      level: nextLevel,
+      messageCount: nextMessageCount,
+      userId: input.userId,
+      voiceMinutes: nextVoiceMinutes,
+      xp: safeXp,
+    },
+  });
+
+  return toXpProfile(record);
+}
+
+/**
+ * Importa una lista de perfiles de XP (migración estilo Enguage/MEE6).
+ * Si la entrada trae xp, se usa directo; si no, se deriva del level.
+ */
+export async function importXpEntries(
+  guildId: string,
+  entries: XpImportEntry[],
+): Promise<{ imported: number }> {
+  const xpConfig = await getXpConfig(guildId);
+  let imported = 0;
+
+  for (const entry of entries) {
+    const userId = entry.userId?.trim();
+    if (!userId) {
+      continue;
+    }
+
+    const xp =
+      typeof entry.xp === "number" && entry.xp >= 0
+        ? Math.floor(entry.xp)
+        : xpRequiredForLevel(
+            Math.max(1, Math.floor(entry.level ?? 0)),
+            xpConfig.levelBaseXp,
+          );
+
+    await setXpProfile({
+      guildId,
+      messageCount: entry.messageCount,
+      userId,
+      voiceMinutes: entry.voiceMinutes,
+      xp,
+    });
+
+    imported += 1;
+  }
+
+  return { imported };
+}

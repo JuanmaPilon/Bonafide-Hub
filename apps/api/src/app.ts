@@ -19,7 +19,13 @@ import {
   type XpRoleRule,
   upsertXpConfig,
 } from "./services/xp-config-store.js";
-import { addXp, getLeaderboard } from "./services/xp-store.js";
+import {
+  addXp,
+  getLeaderboard,
+  importXpEntries,
+  listXpProfiles,
+  type XpImportEntry,
+} from "./services/xp-store.js";
 import {
   buildClearCookie,
   buildCookieHeader,
@@ -825,6 +831,7 @@ export function buildApp() {
       levelRoles: body.levelRoles as XpRoleRule[] | undefined,
       maxLevel: body.maxLevel,
       messageXp: body.messageXp,
+      roleMultipliers: body.roleMultipliers,
       roleStacking: body.roleStacking,
       voiceXpPerMinute: body.voiceXpPerMinute,
     });
@@ -875,7 +882,7 @@ export function buildApp() {
     };
   });
 
-  app.get("/guilds/:guildId/export", async (request, reply) => {
+  app.get("/guilds/:guildId/xp/export", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
@@ -890,22 +897,23 @@ export function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const [config, xpConfig] = await Promise.all([
-      getGuildConfig(params.guildId),
-      getXpConfig(params.guildId),
-    ]);
+    const profiles = await listXpProfiles(params.guildId);
 
     return {
       ok: true,
       guildId: params.guildId,
       version: 1,
       exportedAt: new Date().toISOString(),
-      config,
-      xpConfig,
+      entries: profiles.map((profile) => ({
+        messageCount: profile.messageCount,
+        userId: profile.userId,
+        voiceMinutes: profile.voiceMinutes,
+        xp: profile.xp,
+      })),
     };
   });
 
-  app.post("/guilds/:guildId/import", async (request, reply) => {
+  app.post("/guilds/:guildId/xp/import", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
@@ -921,45 +929,23 @@ export function buildApp() {
     }
 
     const body = (request.body ?? {}) as {
-      config?: GuildConfig;
-      xpConfig?: Partial<XpConfig>;
+      entries?: XpImportEntry[];
     };
+    const entries = Array.isArray(body.entries) ? body.entries : [];
 
-    if (!body.config && !body.xpConfig) {
+    if (entries.length === 0) {
       return reply.code(400).send({
         ok: false,
-        error: "No se encontró config ni xpConfig para importar",
+        error: "No se encontraron entradas de XP para importar",
       });
     }
 
-    if (body.config) {
-      await replaceGuildConfig(params.guildId, body.config);
-    }
-
-    if (body.xpConfig) {
-      await upsertXpConfig({
-        guildId: params.guildId,
-        cooldownSeconds: body.xpConfig.cooldownSeconds,
-        levelBaseXp: body.xpConfig.levelBaseXp,
-        levelRoles: body.xpConfig.levelRoles as XpRoleRule[] | undefined,
-        maxLevel: body.xpConfig.maxLevel,
-        messageXp: body.xpConfig.messageXp,
-        roleMultipliers: body.xpConfig.roleMultipliers,
-        roleStacking: body.xpConfig.roleStacking,
-        voiceXpPerMinute: body.xpConfig.voiceXpPerMinute,
-      });
-    }
-
-    const [config, xpConfig] = await Promise.all([
-      getGuildConfig(params.guildId),
-      getXpConfig(params.guildId),
-    ]);
+    const result = await importXpEntries(params.guildId, entries);
 
     return {
       ok: true,
       guildId: params.guildId,
-      config,
-      xpConfig,
+      ...result,
     };
   });
 

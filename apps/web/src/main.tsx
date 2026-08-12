@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  exportGuildConfig,
+  exportXpData,
   getGuildConfig,
   getGuildRoles,
   getGuilds,
@@ -11,7 +11,7 @@ import {
   getLeaderboard,
   getMe,
   getXpConfig,
-  importGuildConfig,
+  importXpData,
   loginUrl,
   logout,
   saveGuildConfig,
@@ -23,6 +23,7 @@ import {
   type GuildWidgetStatus,
   type LeaderboardEntry,
   type XpConfig,
+  type XpImportEntry,
   type XpRoleMultiplier,
   type XpRoleRule,
 } from "./api";
@@ -378,35 +379,38 @@ function App() {
     }
   }
 
-  async function handleExportConfig(): Promise<void> {
+  async function handleExportXp(): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
 
     setLoadingGuildData(true);
     try {
-      const payload = await exportGuildConfig(selectedGuildId);
+      const payload = await exportXpData(selectedGuildId);
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `bonafide-config-${selectedGuildId}.json`;
+      link.download = `bonafide-xp-${selectedGuildId}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      pushToast("Configuración exportada.", "success");
+      pushToast(
+        `XP exportada (${payload.entries.length} usuarios).`,
+        "success",
+      );
     } catch (error) {
       void error;
-      pushToast("No se pudo exportar la configuración.", "error");
+      pushToast("No se pudo exportar el XP.", "error");
     } finally {
       setLoadingGuildData(false);
     }
   }
 
-  async function handleImportFile(
+  async function handleImportXpFile(
     event: ChangeEvent<HTMLInputElement>,
   ): Promise<void> {
     const file = event.target.files?.[0];
@@ -429,18 +433,21 @@ function App() {
       return;
     }
 
-    const payload = parsed as {
-      config?: Partial<GuildConfig>;
-      xpConfig?: Partial<XpConfig>;
-    };
+    let entries: XpImportEntry[] = [];
+    const payload = parsed as { entries?: XpImportEntry[] };
+    if (Array.isArray(payload.entries)) {
+      entries = payload.entries;
+    } else if (Array.isArray(parsed)) {
+      entries = parsed as XpImportEntry[];
+    }
 
-    if (!payload.config && !payload.xpConfig) {
-      pushToast("El archivo no contiene configuración válida.", "error");
+    if (entries.length === 0) {
+      pushToast("El archivo no tiene entradas de XP válidas.", "error");
       return;
     }
 
     const confirmed = window.confirm(
-      "¿Importar esta configuración? Se reemplazarán los ajustes actuales del servidor.",
+      `¿Importar ${entries.length} perfil/es de XP? Se reemplazarán los niveles/XP actuales de esos usuarios.`,
     );
     if (!confirmed) {
       return;
@@ -448,13 +455,13 @@ function App() {
 
     setLoadingGuildData(true);
     try {
-      const result = await importGuildConfig(selectedGuildId, payload);
-      setConfig(result.config);
-      setXpConfig(result.xpConfig);
-      pushToast("Configuración importada.", "success");
+      const result = await importXpData(selectedGuildId, entries);
+      const nextLeaderboard = await getLeaderboard(selectedGuildId);
+      setLeaderboard(nextLeaderboard);
+      pushToast(`${result.imported} perfiles de XP importados.`, "success");
     } catch (error) {
       void error;
-      pushToast("No se pudo importar la configuración.", "error");
+      pushToast("No se pudo importar el XP.", "error");
     } finally {
       setLoadingGuildData(false);
     }
@@ -889,30 +896,6 @@ function App() {
 
           {activeTab === "admin" && selectedGuild && adminEnabled ? (
             <>
-              <div className="import-export">
-                <button
-                  className="ghost-button"
-                  onClick={() => void handleExportConfig()}
-                  type="button"
-                >
-                  Exportar configuración
-                </button>
-                <button
-                  className="ghost-button"
-                  onClick={() => importFileRef.current?.click()}
-                  type="button"
-                >
-                  Importar configuración
-                </button>
-                <input
-                  ref={importFileRef}
-                  type="file"
-                  accept="application/json,.json"
-                  hidden
-                  onChange={(event) => void handleImportFile(event)}
-                />
-              </div>
-
               <div className="form-grid">
                 <label>
                   <span>Canal principal de Karpindomo</span>
@@ -1269,6 +1252,30 @@ function App() {
                     >
                       + Agregar multiplicador
                     </button>
+                  </div>
+
+                  <div className="import-export">
+                    <button
+                      className="ghost-button"
+                      onClick={() => void handleExportXp()}
+                      type="button"
+                    >
+                      Exportar XP
+                    </button>
+                    <button
+                      className="ghost-button"
+                      onClick={() => importFileRef.current?.click()}
+                      type="button"
+                    >
+                      Importar XP
+                    </button>
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept="application/json,.json"
+                      hidden
+                      onChange={(event) => void handleImportXpFile(event)}
+                    />
                   </div>
 
                   <div className="form-actions">
