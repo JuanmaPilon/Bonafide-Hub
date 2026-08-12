@@ -156,7 +156,7 @@ function panelTitle(tab: HubTab): string {
 
 function panelDescription(tab: HubTab): string {
   if (tab === "dashboard") {
-    return "Vista general del servidor: actividad, niveles y herramientas.";
+    return "";
   }
 
   if (tab === "comunicados") {
@@ -184,13 +184,9 @@ function panelDescription(tab: HubTab): string {
 
 function ServerStats({
   status,
-  guilds,
-  modules,
   loading,
 }: {
   status: GuildWidgetStatus | null;
-  guilds: number;
-  modules: number;
   loading: boolean;
 }) {
   if (loading) {
@@ -208,7 +204,7 @@ function ServerStats({
     status?.available && status.presenceCount != null
       ? status.presenceCount
       : null;
-  const total = status?.available && status.name ? undefined : null;
+  const totalMembers = status?.memberCount ?? null;
 
   return (
     <div className="stats-grid">
@@ -218,15 +214,7 @@ function ServerStats({
       </div>
       <div className="stat-tile">
         <span className="label">Miembros totales</span>
-        <strong>{total ?? "—"}</strong>
-      </div>
-      <div className="stat-tile">
-        <span className="label">Guilds</span>
-        <strong>{guilds}</strong>
-      </div>
-      <div className="stat-tile">
-        <span className="label">Módulos activos</span>
-        <strong>{modules}</strong>
+        <strong>{totalMembers ?? "—"}</strong>
       </div>
     </div>
   );
@@ -439,7 +427,6 @@ function App() {
     }
   }
 
-  const enabledModuleCount = config.enabledModules?.length ?? 0;
   const tabs: HubTab[] = [
     "dashboard",
     "comunicados",
@@ -536,6 +523,8 @@ function App() {
     );
   }
 
+  const panelDesc = panelDescription(activeTab);
+
   return (
     <div className="app-shell">
       <ToastViewport toasts={toasts} />
@@ -606,18 +595,13 @@ function App() {
           <div className="section-header">
             <div>
               <h2>{panelTitle(activeTab)}</h2>
-              <p>{panelDescription(activeTab)}</p>
+              {panelDesc ? <p>{panelDesc}</p> : null}
             </div>
           </div>
 
           {activeTab === "dashboard" ? (
             <div className="dashboard-stack">
-              <ServerStats
-                status={widgetStatus}
-                guilds={guilds.length}
-                modules={enabledModuleCount}
-                loading={loadingGuildData}
-              />
+              <ServerStats status={widgetStatus} loading={loadingGuildData} />
 
               <div className="leaderboard-panel">
                 <h3>Leaderboard de XP</h3>
@@ -644,8 +628,23 @@ function App() {
                         <tr key={entry.userId}>
                           <td>{entry.rank}</td>
                           <td>
-                            <span className="user-mention">
-                              &lt;@{entry.userId}&gt;
+                            <span className="leaderboard-user">
+                              {entry.avatarUrl ? (
+                                <img
+                                  className="leaderboard-avatar"
+                                  src={entry.avatarUrl}
+                                  alt=""
+                                />
+                              ) : (
+                                <span className="leaderboard-avatar leaderboard-avatar-placeholder">
+                                  ?
+                                </span>
+                              )}
+                              <span className="user-mention">
+                                {entry.nickname ||
+                                  entry.username ||
+                                  `@${entry.userId}`}
+                              </span>
                             </span>
                           </td>
                           <td>{entry.level}</td>

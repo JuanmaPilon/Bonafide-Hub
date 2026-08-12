@@ -18,6 +18,7 @@ export type GuildWidgetStatus = {
   available: boolean;
   guildId: string;
   inviteUrl: string | null;
+  memberCount: number | null;
   name?: string;
   presenceCount: number | null;
 };
@@ -195,10 +196,13 @@ export async function saveXpConfig(
 }
 
 export type LeaderboardEntry = {
+  avatarUrl: string | null;
   level: number;
   messageCount: number;
+  nickname: string | null;
   rank: number;
   userId: string;
+  username: string | null;
   voiceMinutes: number;
   xp: number;
 };

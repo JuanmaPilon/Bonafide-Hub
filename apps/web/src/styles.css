@@ -286,6 +286,30 @@ a:hover {
   font-weight: 600;
 }
 
+.leaderboard-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.leaderboard-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-border);
+  flex-shrink: 0;
+}
+
+.leaderboard-avatar-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .xp-panel {
   margin-top: 24px;
   border-top: 1px solid var(--panel-border);
