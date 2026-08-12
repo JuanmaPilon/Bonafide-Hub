@@ -601,6 +601,28 @@ function App() {
 
           {activeTab === "dashboard" ? (
             <div className="dashboard-stack">
+              <div className="dashboard-toolbar">
+                <button
+                  className="icon-button"
+                  onClick={refreshSession}
+                  disabled={loading}
+                  title="Refrescar datos"
+                  aria-label="Refrescar datos"
+                >
+                  <svg
+                    className="icon-button-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                    <polyline points="21 3 21 9 15 9" />
+                  </svg>
+                </button>
+              </div>
               <ServerStats status={widgetStatus} loading={loadingGuildData} />
 
               <div className="leaderboard-panel">
@@ -659,13 +681,6 @@ function App() {
               </div>
 
               <div className="dashboard-actions">
-                <button
-                  className="ghost-button"
-                  onClick={refreshSession}
-                  disabled={loading}
-                >
-                  Refrescar sesión
-                </button>
                 {widgetStatus?.inviteUrl ? (
                   <a
                     className="primary-button"

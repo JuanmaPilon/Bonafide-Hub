@@ -610,9 +610,11 @@ export function buildApp() {
     const preview = previewResponse?.ok
       ? ((await previewResponse.json()) as {
           approximate_member_count?: number;
+          approximate_presence_count?: number;
         })
       : null;
     const memberCount = preview?.approximate_member_count ?? null;
+    const previewPresenceCount = preview?.approximate_presence_count ?? null;
 
     const widgetResponse = await fetch(
       `https://discord.com/api/guilds/${params.guildId}/widget.json`,
@@ -624,7 +626,7 @@ export function buildApp() {
         guildId: params.guildId,
         available: false,
         memberCount,
-        presenceCount: null,
+        presenceCount: previewPresenceCount,
         inviteUrl: null,
       });
     }
@@ -636,7 +638,7 @@ export function buildApp() {
       guildId: params.guildId,
       available: true,
       memberCount,
-      presenceCount: widget.presence_count ?? null,
+      presenceCount: previewPresenceCount ?? widget.presence_count ?? null,
       inviteUrl: widget.instant_invite ?? null,
       name: widget.name,
     };

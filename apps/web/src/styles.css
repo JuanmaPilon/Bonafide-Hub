@@ -474,6 +474,40 @@ a:hover {
   gap: 18px;
 }
 
+.dashboard-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 172, 228, 0.25);
+  background: rgba(12, 18, 33, 0.92);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-button:hover {
+  border-color: rgba(148, 172, 228, 0.5);
+  color: var(--accent);
+}
+
+.icon-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.icon-button-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .dashboard-actions {
   display: flex;
   gap: 12px;
