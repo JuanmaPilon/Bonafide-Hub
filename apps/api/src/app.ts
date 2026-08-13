@@ -12,6 +12,7 @@ import {
   createReactionRoleJob,
   listPendingReactionRoleJobs,
   listReactionRolePanels,
+  listRecentReactionRoleJobs,
   type ReactionRolePair,
 } from "./services/reaction-roles-store.js";
 import {
@@ -1312,6 +1313,30 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       panels,
+    };
+  });
+
+  app.get("/guilds/:guildId/reaction-roles/jobs", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const jobs = await listRecentReactionRoleJobs(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      jobs,
     };
   });
 

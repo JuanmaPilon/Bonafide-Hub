@@ -407,8 +407,8 @@ a:hover {
 }
 
 .xp-mode-toggle button.active {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #0e111d;
+  background: var(--accent);
+  color: #0b1020;
 }
 
 .xp-remove-trigger {
@@ -455,24 +455,61 @@ a:hover {
   text-decoration: none;
   cursor: pointer;
   padding: 11px 18px;
-  background: linear-gradient(135deg, #ff6b6b, #e63946);
+  background: #e5484d;
   color: #fff;
   font-weight: 700;
+  transition: filter 0.15s ease;
 }
 
-.admin-section-title {
-  margin: 0 0 14px;
-  color: var(--muted);
+.danger-button:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
-.reaction-roles-section {
+.admin-card {
+  display: grid;
+  gap: 0;
   margin-top: 24px;
-  border-top: 1px solid var(--panel-border);
-  padding-top: 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: var(--panel);
+  overflow: hidden;
 }
 
-.reaction-roles-section h3 {
-  margin: 0 0 14px;
+.admin-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 0;
+}
+
+.admin-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.admin-card-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.admin-card-body {
+  padding: 18px 20px;
+  display: grid;
+  gap: 18px;
+}
+
+.admin-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(8, 12, 22, 0.5);
 }
 
 .rr-panel-actions {
@@ -506,24 +543,149 @@ a:hover {
 }
 
 .rr-panel-card {
-  padding: 14px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(12, 19, 37, 0.55);
   border: 1px solid rgba(134, 158, 214, 0.18);
-  display: grid;
-  gap: 10px;
+  overflow: hidden;
 }
 
-.rr-panel-head {
+.rr-panel-header {
+  width: 100%;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.rr-panel-title {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rr-panel-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.rr-caret {
+  color: var(--muted);
+}
+
+.rr-panel-body {
+  padding: 0 14px 14px;
+  display: grid;
+  gap: 12px;
 }
 
 .rr-mode {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.rr-panels-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rr-preview {
+  border: 1px solid rgba(134, 158, 214, 0.18);
+  border-radius: 14px;
+  background: rgba(6, 10, 20, 0.6);
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.rr-preview-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.rr-preview-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin-top: 4px;
+}
+
+.rr-preview-line {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 0.95rem;
+}
+
+.rr-preview-line.muted {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.rr-jobs {
+  display: grid;
+  gap: 10px;
+}
+
+.rr-jobs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rr-jobs-head strong {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.rr-jobs-list {
+  display: grid;
+  gap: 8px;
+}
+
+.rr-job {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+  font-size: 0.86rem;
+}
+
+.rr-job-pending {
+  border-color: rgba(106, 168, 255, 0.35);
+}
+
+.rr-job-failed {
+  border-color: rgba(229, 72, 77, 0.5);
+}
+
+.rr-job-error {
+  color: #ff9a9a;
+}
+
+.rr-job-ok {
+  color: var(--muted);
+  font-size: 0.86rem;
+  padding: 10px 12px;
+  border: 1px dashed rgba(134, 158, 214, 0.2);
+  border-radius: 12px;
 }
 
 .rr-rules {
@@ -752,15 +914,39 @@ a:hover {
 }
 
 .primary-button {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #0e111d;
+  background: var(--accent);
+  color: #0b1020;
   font-weight: 700;
+  transition:
+    filter 0.15s ease,
+    transform 0.1s ease;
+}
+
+.primary-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.primary-button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .ghost-button {
   background: rgba(12, 18, 33, 0.92);
   border-color: rgba(148, 172, 228, 0.25);
   color: var(--text);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: rgba(148, 172, 228, 0.5);
+  background: rgba(22, 32, 58, 0.95);
+}
+
+.ghost-button.small {
+  padding: 7px 12px;
+  font-size: 0.8rem;
 }
 
 .ghost-button.danger {

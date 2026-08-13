@@ -187,3 +187,38 @@ export async function listReactionRolePanels(
 
   return Array.from(panelByMessage.values());
 }
+
+export type ReactionRoleJobSummary = {
+  action: string;
+  channelId: string | null;
+  createdAt: string;
+  error: string | null;
+  id: string;
+  messageId: string | null;
+  mode: string;
+  status: string;
+  title: string | null;
+};
+
+export async function listRecentReactionRoleJobs(
+  guildId: string,
+  limit = 30,
+): Promise<ReactionRoleJobSummary[]> {
+  const jobs = await prisma.reactionRolePanelJob.findMany({
+    where: { guildId },
+    orderBy: [{ createdAt: "desc" }],
+    take: limit,
+  });
+
+  return jobs.map((job) => ({
+    action: job.action,
+    channelId: job.channelId,
+    createdAt: job.createdAt.toISOString(),
+    error: job.error,
+    id: job.id,
+    messageId: job.messageId,
+    mode: job.mode,
+    status: job.status,
+    title: job.title,
+  }));
+}

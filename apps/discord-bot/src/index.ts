@@ -1005,6 +1005,38 @@ function buildReactionPanelText(input: {
     .join("\n");
 }
 
+function resolveReactionEmoji(
+  guild: {
+    emojis?: {
+      cache?: {
+        find: (
+          predicate: (emoji: {
+            animated: boolean;
+            id: string;
+            name: string;
+          }) => boolean,
+        ) => { animated: boolean; id: string; name: string } | undefined;
+      };
+    };
+  },
+  raw: string,
+): string {
+  const trimmed = raw.trim();
+  if (
+    /^<a?:\w+:\d+>$/.test(trimmed) ||
+    /^\d+$/.test(trimmed) ||
+    /[^\x00-\x7F]/.test(trimmed)
+  ) {
+    return trimmed;
+  }
+  const found = guild.emojis?.cache?.find((emoji) => emoji.name === trimmed);
+  return found
+    ? found.animated
+      ? `<a:${found.name}:${found.id}>`
+      : `<:${found.name}:${found.id}>`
+    : trimmed;
+}
+
 async function processReactionRoleJob(
   job: PendingReactionRoleJob,
 ): Promise<void> {
@@ -1035,9 +1067,14 @@ async function processReactionRoleJob(
         return;
       }
 
+      const resolvedRules = job.rules.map((pair) => ({
+        emoji: resolveReactionEmoji(guild, pair.emoji),
+        roleId: pair.roleId,
+      }));
+
       const panelText = buildReactionPanelText({
         description: job.description,
-        pairs: job.rules,
+        pairs: resolvedRules,
         title: job.title,
       });
       const sentMessage = await channel.send(panelText).catch(() => null);
@@ -1048,7 +1085,7 @@ async function processReactionRoleJob(
         return;
       }
 
-      for (const pair of job.rules) {
+      for (const pair of resolvedRules) {
         const emojiKey = normalizeEmojiKey(pair.emoji);
         if (!emojiKey) {
           continue;
@@ -1111,12 +1148,17 @@ async function processReactionRoleJob(
         return;
       }
 
+      const resolvedRules = job.rules.map((pair) => ({
+        emoji: resolveReactionEmoji(guild, pair.emoji),
+        roleId: pair.roleId,
+      }));
+
       if (hasEditMethod(message)) {
         await message
           .edit(
             buildReactionPanelText({
               description: job.description,
-              pairs: job.rules,
+              pairs: resolvedRules,
               title: job.title,
             }),
           )
@@ -1138,7 +1180,7 @@ async function processReactionRoleJob(
           }
         }
 
-        for (const pair of job.rules) {
+        for (const pair of resolvedRules) {
           const emojiKey = normalizeEmojiKey(pair.emoji);
           if (!emojiKey) {
             continue;
@@ -1150,7 +1192,7 @@ async function processReactionRoleJob(
       }
 
       await removeReactionRoleRulesForMessage(job.guildId, job.messageId);
-      for (const pair of job.rules) {
+      for (const pair of resolvedRules) {
         const emojiKey = normalizeEmojiKey(pair.emoji);
         if (!emojiKey) {
           continue;

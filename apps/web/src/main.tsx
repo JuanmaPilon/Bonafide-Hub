@@ -15,6 +15,7 @@ import {
   getMe,
   getXpConfig,
   importXpData,
+  listReactionRoleJobs,
   listReactionRolePanels,
   loginUrl,
   logout,
@@ -30,6 +31,7 @@ import {
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
+  type ReactionRoleJob,
   type ReactionRolePairInput,
   type ReactionRolePanel,
   type XpConfig,
@@ -319,6 +321,11 @@ function App() {
   const [editingPanel, setEditingPanel] = useState<ReactionRolePanel | null>(
     null,
   );
+  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
+  const [rrJobs, setRrJobs] = useState<ReactionRoleJob[]>([]);
+  const [savingAction, setSavingAction] = useState<
+    "config" | "xp" | "panel" | null
+  >(null);
   const [roleModal, setRoleModal] = useState<{
     kind: "add" | "remove";
     level: number;
@@ -421,7 +428,7 @@ function App() {
       return;
     }
 
-    setLoadingGuildData(true);
+    setSavingAction("config");
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, config);
       setConfig(nextConfig);
@@ -430,7 +437,7 @@ function App() {
       void error;
       pushToast("No se pudo guardar la configuración.", "error");
     } finally {
-      setLoadingGuildData(false);
+      setSavingAction(null);
     }
   }
 
@@ -439,7 +446,7 @@ function App() {
       return;
     }
 
-    setLoadingGuildData(true);
+    setSavingAction("xp");
     try {
       const nextXp = await saveXpConfig(selectedGuildId, xpConfig);
       setXpConfig(nextXp);
@@ -448,7 +455,7 @@ function App() {
       void error;
       pushToast("No se pudo guardar la configuración de XP.", "error");
     } finally {
-      setLoadingGuildData(false);
+      setSavingAction(null);
     }
   }
 
@@ -648,12 +655,92 @@ function App() {
 
   function emojiKeyToEditable(emojiKey: string): string {
     if (emojiKey.startsWith("custom:")) {
-      return emojiKey.slice("custom:".length);
+      const id = emojiKey.slice("custom:".length);
+      const found = guildEmojis.find((emoji) => emoji.id === id);
+      return found
+        ? found.animated
+          ? `<a:${found.name}:${found.id}>`
+          : `<:${found.name}:${found.id}>`
+        : id;
     }
     if (emojiKey.startsWith("unicode:")) {
       return emojiKey.slice("unicode:".length);
     }
     return emojiKey;
+  }
+
+  function normalizeEmoji(emoji: string): string {
+    const trimmed = emoji.trim();
+    if (!trimmed) {
+      return trimmed;
+    }
+    if (/^<a?:\w+:\d+>$/.test(trimmed) || /^\d+$/.test(trimmed)) {
+      return trimmed;
+    }
+    if (/[^\x00-\x7F]/.test(trimmed)) {
+      return trimmed;
+    }
+    const found = guildEmojis.find((entry) => entry.name === trimmed);
+    if (found) {
+      return found.animated
+        ? `<a:${found.name}:${found.id}>`
+        : `<:${found.name}:${found.id}>`;
+    }
+    return trimmed;
+  }
+
+  function formatEmojiKey(emojiKey: string): string {
+    if (emojiKey.startsWith("custom:")) {
+      const id = emojiKey.slice("custom:".length);
+      const found = guildEmojis.find((emoji) => emoji.id === id);
+      return found ? `:${found.name}:` : emojiKey;
+    }
+    if (emojiKey.startsWith("unicode:")) {
+      return emojiKey.slice("unicode:".length);
+    }
+    return emojiKey;
+  }
+
+  function rrPreviewLines(): string[] {
+    const lines = rrPairs
+      .filter((pair) => pair.emoji.trim() && pair.roleId)
+      .map((pair) => {
+        const emoji = normalizeEmoji(pair.emoji);
+        const roleName =
+          guildRoles.find((role) => role.id === pair.roleId)?.name ?? "Rol";
+        return `${emoji} ${roleName}`;
+      });
+
+    return [
+      rrTitle.trim() ? `## ${rrTitle.trim()}` : "",
+      rrDescription.trim(),
+      "Reacciona para recibir o quitar tu rol:",
+      ...lines,
+    ].filter((line) => line.length > 0);
+  }
+
+  async function refreshRrJobs(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const jobs = await listReactionRoleJobs(selectedGuildId);
+      setRrJobs(jobs);
+    } catch {
+      // fallo silencioso: se puede reintentar con el botón Refrescar
+    }
+  }
+
+  async function refreshReactionPanels(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const panels = await listReactionRolePanels(selectedGuildId);
+      setReactionPanels(panels);
+    } catch {
+      // fallo silencioso
+    }
   }
 
   function startEditReactionPanel(panel: ReactionRolePanel): void {
@@ -687,9 +774,12 @@ function App() {
       return;
     }
 
-    const validPairs = rrPairs.filter(
-      (pair) => pair.emoji.trim() && pair.roleId,
-    );
+    const validPairs = rrPairs
+      .filter((pair) => pair.emoji.trim() && pair.roleId)
+      .map((pair) => ({
+        emoji: normalizeEmoji(pair.emoji),
+        roleId: pair.roleId,
+      }));
     if (!rrChannelId) {
       pushToast("Elegí un canal de texto.", "error");
       return;
@@ -707,7 +797,7 @@ function App() {
       title: rrTitle.trim() || undefined,
     };
 
-    setLoadingGuildData(true);
+    setSavingAction("panel");
     try {
       if (editingPanel) {
         await updateReactionRolePanel(
@@ -732,12 +822,13 @@ function App() {
       setRrTitle("");
       setRrDescription("");
       setRrPairs([{ emoji: "", roleId: "" }]);
+      void refreshRrJobs();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Error desconocido";
       pushToast(`No se pudo guardar el panel: ${message}`, "error");
     } finally {
-      setLoadingGuildData(false);
+      setSavingAction(null);
     }
   }
 
@@ -764,12 +855,17 @@ function App() {
       return;
     }
 
+    setReactionPanels((current) =>
+      current.filter((entry) => entry.messageId !== panel.messageId),
+    );
+    setExpandedPanelId((current) =>
+      current === panel.messageId ? null : current,
+    );
     setLoadingGuildData(true);
     try {
       await deleteReactionRolePanel(selectedGuildId, panel.messageId);
-      const nextPanels = await listReactionRolePanels(selectedGuildId);
-      setReactionPanels(nextPanels);
       pushToast("Panel eliminado (el bot borra el mensaje).", "success");
+      void refreshRrJobs();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Error desconocido";
@@ -989,6 +1085,7 @@ function App() {
       setXpConfig(null);
       setReactionPanels([]);
       setGuildEmojis([]);
+      setRrJobs([]);
       return;
     }
 
@@ -1000,8 +1097,9 @@ function App() {
       getXpConfig(selectedGuildId),
       listReactionRolePanels(selectedGuildId),
       getGuildEmojis(selectedGuildId),
+      listReactionRoleJobs(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, xp, panels, emojis]) => {
+      .then(([channels, textCh, roles, xp, panels, emojis, jobs]) => {
         if (cancelled) {
           return;
         }
@@ -1012,6 +1110,7 @@ function App() {
         setXpConfig(xp);
         setReactionPanels(panels);
         setGuildEmojis(emojis);
+        setRrJobs(jobs);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -1022,6 +1121,7 @@ function App() {
           setXpConfig(null);
           setReactionPanels([]);
           setGuildEmojis([]);
+          setRrJobs([]);
           pushToast(
             "No se pudieron cargar los datos del panel Admin.",
             "error",
@@ -1252,10 +1352,18 @@ function App() {
 
           {activeTab === "admin" && selectedGuild && adminEnabled ? (
             <>
-              <h3 className="admin-section-title">
-                Configuración general del servidor
-              </h3>
-              <div className="form-grid">
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <h3>Configuración general del servidor</h3>
+                    <p>
+                      Canales y roles base del servidor. Se guardan por
+                      servidor.
+                    </p>
+                  </div>
+                </div>
+                <div className="admin-card-body">
+                  <div className="form-grid">
                 <label>
                   <span>Canal principal de Karpindomo</span>
                   <select
@@ -1320,20 +1428,33 @@ function App() {
                   </select>
                 </label>
 
-                <div className="form-actions">
+                </div>
+                </div>
+                <div className="admin-card-footer">
                   <button
                     className="primary-button"
-                    onClick={handleSave}
-                    disabled={loading}
+                    onClick={() => void handleSave()}
+                    disabled={savingAction !== null}
                   >
-                    Guardar cambios
+                    {savingAction === "config"
+                      ? "Guardando…"
+                      : "Guardar cambios"}
                   </button>
                 </div>
               </div>
 
-              <div className="reaction-roles-section">
-                <h3>Reaction Roles</h3>
-                <div className="form-grid">
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <h3>Reaction Roles</h3>
+                    <p>
+                      Paneles de roles por reacción que el bot publica en
+                      Discord.
+                    </p>
+                  </div>
+                </div>
+                <div className="admin-card-body">
+                  <div className="form-grid">
                   <label>
                     <span>Canal de texto</span>
                     <select
@@ -1449,12 +1570,170 @@ function App() {
                   ))}
                 </datalist>
 
-                <div className="form-actions">
+                <div className="rr-preview">
+                  <div className="rr-preview-label">
+                    Vista previa del mensaje
+                  </div>
+                  {rrPreviewLines().length > 0 ? (
+                    rrPreviewLines().map((line, index) =>
+                      line.startsWith("## ") ? (
+                        <div className="rr-preview-title" key={index}>
+                          {line.replace(/^## /, "")}
+                        </div>
+                      ) : (
+                        <div className="rr-preview-line" key={index}>
+                          {line}
+                        </div>
+                      ),
+                    )
+                  ) : (
+                    <div className="rr-preview-line muted">
+                      Completá el título, la descripción y al menos un emoji +
+                      rol para ver el mensaje.
+                    </div>
+                  )}
+                </div>
+
+                <div className="rr-jobs">
+                  {rrJobs.length > 0 ? (
+                    <>
+                      <div className="rr-jobs-head">
+                        <strong>Estado de publicación</strong>
+                        <button
+                          className="ghost-button small"
+                          onClick={() => void refreshRrJobs()}
+                          type="button"
+                        >
+                          Refrescar
+                        </button>
+                      </div>
+                      <div className="rr-jobs-list">
+                        {rrJobs.filter((job) => job.status !== "done").length >
+                        0 ? (
+                          rrJobs
+                            .filter((job) => job.status !== "done")
+                            .slice(0, 5)
+                            .map((job) => (
+                              <div
+                                className={`rr-job rr-job-${job.status}`}
+                                key={job.id}
+                              >
+                                <span>
+                                  {job.status === "pending"
+                                    ? "En cola"
+                                    : "Error"}{" "}
+                                  · {job.action}
+                                  {job.title ? ` · ${job.title}` : ""}
+                                </span>
+                                {job.error ? (
+                                  <span className="rr-job-error">
+                                    {job.error}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))
+                        ) : (
+                          <div className="rr-job-ok">
+                            Todo publicado. Sin trabajos pendientes.
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                {reactionPanels.length > 0 ? (
+                  <div className="rr-panels-list">
+                    <div className="rr-panels-head">
+                      <h4>
+                        Paneles existentes ({reactionPanels.length})
+                      </h4>
+                      <button
+                        className="ghost-button small"
+                        onClick={() => void refreshReactionPanels()}
+                        type="button"
+                      >
+                        Refrescar
+                      </button>
+                    </div>
+                    {reactionPanels.map((panel) => {
+                      const channelName =
+                        textChannels.find(
+                          (channel) => channel.id === panel.channelId,
+                        )?.name ?? "?";
+                      const expanded = expandedPanelId === panel.messageId;
+                      return (
+                        <div className="rr-panel-card" key={panel.messageId}>
+                          <button
+                            className="rr-panel-header"
+                            onClick={() =>
+                              setExpandedPanelId(
+                                expanded ? null : panel.messageId,
+                              )
+                            }
+                            type="button"
+                          >
+                            <span className="rr-panel-title">
+                              {panel.title || "Panel sin título"}
+                            </span>
+                            <span className="rr-panel-meta">
+                              #{channelName} · {panel.rules.length} rol/es
+                            </span>
+                            <span className="rr-caret">
+                              {expanded ? "▴" : "▾"}
+                            </span>
+                          </button>
+                          {expanded ? (
+                            <div className="rr-panel-body">
+                              <div className="rr-rules">
+                                {panel.rules.map((rule) => {
+                                  const roleName =
+                                    guildRoles.find(
+                                      (role) => role.id === rule.roleId,
+                                    )?.name ?? rule.roleId;
+                                  return (
+                                    <span
+                                      className="rr-rule"
+                                      key={rule.emojiKey}
+                                    >
+                                      {formatEmojiKey(rule.emojiKey)} →{" "}
+                                      {roleName}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <div className="rr-panel-actions">
+                                <button
+                                  className="ghost-button"
+                                  onClick={() => startEditReactionPanel(panel)}
+                                  type="button"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="ghost-button danger"
+                                  onClick={() =>
+                                    requestDeleteReactionPanel(panel)
+                                  }
+                                  type="button"
+                                >
+                                  Eliminar panel
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                </div>
+                <div className="admin-card-footer">
                   {editingPanel ? (
                     <button
                       className="ghost-button"
                       onClick={cancelEditReactionPanel}
-                      disabled={loading}
+                      disabled={savingAction !== null}
                       type="button"
                     >
                       Cancelar edición
@@ -1463,57 +1742,30 @@ function App() {
                   <button
                     className="primary-button"
                     onClick={() => void handleSaveReactionPanel()}
-                    disabled={loading}
+                    disabled={savingAction !== null}
                     type="button"
                   >
-                    {editingPanel ? "Guardar cambios" : "Crear panel"}
+                    {savingAction === "panel"
+                      ? "Guardando…"
+                      : editingPanel
+                        ? "Guardar cambios"
+                        : "Crear panel"}
                   </button>
                 </div>
-
-                {reactionPanels.length > 0 ? (
-                  <div className="rr-panels-list">
-                    <h4>Paneles existentes</h4>
-                    {reactionPanels.map((panel) => (
-                      <div className="rr-panel-card" key={panel.messageId}>
-                        <div className="rr-panel-head">
-                          <strong>
-                            {panel.title ? `${panel.title} · ` : ""}Canal:{" "}
-                            {panel.channelId ?? "?"} · msg: {panel.messageId}
-                          </strong>
-                          <span className="rr-mode">Modo: {panel.mode}</span>
-                        </div>
-                        <div className="rr-rules">
-                          {panel.rules.map((rule) => (
-                            <span className="rr-rule" key={rule.emojiKey}>
-                              {rule.emojiKey} → <code>{rule.roleId}</code>
-                            </span>
-                          ))}
-                        </div>
-                        <div className="rr-panel-actions">
-                          <button
-                            className="ghost-button"
-                            onClick={() => startEditReactionPanel(panel)}
-                            type="button"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            className="ghost-button danger"
-                            onClick={() => requestDeleteReactionPanel(panel)}
-                            type="button"
-                          >
-                            Eliminar panel
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
               </div>
 
               {xpConfig ? (
-                <div className="xp-panel">
-                  <h3>Sistema de XP</h3>
+                <div className="admin-card">
+                  <div className="admin-card-header">
+                    <div>
+                      <h3>Sistema de XP</h3>
+                      <p>
+                        Configuración de niveles, roles por nivel y
+                        multiplicadores.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="admin-card-body">
 
                   <div className="form-grid">
                     <label>
@@ -1660,7 +1912,7 @@ function App() {
                             <input
                               type="text"
                               maxLength={8}
-                              placeholder="🪧"
+                              placeholder="🔵"
                               value={rule.nicknamePrefix ?? ""}
                               onChange={(event) =>
                                 updateXpRole(rule.level, {
@@ -1839,16 +2091,19 @@ function App() {
                     </button>
                   </div>
 
-                  <div className="form-actions">
-                    <button
-                      className="primary-button"
-                      onClick={handleSaveXp}
-                      disabled={loading}
-                    >
-                      Guardar configuración de XP
-                    </button>
-                  </div>
                 </div>
+                <div className="admin-card-footer">
+                  <button
+                    className="primary-button"
+                    onClick={() => void handleSaveXp()}
+                    disabled={savingAction !== null}
+                  >
+                    {savingAction === "xp"
+                      ? "Guardando…"
+                      : "Guardar configuración de XP"}
+                  </button>
+                </div>
+              </div>
               ) : null}
             </>
           ) : activeTab === "admin" ? (

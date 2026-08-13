@@ -358,6 +358,31 @@ export async function listReactionRolePanels(
   return data.panels;
 }
 
+export type ReactionRoleJob = {
+  action: string;
+  channelId: string | null;
+  createdAt: string;
+  error: string | null;
+  id: string;
+  messageId: string | null;
+  mode: string;
+  status: string;
+  title: string | null;
+};
+
+export async function listReactionRoleJobs(
+  guildId: string,
+): Promise<ReactionRoleJob[]> {
+  const data = await requestJson<{ jobs: ReactionRoleJob[] }>(
+    `/guilds/${guildId}/reaction-roles/jobs`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.jobs;
+}
+
 export async function deleteReactionRolePanel(
   guildId: string,
   messageId: string,
