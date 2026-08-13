@@ -97,6 +97,7 @@ async function fetchDiscordJson<T>(
 type DiscordGuildMember = {
   avatar?: string | null;
   nick?: string | null;
+  premium_since?: string | null;
   user?: {
     avatar?: string | null;
     id: string;
@@ -110,16 +111,23 @@ type LeaderboardUserInfo = {
   username: string;
 };
 
-async function fetchGuildMembersForLeaderboard(
+type GuildBooster = {
+  avatarUrl: string | null;
+  nickname: string | null;
+  premiumSince: string;
+  userId: string;
+  username: string;
+};
+
+async function fetchAllGuildMembers(
   guildId: string,
-): Promise<Map<string, LeaderboardUserInfo>> {
-  const result = new Map<string, LeaderboardUserInfo>();
+): Promise<DiscordGuildMember[]> {
   if (!env.DISCORD_BOT_TOKEN) {
-    return result;
+    return [];
   }
 
-  let after: string | undefined;
   const members: DiscordGuildMember[] = [];
+  let after: string | undefined;
 
   for (let page = 0; page < 10; page += 1) {
     const query = new URLSearchParams({ limit: "1000" });
@@ -156,6 +164,15 @@ async function fetchGuildMembersForLeaderboard(
     }
   }
 
+  return members;
+}
+
+async function fetchGuildMembersForLeaderboard(
+  guildId: string,
+): Promise<Map<string, LeaderboardUserInfo>> {
+  const result = new Map<string, LeaderboardUserInfo>();
+  const members = await fetchAllGuildMembers(guildId).catch(() => []);
+
   for (const member of members) {
     if (!member.user) {
       continue;
@@ -174,6 +191,23 @@ async function fetchGuildMembersForLeaderboard(
   }
 
   return result;
+}
+
+async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
+  const members = await fetchAllGuildMembers(guildId).catch(() => []);
+
+  return members
+    .filter((member) => member.user && member.premium_since)
+    .map((member) => ({
+      avatarUrl: member.user?.avatar
+        ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png?size=64`
+        : null,
+      nickname: member.nick ?? null,
+      premiumSince: member.premium_since as string,
+      userId: member.user?.id ?? "",
+      username: member.user?.username ?? "",
+    }))
+    .filter((booster) => booster.userId);
 }
 
 export function buildApp() {
@@ -851,6 +885,23 @@ export function buildApp() {
     const memberCount = preview?.approximate_member_count ?? null;
     const previewPresenceCount = preview?.approximate_presence_count ?? null;
 
+    const guildResponse = env.DISCORD_BOT_TOKEN
+      ? await fetch(
+          `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}`,
+          {
+            headers: {
+              Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+            },
+          },
+        ).catch(() => null)
+      : null;
+    const guildData = guildResponse?.ok
+      ? ((await guildResponse.json()) as {
+          premium_subscription_count?: number;
+        })
+      : null;
+    const boostCount = guildData?.premium_subscription_count ?? null;
+
     const widgetResponse = await fetch(
       `https://discord.com/api/guilds/${params.guildId}/widget.json`,
     );
@@ -860,6 +911,7 @@ export function buildApp() {
         ok: true,
         guildId: params.guildId,
         available: false,
+        boostCount,
         memberCount,
         presenceCount: previewPresenceCount,
         inviteUrl: null,
@@ -872,10 +924,35 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       available: true,
+      boostCount,
       memberCount,
       presenceCount: previewPresenceCount ?? widget.presence_count ?? null,
       inviteUrl: widget.instant_invite ?? null,
       name: widget.name,
+    };
+  });
+
+  app.get("/guilds/:guildId/boosters", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const boosters = await fetchGuildBoosters(params.guildId).catch(() => []);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      boosters,
     };
   });
 

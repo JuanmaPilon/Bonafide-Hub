@@ -17,12 +17,34 @@ export type GuildConfig = {
 
 export type GuildWidgetStatus = {
   available: boolean;
+  boostCount: number | null;
   guildId: string;
   inviteUrl: string | null;
   memberCount: number | null;
   name?: string;
   presenceCount: number | null;
 };
+
+export type GuildBooster = {
+  avatarUrl: string | null;
+  nickname: string | null;
+  premiumSince: string;
+  userId: string;
+  username: string;
+};
+
+export async function getGuildBoosters(
+  guildId: string,
+): Promise<GuildBooster[]> {
+  const data = await requestJson<{ boosters: GuildBooster[] }>(
+    `/guilds/${guildId}/boosters`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.boosters;
+}
 
 export type GuildRole = {
   color: number;

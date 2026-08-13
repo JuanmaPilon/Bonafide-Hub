@@ -6,6 +6,7 @@ import {
   deleteReactionRolePanel,
   exportXpData,
   getAuditLogs,
+  getGuildBoosters,
   getGuildConfig,
   getGuildEmojis,
   getGuildRoles,
@@ -28,6 +29,7 @@ import {
   updateReactionRolePanel,
   type ApiGuild,
   type AuditLogEntry,
+  type GuildBooster,
   type GuildChannel,
   type GuildConfig,
   type GuildEmoji,
@@ -45,6 +47,7 @@ import {
 import "./styles.css";
 
 type HubTab =
+  | "home"
   | "dashboard"
   | "comunicados"
   | "raids"
@@ -54,6 +57,7 @@ type HubTab =
   | "admin";
 
 const VALID_TABS: HubTab[] = [
+  "home",
   "dashboard",
   "comunicados",
   "raids",
@@ -65,7 +69,7 @@ const VALID_TABS: HubTab[] = [
 
 function tabFromHash(): HubTab {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
-  return (VALID_TABS as string[]).includes(raw) ? (raw as HubTab) : "dashboard";
+  return (VALID_TABS as string[]).includes(raw) ? (raw as HubTab) : "home";
 }
 
 type ToastKind = "success" | "error";
@@ -134,6 +138,10 @@ function guildIconUrl(guild: ApiGuild | null): string | null {
 }
 
 function tabLabel(tab: HubTab): string {
+  if (tab === "home") {
+    return "Inicio";
+  }
+
   if (tab === "dashboard") {
     return "Dashboard";
   }
@@ -162,6 +170,10 @@ function tabLabel(tab: HubTab): string {
 }
 
 function panelTitle(tab: HubTab): string {
+  if (tab === "home") {
+    return "Inicio";
+  }
+
   if (tab === "dashboard") {
     return "Dashboard";
   }
@@ -190,6 +202,10 @@ function panelTitle(tab: HubTab): string {
 }
 
 function panelDescription(tab: HubTab): string {
+  if (tab === "home") {
+    return "Bienvenido al hub de la comunidad.";
+  }
+
   if (tab === "dashboard") {
     return "";
   }
@@ -237,16 +253,33 @@ function ServerStats({
 
   const connected = status?.presenceCount != null ? status.presenceCount : null;
   const totalMembers = status?.memberCount ?? null;
+  const boosts = status?.boostCount ?? null;
 
   return (
     <div className="stats-grid">
-      <div className="stat-tile">
+      <div className="stat-tile stat-tile-online">
         <span className="label">Conectados</span>
-        <strong>{connected ?? "—"}</strong>
+        <strong className="stat-online">
+          {connected ?? "—"}
+          <span className="online-dots" aria-hidden="true">
+            <span className="online-dot" />
+            <span className="online-dot" />
+            <span className="online-dot" />
+          </span>
+        </strong>
       </div>
       <div className="stat-tile">
         <span className="label">Miembros totales</span>
         <strong>{totalMembers ?? "—"}</strong>
+      </div>
+      <div className="stat-tile stat-tile-boost">
+        <span className="label">Boosts de Nitro</span>
+        <strong className="stat-boost">
+          <span className="boost-gem" aria-hidden="true">
+            ◈
+          </span>
+          {boosts ?? "—"}
+        </strong>
       </div>
     </div>
   );
@@ -316,6 +349,123 @@ function RefreshIcon() {
   );
 }
 
+function HomeView({
+  boostCount,
+  boosters,
+  colorFor,
+  leaderboard,
+  loading,
+  username,
+}: {
+  boostCount: number | null;
+  boosters: GuildBooster[];
+  colorFor: (
+    level: number,
+  ) => { color: string; textShadow: string } | undefined;
+  leaderboard: LeaderboardEntry[];
+  loading: boolean;
+  username: string | null;
+}) {
+  const top5 = leaderboard.slice(0, 5);
+
+  return (
+    <div className="home-view">
+      <section className="home-hero">
+        <div className="home-hero-art" aria-hidden="true" />
+        <h1>Bienvenido a Bonafide</h1>
+        <p>
+          Hola <strong className="user-name">{username}</strong>, este es el hub
+          de la comunidad.
+        </p>
+      </section>
+
+      <section className="panel content-panel home-panel">
+        <div className="section-header">
+          <div>
+            <h2>Podio del servidor</h2>
+            <p>Top 5 MVP por XP del servidor.</p>
+          </div>
+        </div>
+        {loading ? (
+          <div className="empty-state">Cargando podio...</div>
+        ) : top5.length === 0 ? (
+          <div className="empty-state">
+            Aún no hay XP registrado en este servidor.
+          </div>
+        ) : (
+          <div className="podium">
+            {top5.map((entry) => (
+              <div
+                className={`podium-item podium-place-${entry.rank}`}
+                key={entry.userId}
+              >
+                <span className="podium-rank">{entry.rank}</span>
+                {entry.avatarUrl ? (
+                  <img className="podium-avatar" src={entry.avatarUrl} alt="" />
+                ) : (
+                  <span className="podium-avatar podium-avatar-placeholder">
+                    ?
+                  </span>
+                )}
+                <span className="podium-name" style={colorFor(entry.level)}>
+                  {entry.nickname || entry.username || `@${entry.userId}`}
+                </span>
+                <span className="podium-meta">
+                  Nivel {entry.level} · {entry.xp} XP
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel content-panel home-panel">
+        <div className="section-header">
+          <div>
+            <h2>Nitro · Boosts del servidor</h2>
+            <p>Los miembros que ayudan a crecer el server.</p>
+          </div>
+          <span className="boost-count-badge">
+            <span className="boost-gem" aria-hidden="true">
+              ◈
+            </span>
+            {boostCount ?? "—"}
+          </span>
+        </div>
+        {loading ? (
+          <div className="empty-state">Cargando boosters...</div>
+        ) : boosters.length === 0 ? (
+          <div className="empty-state">Aún no hay boosters registrados.</div>
+        ) : (
+          <div className="booster-list">
+            {boosters.map((booster) => (
+              <div className="booster-item" key={booster.userId}>
+                {booster.avatarUrl ? (
+                  <img
+                    className="booster-avatar"
+                    src={booster.avatarUrl}
+                    alt=""
+                  />
+                ) : (
+                  <span className="booster-avatar booster-avatar-placeholder">
+                    ?
+                  </span>
+                )}
+                <span className="booster-name">
+                  {booster.nickname || booster.username}
+                </span>
+                <span className="booster-since">
+                  Desde {new Date(booster.premiumSince).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function App() {
   const [username, setUsername] = useState<string | null>(null);
   const [guilds, setGuilds] = useState<ApiGuild[]>([]);
@@ -353,6 +503,7 @@ function App() {
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
@@ -741,6 +892,15 @@ function App() {
     return color;
   }
 
+  function levelStyleFor(
+    level: number,
+  ): { color: string; textShadow: string } | undefined {
+    const color = levelColorFor(level);
+    return color
+      ? { color, textShadow: `0 0 6px ${color}, 0 0 14px ${color}66` }
+      : undefined;
+  }
+
   function rrPreviewLines(): string[] {
     const lines = rrPairs
       .filter((pair) => pair.emoji.trim() && pair.roleId)
@@ -1108,6 +1268,7 @@ function App() {
   }
 
   const tabs: HubTab[] = [
+    "home",
     "dashboard",
     "comunicados",
     "raids",
@@ -1240,6 +1401,30 @@ function App() {
   }, [activeTab, selectedGuildId]);
 
   useEffect(() => {
+    if (activeTab !== "home" || !selectedGuildId) {
+      setBoosters([]);
+      return;
+    }
+
+    let cancelled = false;
+    getGuildBoosters(selectedGuildId)
+      .then((boostersList) => {
+        if (!cancelled) {
+          setBoosters(boostersList);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBoosters([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
+  useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
       return;
     }
@@ -1307,7 +1492,12 @@ function App() {
       <ToastViewport toasts={toasts} />
       <header className="topbar">
         <div className="topbar-inner">
-          <div className="brand">
+          <button
+            className="brand"
+            onClick={() => setActiveTab("home")}
+            title="Ir al inicio"
+            type="button"
+          >
             {selectedGuildIcon ? (
               <img
                 className="brand-icon"
@@ -1316,7 +1506,7 @@ function App() {
               />
             ) : null}
             <strong>Bonafide</strong>
-          </div>
+          </button>
 
           <nav className="top-nav">
             {visibleTabs.map((tab) => (
@@ -1361,1011 +1551,1063 @@ function App() {
       </header>
 
       <main className="page">
-        <section className="page-hero">
-          <h1>Bienvenido a Bonafide</h1>
-          <p>
-            Bienvenido <strong className="user-name">{username}</strong>
-          </p>
-        </section>
+        {activeTab === "home" ? (
+          <HomeView
+            boostCount={widgetStatus?.boostCount ?? null}
+            boosters={boosters}
+            colorFor={levelStyleFor}
+            leaderboard={leaderboard}
+            loading={loadingGuildData}
+            username={username}
+          />
+        ) : (
+          <>
+            <section className="page-hero">
+              <h1>Bienvenido a Bonafide</h1>
+              <p>
+                Bienvenido <strong className="user-name">{username}</strong>
+              </p>
+            </section>
 
-        <section className="panel content-panel">
-          <div className="section-header">
-            <div>
-              <h2>{panelTitle(activeTab)}</h2>
-              {panelDesc ? <p>{panelDesc}</p> : null}
-            </div>
-          </div>
-
-          {activeTab === "dashboard" ? (
-            <div className="dashboard-stack">
-              <div className="dashboard-toolbar">
-                <button
-                  className="icon-button"
-                  onClick={refreshSession}
-                  disabled={loading}
-                  title="Refrescar datos"
-                  aria-label="Refrescar datos"
-                >
-                  <svg
-                    className="icon-button-icon"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                    <polyline points="21 3 21 9 15 9" />
-                  </svg>
-                </button>
-              </div>
-              <ServerStats status={widgetStatus} loading={loadingGuildData} />
-
-              <div className="leaderboard-panel">
-                <h3>Leaderboard de XP</h3>
-                {loadingGuildData ? (
-                  <div className="empty-state">Cargando ranking...</div>
-                ) : leaderboard.length === 0 ? (
-                  <div className="empty-state">
-                    Todavía no hay XP registrado en este servidor.
-                  </div>
-                ) : (
-                  <table className="leaderboard-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Usuario</th>
-                        <th>Nivel</th>
-                        <th>XP</th>
-                        <th>Mensajes</th>
-                        <th>Min. voz</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leaderboard.map((entry) => (
-                        <tr key={entry.userId}>
-                          <td>{entry.rank}</td>
-                          <td>
-                            <span className="leaderboard-user">
-                              {entry.avatarUrl ? (
-                                <img
-                                  className="leaderboard-avatar"
-                                  src={entry.avatarUrl}
-                                  alt=""
-                                />
-                              ) : (
-                                <span className="leaderboard-avatar leaderboard-avatar-placeholder">
-                                  ?
-                                </span>
-                              )}
-                              <span
-                                className="user-mention"
-                                style={
-                                  levelColorFor(entry.level)
-                                    ? { color: levelColorFor(entry.level) }
-                                    : undefined
-                                }
-                              >
-                                {entry.nickname ||
-                                  entry.username ||
-                                  `@${entry.userId}`}
-                              </span>
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className="leaderboard-level"
-                              style={
-                                levelColorFor(entry.level)
-                                  ? { color: levelColorFor(entry.level) }
-                                  : undefined
-                              }
-                            >
-                              {entry.level}
-                            </span>
-                          </td>
-                          <td>{entry.xp}</td>
-                          <td>{entry.messageCount}</td>
-                          <td>{entry.voiceMinutes}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-              <div className="dashboard-actions">
-                {widgetStatus?.inviteUrl ? (
-                  <a
-                    className="primary-button"
-                    href={widgetStatus.inviteUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Invitación del servidor
-                  </a>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {activeTab === "admin" && selectedGuild && adminEnabled ? (
-            <>
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <div>
-                    <h3>Configuración general del servidor</h3>
-                    <p>
-                      Canales y roles base del servidor. Se guardan por
-                      servidor.
-                    </p>
-                  </div>
-                </div>
-                <div className="admin-card-body">
-                  <div className="form-grid">
-                    <label>
-                      <span>Canal principal de Karpindomo</span>
-                      <select
-                        className="select"
-                        value={config.memberLogChannelId ?? ""}
-                        onChange={(event) =>
-                          setConfig((current) => ({
-                            ...current,
-                            memberLogChannelId: event.target.value || undefined,
-                          }))
-                        }
-                      >
-                        <option value="">Sin canal configurado</option>
-                        {textChannels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>
-                            {channel.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Rol de entrada del servidor</span>
-                      <select
-                        className="select"
-                        value={config.defaultRoleId ?? ""}
-                        onChange={(event) =>
-                          setConfig((current) => ({
-                            ...current,
-                            defaultRoleId: event.target.value || undefined,
-                          }))
-                        }
-                      >
-                        <option value="">Sin rol de entrada</option>
-                        {guildRoles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label>
-                      <span>Canal para creación dinámica de salas (voz)</span>
-                      <select
-                        className="select"
-                        value={config.dynamicVoiceCreateChannelId ?? ""}
-                        onChange={(event) =>
-                          setConfig((current) => ({
-                            ...current,
-                            dynamicVoiceCreateChannelId:
-                              event.target.value || undefined,
-                          }))
-                        }
-                      >
-                        <option value="">Sin canal configurado</option>
-                        {voiceChannels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>
-                            {channel.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-                <div className="admin-card-footer">
-                  <button
-                    className="primary-button"
-                    onClick={() => void handleSave()}
-                    disabled={savingAction !== null}
-                  >
-                    {savingAction === "config"
-                      ? "Guardando…"
-                      : "Guardar cambios"}
-                  </button>
+            <section className="panel content-panel">
+              <div className="section-header">
+                <div>
+                  <h2>{panelTitle(activeTab)}</h2>
+                  {panelDesc ? <p>{panelDesc}</p> : null}
                 </div>
               </div>
 
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <div>
-                    <h3>Reaction Roles</h3>
-                    <p>
-                      Paneles de roles por reacción que el bot publica en
-                      Discord.
-                    </p>
-                  </div>
-                </div>
-                <div className="admin-card-body">
-                  <div className="form-grid">
-                    <label>
-                      <span>Canal de texto</span>
-                      <select
-                        className="select"
-                        value={rrChannelId}
-                        onChange={(event) => setRrChannelId(event.target.value)}
-                      >
-                        <option value="">Sin canal configurado</option>
-                        {textChannels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>
-                            {channel.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Título del panel</span>
-                      <input
-                        value={rrTitle}
-                        onChange={(event) => setRrTitle(event.target.value)}
-                        placeholder="Rangos"
-                      />
-                    </label>
-                    <label>
-                      <span>Descripción</span>
-                      <input
-                        value={rrDescription}
-                        onChange={(event) =>
-                          setRrDescription(event.target.value)
-                        }
-                        placeholder="Reacciona para recibir tu rol"
-                      />
-                    </label>
-                    <label>
-                      <span>Modo</span>
-                      <select
-                        className="select"
-                        value={rrMode}
-                        onChange={(event) =>
-                          setRrMode(
-                            event.target.value as
-                              | "multiple"
-                              | "unique"
-                              | "additive",
-                          )
-                        }
-                      >
-                        <option value="multiple">
-                          Multiple (se puede tener varios)
-                        </option>
-                        <option value="unique">
-                          Único (solo uno del panel)
-                        </option>
-                        <option value="additive">
-                          Aditivo (solo agrega, no quita)
-                        </option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="rr-pairs">
-                    {rrPairs.map((pair, index) => (
-                      <div className="rr-pair" key={index}>
-                        <input
-                          type="text"
-                          list="guild-emojis"
-                          value={pair.emoji}
-                          onChange={(event) =>
-                            updateRrPair(index, { emoji: event.target.value })
-                          }
-                          placeholder="Emoji del servidor"
-                        />
-                        <select
-                          className="select"
-                          value={pair.roleId}
-                          onChange={(event) =>
-                            updateRrPair(index, { roleId: event.target.value })
-                          }
-                        >
-                          <option value="">Adjuntar rol</option>
-                          {guildRoles.map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          className="ghost-button danger"
-                          onClick={() => removeRrPair(index)}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+              {activeTab === "dashboard" ? (
+                <div className="dashboard-stack">
+                  <div className="dashboard-toolbar">
                     <button
-                      className="ghost-button"
-                      onClick={addRrPair}
-                      type="button"
+                      className="icon-button"
+                      onClick={refreshSession}
+                      disabled={loading}
+                      title="Refrescar datos"
+                      aria-label="Refrescar datos"
                     >
-                      + Agregar par emoji/rol
+                      <svg
+                        className="icon-button-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                        <polyline points="21 3 21 9 15 9" />
+                      </svg>
                     </button>
                   </div>
+                  <ServerStats
+                    status={widgetStatus}
+                    loading={loadingGuildData}
+                  />
 
-                  <datalist id="guild-emojis">
-                    {guildEmojis.map((emoji) => (
-                      <option
-                        key={emoji.id}
-                        value={
-                          emoji.animated
-                            ? `<a:${emoji.name}:${emoji.id}>`
-                            : `<:${emoji.name}:${emoji.id}>`
-                        }
-                      >
-                        {emoji.name}
-                      </option>
-                    ))}
-                  </datalist>
-
-                  <div className="rr-preview">
-                    <div className="rr-preview-label">
-                      Vista previa del mensaje
-                    </div>
-                    {rrPreviewLines().length > 0 ? (
-                      rrPreviewLines().map((line, index) =>
-                        line.startsWith("## ") ? (
-                          <div className="rr-preview-title" key={index}>
-                            {line.replace(/^## /, "")}
-                          </div>
-                        ) : (
-                          <div className="rr-preview-line" key={index}>
-                            {line}
-                          </div>
-                        ),
-                      )
-                    ) : (
-                      <div className="rr-preview-line muted">
-                        Completá el título, la descripción y al menos un emoji +
-                        rol para ver el mensaje.
+                  <div className="leaderboard-panel">
+                    <h3>Leaderboard de XP</h3>
+                    {loadingGuildData ? (
+                      <div className="empty-state">Cargando ranking...</div>
+                    ) : leaderboard.length === 0 ? (
+                      <div className="empty-state">
+                        Todavía no hay XP registrado en este servidor.
                       </div>
+                    ) : (
+                      <table className="leaderboard-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Usuario</th>
+                            <th>Nivel</th>
+                            <th>XP</th>
+                            <th>Mensajes</th>
+                            <th>Min. voz</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {leaderboard.map((entry) => (
+                            <tr
+                              key={entry.userId}
+                              className={
+                                entry.rank <= 5 ? "mvp-row" : undefined
+                              }
+                            >
+                              <td>
+                                <span
+                                  className={
+                                    entry.rank <= 5 ? "mvp-rank" : undefined
+                                  }
+                                >
+                                  {entry.rank}
+                                </span>
+                              </td>
+                              <td>
+                                <span className="leaderboard-user">
+                                  {entry.avatarUrl ? (
+                                    <img
+                                      className="leaderboard-avatar"
+                                      src={entry.avatarUrl}
+                                      alt=""
+                                    />
+                                  ) : (
+                                    <span className="leaderboard-avatar leaderboard-avatar-placeholder">
+                                      ?
+                                    </span>
+                                  )}
+                                  <span
+                                    className="user-mention"
+                                    style={levelStyleFor(entry.level)}
+                                  >
+                                    {entry.nickname ||
+                                      entry.username ||
+                                      `@${entry.userId}`}
+                                  </span>
+                                </span>
+                              </td>
+                              <td>
+                                <span
+                                  className="leaderboard-level"
+                                  style={levelStyleFor(entry.level)}
+                                >
+                                  {entry.level}
+                                </span>
+                              </td>
+                              <td>{entry.xp}</td>
+                              <td>{entry.messageCount}</td>
+                              <td>{entry.voiceMinutes}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     )}
                   </div>
 
-                  <div className="rr-jobs">
-                    {rrJobs.length > 0 ? (
-                      <>
-                        <div className="rr-jobs-head">
-                          <strong>Estado de publicación</strong>
-                          <button
-                            className="icon-button"
-                            onClick={() => void refreshRrJobs()}
-                            title="Refrescar estado"
-                            aria-label="Refrescar estado"
-                            type="button"
-                          >
-                            <RefreshIcon />
-                          </button>
-                        </div>
-                        <div className="rr-jobs-list">
-                          {rrJobs.filter((job) => job.status !== "done")
-                            .length > 0 ? (
-                            rrJobs
-                              .filter((job) => job.status !== "done")
-                              .slice(0, 5)
-                              .map((job) => (
-                                <div
-                                  className={`rr-job rr-job-${job.status}`}
-                                  key={job.id}
-                                >
-                                  <div className="rr-job-line">
-                                    <span>
-                                      {job.status === "pending"
-                                        ? "En cola"
-                                        : "Error"}{" "}
-                                      · {job.action}
-                                      {job.title ? ` · ${job.title}` : ""}
-                                      {job.status !== "pending"
-                                        ? ` · ${new Date(
-                                            job.createdAt,
-                                          ).toLocaleString()}`
-                                        : ""}
-                                    </span>
-                                    <button
-                                      className="rr-job-dismiss"
-                                      onClick={() =>
-                                        void dismissReactionRoleJob(job.id)
-                                      }
-                                      title="Quitar de la lista"
-                                      aria-label="Quitar de la lista"
-                                      type="button"
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                  {job.error ? (
-                                    <span className="rr-job-error">
-                                      {job.error}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ))
-                          ) : (
-                            <div className="rr-job-ok">
-                              Todo publicado. Sin trabajos pendientes.
-                            </div>
-                          )}
-                        </div>
-                      </>
+                  <div className="dashboard-actions">
+                    {widgetStatus?.inviteUrl ? (
+                      <a
+                        className="primary-button"
+                        href={widgetStatus.inviteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Invitación del servidor
+                      </a>
                     ) : null}
-                  </div>
-
-                  {reactionPanels.length > 0 ? (
-                    <div className="rr-panels-list">
-                      <div className="rr-panels-head">
-                        <h4>Paneles existentes ({reactionPanels.length})</h4>
-                        <button
-                          className="icon-button"
-                          onClick={() => void refreshReactionPanels()}
-                          title="Refrescar paneles"
-                          aria-label="Refrescar paneles"
-                          type="button"
-                        >
-                          <RefreshIcon />
-                        </button>
-                      </div>
-                      {reactionPanels.map((panel) => {
-                        const channelName =
-                          textChannels.find(
-                            (channel) => channel.id === panel.channelId,
-                          )?.name ?? "?";
-                        const expanded = expandedPanelId === panel.messageId;
-                        return (
-                          <div className="rr-panel-card" key={panel.messageId}>
-                            <button
-                              className="rr-panel-header"
-                              onClick={() =>
-                                setExpandedPanelId(
-                                  expanded ? null : panel.messageId,
-                                )
-                              }
-                              type="button"
-                            >
-                              <span className="rr-panel-title">
-                                {panel.title || "Panel sin título"}
-                              </span>
-                              <span className="rr-panel-meta">
-                                #{channelName} · {panel.rules.length} rol/es
-                              </span>
-                              <span className="rr-caret">
-                                {expanded ? "▴" : "▾"}
-                              </span>
-                            </button>
-                            {expanded ? (
-                              <div className="rr-panel-body">
-                                <div className="rr-rules">
-                                  {panel.rules.map((rule) => {
-                                    const roleName =
-                                      guildRoles.find(
-                                        (role) => role.id === rule.roleId,
-                                      )?.name ?? rule.roleId;
-                                    return (
-                                      <span
-                                        className="rr-rule"
-                                        key={rule.emojiKey}
-                                      >
-                                        {formatEmojiKey(rule.emojiKey)} →{" "}
-                                        {roleName}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                                <div className="rr-panel-actions">
-                                  <button
-                                    className="ghost-button"
-                                    onClick={() =>
-                                      startEditReactionPanel(panel)
-                                    }
-                                    type="button"
-                                  >
-                                    Editar
-                                  </button>
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() =>
-                                      requestDeleteReactionPanel(panel)
-                                    }
-                                    type="button"
-                                  >
-                                    Eliminar panel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-                <div className="admin-card-footer">
-                  {editingPanel ? (
-                    <button
-                      className="ghost-button"
-                      onClick={cancelEditReactionPanel}
-                      disabled={savingAction !== null}
-                      type="button"
-                    >
-                      Cancelar edición
-                    </button>
-                  ) : null}
-                  <button
-                    className="primary-button"
-                    onClick={() => void handleSaveReactionPanel()}
-                    disabled={savingAction !== null}
-                    type="button"
-                  >
-                    {savingAction === "panel"
-                      ? "Guardando…"
-                      : editingPanel
-                        ? "Guardar cambios"
-                        : "Crear panel"}
-                  </button>
-                </div>
-              </div>
-
-              {xpConfig ? (
-                <div className="admin-card">
-                  <div className="admin-card-header">
-                    <div>
-                      <h3>Sistema de XP</h3>
-                      <p>
-                        Configuración de niveles, roles por nivel y
-                        multiplicadores.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="admin-card-body">
-                    <div className="form-grid">
-                      <label>
-                        <span>XP por mensaje</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={xpConfig.messageXp}
-                          onChange={(event) =>
-                            setXpConfig((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    messageXp: Number(event.target.value) || 0,
-                                  }
-                                : current,
-                            )
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>XP por minuto en voz</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={xpConfig.voiceXpPerMinute}
-                          onChange={(event) =>
-                            setXpConfig((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    voiceXpPerMinute:
-                                      Number(event.target.value) || 0,
-                                  }
-                                : current,
-                            )
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>Cooldown anti-spam (segundos)</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={xpConfig.cooldownSeconds}
-                          onChange={(event) =>
-                            setXpConfig((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    cooldownSeconds:
-                                      Number(event.target.value) || 0,
-                                  }
-                                : current,
-                            )
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>XP base por nivel</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={xpConfig.levelBaseXp}
-                          onChange={(event) =>
-                            setXpConfig((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    levelBaseXp:
-                                      Number(event.target.value) || 0,
-                                  }
-                                : current,
-                            )
-                          }
-                        />
-                      </label>
-
-                      <label>
-                        <span>Cap de nivel (0 = sin límite)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={xpConfig.maxLevel}
-                          onChange={(event) =>
-                            setXpConfig((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    maxLevel:
-                                      Math.max(0, Number(event.target.value)) ||
-                                      0,
-                                  }
-                                : current,
-                            )
-                          }
-                        />
-                      </label>
-                    </div>
-
-                    <h4>Roles por nivel</h4>
-                    <div className="xp-roles">
-                      {xpConfig.levelRoles.length === 0 ? (
-                        <div className="empty-state">
-                          Aún no hay roles por nivel configurados.
-                        </div>
-                      ) : (
-                        xpConfig.levelRoles.map((rule, index) => (
-                          <div className="xp-role-row" key={index}>
-                            <label className="xp-role-level-input">
-                              <span>Nivel</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={rule.level}
-                                onChange={(event) =>
-                                  changeXpRoleLevel(
-                                    rule.level,
-                                    Number(event.target.value),
-                                  )
-                                }
-                              />
-                            </label>
-                            <select
-                              className="select"
-                              value={rule.roleId}
-                              onChange={(event) =>
-                                updateXpRole(rule.level, {
-                                  roleId: event.target.value,
-                                })
-                              }
-                            >
-                              <option value="">Sin rol</option>
-                              {guildRoles.map((role) => (
-                                <option key={role.id} value={role.id}>
-                                  {role.name}
-                                </option>
-                              ))}
-                            </select>
-                            <label className="xp-nickname-prefix">
-                              <span>Prefijo de nombre</span>
-                              <input
-                                type="text"
-                                maxLength={8}
-                                placeholder="🔵"
-                                value={rule.nicknamePrefix ?? ""}
-                                onChange={(event) =>
-                                  updateXpRole(rule.level, {
-                                    nicknamePrefix: event.target.value,
-                                  })
-                                }
-                              />
-                            </label>
-                            <label className="xp-color-input">
-                              <span>Color (nivel/nombre)</span>
-                              <span className="xp-color-row">
-                                <input
-                                  type="color"
-                                  value={rule.color ?? "#6aa8ff"}
-                                  onChange={(event) =>
-                                    updateXpRole(rule.level, {
-                                      color: event.target.value,
-                                    })
-                                  }
-                                />
-                                {rule.color ? (
-                                  <button
-                                    type="button"
-                                    className="ghost-button small"
-                                    onClick={() =>
-                                      updateXpRole(rule.level, {
-                                        color: undefined,
-                                      })
-                                    }
-                                  >
-                                    Quitar
-                                  </button>
-                                ) : null}
-                              </span>
-                            </label>
-                            <div
-                              className="xp-mode-toggle"
-                              title="Comportamiento al alcanzar este nivel"
-                            >
-                              <button
-                                type="button"
-                                className={
-                                  rule.stacking !== "replace" ? "active" : ""
-                                }
-                                onClick={() =>
-                                  updateXpRole(rule.level, {
-                                    stacking: "stack",
-                                  })
-                                }
-                              >
-                                Acumular
-                              </button>
-                              <button
-                                type="button"
-                                className={
-                                  rule.stacking === "replace" ? "active" : ""
-                                }
-                                onClick={() =>
-                                  updateXpRole(rule.level, {
-                                    stacking: "replace",
-                                  })
-                                }
-                              >
-                                Reemplazar
-                              </button>
-                            </div>
-                            <button
-                              type="button"
-                              className="ghost-button xp-remove-trigger"
-                              onClick={() =>
-                                setRoleModal({ kind: "add", level: rule.level })
-                              }
-                            >
-                              Dar roles extra ({rule.addRoleIds.length})
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost-button xp-remove-trigger"
-                              onClick={() =>
-                                setRoleModal({
-                                  kind: "remove",
-                                  level: rule.level,
-                                })
-                              }
-                            >
-                              Quitar roles extra ({rule.removeRoleIds.length})
-                            </button>
-                            <button
-                              className="ghost-button danger"
-                              onClick={() => removeXpRole(rule.level)}
-                              type="button"
-                            >
-                              Borrar
-                            </button>
-                          </div>
-                        ))
-                      )}
-
-                      <button
-                        className="ghost-button"
-                        onClick={addXpRole}
-                        type="button"
-                      >
-                        + Agregar rol de nivel
-                      </button>
-                    </div>
-
-                    <h4>Multiplicadores de XP por rol</h4>
-                    <div className="xp-roles">
-                      {xpConfig.roleMultipliers.length === 0 ? (
-                        <div className="empty-state">
-                          Aún no hay roles con multiplicador de XP.
-                        </div>
-                      ) : (
-                        xpConfig.roleMultipliers.map((entry) => (
-                          <div
-                            className="xp-role-row xp-multiplier-row"
-                            key={entry.roleId}
-                          >
-                            <select
-                              className="select"
-                              value={entry.roleId}
-                              onChange={(event) =>
-                                updateXpMultiplier(entry.roleId, {
-                                  roleId: event.target.value,
-                                })
-                              }
-                            >
-                              <option value="">Sin rol</option>
-                              {guildRoles.map((role) => (
-                                <option key={role.id} value={role.id}>
-                                  {role.name}
-                                </option>
-                              ))}
-                            </select>
-                            <label className="xp-multiplier">
-                              <span>Multiplicador (x)</span>
-                              <input
-                                type="number"
-                                min="1"
-                                step="0.5"
-                                value={entry.multiplier}
-                                onChange={(event) =>
-                                  updateXpMultiplier(entry.roleId, {
-                                    multiplier: Number(event.target.value) || 1,
-                                  })
-                                }
-                              />
-                            </label>
-                            <button
-                              className="ghost-button danger"
-                              onClick={() => removeXpMultiplier(entry.roleId)}
-                              type="button"
-                            >
-                              Borrar
-                            </button>
-                          </div>
-                        ))
-                      )}
-
-                      <button
-                        className="ghost-button"
-                        onClick={addXpMultiplier}
-                        type="button"
-                      >
-                        + Agregar multiplicador
-                      </button>
-                    </div>
-
-                    <div className="import-export">
-                      <button
-                        className="ghost-button"
-                        onClick={() => void handleExportXp()}
-                        type="button"
-                      >
-                        Exportar XP
-                      </button>
-                      <button
-                        className="ghost-button"
-                        onClick={() => importFileRef.current?.click()}
-                        type="button"
-                      >
-                        Importar XP
-                      </button>
-                      <input
-                        ref={importFileRef}
-                        type="file"
-                        accept="application/json,.json"
-                        hidden
-                        onChange={(event) => void handleImportXpFile(event)}
-                      />
-                      <button
-                        className="ghost-button"
-                        onClick={requestSyncRoles}
-                        type="button"
-                      >
-                        Re-sincronizar roles
-                      </button>
-                      <button
-                        className="ghost-button danger"
-                        onClick={requestResetAllXp}
-                        type="button"
-                      >
-                        Resetear niveles de todos
-                      </button>
-                    </div>
-                  </div>
-                  <div className="admin-card-footer">
-                    <button
-                      className="primary-button"
-                      onClick={() => void handleSaveXp()}
-                      disabled={savingAction !== null}
-                    >
-                      {savingAction === "xp"
-                        ? "Guardando…"
-                        : "Guardar configuración de XP"}
-                    </button>
                   </div>
                 </div>
               ) : null}
 
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <div>
-                    <h3>Registro de cambios (auditoría)</h3>
-                    <p>
-                      Quién cambió cada cosa en el Hub. Solo lectura y visible
-                      únicamente para el owner.
-                    </p>
-                  </div>
-                  <button
-                    className="icon-button"
-                    onClick={() => void refreshAuditLogs()}
-                    title="Refrescar registro"
-                    aria-label="Refrescar registro"
-                    type="button"
-                  >
-                    <RefreshIcon />
-                  </button>
-                </div>
-                <div className="admin-card-body">
-                  {selectedGuild?.owner ? (
-                    auditLogs.length === 0 ? (
-                      <div className="empty-state">
-                        Aún no hay cambios registrados. Las acciones del panel
-                        Admin quedan anotadas acá.
+              {activeTab === "admin" && selectedGuild && adminEnabled ? (
+                <>
+                  <div className="admin-card">
+                    <div className="admin-card-header">
+                      <div>
+                        <h3>Configuración general del servidor</h3>
+                        <p>
+                          Canales y roles base del servidor. Se guardan por
+                          servidor.
+                        </p>
                       </div>
-                    ) : (
-                      <div className="audit-list">
-                        {auditLogs.map((entry) => (
-                          <div className="audit-row" key={entry.id}>
-                            <span className="audit-time">
-                              {new Date(entry.createdAt).toLocaleString()}
-                            </span>
-                            <span className="audit-actor">
-                              {entry.actorName ?? entry.actorUserId ?? "—"}
-                            </span>
-                            <span className="audit-action">{entry.action}</span>
-                            {entry.details ? (
-                              <span className="audit-detail">
-                                {entry.details}
-                              </span>
-                            ) : null}
+                    </div>
+                    <div className="admin-card-body">
+                      <div className="form-grid">
+                        <label>
+                          <span>Canal principal de Karpindomo</span>
+                          <select
+                            className="select"
+                            value={config.memberLogChannelId ?? ""}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                memberLogChannelId:
+                                  event.target.value || undefined,
+                              }))
+                            }
+                          >
+                            <option value="">Sin canal configurado</option>
+                            {textChannels.map((channel) => (
+                              <option key={channel.id} value={channel.id}>
+                                {channel.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label>
+                          <span>Rol de entrada del servidor</span>
+                          <select
+                            className="select"
+                            value={config.defaultRoleId ?? ""}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                defaultRoleId: event.target.value || undefined,
+                              }))
+                            }
+                          >
+                            <option value="">Sin rol de entrada</option>
+                            {guildRoles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label>
+                          <span>
+                            Canal para creación dinámica de salas (voz)
+                          </span>
+                          <select
+                            className="select"
+                            value={config.dynamicVoiceCreateChannelId ?? ""}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                dynamicVoiceCreateChannelId:
+                                  event.target.value || undefined,
+                              }))
+                            }
+                          >
+                            <option value="">Sin canal configurado</option>
+                            {voiceChannels.map((channel) => (
+                              <option key={channel.id} value={channel.id}>
+                                {channel.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="admin-card-footer">
+                      <button
+                        className="primary-button"
+                        onClick={() => void handleSave()}
+                        disabled={savingAction !== null}
+                      >
+                        {savingAction === "config"
+                          ? "Guardando…"
+                          : "Guardar cambios"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-card">
+                    <div className="admin-card-header">
+                      <div>
+                        <h3>Reaction Roles</h3>
+                        <p>
+                          Paneles de roles por reacción que el bot publica en
+                          Discord.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="admin-card-body">
+                      <div className="form-grid">
+                        <label>
+                          <span>Canal de texto</span>
+                          <select
+                            className="select"
+                            value={rrChannelId}
+                            onChange={(event) =>
+                              setRrChannelId(event.target.value)
+                            }
+                          >
+                            <option value="">Sin canal configurado</option>
+                            {textChannels.map((channel) => (
+                              <option key={channel.id} value={channel.id}>
+                                {channel.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Título del panel</span>
+                          <input
+                            value={rrTitle}
+                            onChange={(event) => setRrTitle(event.target.value)}
+                            placeholder="Rangos"
+                          />
+                        </label>
+                        <label>
+                          <span>Descripción</span>
+                          <input
+                            value={rrDescription}
+                            onChange={(event) =>
+                              setRrDescription(event.target.value)
+                            }
+                            placeholder="Reacciona para recibir tu rol"
+                          />
+                        </label>
+                        <label>
+                          <span>Modo</span>
+                          <select
+                            className="select"
+                            value={rrMode}
+                            onChange={(event) =>
+                              setRrMode(
+                                event.target.value as
+                                  | "multiple"
+                                  | "unique"
+                                  | "additive",
+                              )
+                            }
+                          >
+                            <option value="multiple">
+                              Multiple (se puede tener varios)
+                            </option>
+                            <option value="unique">
+                              Único (solo uno del panel)
+                            </option>
+                            <option value="additive">
+                              Aditivo (solo agrega, no quita)
+                            </option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="rr-pairs">
+                        {rrPairs.map((pair, index) => (
+                          <div className="rr-pair" key={index}>
+                            <input
+                              type="text"
+                              list="guild-emojis"
+                              value={pair.emoji}
+                              onChange={(event) =>
+                                updateRrPair(index, {
+                                  emoji: event.target.value,
+                                })
+                              }
+                              placeholder="Emoji del servidor"
+                            />
+                            <select
+                              className="select"
+                              value={pair.roleId}
+                              onChange={(event) =>
+                                updateRrPair(index, {
+                                  roleId: event.target.value,
+                                })
+                              }
+                            >
+                              <option value="">Adjuntar rol</option>
+                              {guildRoles.map((role) => (
+                                <option key={role.id} value={role.id}>
+                                  {role.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="ghost-button danger"
+                              onClick={() => removeRrPair(index)}
+                              type="button"
+                            >
+                              ×
+                            </button>
                           </div>
                         ))}
+                        <button
+                          className="ghost-button"
+                          onClick={addRrPair}
+                          type="button"
+                        >
+                          + Agregar par emoji/rol
+                        </button>
                       </div>
-                    )
-                  ) : (
-                    <div className="empty-state">
-                      Solo el owner de la guild puede ver este registro.
+
+                      <datalist id="guild-emojis">
+                        {guildEmojis.map((emoji) => (
+                          <option
+                            key={emoji.id}
+                            value={
+                              emoji.animated
+                                ? `<a:${emoji.name}:${emoji.id}>`
+                                : `<:${emoji.name}:${emoji.id}>`
+                            }
+                          >
+                            {emoji.name}
+                          </option>
+                        ))}
+                      </datalist>
+
+                      <div className="rr-preview">
+                        <div className="rr-preview-label">
+                          Vista previa del mensaje
+                        </div>
+                        {rrPreviewLines().length > 0 ? (
+                          rrPreviewLines().map((line, index) =>
+                            line.startsWith("## ") ? (
+                              <div className="rr-preview-title" key={index}>
+                                {line.replace(/^## /, "")}
+                              </div>
+                            ) : (
+                              <div className="rr-preview-line" key={index}>
+                                {line}
+                              </div>
+                            ),
+                          )
+                        ) : (
+                          <div className="rr-preview-line muted">
+                            Completá el título, la descripción y al menos un
+                            emoji + rol para ver el mensaje.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rr-jobs">
+                        {rrJobs.length > 0 ? (
+                          <>
+                            <div className="rr-jobs-head">
+                              <strong>Estado de publicación</strong>
+                              <button
+                                className="icon-button"
+                                onClick={() => void refreshRrJobs()}
+                                title="Refrescar estado"
+                                aria-label="Refrescar estado"
+                                type="button"
+                              >
+                                <RefreshIcon />
+                              </button>
+                            </div>
+                            <div className="rr-jobs-list">
+                              {rrJobs.filter((job) => job.status !== "done")
+                                .length > 0 ? (
+                                rrJobs
+                                  .filter((job) => job.status !== "done")
+                                  .slice(0, 5)
+                                  .map((job) => (
+                                    <div
+                                      className={`rr-job rr-job-${job.status}`}
+                                      key={job.id}
+                                    >
+                                      <div className="rr-job-line">
+                                        <span>
+                                          {job.status === "pending"
+                                            ? "En cola"
+                                            : "Error"}{" "}
+                                          · {job.action}
+                                          {job.title ? ` · ${job.title}` : ""}
+                                          {job.status !== "pending"
+                                            ? ` · ${new Date(
+                                                job.createdAt,
+                                              ).toLocaleString()}`
+                                            : ""}
+                                        </span>
+                                        <button
+                                          className="rr-job-dismiss"
+                                          onClick={() =>
+                                            void dismissReactionRoleJob(job.id)
+                                          }
+                                          title="Quitar de la lista"
+                                          aria-label="Quitar de la lista"
+                                          type="button"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                      {job.error ? (
+                                        <span className="rr-job-error">
+                                          {job.error}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ))
+                              ) : (
+                                <div className="rr-job-ok">
+                                  Todo publicado. Sin trabajos pendientes.
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+
+                      {reactionPanels.length > 0 ? (
+                        <div className="rr-panels-list">
+                          <div className="rr-panels-head">
+                            <h4>
+                              Paneles existentes ({reactionPanels.length})
+                            </h4>
+                            <button
+                              className="icon-button"
+                              onClick={() => void refreshReactionPanels()}
+                              title="Refrescar paneles"
+                              aria-label="Refrescar paneles"
+                              type="button"
+                            >
+                              <RefreshIcon />
+                            </button>
+                          </div>
+                          {reactionPanels.map((panel) => {
+                            const channelName =
+                              textChannels.find(
+                                (channel) => channel.id === panel.channelId,
+                              )?.name ?? "?";
+                            const expanded =
+                              expandedPanelId === panel.messageId;
+                            return (
+                              <div
+                                className="rr-panel-card"
+                                key={panel.messageId}
+                              >
+                                <button
+                                  className="rr-panel-header"
+                                  onClick={() =>
+                                    setExpandedPanelId(
+                                      expanded ? null : panel.messageId,
+                                    )
+                                  }
+                                  type="button"
+                                >
+                                  <span className="rr-panel-title">
+                                    {panel.title || "Panel sin título"}
+                                  </span>
+                                  <span className="rr-panel-meta">
+                                    #{channelName} · {panel.rules.length} rol/es
+                                  </span>
+                                  <span className="rr-caret">
+                                    {expanded ? "▴" : "▾"}
+                                  </span>
+                                </button>
+                                {expanded ? (
+                                  <div className="rr-panel-body">
+                                    <div className="rr-rules">
+                                      {panel.rules.map((rule) => {
+                                        const roleName =
+                                          guildRoles.find(
+                                            (role) => role.id === rule.roleId,
+                                          )?.name ?? rule.roleId;
+                                        return (
+                                          <span
+                                            className="rr-rule"
+                                            key={rule.emojiKey}
+                                          >
+                                            {formatEmojiKey(rule.emojiKey)} →{" "}
+                                            {roleName}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="rr-panel-actions">
+                                      <button
+                                        className="ghost-button"
+                                        onClick={() =>
+                                          startEditReactionPanel(panel)
+                                        }
+                                        type="button"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        className="ghost-button danger"
+                                        onClick={() =>
+                                          requestDeleteReactionPanel(panel)
+                                        }
+                                        type="button"
+                                      >
+                                        Eliminar panel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                     </div>
-                  )}
+                    <div className="admin-card-footer">
+                      {editingPanel ? (
+                        <button
+                          className="ghost-button"
+                          onClick={cancelEditReactionPanel}
+                          disabled={savingAction !== null}
+                          type="button"
+                        >
+                          Cancelar edición
+                        </button>
+                      ) : null}
+                      <button
+                        className="primary-button"
+                        onClick={() => void handleSaveReactionPanel()}
+                        disabled={savingAction !== null}
+                        type="button"
+                      >
+                        {savingAction === "panel"
+                          ? "Guardando…"
+                          : editingPanel
+                            ? "Guardar cambios"
+                            : "Crear panel"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {xpConfig ? (
+                    <div className="admin-card">
+                      <div className="admin-card-header">
+                        <div>
+                          <h3>Sistema de XP</h3>
+                          <p>
+                            Configuración de niveles, roles por nivel y
+                            multiplicadores.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="admin-card-body">
+                        <div className="form-grid">
+                          <label>
+                            <span>XP por mensaje</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={xpConfig.messageXp}
+                              onChange={(event) =>
+                                setXpConfig((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        messageXp:
+                                          Number(event.target.value) || 0,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </label>
+
+                          <label>
+                            <span>XP por minuto en voz</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={xpConfig.voiceXpPerMinute}
+                              onChange={(event) =>
+                                setXpConfig((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        voiceXpPerMinute:
+                                          Number(event.target.value) || 0,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </label>
+
+                          <label>
+                            <span>Cooldown anti-spam (segundos)</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={xpConfig.cooldownSeconds}
+                              onChange={(event) =>
+                                setXpConfig((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        cooldownSeconds:
+                                          Number(event.target.value) || 0,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </label>
+
+                          <label>
+                            <span>XP base por nivel</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={xpConfig.levelBaseXp}
+                              onChange={(event) =>
+                                setXpConfig((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        levelBaseXp:
+                                          Number(event.target.value) || 0,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </label>
+
+                          <label>
+                            <span>Cap de nivel (0 = sin límite)</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={xpConfig.maxLevel}
+                              onChange={(event) =>
+                                setXpConfig((current) =>
+                                  current
+                                    ? {
+                                        ...current,
+                                        maxLevel:
+                                          Math.max(
+                                            0,
+                                            Number(event.target.value),
+                                          ) || 0,
+                                      }
+                                    : current,
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <h4>Roles por nivel</h4>
+                        <div className="xp-roles">
+                          {xpConfig.levelRoles.length === 0 ? (
+                            <div className="empty-state">
+                              Aún no hay roles por nivel configurados.
+                            </div>
+                          ) : (
+                            xpConfig.levelRoles.map((rule, index) => (
+                              <div className="xp-role-row" key={index}>
+                                <label className="xp-role-level-input">
+                                  <span>Nivel</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={rule.level}
+                                    onChange={(event) =>
+                                      changeXpRoleLevel(
+                                        rule.level,
+                                        Number(event.target.value),
+                                      )
+                                    }
+                                  />
+                                </label>
+                                <select
+                                  className="select"
+                                  value={rule.roleId}
+                                  onChange={(event) =>
+                                    updateXpRole(rule.level, {
+                                      roleId: event.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="">Sin rol</option>
+                                  {guildRoles.map((role) => (
+                                    <option key={role.id} value={role.id}>
+                                      {role.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <label className="xp-nickname-prefix">
+                                  <span>Prefijo de nombre</span>
+                                  <input
+                                    type="text"
+                                    maxLength={8}
+                                    placeholder="🔵"
+                                    value={rule.nicknamePrefix ?? ""}
+                                    onChange={(event) =>
+                                      updateXpRole(rule.level, {
+                                        nicknamePrefix: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </label>
+                                <label className="xp-color-input">
+                                  <span>Color (nivel/nombre)</span>
+                                  <span className="xp-color-row">
+                                    <input
+                                      type="color"
+                                      value={rule.color ?? "#6aa8ff"}
+                                      onChange={(event) =>
+                                        updateXpRole(rule.level, {
+                                          color: event.target.value,
+                                        })
+                                      }
+                                    />
+                                    {rule.color ? (
+                                      <button
+                                        type="button"
+                                        className="ghost-button small"
+                                        onClick={() =>
+                                          updateXpRole(rule.level, {
+                                            color: undefined,
+                                          })
+                                        }
+                                      >
+                                        Quitar
+                                      </button>
+                                    ) : null}
+                                  </span>
+                                </label>
+                                <div
+                                  className="xp-mode-toggle"
+                                  title="Comportamiento al alcanzar este nivel"
+                                >
+                                  <button
+                                    type="button"
+                                    className={
+                                      rule.stacking !== "replace"
+                                        ? "active"
+                                        : ""
+                                    }
+                                    onClick={() =>
+                                      updateXpRole(rule.level, {
+                                        stacking: "stack",
+                                      })
+                                    }
+                                  >
+                                    Acumular
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={
+                                      rule.stacking === "replace"
+                                        ? "active"
+                                        : ""
+                                    }
+                                    onClick={() =>
+                                      updateXpRole(rule.level, {
+                                        stacking: "replace",
+                                      })
+                                    }
+                                  >
+                                    Reemplazar
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="ghost-button xp-remove-trigger"
+                                  onClick={() =>
+                                    setRoleModal({
+                                      kind: "add",
+                                      level: rule.level,
+                                    })
+                                  }
+                                >
+                                  Dar roles extra ({rule.addRoleIds.length})
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ghost-button xp-remove-trigger"
+                                  onClick={() =>
+                                    setRoleModal({
+                                      kind: "remove",
+                                      level: rule.level,
+                                    })
+                                  }
+                                >
+                                  Quitar roles extra (
+                                  {rule.removeRoleIds.length})
+                                </button>
+                                <button
+                                  className="ghost-button danger"
+                                  onClick={() => removeXpRole(rule.level)}
+                                  type="button"
+                                >
+                                  Borrar
+                                </button>
+                              </div>
+                            ))
+                          )}
+
+                          <button
+                            className="ghost-button"
+                            onClick={addXpRole}
+                            type="button"
+                          >
+                            + Agregar rol de nivel
+                          </button>
+                        </div>
+
+                        <h4>Multiplicadores de XP por rol</h4>
+                        <div className="xp-roles">
+                          {xpConfig.roleMultipliers.length === 0 ? (
+                            <div className="empty-state">
+                              Aún no hay roles con multiplicador de XP.
+                            </div>
+                          ) : (
+                            xpConfig.roleMultipliers.map((entry) => (
+                              <div
+                                className="xp-role-row xp-multiplier-row"
+                                key={entry.roleId}
+                              >
+                                <select
+                                  className="select"
+                                  value={entry.roleId}
+                                  onChange={(event) =>
+                                    updateXpMultiplier(entry.roleId, {
+                                      roleId: event.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="">Sin rol</option>
+                                  {guildRoles.map((role) => (
+                                    <option key={role.id} value={role.id}>
+                                      {role.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <label className="xp-multiplier">
+                                  <span>Multiplicador (x)</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="0.5"
+                                    value={entry.multiplier}
+                                    onChange={(event) =>
+                                      updateXpMultiplier(entry.roleId, {
+                                        multiplier:
+                                          Number(event.target.value) || 1,
+                                      })
+                                    }
+                                  />
+                                </label>
+                                <button
+                                  className="ghost-button danger"
+                                  onClick={() =>
+                                    removeXpMultiplier(entry.roleId)
+                                  }
+                                  type="button"
+                                >
+                                  Borrar
+                                </button>
+                              </div>
+                            ))
+                          )}
+
+                          <button
+                            className="ghost-button"
+                            onClick={addXpMultiplier}
+                            type="button"
+                          >
+                            + Agregar multiplicador
+                          </button>
+                        </div>
+
+                        <div className="import-export">
+                          <button
+                            className="ghost-button"
+                            onClick={() => void handleExportXp()}
+                            type="button"
+                          >
+                            Exportar XP
+                          </button>
+                          <button
+                            className="ghost-button"
+                            onClick={() => importFileRef.current?.click()}
+                            type="button"
+                          >
+                            Importar XP
+                          </button>
+                          <input
+                            ref={importFileRef}
+                            type="file"
+                            accept="application/json,.json"
+                            hidden
+                            onChange={(event) => void handleImportXpFile(event)}
+                          />
+                          <button
+                            className="ghost-button"
+                            onClick={requestSyncRoles}
+                            type="button"
+                          >
+                            Re-sincronizar roles
+                          </button>
+                          <button
+                            className="ghost-button danger"
+                            onClick={requestResetAllXp}
+                            type="button"
+                          >
+                            Resetear niveles de todos
+                          </button>
+                        </div>
+                      </div>
+                      <div className="admin-card-footer">
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleSaveXp()}
+                          disabled={savingAction !== null}
+                        >
+                          {savingAction === "xp"
+                            ? "Guardando…"
+                            : "Guardar configuración de XP"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="admin-card">
+                    <div className="admin-card-header">
+                      <div>
+                        <h3>Registro de cambios (auditoría)</h3>
+                        <p>
+                          Quién cambió cada cosa en el Hub. Solo lectura y
+                          visible únicamente para el owner.
+                        </p>
+                      </div>
+                      <button
+                        className="icon-button"
+                        onClick={() => void refreshAuditLogs()}
+                        title="Refrescar registro"
+                        aria-label="Refrescar registro"
+                        type="button"
+                      >
+                        <RefreshIcon />
+                      </button>
+                    </div>
+                    <div className="admin-card-body">
+                      {selectedGuild?.owner ? (
+                        auditLogs.length === 0 ? (
+                          <div className="empty-state">
+                            Aún no hay cambios registrados. Las acciones del
+                            panel Admin quedan anotadas acá.
+                          </div>
+                        ) : (
+                          <div className="audit-list">
+                            {auditLogs.map((entry) => (
+                              <div className="audit-row" key={entry.id}>
+                                <span className="audit-time">
+                                  {new Date(entry.createdAt).toLocaleString()}
+                                </span>
+                                <span className="audit-actor">
+                                  {entry.actorName ?? entry.actorUserId ?? "—"}
+                                </span>
+                                <span className="audit-action">
+                                  {entry.action}
+                                </span>
+                                {entry.details ? (
+                                  <span className="audit-detail">
+                                    {entry.details}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        <div className="empty-state">
+                          Solo el owner de la guild puede ver este registro.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : activeTab === "admin" ? (
+                <div className="empty-state">
+                  {selectedGuild
+                    ? "No tienes permisos para ver el panel Admin en esta guild."
+                    : "No hay guild seleccionada o no tenes permisos para ver una."}
                 </div>
-              </div>
-            </>
-          ) : activeTab === "admin" ? (
-            <div className="empty-state">
-              {selectedGuild
-                ? "No tienes permisos para ver el panel Admin en esta guild."
-                : "No hay guild seleccionada o no tenes permisos para ver una."}
-            </div>
-          ) : activeTab === "dashboard" ? null : (
-            <div className="empty-state">
-              Módulo en preparación. Esta tab ya está lista para conectar su
-              backend específico en la próxima iteración.
-            </div>
-          )}
-        </section>
+              ) : activeTab === "dashboard" ? null : (
+                <div className="empty-state">
+                  Módulo en preparación. Esta tab ya está lista para conectar su
+                  backend específico en la próxima iteración.
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
       {roleModal != null ? (
         <div className="modal-overlay" onClick={() => setRoleModal(null)}>
