@@ -1641,7 +1641,7 @@ function App() {
                           onChange={(event) =>
                             updateRrPair(index, { emoji: event.target.value })
                           }
-                          placeholder="✅ o elegí un emoji del servidor"
+                          placeholder="Emoji del servidor"
                         />
                         <select
                           className="select"
