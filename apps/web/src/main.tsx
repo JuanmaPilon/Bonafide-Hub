@@ -351,10 +351,10 @@ function RefreshIcon() {
 
 const PODIUM_TIERS = [
   { color: "#ffd700", label: "Oro" },
-  { color: "#e8e8e8", label: "Platino" },
-  { color: "#7ff8ff", label: "Diamante" },
-  { color: "#7aa8ff", label: "Zafiro" },
-  { color: "#c39bff", label: "Amatista" },
+  { color: "#c0c0c0", label: "Plata" },
+  { color: "#cd7f32", label: "Bronce" },
+  { color: "#9aa3ad", label: "Hierro" },
+  { color: "#b87333", label: "Cobre" },
 ] as const;
 
 function HomeView({
@@ -369,7 +369,7 @@ function HomeView({
   boosters: GuildBooster[];
   colorFor: (
     level: number,
-  ) => { color: string; textShadow: string } | undefined;
+  ) => { color: string; textShadow?: string } | undefined;
   leaderboard: LeaderboardEntry[];
   loading: boolean;
   username: string | null;
@@ -906,10 +906,13 @@ function App() {
 
   function levelStyleFor(
     level: number,
-  ): { color: string; textShadow: string } | undefined {
+    glow = true,
+  ): { color: string; textShadow?: string } | undefined {
     const color = levelColorFor(level);
     return color
-      ? { color, textShadow: `0 0 6px ${color}, 0 0 14px ${color}66` }
+      ? glow
+        ? { color, textShadow: `0 0 6px ${color}, 0 0 14px ${color}66` }
+        : { color }
       : undefined;
   }
 
@@ -1670,7 +1673,10 @@ function App() {
                                   )}
                                   <span
                                     className="user-mention"
-                                    style={levelStyleFor(entry.level)}
+                                    style={levelStyleFor(
+                                      entry.level,
+                                      entry.isBooster,
+                                    )}
                                   >
                                     {entry.nickname ||
                                       entry.username ||
@@ -1681,7 +1687,10 @@ function App() {
                               <td>
                                 <span
                                   className="leaderboard-level"
-                                  style={levelStyleFor(entry.level)}
+                                  style={levelStyleFor(
+                                    entry.level,
+                                    entry.isBooster,
+                                  )}
                                 >
                                   {entry.level}
                                 </span>

@@ -898,23 +898,23 @@ a:hover {
 }
 
 .podium-place-2 {
-  border-color: rgba(232, 232, 232, 0.45);
-  box-shadow: 0 0 18px rgba(232, 232, 232, 0.12);
+  border-color: rgba(192, 192, 192, 0.45);
+  box-shadow: 0 0 18px rgba(192, 192, 192, 0.12);
 }
 
 .podium-place-3 {
-  border-color: rgba(127, 248, 255, 0.5);
-  box-shadow: 0 0 18px rgba(127, 248, 255, 0.14);
+  border-color: rgba(205, 127, 50, 0.5);
+  box-shadow: 0 0 18px rgba(205, 127, 50, 0.14);
 }
 
 .podium-place-4 {
-  border-color: rgba(122, 168, 255, 0.5);
-  box-shadow: 0 0 16px rgba(122, 168, 255, 0.12);
+  border-color: rgba(154, 163, 173, 0.5);
+  box-shadow: 0 0 16px rgba(154, 163, 173, 0.12);
 }
 
 .podium-place-5 {
-  border-color: rgba(195, 155, 255, 0.5);
-  box-shadow: 0 0 16px rgba(195, 155, 255, 0.12);
+  border-color: rgba(184, 115, 51, 0.5);
+  box-shadow: 0 0 16px rgba(184, 115, 51, 0.12);
 }
 
 .podium-rank {
@@ -931,31 +931,31 @@ a:hover {
 }
 
 .podium-place-2 .podium-rank {
-  color: #e8e8e8;
+  color: #c0c0c0;
   text-shadow:
-    0 0 8px rgba(232, 232, 232, 0.6),
-    0 0 18px rgba(232, 232, 232, 0.3);
+    0 0 8px rgba(192, 192, 192, 0.6),
+    0 0 18px rgba(192, 192, 192, 0.3);
 }
 
 .podium-place-3 .podium-rank {
-  color: #7ff8ff;
+  color: #cd7f32;
   text-shadow:
-    0 0 8px rgba(127, 248, 255, 0.65),
-    0 0 18px rgba(127, 248, 255, 0.3);
+    0 0 8px rgba(205, 127, 50, 0.65),
+    0 0 18px rgba(205, 127, 50, 0.3);
 }
 
 .podium-place-4 .podium-rank {
-  color: #7aa8ff;
+  color: #9aa3ad;
   text-shadow:
-    0 0 8px rgba(122, 168, 255, 0.65),
-    0 0 18px rgba(122, 168, 255, 0.3);
+    0 0 8px rgba(154, 163, 173, 0.65),
+    0 0 18px rgba(154, 163, 173, 0.3);
 }
 
 .podium-place-5 .podium-rank {
-  color: #c39bff;
+  color: #b87333;
   text-shadow:
-    0 0 8px rgba(195, 155, 255, 0.65),
-    0 0 18px rgba(195, 155, 255, 0.3);
+    0 0 8px rgba(184, 115, 51, 0.65),
+    0 0 18px rgba(184, 115, 51, 0.3);
 }
 
 .podium-tier {
@@ -974,19 +974,19 @@ a:hover {
 }
 
 .podium-place-2 .podium-tier {
-  color: #e8e8e8;
+  color: #c0c0c0;
 }
 
 .podium-place-3 .podium-tier {
-  color: #7ff8ff;
+  color: #cd7f32;
 }
 
 .podium-place-4 .podium-tier {
-  color: #7aa8ff;
+  color: #9aa3ad;
 }
 
 .podium-place-5 .podium-tier {
-  color: #c39bff;
+  color: #b87333;
 }
 
 .podium-avatar,

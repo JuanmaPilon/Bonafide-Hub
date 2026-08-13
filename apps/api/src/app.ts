@@ -107,6 +107,7 @@ type DiscordGuildMember = {
 
 type LeaderboardUserInfo = {
   avatarUrl: string | null;
+  isBooster: boolean;
   nickname: string | null;
   username: string;
 };
@@ -185,6 +186,7 @@ async function fetchGuildMembersForLeaderboard(
 
     result.set(member.user.id, {
       avatarUrl,
+      isBooster: Boolean(member.premium_since),
       nickname: member.nick ?? null,
       username: member.user.username,
     });
@@ -1237,6 +1239,7 @@ export function buildApp() {
       return {
         ...entry,
         avatarUrl: info?.avatarUrl ?? null,
+        isBooster: info?.isBooster ?? false,
         nickname: info?.nickname ?? null,
         username: info?.username ?? null,
       };

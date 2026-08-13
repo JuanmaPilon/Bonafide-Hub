@@ -242,6 +242,7 @@ export async function saveXpConfig(
 
 export type LeaderboardEntry = {
   avatarUrl: string | null;
+  isBooster: boolean;
   level: number;
   messageCount: number;
   nickname: string | null;
