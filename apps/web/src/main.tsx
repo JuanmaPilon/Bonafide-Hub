@@ -239,6 +239,52 @@ function ServerStats({
   );
 }
 
+type ConfirmDialog = {
+  kind: "danger" | "default";
+  message: string;
+  onConfirm: () => void;
+  title: string;
+};
+
+function ConfirmModal({
+  dialog,
+  onClose,
+}: {
+  dialog: ConfirmDialog;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <h4>{dialog.title}</h4>
+        <p className="confirm-message">{dialog.message}</p>
+        <div className="form-actions">
+          <button className="ghost-button" onClick={onClose} type="button">
+            Cancelar
+          </button>
+          <button
+            className={
+              dialog.kind === "danger" ? "danger-button" : "primary-button"
+            }
+            onClick={() => {
+              onClose();
+              dialog.onConfirm();
+            }}
+            type="button"
+          >
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [username, setUsername] = useState<string | null>(null);
   const [guilds, setGuilds] = useState<ApiGuild[]>([]);
@@ -258,6 +304,9 @@ function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
+    null,
+  );
   const [loadingSession, setLoadingSession] = useState(false);
   const [loadingGuildData, setLoadingGuildData] = useState(false);
   const loading = loadingSession || loadingGuildData;
@@ -448,36 +497,53 @@ function App() {
       return;
     }
 
-    const confirmed = window.confirm(
-      `¿Importar ${entries.length} perfil/es de XP? Se reemplazarán los niveles/XP actuales de esos usuarios.`,
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    setLoadingGuildData(true);
-    try {
-      const result = await importXpData(selectedGuildId, entries);
-      const nextLeaderboard = await getLeaderboard(selectedGuildId);
-      setLeaderboard(nextLeaderboard);
-      pushToast(`${result.imported} perfiles de XP importados.`, "success");
-    } catch (error) {
-      void error;
-      pushToast("No se pudo importar el XP.", "error");
-    } finally {
-      setLoadingGuildData(false);
-    }
+    setConfirmDialog({
+      kind: "default",
+      title: "Importar XP",
+      message: `¿Importar ${entries.length} perfil/es de XP? Se reemplazarán los niveles/XP actuales de esos usuarios.`,
+      onConfirm: () => {
+        void (async () => {
+          if (!selectedGuildId) {
+            return;
+          }
+          setLoadingGuildData(true);
+          try {
+            const result = await importXpData(selectedGuildId, entries);
+            const nextLeaderboard = await getLeaderboard(selectedGuildId);
+            setLeaderboard(nextLeaderboard);
+            pushToast(
+              `${result.imported} perfiles de XP importados.`,
+              "success",
+            );
+          } catch (error) {
+            void error;
+            pushToast("No se pudo importar el XP.", "error");
+          } finally {
+            setLoadingGuildData(false);
+          }
+        })();
+      },
+    });
   }
 
-  async function handleResetAllXp(): Promise<void> {
+  function requestResetAllXp(): void {
     if (!selectedGuildId) {
       return;
     }
 
-    const confirmed = window.confirm(
-      "⚠️ ¡CUIDADO! Vas a eliminar los niveles y XP de TODOS los miembros del servidor. Esta acción no se puede deshacer. ¿Continuar?",
-    );
-    if (!confirmed) {
+    setConfirmDialog({
+      kind: "danger",
+      title: "Resetear niveles de todos",
+      message:
+        "⚠️ ¡CUIDADO! Vas a eliminar los niveles y XP de TODOS los miembros del servidor. Esta acción no se puede deshacer.",
+      onConfirm: () => {
+        void performResetAllXp();
+      },
+    });
+  }
+
+  async function performResetAllXp(): Promise<void> {
+    if (!selectedGuildId) {
       return;
     }
 
@@ -498,15 +564,24 @@ function App() {
     }
   }
 
-  async function handleSyncRoles(): Promise<void> {
+  function requestSyncRoles(): void {
     if (!selectedGuildId) {
       return;
     }
 
-    const confirmed = window.confirm(
-      "¿Re-sincronizar roles y prefijos de nombre de todos los miembros según su nivel actual? El bot lo procesará en unos segundos.",
-    );
-    if (!confirmed) {
+    setConfirmDialog({
+      kind: "default",
+      title: "Re-sincronizar roles",
+      message:
+        "¿Re-sincronizar roles y prefijos de nombre de todos los miembros según su nivel actual? El bot lo procesará en unos segundos.",
+      onConfirm: () => {
+        void performSyncRoles();
+      },
+    });
+  }
+
+  async function performSyncRoles(): Promise<void> {
+    if (!selectedGuildId) {
       return;
     }
 
@@ -1394,18 +1469,18 @@ function App() {
                       onChange={(event) => void handleImportXpFile(event)}
                     />
                     <button
-                      className="ghost-button danger"
-                      onClick={() => void handleResetAllXp()}
-                      type="button"
-                    >
-                      Resetear niveles de todos
-                    </button>
-                    <button
                       className="ghost-button"
-                      onClick={() => void handleSyncRoles()}
+                      onClick={requestSyncRoles}
                       type="button"
                     >
                       Re-sincronizar roles
+                    </button>
+                    <button
+                      className="ghost-button danger"
+                      onClick={requestResetAllXp}
+                      type="button"
+                    >
+                      Resetear niveles de todos
                     </button>
                   </div>
 
@@ -1493,6 +1568,13 @@ function App() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {confirmDialog ? (
+        <ConfirmModal
+          dialog={confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+        />
       ) : null}
     </div>
   );

@@ -443,6 +443,23 @@ a:hover {
   margin: 0;
 }
 
+.confirm-message {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.danger-button {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 11px 18px;
+  background: linear-gradient(135deg, #ff6b6b, #e63946);
+  color: #fff;
+  font-weight: 700;
+}
+
 .modal-role-list {
   display: grid;
   gap: 8px;
