@@ -1146,7 +1146,6 @@ function App() {
       setVoiceChannels([]);
       setTextChannels([]);
       setGuildRoles([]);
-      setXpConfig(null);
       setReactionPanels([]);
       setGuildEmojis([]);
       setRrJobs([]);
@@ -1159,12 +1158,11 @@ function App() {
       getGuildVoiceChannels(selectedGuildId),
       getGuildTextChannels(selectedGuildId),
       getGuildRoles(selectedGuildId),
-      getXpConfig(selectedGuildId),
       listReactionRolePanels(selectedGuildId),
       getGuildEmojis(selectedGuildId),
       listReactionRoleJobs(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, xp, panels, emojis, jobs]) => {
+      .then(([channels, textCh, roles, panels, emojis, jobs]) => {
         if (cancelled) {
           return;
         }
@@ -1172,7 +1170,6 @@ function App() {
         setVoiceChannels(channels);
         setTextChannels(textCh);
         setGuildRoles(roles);
-        setXpConfig(xp);
         setReactionPanels(panels);
         setGuildEmojis(emojis);
         setRrJobs(jobs);
@@ -1183,7 +1180,6 @@ function App() {
           setVoiceChannels([]);
           setTextChannels([]);
           setGuildRoles([]);
-          setXpConfig(null);
           setReactionPanels([]);
           setGuildEmojis([]);
           setRrJobs([]);
@@ -1210,6 +1206,33 @@ function App() {
           }
         });
     }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
+  useEffect(() => {
+    if (
+      !selectedGuildId ||
+      (activeTab !== "admin" && activeTab !== "dashboard")
+    ) {
+      setXpConfig(null);
+      return;
+    }
+
+    let cancelled = false;
+    getXpConfig(selectedGuildId)
+      .then((xp) => {
+        if (!cancelled) {
+          setXpConfig(xp);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setXpConfig(null);
+        }
+      });
 
     return () => {
       cancelled = true;
