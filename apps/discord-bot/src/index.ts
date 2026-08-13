@@ -536,6 +536,12 @@ const LEVEL_UP_TEMPLATES = [
   "☕ **Pausa para celebrar.**\n<@{memberId}> llegó al nivel {level}.\nEl te de Karpindomo espera por el festejo.",
   "🪙 **Moneda de Karpindomo:**\n<@{memberId}> alcanzó el nivel {level}.\nSiga acumulando, Senior.",
   "🛡️ **Guardianes del rango.**\n<@{memberId}> superó el nivel {level}.\nKarpindomo le da la bienvenida al club.",
+  "🎖️ **Ascenso de rango.**\n<@{memberId}> llegó al rango {level}.\nKarpindomo lo saluda con honor.",
+  "🏅 **Nuevo rango desbloqueado.**\n<@{memberId}> alcanzó el rango {level}.\nEl mayordomo capincho aplaude.",
+  "📯 **Toque de corneta.**\n<@{memberId}> asciende al rango {level}.\nKarpindomo rinde tributo.",
+  "🦆 **El carpincho aprueba.**\n<@{memberId}> subió de rango: {level}.\nSiga elevando el estándar.",
+  "🔔 **Campanadas de Karpindomo.**\n<@{memberId}> alcanzó el rango {level}.\nSe lo festeja como corresponde.",
+  "🫖 **Asiento reservado.**\n<@{memberId}> ganó el rango {level}.\nKarpindomo ya le guardó lugar en la mesa.",
 ] as const;
 
 let lastLevelUpTemplateIndex: number | undefined;
@@ -554,9 +560,24 @@ function buildLevelUpMessage(memberId: string, level: number): string {
 async function announceLevelUp(input: {
   guildId: string;
   level: number;
+  previousLevel: number;
   userId: string;
 }): Promise<void> {
   try {
+    const xpConfig = await fetchRemoteXpConfig(input.guildId);
+    const crossedRank = (xpConfig.levelRoles ?? [])
+      .filter(
+        (rule) =>
+          rule.roleId &&
+          rule.level > input.previousLevel &&
+          rule.level <= input.level,
+      )
+      .sort((left, right) => right.level - left.level)[0];
+
+    if (!crossedRank) {
+      return;
+    }
+
     const guild = await client.guilds.fetch(input.guildId).catch(() => null);
     if (!guild) {
       return;
@@ -566,7 +587,7 @@ async function announceLevelUp(input: {
     const channelId = guildConfig.memberLogChannelId;
     if (!channelId) {
       console.log(
-        `[discord-bot] <@${input.userId}> subió al nivel ${input.level} (sin canal de Karpindomo configurado).`,
+        `[discord-bot] <@${input.userId}> subió al rango ${crossedRank.level} (sin canal de Karpindomo configurado).`,
       );
       return;
     }
@@ -576,7 +597,7 @@ async function announceLevelUp(input: {
       return;
     }
 
-    await channel.send(buildLevelUpMessage(input.userId, input.level));
+    await channel.send(buildLevelUpMessage(input.userId, crossedRank.level));
   } catch (error: unknown) {
     console.warn(
       `[discord-bot] Failed to announce level up: ${getErrorMessage(error)}`,
@@ -1790,6 +1811,7 @@ async function awardXpForVoiceMinutes(input: {
       void announceLevelUp({
         guildId: input.guildId,
         level: result.level,
+        previousLevel: result.previousLevel,
         userId: input.userId,
       });
     }
@@ -2119,6 +2141,7 @@ async function awardXpForMessage(
       void announceLevelUp({
         guildId: message.guildId,
         level: result.level,
+        previousLevel: result.previousLevel,
         userId: message.author.id,
       });
     }
