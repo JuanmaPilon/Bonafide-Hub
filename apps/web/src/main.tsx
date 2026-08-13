@@ -5,6 +5,7 @@ import {
   deleteReactionRolePanel,
   exportXpData,
   getGuildConfig,
+  getGuildEmojis,
   getGuildRoles,
   getGuilds,
   getGuildTextChannels,
@@ -21,9 +22,11 @@ import {
   resetAllXp,
   saveGuildConfig,
   saveXpConfig,
+  updateReactionRolePanel,
   type ApiGuild,
   type GuildChannel,
   type GuildConfig,
+  type GuildEmoji,
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
@@ -312,6 +315,10 @@ function App() {
   const [rrPairs, setRrPairs] = useState<ReactionRolePairInput[]>([
     { emoji: "", roleId: "" },
   ]);
+  const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
+  const [editingPanel, setEditingPanel] = useState<ReactionRolePanel | null>(
+    null,
+  );
   const [roleModal, setRoleModal] = useState<{
     kind: "add" | "remove";
     level: number;
@@ -639,7 +646,43 @@ function App() {
     );
   }
 
-  async function handleCreateReactionPanel(): Promise<void> {
+  function emojiKeyToEditable(emojiKey: string): string {
+    if (emojiKey.startsWith("custom:")) {
+      return emojiKey.slice("custom:".length);
+    }
+    if (emojiKey.startsWith("unicode:")) {
+      return emojiKey.slice("unicode:".length);
+    }
+    return emojiKey;
+  }
+
+  function startEditReactionPanel(panel: ReactionRolePanel): void {
+    setEditingPanel(panel);
+    setRrChannelId(panel.channelId ?? "");
+    setRrTitle(panel.title ?? "");
+    setRrDescription(panel.description ?? "");
+    setRrMode(
+      panel.mode === "unique" || panel.mode === "additive"
+        ? panel.mode
+        : "multiple",
+    );
+    setRrPairs(
+      panel.rules.map((rule) => ({
+        emoji: emojiKeyToEditable(rule.emojiKey),
+        roleId: rule.roleId,
+      })),
+    );
+  }
+
+  function cancelEditReactionPanel(): void {
+    setEditingPanel(null);
+    setRrChannelId("");
+    setRrTitle("");
+    setRrDescription("");
+    setRrPairs([{ emoji: "", roleId: "" }]);
+  }
+
+  async function handleSaveReactionPanel(): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
@@ -656,26 +699,43 @@ function App() {
       return;
     }
 
+    const input = {
+      channelId: rrChannelId,
+      description: rrDescription.trim() || undefined,
+      mode: rrMode,
+      pairs: validPairs,
+      title: rrTitle.trim() || undefined,
+    };
+
     setLoadingGuildData(true);
     try {
-      await createReactionRolePanel(selectedGuildId, {
-        channelId: rrChannelId,
-        description: rrDescription.trim() || undefined,
-        mode: rrMode,
-        pairs: validPairs,
-        title: rrTitle.trim() || undefined,
-      });
+      if (editingPanel) {
+        await updateReactionRolePanel(
+          selectedGuildId,
+          editingPanel.messageId,
+          input,
+        );
+        pushToast(
+          "Panel actualizado. El bot lo editará en unos segundos.",
+          "success",
+        );
+      } else {
+        await createReactionRolePanel(selectedGuildId, input);
+        pushToast(
+          "Panel encolado. El bot lo creará en unos segundos.",
+          "success",
+        );
+      }
+
+      setEditingPanel(null);
+      setRrChannelId("");
       setRrTitle("");
       setRrDescription("");
       setRrPairs([{ emoji: "", roleId: "" }]);
-      pushToast(
-        "Panel encolado. El bot lo creará en unos segundos.",
-        "success",
-      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Error desconocido";
-      pushToast(`No se pudo crear el panel: ${message}`, "error");
+      pushToast(`No se pudo guardar el panel: ${message}`, "error");
     } finally {
       setLoadingGuildData(false);
     }
@@ -928,6 +988,7 @@ function App() {
       setGuildRoles([]);
       setXpConfig(null);
       setReactionPanels([]);
+      setGuildEmojis([]);
       return;
     }
 
@@ -938,8 +999,9 @@ function App() {
       getGuildRoles(selectedGuildId),
       getXpConfig(selectedGuildId),
       listReactionRolePanels(selectedGuildId),
+      getGuildEmojis(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, xp, panels]) => {
+      .then(([channels, textCh, roles, xp, panels, emojis]) => {
         if (cancelled) {
           return;
         }
@@ -949,6 +1011,7 @@ function App() {
         setGuildRoles(roles);
         setXpConfig(xp);
         setReactionPanels(panels);
+        setGuildEmojis(emojis);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -958,6 +1021,7 @@ function App() {
           setGuildRoles([]);
           setXpConfig(null);
           setReactionPanels([]);
+          setGuildEmojis([]);
           pushToast(
             "No se pudieron cargar los datos del panel Admin.",
             "error",
@@ -1188,6 +1252,9 @@ function App() {
 
           {activeTab === "admin" && selectedGuild && adminEnabled ? (
             <>
+              <h3 className="admin-section-title">
+                Configuración general del servidor
+              </h3>
               <div className="form-grid">
                 <label>
                   <span>Canal principal de Karpindomo</span>
@@ -1253,20 +1320,6 @@ function App() {
                   </select>
                 </label>
 
-                <label>
-                  <span>Reaction roles channel ID</span>
-                  <input
-                    value={config.reactionRolesChannelId ?? ""}
-                    onChange={(event) =>
-                      setConfig((current) => ({
-                        ...current,
-                        reactionRolesChannelId: event.target.value || undefined,
-                      }))
-                    }
-                    placeholder="Canal de roles"
-                  />
-                </label>
-
                 <div className="form-actions">
                   <button
                     className="primary-button"
@@ -1288,7 +1341,7 @@ function App() {
                       value={rrChannelId}
                       onChange={(event) => setRrChannelId(event.target.value)}
                     >
-                      <option value="">Elegí un canal</option>
+                      <option value="">Sin canal configurado</option>
                       {textChannels.map((channel) => (
                         <option key={channel.id} value={channel.id}>
                           {channel.name}
@@ -1342,11 +1395,12 @@ function App() {
                     <div className="rr-pair" key={index}>
                       <input
                         type="text"
+                        list="guild-emojis"
                         value={pair.emoji}
                         onChange={(event) =>
                           updateRrPair(index, { emoji: event.target.value })
                         }
-                        placeholder="Emoji (✅ o <:name:id>)"
+                        placeholder="✅ o elegí un emoji del servidor"
                       />
                       <select
                         className="select"
@@ -1355,7 +1409,7 @@ function App() {
                           updateRrPair(index, { roleId: event.target.value })
                         }
                       >
-                        <option value="">Elegí rol</option>
+                        <option value="">Adjuntar rol</option>
                         {guildRoles.map((role) => (
                           <option key={role.id} value={role.id}>
                             {role.name}
@@ -1380,14 +1434,39 @@ function App() {
                   </button>
                 </div>
 
+                <datalist id="guild-emojis">
+                  {guildEmojis.map((emoji) => (
+                    <option
+                      key={emoji.id}
+                      value={
+                        emoji.animated
+                          ? `<a:${emoji.name}:${emoji.id}>`
+                          : `<:${emoji.name}:${emoji.id}>`
+                      }
+                    >
+                      {emoji.name}
+                    </option>
+                  ))}
+                </datalist>
+
                 <div className="form-actions">
+                  {editingPanel ? (
+                    <button
+                      className="ghost-button"
+                      onClick={cancelEditReactionPanel}
+                      disabled={loading}
+                      type="button"
+                    >
+                      Cancelar edición
+                    </button>
+                  ) : null}
                   <button
                     className="primary-button"
-                    onClick={() => void handleCreateReactionPanel()}
+                    onClick={() => void handleSaveReactionPanel()}
                     disabled={loading}
                     type="button"
                   >
-                    Crear panel
+                    {editingPanel ? "Guardar cambios" : "Crear panel"}
                   </button>
                 </div>
 
@@ -1398,8 +1477,8 @@ function App() {
                       <div className="rr-panel-card" key={panel.messageId}>
                         <div className="rr-panel-head">
                           <strong>
-                            Canal: {panel.channelId ?? "?"} · msg:{" "}
-                            {panel.messageId}
+                            {panel.title ? `${panel.title} · ` : ""}Canal:{" "}
+                            {panel.channelId ?? "?"} · msg: {panel.messageId}
                           </strong>
                           <span className="rr-mode">Modo: {panel.mode}</span>
                         </div>
@@ -1410,13 +1489,22 @@ function App() {
                             </span>
                           ))}
                         </div>
-                        <button
-                          className="ghost-button danger"
-                          onClick={() => requestDeleteReactionPanel(panel)}
-                          type="button"
-                        >
-                          Eliminar panel
-                        </button>
+                        <div className="rr-panel-actions">
+                          <button
+                            className="ghost-button"
+                            onClick={() => startEditReactionPanel(panel)}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="ghost-button danger"
+                            onClick={() => requestDeleteReactionPanel(panel)}
+                            type="button"
+                          >
+                            Eliminar panel
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -419,11 +419,18 @@ export function buildApp() {
       const body = (request.body ?? {}) as {
         error?: string;
         messageId?: string;
+        panel?: {
+          channelId?: string;
+          description?: string;
+          mode?: string;
+          title?: string;
+        };
       };
 
       await completeReactionRoleJob(params.guildId, params.jobId, {
         error: body.error,
         messageId: body.messageId,
+        panel: body.panel,
       });
 
       return {
@@ -888,6 +895,63 @@ export function buildApp() {
     };
   });
 
+  app.get("/guilds/:guildId/emojis", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (!env.DISCORD_BOT_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "DISCORD_BOT_TOKEN is not configured",
+      });
+    }
+
+    const emojisResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${params.guildId}/emojis`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    );
+
+    if (!emojisResponse.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: `Discord API returned ${emojisResponse.status}`,
+      });
+    }
+
+    const emojis = (await emojisResponse.json()) as Array<{
+      animated?: boolean;
+      id: string;
+      name: string;
+    }>;
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      emojis: emojis
+        .map((emoji) => ({
+          animated: Boolean(emoji.animated),
+          id: emoji.id,
+          name: emoji.name,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    };
+  });
+
   app.get("/guilds/:guildId/roles", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -1280,6 +1344,72 @@ export function buildApp() {
       return {
         ok: true,
         guildId: params.guildId,
+      };
+    },
+  );
+
+  app.patch(
+    "/guilds/:guildId/reaction-roles/panels/:messageId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        messageId?: string;
+      };
+      if (!params.guildId || !params.messageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const body = (request.body ?? {}) as {
+        channelId?: string;
+        description?: string;
+        mode?: string;
+        pairs?: ReactionRolePair[];
+        title?: string;
+      };
+      const channelId = body.channelId?.trim();
+      const pairs = Array.isArray(body.pairs)
+        ? body.pairs
+            .map((pair) => ({
+              emoji: String(pair.emoji ?? "").trim(),
+              roleId: String(pair.roleId ?? "").trim(),
+            }))
+            .filter((pair) => pair.emoji && pair.roleId)
+        : [];
+
+      if (pairs.length === 0) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Debes agregar al menos un par emoji + rol",
+        });
+      }
+
+      const result = await createReactionRoleJob({
+        action: "update",
+        channelId,
+        description: body.description?.trim() || undefined,
+        guildId: params.guildId,
+        messageId: params.messageId,
+        mode:
+          body.mode === "unique" || body.mode === "additive"
+            ? body.mode
+            : "multiple",
+        rules: pairs,
+        title: body.title?.trim() || undefined,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        ...result,
       };
     },
   );

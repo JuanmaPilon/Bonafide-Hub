@@ -317,9 +317,11 @@ export type ReactionRolePairInput = {
 
 export type ReactionRolePanel = {
   channelId: string | null;
+  description?: string;
   messageId: string;
   mode: string;
   rules: Array<{ emojiKey: string; roleId: string }>;
+  title?: string;
 };
 
 export async function createReactionRolePanel(
@@ -367,6 +369,45 @@ export async function deleteReactionRolePanel(
       body: JSON.stringify({}),
     },
   );
+}
+
+export type GuildEmoji = {
+  animated: boolean;
+  id: string;
+  name: string;
+};
+
+export async function getGuildEmojis(guildId: string): Promise<GuildEmoji[]> {
+  const data = await requestJson<{ emojis: GuildEmoji[] }>(
+    `/guilds/${guildId}/emojis`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.emojis;
+}
+
+export async function updateReactionRolePanel(
+  guildId: string,
+  messageId: string,
+  input: {
+    channelId?: string;
+    description?: string;
+    mode?: string;
+    pairs: ReactionRolePairInput[];
+    title?: string;
+  },
+): Promise<{ jobId: string }> {
+  const data = await requestJson<{ jobId: string }>(
+    `/guilds/${guildId}/reaction-roles/panels/${encodeURIComponent(messageId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return data;
 }
 
 export async function saveGuildConfig(

@@ -316,6 +316,12 @@ function hasDeleteMethod(
   return isObjectRecord(value) && typeof value.delete === "function";
 }
 
+function hasEditMethod(
+  value: unknown,
+): value is { edit: (content: string) => Promise<unknown> } {
+  return isObjectRecord(value) && typeof value.edit === "function";
+}
+
 function hasRawPosition(value: unknown): value is { rawPosition: number } {
   return isObjectRecord(value) && typeof value.rawPosition === "number";
 }
@@ -1062,6 +1068,110 @@ async function processReactionRoleJob(
 
       await completeReactionRoleJob(job.guildId, job.id, {
         messageId: sentMessage.id,
+        panel: {
+          channelId: job.channelId ?? undefined,
+          description: job.description ?? undefined,
+          mode: job.mode,
+          title: job.title ?? undefined,
+        },
+      });
+      return;
+    }
+
+    if (job.action === "update") {
+      const existingRules = await listReactionRoleRules(job.guildId);
+      const channelId =
+        job.channelId ??
+        existingRules.find((rule) => rule.messageId === job.messageId)
+          ?.channelId ??
+        null;
+
+      if (!job.messageId || !channelId) {
+        await completeReactionRoleJob(job.guildId, job.id, {
+          error: "No se pudo resolver el mensaje del panel",
+        });
+        return;
+      }
+
+      const channel = await guild.channels.fetch(channelId).catch(() => null);
+      if (!isReactionRoleTextChannelLike(channel)) {
+        await completeReactionRoleJob(job.guildId, job.id, {
+          error: "Canal invalido",
+        });
+        return;
+      }
+
+      const message = await channel.messages
+        .fetch(job.messageId)
+        .catch(() => null);
+      if (!message) {
+        await completeReactionRoleJob(job.guildId, job.id, {
+          error: "No se encontró el mensaje del panel",
+        });
+        return;
+      }
+
+      if (hasEditMethod(message)) {
+        await message
+          .edit(
+            buildReactionPanelText({
+              description: job.description,
+              pairs: job.rules,
+              title: job.title,
+            }),
+          )
+          .catch(() => undefined);
+      }
+
+      if (isReactableMessageLike(message)) {
+        const reactions = (
+          message as {
+            reactions?: {
+              cache?: Map<unknown, { remove: () => Promise<unknown> }>;
+            };
+          }
+        ).reactions?.cache;
+
+        if (reactions) {
+          for (const reaction of Array.from(reactions.values())) {
+            await reaction.remove().catch(() => undefined);
+          }
+        }
+
+        for (const pair of job.rules) {
+          const emojiKey = normalizeEmojiKey(pair.emoji);
+          if (!emojiKey) {
+            continue;
+          }
+          await message
+            .react(parseEmojiForReaction(pair.emoji))
+            .catch(() => undefined);
+        }
+      }
+
+      await removeReactionRoleRulesForMessage(job.guildId, job.messageId);
+      for (const pair of job.rules) {
+        const emojiKey = normalizeEmojiKey(pair.emoji);
+        if (!emojiKey) {
+          continue;
+        }
+        await upsertReactionRoleRule(job.guildId, {
+          channelId: channelId,
+          emojiKey,
+          messageId: job.messageId,
+          mode: (job.mode as ReactionRoleMode) || "multiple",
+          roleId: pair.roleId,
+        });
+      }
+
+      await completeReactionRoleJob(job.guildId, job.id, {
+        messageId: job.messageId,
+        panel: {
+          channelId,
+          description: job.description ?? undefined,
+          mode: job.mode,
+          title: job.title ?? undefined,
+        },
       });
       return;
     }

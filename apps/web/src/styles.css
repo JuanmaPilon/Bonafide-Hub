@@ -460,6 +460,11 @@ a:hover {
   font-weight: 700;
 }
 
+.admin-section-title {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
 .reaction-roles-section {
   margin-top: 24px;
   border-top: 1px solid var(--panel-border);
@@ -468,6 +473,12 @@ a:hover {
 
 .reaction-roles-section h3 {
   margin: 0 0 14px;
+}
+
+.rr-panel-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .rr-pairs {

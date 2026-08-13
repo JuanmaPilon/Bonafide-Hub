@@ -59,6 +59,20 @@ model ReactionRolePanelJob {
   @@map("reaction_role_panel_jobs")
 }
 
+model ReactionRolePanel {
+  guildId     String
+  messageId   String
+  channelId   String?
+  title       String?
+  description String?
+  mode        String   @default("multiple")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@id([guildId, messageId])
+  @@map("reaction_role_panels")
+}
+
 model DiscordSession {
   id        String   @id
   createdAt DateTime @default(now())

@@ -6,7 +6,7 @@ export type ReactionRolePair = {
 };
 
 export async function createReactionRoleJob(input: {
-  action: "create" | "delete";
+  action: "create" | "delete" | "update";
   channelId?: string;
   description?: string;
   guildId: string;
@@ -64,11 +64,70 @@ export async function listPendingReactionRoleJobs(
   }));
 }
 
+export async function upsertReactionRolePanel(
+  guildId: string,
+  messageId: string,
+  panel: {
+    channelId?: string;
+    description?: string;
+    mode?: string;
+    title?: string;
+  },
+): Promise<void> {
+  await prisma.reactionRolePanel.upsert({
+    where: { guildId_messageId: { guildId, messageId } },
+    update: {
+      channelId: panel.channelId,
+      description: panel.description,
+      mode: panel.mode ?? "multiple",
+      title: panel.title,
+    },
+    create: {
+      channelId: panel.channelId,
+      description: panel.description,
+      guildId,
+      messageId,
+      mode: panel.mode ?? "multiple",
+      title: panel.title,
+    },
+  });
+}
+
+export async function deleteReactionRolePanel(
+  guildId: string,
+  messageId: string,
+): Promise<void> {
+  await prisma.reactionRolePanel.deleteMany({
+    where: { guildId, messageId },
+  });
+}
+
 export async function completeReactionRoleJob(
   guildId: string,
   jobId: string,
-  input: { error?: string; messageId?: string },
+  input: {
+    error?: string;
+    messageId?: string;
+    panel?: {
+      channelId?: string;
+      description?: string;
+      mode?: string;
+      title?: string;
+    };
+  },
 ): Promise<void> {
+  const job = await prisma.reactionRolePanelJob.findUnique({
+    where: { id: jobId },
+  });
+
+  if (job && job.action === "delete" && job.messageId) {
+    await deleteReactionRolePanel(guildId, job.messageId);
+  }
+
+  if (input.panel && input.messageId) {
+    await upsertReactionRolePanel(guildId, input.messageId, input.panel);
+  }
+
   await prisma.reactionRolePanelJob.update({
     where: { id: jobId },
     data: {
@@ -81,28 +140,43 @@ export async function completeReactionRoleJob(
 
 export type ReactionRolePanel = {
   channelId: string | null;
+  description?: string;
   messageId: string;
   mode: string;
   rules: Array<{ emojiKey: string; roleId: string }>;
+  title?: string;
 };
 
 export async function listReactionRolePanels(
   guildId: string,
 ): Promise<ReactionRolePanel[]> {
-  const rules = await prisma.reactionRoleRule.findMany({
-    where: { guildId },
-    orderBy: [{ messageId: "asc" }, { emojiKey: "asc" }],
-  });
+  const [rules, panels] = await Promise.all([
+    prisma.reactionRoleRule.findMany({
+      where: { guildId },
+      orderBy: [{ messageId: "asc" }, { emojiKey: "asc" }],
+    }),
+    prisma.reactionRolePanel.findMany({ where: { guildId } }),
+  ]);
 
-  const grouped = new Map<string, ReactionRolePanel>();
+  const panelByMessage = new Map<string, ReactionRolePanel>();
+
+  for (const panel of panels) {
+    panelByMessage.set(panel.messageId, {
+      channelId: panel.channelId,
+      description: panel.description ?? undefined,
+      messageId: panel.messageId,
+      mode: panel.mode,
+      rules: [],
+      title: panel.title ?? undefined,
+    });
+  }
 
   for (const rule of rules) {
-    const key = `${rule.messageId}:${rule.channelId ?? ""}`;
-    const existing = grouped.get(key);
+    const existing = panelByMessage.get(rule.messageId);
     if (existing) {
       existing.rules.push({ emojiKey: rule.emojiKey, roleId: rule.roleId });
     } else {
-      grouped.set(key, {
+      panelByMessage.set(rule.messageId, {
         channelId: rule.channelId,
         messageId: rule.messageId,
         mode: rule.mode ?? "multiple",
@@ -111,5 +185,5 @@ export async function listReactionRolePanels(
     }
   }
 
-  return Array.from(grouped.values());
+  return Array.from(panelByMessage.values());
 }

@@ -65,7 +65,16 @@ export async function fetchPendingReactionRoleJobs(
 export async function completeReactionRoleJob(
   guildId: string,
   jobId: string,
-  input: { error?: string; messageId?: string },
+  input: {
+    error?: string;
+    messageId?: string;
+    panel?: {
+      channelId?: string;
+      description?: string;
+      mode?: string;
+      title?: string;
+    };
+  },
 ): Promise<void> {
   if (!remoteApiBaseUrl || !remoteApiToken) {
     return;
