@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  createReactionRolePanel,
+  deleteReactionRolePanel,
   exportXpData,
   getGuildConfig,
   getGuildRoles,
@@ -12,6 +14,7 @@ import {
   getMe,
   getXpConfig,
   importXpData,
+  listReactionRolePanels,
   loginUrl,
   logout,
   requestXpSync,
@@ -24,6 +27,8 @@ import {
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
+  type ReactionRolePairInput,
+  type ReactionRolePanel,
   type XpConfig,
   type XpImportEntry,
   type XpRoleMultiplier,
@@ -297,6 +302,16 @@ function App() {
   const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
+  const [reactionPanels, setReactionPanels] = useState<ReactionRolePanel[]>([]);
+  const [rrChannelId, setRrChannelId] = useState("");
+  const [rrTitle, setRrTitle] = useState("");
+  const [rrDescription, setRrDescription] = useState("");
+  const [rrMode, setRrMode] = useState<"multiple" | "unique" | "additive">(
+    "multiple",
+  );
+  const [rrPairs, setRrPairs] = useState<ReactionRolePairInput[]>([
+    { emoji: "", roleId: "" },
+  ]);
   const [roleModal, setRoleModal] = useState<{
     kind: "add" | "remove";
     level: number;
@@ -601,6 +616,109 @@ function App() {
     }
   }
 
+  function updateRrPair(
+    index: number,
+    patch: Partial<ReactionRolePairInput>,
+  ): void {
+    setRrPairs((current) =>
+      current.map((pair, pairIndex) =>
+        pairIndex === index ? { ...pair, ...patch } : pair,
+      ),
+    );
+  }
+
+  function addRrPair(): void {
+    setRrPairs((current) => [...current, { emoji: "", roleId: "" }]);
+  }
+
+  function removeRrPair(index: number): void {
+    setRrPairs((current) =>
+      current.length === 1
+        ? current
+        : current.filter((_, pairIndex) => pairIndex !== index),
+    );
+  }
+
+  async function handleCreateReactionPanel(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    const validPairs = rrPairs.filter(
+      (pair) => pair.emoji.trim() && pair.roleId,
+    );
+    if (!rrChannelId) {
+      pushToast("Elegí un canal de texto.", "error");
+      return;
+    }
+    if (validPairs.length === 0) {
+      pushToast("Completá al menos un par emoji + rol.", "error");
+      return;
+    }
+
+    setLoadingGuildData(true);
+    try {
+      await createReactionRolePanel(selectedGuildId, {
+        channelId: rrChannelId,
+        description: rrDescription.trim() || undefined,
+        mode: rrMode,
+        pairs: validPairs,
+        title: rrTitle.trim() || undefined,
+      });
+      setRrTitle("");
+      setRrDescription("");
+      setRrPairs([{ emoji: "", roleId: "" }]);
+      pushToast(
+        "Panel encolado. El bot lo creará en unos segundos.",
+        "success",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error desconocido";
+      pushToast(`No se pudo crear el panel: ${message}`, "error");
+    } finally {
+      setLoadingGuildData(false);
+    }
+  }
+
+  function requestDeleteReactionPanel(panel: ReactionRolePanel): void {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setConfirmDialog({
+      kind: "danger",
+      title: "Eliminar panel de reaction roles",
+      message:
+        "Se va a eliminar este panel: se borra el mensaje en Discord y sus reglas.",
+      onConfirm: () => {
+        void performDeleteReactionPanel(panel);
+      },
+    });
+  }
+
+  async function performDeleteReactionPanel(
+    panel: ReactionRolePanel,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setLoadingGuildData(true);
+    try {
+      await deleteReactionRolePanel(selectedGuildId, panel.messageId);
+      const nextPanels = await listReactionRolePanels(selectedGuildId);
+      setReactionPanels(nextPanels);
+      pushToast("Panel eliminado (el bot borra el mensaje).", "success");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error desconocido";
+      pushToast(`No se pudo eliminar el panel: ${message}`, "error");
+    } finally {
+      setLoadingGuildData(false);
+    }
+  }
+
   function updateXpRole(level: number, patch: Partial<XpRoleRule>): void {
     setXpConfig((current) => {
       if (!current) {
@@ -809,6 +927,7 @@ function App() {
       setTextChannels([]);
       setGuildRoles([]);
       setXpConfig(null);
+      setReactionPanels([]);
       return;
     }
 
@@ -818,8 +937,9 @@ function App() {
       getGuildTextChannels(selectedGuildId),
       getGuildRoles(selectedGuildId),
       getXpConfig(selectedGuildId),
+      listReactionRolePanels(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, xp]) => {
+      .then(([channels, textCh, roles, xp, panels]) => {
         if (cancelled) {
           return;
         }
@@ -828,6 +948,7 @@ function App() {
         setTextChannels(textCh);
         setGuildRoles(roles);
         setXpConfig(xp);
+        setReactionPanels(panels);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -836,6 +957,7 @@ function App() {
           setTextChannels([]);
           setGuildRoles([]);
           setXpConfig(null);
+          setReactionPanels([]);
           pushToast(
             "No se pudieron cargar los datos del panel Admin.",
             "error",
@@ -1154,6 +1276,151 @@ function App() {
                     Guardar cambios
                   </button>
                 </div>
+              </div>
+
+              <div className="reaction-roles-section">
+                <h3>Reaction Roles</h3>
+                <div className="form-grid">
+                  <label>
+                    <span>Canal de texto</span>
+                    <select
+                      className="select"
+                      value={rrChannelId}
+                      onChange={(event) => setRrChannelId(event.target.value)}
+                    >
+                      <option value="">Elegí un canal</option>
+                      {textChannels.map((channel) => (
+                        <option key={channel.id} value={channel.id}>
+                          {channel.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Título del panel</span>
+                    <input
+                      value={rrTitle}
+                      onChange={(event) => setRrTitle(event.target.value)}
+                      placeholder="Rangos"
+                    />
+                  </label>
+                  <label>
+                    <span>Descripción</span>
+                    <input
+                      value={rrDescription}
+                      onChange={(event) => setRrDescription(event.target.value)}
+                      placeholder="Reacciona para recibir tu rol"
+                    />
+                  </label>
+                  <label>
+                    <span>Modo</span>
+                    <select
+                      className="select"
+                      value={rrMode}
+                      onChange={(event) =>
+                        setRrMode(
+                          event.target.value as
+                            | "multiple"
+                            | "unique"
+                            | "additive",
+                        )
+                      }
+                    >
+                      <option value="multiple">
+                        Multiple (se puede tener varios)
+                      </option>
+                      <option value="unique">Único (solo uno del panel)</option>
+                      <option value="additive">
+                        Aditivo (solo agrega, no quita)
+                      </option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="rr-pairs">
+                  {rrPairs.map((pair, index) => (
+                    <div className="rr-pair" key={index}>
+                      <input
+                        type="text"
+                        value={pair.emoji}
+                        onChange={(event) =>
+                          updateRrPair(index, { emoji: event.target.value })
+                        }
+                        placeholder="Emoji (✅ o <:name:id>)"
+                      />
+                      <select
+                        className="select"
+                        value={pair.roleId}
+                        onChange={(event) =>
+                          updateRrPair(index, { roleId: event.target.value })
+                        }
+                      >
+                        <option value="">Elegí rol</option>
+                        {guildRoles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="ghost-button danger"
+                        onClick={() => removeRrPair(index)}
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    className="ghost-button"
+                    onClick={addRrPair}
+                    type="button"
+                  >
+                    + Agregar par emoji/rol
+                  </button>
+                </div>
+
+                <div className="form-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => void handleCreateReactionPanel()}
+                    disabled={loading}
+                    type="button"
+                  >
+                    Crear panel
+                  </button>
+                </div>
+
+                {reactionPanels.length > 0 ? (
+                  <div className="rr-panels-list">
+                    <h4>Paneles existentes</h4>
+                    {reactionPanels.map((panel) => (
+                      <div className="rr-panel-card" key={panel.messageId}>
+                        <div className="rr-panel-head">
+                          <strong>
+                            Canal: {panel.channelId ?? "?"} · msg:{" "}
+                            {panel.messageId}
+                          </strong>
+                          <span className="rr-mode">Modo: {panel.mode}</span>
+                        </div>
+                        <div className="rr-rules">
+                          {panel.rules.map((rule) => (
+                            <span className="rr-rule" key={rule.emojiKey}>
+                              {rule.emojiKey} → <code>{rule.roleId}</code>
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          className="ghost-button danger"
+                          onClick={() => requestDeleteReactionPanel(panel)}
+                          type="button"
+                        >
+                          Eliminar panel
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               {xpConfig ? (

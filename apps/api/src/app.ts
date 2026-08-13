@@ -8,6 +8,13 @@ import {
   listGuildReminders,
 } from "./services/reminders-store.js";
 import {
+  completeReactionRoleJob,
+  createReactionRoleJob,
+  listPendingReactionRoleJobs,
+  listReactionRolePanels,
+  type ReactionRolePair,
+} from "./services/reaction-roles-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -357,6 +364,74 @@ export function buildApp() {
       config,
     };
   });
+
+  app.get(
+    "/internal/guilds/:guildId/reaction-roles/jobs",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const jobs = await listPendingReactionRoleJobs(params.guildId);
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        jobs,
+      };
+    },
+  );
+
+  app.post(
+    "/internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        jobId?: string;
+      };
+      if (!params.guildId || !params.jobId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      const body = (request.body ?? {}) as {
+        error?: string;
+        messageId?: string;
+      };
+
+      await completeReactionRoleJob(params.guildId, params.jobId, {
+        error: body.error,
+        messageId: body.messageId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+      };
+    },
+  );
 
   app.get("/internal/guilds/:guildId/xp-config", async (request, reply) => {
     if (!env.BOT_API_TOKEN) {
@@ -1088,6 +1163,126 @@ export function buildApp() {
       guildId: params.guildId,
     };
   });
+
+  app.post("/guilds/:guildId/reaction-roles/panels", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      channelId?: string;
+      description?: string;
+      mode?: string;
+      pairs?: ReactionRolePair[];
+      title?: string;
+    };
+    const channelId = body.channelId?.trim();
+    const pairs = Array.isArray(body.pairs)
+      ? body.pairs
+          .map((pair) => ({
+            emoji: String(pair.emoji ?? "").trim(),
+            roleId: String(pair.roleId ?? "").trim(),
+          }))
+          .filter((pair) => pair.emoji && pair.roleId)
+      : [];
+
+    if (!channelId) {
+      return reply.code(400).send({ ok: false, error: "Missing channelId" });
+    }
+
+    if (pairs.length === 0) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Debes agregar al menos un par emoji + rol",
+      });
+    }
+
+    const result = await createReactionRoleJob({
+      action: "create",
+      channelId,
+      description: body.description?.trim() || undefined,
+      guildId: params.guildId,
+      mode:
+        body.mode === "unique" || body.mode === "additive"
+          ? body.mode
+          : "multiple",
+      rules: pairs,
+      title: body.title?.trim() || undefined,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      ...result,
+    };
+  });
+
+  app.get("/guilds/:guildId/reaction-roles/panels", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const panels = await listReactionRolePanels(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      panels,
+    };
+  });
+
+  app.delete(
+    "/guilds/:guildId/reaction-roles/panels/:messageId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        messageId?: string;
+      };
+      if (!params.guildId || !params.messageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      await createReactionRoleJob({
+        action: "delete",
+        guildId: params.guildId,
+        messageId: params.messageId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+      };
+    },
+  );
 
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);

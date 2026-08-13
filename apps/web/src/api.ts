@@ -310,6 +310,65 @@ export async function requestXpSync(guildId: string): Promise<void> {
   });
 }
 
+export type ReactionRolePairInput = {
+  emoji: string;
+  roleId: string;
+};
+
+export type ReactionRolePanel = {
+  channelId: string | null;
+  messageId: string;
+  mode: string;
+  rules: Array<{ emojiKey: string; roleId: string }>;
+};
+
+export async function createReactionRolePanel(
+  guildId: string,
+  input: {
+    channelId: string;
+    description?: string;
+    mode?: string;
+    pairs: ReactionRolePairInput[];
+    title?: string;
+  },
+): Promise<{ jobId: string }> {
+  const data = await requestJson<{ jobId: string }>(
+    `/guilds/${guildId}/reaction-roles/panels`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+
+  return data;
+}
+
+export async function listReactionRolePanels(
+  guildId: string,
+): Promise<ReactionRolePanel[]> {
+  const data = await requestJson<{ panels: ReactionRolePanel[] }>(
+    `/guilds/${guildId}/reaction-roles/panels`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.panels;
+}
+
+export async function deleteReactionRolePanel(
+  guildId: string,
+  messageId: string,
+): Promise<void> {
+  await requestJson<{ ok: boolean }>(
+    `/guilds/${guildId}/reaction-roles/panels/${encodeURIComponent(messageId)}`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
 export async function saveGuildConfig(
   guildId: string,
   config: GuildConfig,

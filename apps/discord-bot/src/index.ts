@@ -30,11 +30,18 @@ import {
   listReactionRoleRules,
   type ReactionRoleMode,
   removeReactionRoleRule,
+  removeReactionRoleRulesForMessage,
   removeTemporaryVoiceChannelId,
   setXpSyncRequested,
   updateReactionRoleModeForMessage,
   upsertReactionRoleRule,
 } from "./services/guild-config-store.js";
+import {
+  completeReactionRoleJob,
+  fetchPendingReactionRoleJobs,
+  type PendingReactionRoleJob,
+  type ReactionRolePair,
+} from "./services/reaction-roles-service.js";
 import {
   getCommunicationContent,
   listCommunicationFiles,
@@ -973,11 +980,159 @@ function startXpSyncChecker(): void {
   }, XP_SYNC_POLL_INTERVAL_MS);
 }
 
+const REACTION_ROLE_JOB_POLL_INTERVAL_MS = 20_000;
+let reactionRoleJobTimer: NodeJS.Timeout | null = null;
+
+function buildReactionPanelText(input: {
+  description?: string | null;
+  pairs: ReactionRolePair[];
+  title?: string | null;
+}): string {
+  const lines = input.pairs.map((pair) => `${pair.emoji} <@&${pair.roleId}>`);
+  return [
+    input.title ? `## ${input.title}` : "",
+    input.description ?? "",
+    "Reacciona para recibir o quitar tu rol:",
+    ...lines,
+  ]
+    .filter((line) => Boolean(line))
+    .join("\n");
+}
+
+async function processReactionRoleJob(
+  job: PendingReactionRoleJob,
+): Promise<void> {
+  const guild = await client.guilds.fetch(job.guildId).catch(() => null);
+  if (!guild) {
+    await completeReactionRoleJob(job.guildId, job.id, {
+      error: "No se pudo obtener la guild",
+    });
+    return;
+  }
+
+  try {
+    if (job.action === "create") {
+      if (!job.channelId) {
+        await completeReactionRoleJob(job.guildId, job.id, {
+          error: "Falta canal",
+        });
+        return;
+      }
+
+      const channel = await guild.channels
+        .fetch(job.channelId)
+        .catch(() => null);
+      if (!isSendableTextChannelLike(channel)) {
+        await completeReactionRoleJob(job.guildId, job.id, {
+          error: "Canal invalido",
+        });
+        return;
+      }
+
+      const panelText = buildReactionPanelText({
+        description: job.description,
+        pairs: job.rules,
+        title: job.title,
+      });
+      const sentMessage = await channel.send(panelText).catch(() => null);
+      if (!isReactableMessageLike(sentMessage)) {
+        await completeReactionRoleJob(job.guildId, job.id, {
+          error: "No se pudo publicar el panel",
+        });
+        return;
+      }
+
+      for (const pair of job.rules) {
+        const emojiKey = normalizeEmojiKey(pair.emoji);
+        if (!emojiKey) {
+          continue;
+        }
+
+        await sentMessage
+          .react(parseEmojiForReaction(pair.emoji))
+          .catch(() => undefined);
+        await upsertReactionRoleRule(job.guildId, {
+          channelId: job.channelId ?? undefined,
+          emojiKey,
+          messageId: sentMessage.id,
+          mode: (job.mode as ReactionRoleMode) || "multiple",
+          roleId: pair.roleId,
+        });
+      }
+
+      await completeReactionRoleJob(job.guildId, job.id, {
+        messageId: sentMessage.id,
+      });
+      return;
+    }
+
+    if (job.action === "delete") {
+      const rules = await listReactionRoleRules(job.guildId);
+      const messageRules = rules.filter(
+        (rule) => rule.messageId === job.messageId,
+      );
+      const channelId = messageRules[0]?.channelId;
+
+      if (channelId && job.messageId) {
+        const channel = await guild.channels.fetch(channelId).catch(() => null);
+        if (isReactionRoleTextChannelLike(channel)) {
+          const message = await channel.messages
+            .fetch(job.messageId)
+            .catch(() => null);
+          if (hasDeleteMethod(message)) {
+            await message.delete().catch(() => undefined);
+          }
+        }
+      }
+
+      await removeReactionRoleRulesForMessage(job.guildId, job.messageId ?? "");
+      await completeReactionRoleJob(job.guildId, job.id, {});
+      return;
+    }
+
+    await completeReactionRoleJob(job.guildId, job.id, {
+      error: `Accion desconocida: ${job.action}`,
+    });
+  } catch (error: unknown) {
+    await completeReactionRoleJob(job.guildId, job.id, {
+      error: getErrorMessage(error),
+    });
+  }
+}
+
+async function processPendingReactionRoleJobs(): Promise<void> {
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const jobs = await fetchPendingReactionRoleJobs(guild.id);
+      for (const job of jobs) {
+        await processReactionRoleJob(job);
+      }
+    } catch (error: unknown) {
+      console.warn(
+        `[discord-bot] Failed to process reaction role jobs for guild ${guild.id}: ${getErrorMessage(error)}`,
+      );
+    }
+  }
+}
+
+function startReactionRoleJobProcessor(): void {
+  if (reactionRoleJobTimer) {
+    return;
+  }
+
+  reactionRoleJobTimer = setInterval(() => {
+    void processPendingReactionRoleJobs();
+  }, REACTION_ROLE_JOB_POLL_INTERVAL_MS);
+
+  void processPendingReactionRoleJobs();
+}
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`[discord-bot] Online as ${readyClient.user.tag}`);
   startReminderScheduler();
   startVoiceXpTracker();
   startXpSyncChecker();
+  startReactionRoleJobProcessor();
 });
 
 async function handleXpLevelCommand(

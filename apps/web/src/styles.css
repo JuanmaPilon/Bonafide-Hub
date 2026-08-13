@@ -460,6 +460,75 @@ a:hover {
   font-weight: 700;
 }
 
+.reaction-roles-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 20px;
+}
+
+.reaction-roles-section h3 {
+  margin: 0 0 14px;
+}
+
+.rr-pairs {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rr-pair {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.rr-panels-list {
+  margin-top: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.rr-panels-list h4 {
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+
+.rr-panel-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+  display: grid;
+  gap: 10px;
+}
+
+.rr-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rr-mode {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.rr-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rr-rule {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(6, 16, 24, 0.5);
+  border: 1px solid rgba(134, 158, 214, 0.2);
+  font-size: 0.85rem;
+}
+
 .modal-role-list {
   display: grid;
   gap: 8px;

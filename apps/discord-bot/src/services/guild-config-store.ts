@@ -367,6 +367,29 @@ export async function listReactionRoleRules(
   return config.reactionRoles ?? [];
 }
 
+export async function removeReactionRoleRulesForMessage(
+  guildId: string,
+  messageId: string,
+): Promise<number> {
+  const current = await getGuildConfig(guildId);
+  const existingRules = current.reactionRoles ?? [];
+  const updatedRules = existingRules.filter(
+    (rule) => rule.messageId !== messageId,
+  );
+  const removedCount = existingRules.length - updatedRules.length;
+
+  if (removedCount === 0) {
+    return 0;
+  }
+
+  await mutateGuildConfig(guildId, (draft) => ({
+    ...draft,
+    reactionRoles: updatedRules,
+  }));
+
+  return removedCount;
+}
+
 export async function findReactionRoleRule(
   guildId: string,
   messageId: string,

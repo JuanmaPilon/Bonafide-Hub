@@ -40,6 +40,25 @@ model ReactionRoleRule {
   @@map("reaction_role_rules")
 }
 
+model ReactionRolePanelJob {
+  id          String   @id @default(cuid())
+  guildId     String
+  action      String
+  channelId   String?
+  messageId   String?
+  title       String?
+  description String?
+  mode        String   @default("multiple")
+  rules       Json     @default("[]")
+  status      String   @default("pending")
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([guildId, status])
+  @@map("reaction_role_panel_jobs")
+}
+
 model DiscordSession {
   id        String   @id
   createdAt DateTime @default(now())
