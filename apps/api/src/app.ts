@@ -18,6 +18,10 @@ import {
   type ReactionRolePair,
 } from "./services/reaction-roles-store.js";
 import {
+  createAuditLogEntry,
+  listAuditLogEntries,
+} from "./services/audit-log-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -255,6 +259,42 @@ export function buildApp() {
       } catch {
         return false;
       }
+    });
+  }
+
+  function isGuildOwner(
+    session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
+    guildId: string,
+  ): boolean {
+    return session.guilds.some(
+      (guild) => guild.id === guildId && guild.owner === true,
+    );
+  }
+
+  async function logAdminAction(
+    session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
+    guildId: string,
+    action: string,
+    options: {
+      details?: string;
+      targetId?: string;
+      targetType?: string;
+    } = {},
+  ): Promise<void> {
+    const user = (session.user ?? {}) as {
+      global_name?: string | null;
+      id?: string;
+      username?: string | null;
+    };
+
+    await createAuditLogEntry({
+      action,
+      actorName: user.global_name ?? user.username ?? undefined,
+      actorUserId: user.id,
+      details: options.details,
+      guildId,
+      targetId: options.targetId,
+      targetType: options.targetType,
     });
   }
 
@@ -1082,6 +1122,10 @@ export function buildApp() {
       voiceXpPerMinute: body.voiceXpPerMinute,
     });
 
+    await logAdminAction(session, params.guildId, "update:xp-config", {
+      details: "Se guardó la configuración de XP.",
+    });
+
     return {
       ok: true,
       guildId: params.guildId,
@@ -1188,6 +1232,10 @@ export function buildApp() {
 
     const result = await importXpEntries(params.guildId, entries);
 
+    await logAdminAction(session, params.guildId, "xp:import", {
+      details: `Importación de XP (${entries.length} perfil/es).`,
+    });
+
     return {
       ok: true,
       guildId: params.guildId,
@@ -1212,6 +1260,10 @@ export function buildApp() {
 
     const result = await resetAllXp(params.guildId);
 
+    await logAdminAction(session, params.guildId, "xp:reset-all", {
+      details: `Reset total de XP (${result.reset} usuario/s).`,
+    });
+
     return {
       ok: true,
       guildId: params.guildId,
@@ -1235,6 +1287,10 @@ export function buildApp() {
     }
 
     await upsertGuildConfig(params.guildId, { xpSyncRequested: true });
+
+    await logAdminAction(session, params.guildId, "xp:sync", {
+      details: "Re-sincronización de roles por nivel encolada.",
+    });
 
     return {
       ok: true,
@@ -1296,6 +1352,11 @@ export function buildApp() {
           : "multiple",
       rules: pairs,
       title: body.title?.trim() || undefined,
+    });
+
+    await logAdminAction(session, params.guildId, "reaction-panel:create", {
+      details: `Panel encolado${body.title?.trim() ? `: "${body.title.trim()}"` : ""} (${pairs.length} regla/s).`,
+      targetType: "reaction-panel",
     });
 
     return {
@@ -1405,6 +1466,12 @@ export function buildApp() {
         messageId: params.messageId,
       });
 
+      await logAdminAction(session, params.guildId, "reaction-panel:delete", {
+        details: "Eliminación de panel de reaction roles encolada.",
+        targetId: params.messageId,
+        targetType: "reaction-panel",
+      });
+
       return {
         ok: true,
         guildId: params.guildId,
@@ -1470,6 +1537,12 @@ export function buildApp() {
         title: body.title?.trim() || undefined,
       });
 
+      await logAdminAction(session, params.guildId, "reaction-panel:update", {
+        details: `Actualización de panel encolada${body.title?.trim() ? `: "${body.title.trim()}"` : ""}.`,
+        targetId: params.messageId,
+        targetType: "reaction-panel",
+      });
+
       return {
         ok: true,
         guildId: params.guildId,
@@ -1499,6 +1572,31 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       config,
+    };
+  });
+
+  app.get("/guilds/:guildId/audit-logs", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    // El registro es readonly y solo lo puede ver el owner de la guild.
+    if (!isGuildOwner(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const logs = await listAuditLogEntries(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      logs,
     };
   });
 
@@ -1542,6 +1640,10 @@ export function buildApp() {
     }
 
     const config = await upsertGuildConfig(params.guildId, allowedBody);
+
+    await logAdminAction(session, params.guildId, "update:guild-config", {
+      details: "Se guardó la configuración general del servidor.",
+    });
 
     return {
       ok: true,

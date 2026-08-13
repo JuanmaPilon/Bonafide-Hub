@@ -7,12 +7,22 @@ export type XpRoleMultiplier = {
 
 export type XpRoleRule = {
   addRoleIds: string[];
+  color?: string;
   level: number;
   nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
   stacking: "stack" | "replace";
 };
+
+function normalizeColor(raw: unknown): string | undefined {
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+
+  const trimmed = raw.trim();
+  return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed.toLowerCase() : undefined;
+}
 
 export type XpConfig = {
   cooldownSeconds: number;
@@ -66,6 +76,7 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
         )
         .map((entry) => ({
           addRoleIds: normalizeRoleIds(entry.addRoleIds),
+          color: normalizeColor(entry.color),
           level: Number(entry.level) || 0,
           nicknamePrefix:
             typeof entry.nicknamePrefix === "string" &&
@@ -126,6 +137,7 @@ function normalizeLevelRoles(
   return levelRoles
     .map((rule) => ({
       addRoleIds: normalizeRoleIds(rule.addRoleIds),
+      color: normalizeColor(rule.color),
       level: Math.max(0, Math.floor(Number(rule.level) || 0)),
       nicknamePrefix:
         typeof rule.nicknamePrefix === "string" && rule.nicknamePrefix.trim()

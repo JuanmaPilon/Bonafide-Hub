@@ -704,6 +704,86 @@ a:hover {
   background: rgba(229, 72, 77, 0.12);
 }
 
+.xp-color-input {
+  display: grid;
+  gap: 6px;
+}
+
+.xp-color-input > span:first-child {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.xp-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.xp-color-row input[type="color"] {
+  width: 46px;
+  height: 34px;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(133, 156, 212, 0.24);
+  background: rgba(10, 16, 31, 0.88);
+  cursor: pointer;
+}
+
+.leaderboard-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-weight: 700;
+}
+
+.audit-list {
+  display: grid;
+  gap: 8px;
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns: 150px 150px 180px 1fr;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+  font-size: 0.86rem;
+}
+
+.audit-time {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.audit-actor {
+  font-weight: 600;
+}
+
+.audit-action {
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.audit-detail {
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .audit-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 .rr-job-ok {
   color: var(--muted);
   font-size: 0.86rem;

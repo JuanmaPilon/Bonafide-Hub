@@ -120,3 +120,18 @@ model XpProfile {
   @@id([guildId, userId])
   @@map("xp_profiles")
 }
+
+model AuditLogEntry {
+  id          String   @id @default(cuid())
+  guildId     String
+  actorUserId String?
+  actorName   String?
+  action      String
+  targetType  String?
+  targetId    String?
+  details     String?
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@map("audit_log_entries")
+}

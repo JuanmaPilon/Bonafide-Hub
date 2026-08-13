@@ -7,6 +7,7 @@ export type XpRoleMultiplier = {
 
 export type XpRoleRule = {
   addRoleIds: string[];
+  color?: string;
   level: number;
   nicknamePrefix?: string;
   removeRoleIds: string[];

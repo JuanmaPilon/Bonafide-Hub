@@ -5,6 +5,7 @@ import {
   deleteReactionRoleJob,
   deleteReactionRolePanel,
   exportXpData,
+  getAuditLogs,
   getGuildConfig,
   getGuildEmojis,
   getGuildRoles,
@@ -26,6 +27,7 @@ import {
   saveXpConfig,
   updateReactionRolePanel,
   type ApiGuild,
+  type AuditLogEntry,
   type GuildChannel,
   type GuildConfig,
   type GuildEmoji,
@@ -350,6 +352,7 @@ function App() {
     level: number;
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
@@ -723,6 +726,21 @@ function App() {
     return emojiKey;
   }
 
+  function levelColorFor(level: number): string | undefined {
+    if (!xpConfig) {
+      return undefined;
+    }
+
+    let color: string | undefined;
+    for (const rule of xpConfig.levelRoles) {
+      if (rule.level <= level && rule.color) {
+        color = rule.color;
+      }
+    }
+
+    return color;
+  }
+
   function rrPreviewLines(): string[] {
     const lines = rrPairs
       .filter((pair) => pair.emoji.trim() && pair.roleId)
@@ -774,6 +792,18 @@ function App() {
       setReactionPanels(panels);
     } catch {
       // fallo silencioso
+    }
+  }
+
+  async function refreshAuditLogs(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const logs = await getAuditLogs(selectedGuildId);
+      setAuditLogs(logs);
+    } catch {
+      // silencioso: puede fallar si el usuario no es owner
     }
   }
 
@@ -1120,6 +1150,7 @@ function App() {
       setReactionPanels([]);
       setGuildEmojis([]);
       setRrJobs([]);
+      setAuditLogs([]);
       return;
     }
 
@@ -1162,6 +1193,23 @@ function App() {
           );
         }
       });
+
+    const isOwner = guilds.some(
+      (guild) => guild.id === selectedGuildId && guild.owner,
+    );
+    if (isOwner) {
+      void getAuditLogs(selectedGuildId)
+        .then((logs) => {
+          if (!cancelled) {
+            setAuditLogs(logs);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAuditLogs([]);
+          }
+        });
+    }
 
     return () => {
       cancelled = true;
@@ -1368,14 +1416,32 @@ function App() {
                                   ?
                                 </span>
                               )}
-                              <span className="user-mention">
+                              <span
+                                className="user-mention"
+                                style={
+                                  levelColorFor(entry.level)
+                                    ? { color: levelColorFor(entry.level) }
+                                    : undefined
+                                }
+                              >
                                 {entry.nickname ||
                                   entry.username ||
                                   `@${entry.userId}`}
                               </span>
                             </span>
                           </td>
-                          <td>{entry.level}</td>
+                          <td>
+                            <span
+                              className="leaderboard-level"
+                              style={
+                                levelColorFor(entry.level)
+                                  ? { color: levelColorFor(entry.level) }
+                                  : undefined
+                              }
+                            >
+                              {entry.level}
+                            </span>
+                          </td>
                           <td>{entry.xp}</td>
                           <td>{entry.messageCount}</td>
                           <td>{entry.voiceMinutes}</td>
@@ -1997,6 +2063,33 @@ function App() {
                                 }
                               />
                             </label>
+                            <label className="xp-color-input">
+                              <span>Color (nivel/nombre)</span>
+                              <span className="xp-color-row">
+                                <input
+                                  type="color"
+                                  value={rule.color ?? "#6aa8ff"}
+                                  onChange={(event) =>
+                                    updateXpRole(rule.level, {
+                                      color: event.target.value,
+                                    })
+                                  }
+                                />
+                                {rule.color ? (
+                                  <button
+                                    type="button"
+                                    className="ghost-button small"
+                                    onClick={() =>
+                                      updateXpRole(rule.level, {
+                                        color: undefined,
+                                      })
+                                    }
+                                  >
+                                    Quitar
+                                  </button>
+                                ) : null}
+                              </span>
+                            </label>
                             <div
                               className="xp-mode-toggle"
                               title="Comportamiento al alcanzar este nivel"
@@ -2182,6 +2275,60 @@ function App() {
                   </div>
                 </div>
               ) : null}
+
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <h3>Registro de cambios (auditoría)</h3>
+                    <p>
+                      Quién cambió cada cosa en el Hub. Solo lectura y visible
+                      únicamente para el owner.
+                    </p>
+                  </div>
+                  <button
+                    className="icon-button"
+                    onClick={() => void refreshAuditLogs()}
+                    title="Refrescar registro"
+                    aria-label="Refrescar registro"
+                    type="button"
+                  >
+                    <RefreshIcon />
+                  </button>
+                </div>
+                <div className="admin-card-body">
+                  {selectedGuild?.owner ? (
+                    auditLogs.length === 0 ? (
+                      <div className="empty-state">
+                        Aún no hay cambios registrados. Las acciones del panel
+                        Admin quedan anotadas acá.
+                      </div>
+                    ) : (
+                      <div className="audit-list">
+                        {auditLogs.map((entry) => (
+                          <div className="audit-row" key={entry.id}>
+                            <span className="audit-time">
+                              {new Date(entry.createdAt).toLocaleString()}
+                            </span>
+                            <span className="audit-actor">
+                              {entry.actorName ?? entry.actorUserId ?? "—"}
+                            </span>
+                            <span className="audit-action">{entry.action}</span>
+                            {entry.details ? (
+                              <span className="audit-detail">
+                                {entry.details}
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <div className="empty-state">
+                      Solo el owner de la guild puede ver este registro.
+                    </div>
+                  )}
+                </div>
+              </div>
             </>
           ) : activeTab === "admin" ? (
             <div className="empty-state">

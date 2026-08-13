@@ -39,6 +39,7 @@ export type XpRoleMultiplier = {
 
 export type XpRoleRule = {
   addRoleIds: string[];
+  color?: string;
   level: number;
   nicknamePrefix?: string;
   removeRoleIds: string[];
@@ -240,6 +241,29 @@ export async function getLeaderboard(
   );
 
   return data.leaderboard;
+}
+
+export type AuditLogEntry = {
+  action: string;
+  actorName: string | null;
+  actorUserId: string | null;
+  createdAt: string;
+  details: string | null;
+  guildId: string;
+  id: string;
+  targetId: string | null;
+  targetType: string | null;
+};
+
+export async function getAuditLogs(guildId: string): Promise<AuditLogEntry[]> {
+  const data = await requestJson<{ logs: AuditLogEntry[] }>(
+    `/guilds/${guildId}/audit-logs`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.logs;
 }
 
 export type XpProfileExportEntry = {
