@@ -349,6 +349,14 @@ function RefreshIcon() {
   );
 }
 
+const PODIUM_TIERS = [
+  { color: "#ffd700", label: "Oro" },
+  { color: "#e8e8e8", label: "Platino" },
+  { color: "#7ff8ff", label: "Diamante" },
+  { color: "#7aa8ff", label: "Zafiro" },
+  { color: "#c39bff", label: "Amatista" },
+] as const;
+
 function HomeView({
   boostCount,
   boosters,
@@ -409,6 +417,10 @@ function HomeView({
                 )}
                 <span className="podium-name" style={colorFor(entry.level)}>
                   {entry.nickname || entry.username || `@${entry.userId}`}
+                </span>
+                <span className="podium-tier">
+                  {entry.rank === 1 ? "👑 " : ""}
+                  {PODIUM_TIERS[entry.rank - 1]?.label ?? ""}
                 </span>
                 <span className="podium-meta">
                   Nivel {entry.level} · {entry.xp} XP
