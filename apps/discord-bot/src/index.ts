@@ -19,8 +19,6 @@ import {
   type Reminder,
   removeUserReminders,
   rescheduleReminder,
-  type ReminderKind,
-  resolveReminderKind,
 } from "./services/reminders-store.js";
 import {
   addTemporaryVoiceChannelId,
@@ -29,11 +27,9 @@ import {
   isTemporaryVoiceChannel,
   listReactionRoleRules,
   type ReactionRoleMode,
-  removeReactionRoleRule,
   removeReactionRoleRulesForMessage,
   removeTemporaryVoiceChannelId,
   setXpSyncRequested,
-  updateReactionRoleModeForMessage,
   upsertReactionRoleRule,
 } from "./services/guild-config-store.js";
 import {
@@ -406,46 +402,18 @@ function parseEmojiForReaction(input: string): string {
   return trimmed;
 }
 
-function parseReactionRoleMode(input: string | null): ReactionRoleMode {
-  if (input === "unique" || input === "additive") {
-    return input;
-  }
-
-  return "multiple";
-}
-
 function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-const KD_REMINDER_TEMPLATES = [
-  "🫖 Senior, puede tirar KD cuando guste.",
-  "🫖 Senior, su KD ya esta servido.",
-  "🫖 Senior, Karpindomo le recuerda que KD esta listo.",
-  "🫖 Senior, Karpindomo confirma que su KD ya esta disponible.",
-  "🫖 Senior, momento ideal para tirar KD.",
-  "🫖 Senior, Karpindomo sugiere activar KD en este preciso instante.",
-  "🫖 Senior, su ventana de KD esta abierta.",
-] as const;
-
-const KDAILY_REMINDER_TEMPLATES = [
-  "🫖 Senior, su KDaily ya esta listo.",
-  "🫖 Senior, Karpindomo le recuerda que puede hacer KDaily.",
-  "🫖 Senior, llego la hora de su KDaily.",
-  "🫖 Senior, Karpindomo anuncia que su KDaily quedo habilitado.",
-  "🫖 Senior, su KDaily aguarda por usted.",
-  "🫖 Senior, Karpindomo confirma que ya puede cobrar su KDaily.",
-  "🫖 Senior, su KDaily quedo en punto para ejecutarse.",
-] as const;
-
-const CUSTOM_REMINDER_TEMPLATES = [
-  "🫖 Senior, su recordatorio de {duration} ha llegado.",
-  "🫖 Senior, Karpindomo anuncia que vencio su recordatorio de {duration}.",
-  "🫖 Senior, es momento de atender su recordatorio de {duration}.",
+const TIMER_TEMPLATES = [
+  "🫖 Senior, su timer de {duration} ha llegado.",
+  "🫖 Senior, Karpindomo anuncia que finalizo su timer de {duration}.",
+  "🫖 Senior, es momento de atender su timer de {duration}.",
   "🫖 Senior, Karpindomo le avisa que se cumplio el plazo de {duration}.",
   "🫖 Senior, su aviso configurado para {duration} esta listo.",
   "🫖 Senior, Karpindomo notifica que el temporizador de {duration} finalizo.",
-  "🫖 Senior, su cita con el recordatorio de {duration} ha llegado.",
+  "🫖 Senior, su cita con el timer de {duration} ha llegado.",
 ] as const;
 
 const WELCOME_TEMPLATES = [
@@ -455,13 +423,27 @@ const WELCOME_TEMPLATES = [
   "🍵 **Recepcion oficial de Karpindomo.**\n<@{memberId}> ya esta en casa.\nPongase comodo y disfrute la estadia.",
 ] as const;
 
-function formatReminderDuration(minutesFromCreation: number): string {
-  if (minutesFromCreation % 60 === 0) {
-    const hours = minutesFromCreation / 60;
-    return `${hours} hora${hours === 1 ? "" : "s"}`;
+function formatTimerDuration(totalMinutes: number): string {
+  const totalSeconds = Math.round(totalMinutes * 60);
+  if (totalSeconds < 60) {
+    return `${totalSeconds} segundo${totalSeconds === 1 ? "" : "s"}`;
   }
 
-  return `${minutesFromCreation} minuto${minutesFromCreation === 1 ? "" : "s"}`;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts: string[] = [];
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}m`);
+  }
+  if (seconds > 0) {
+    parts.push(`${seconds}s`);
+  }
+
+  return parts.join(" ");
 }
 
 function pickRandomTemplateAvoidingLast<T extends string>(
@@ -494,33 +476,12 @@ function buildDmReminderMessage(reminder: Reminder): {
   content: string;
   rotationIndex: number;
 } {
-  const kind = resolveReminderKind(reminder);
-  const lastIndex = reminder.rotationIndex;
-
-  if (kind === "kd") {
-    const next = pickRandomTemplateAvoidingLast(
-      KD_REMINDER_TEMPLATES,
-      lastIndex,
-    );
-    return { content: next.template, rotationIndex: next.index };
-  }
-
-  if (kind === "kdaily") {
-    const next = pickRandomTemplateAvoidingLast(
-      KDAILY_REMINDER_TEMPLATES,
-      lastIndex,
-    );
-    return {
-      content: `${next.template}\nhttps://karuta.com/vote`,
-      rotationIndex: next.index,
-    };
-  }
-
-  const durationText = formatReminderDuration(reminder.minutesFromCreation);
+  const durationText = formatTimerDuration(reminder.minutesFromCreation);
   const next = pickRandomTemplateAvoidingLast(
-    CUSTOM_REMINDER_TEMPLATES,
-    lastIndex,
+    TIMER_TEMPLATES,
+    reminder.rotationIndex,
   );
+
   return {
     content: next.template.replace("{duration}", durationText),
     rotationIndex: next.index,
@@ -1566,392 +1527,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (interaction.commandName === "setreactionrole") {
-    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!interaction.memberPermissions?.has("ManageRoles")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Roles para usar este comando.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const targetChannel = interaction.options.getChannel("canal", true);
-    const messageId = interaction.options.getString("mensaje_id", true).trim();
-    const emojiRaw = interaction.options.getString("emoji", true);
-    const role = interaction.options.getRole("rol", true);
-    const mode = parseReactionRoleMode(interaction.options.getString("modo"));
-    const emojiKey = normalizeEmojiKey(emojiRaw);
-
-    if (!isReactionRoleTextChannelLike(targetChannel)) {
-      await interaction.reply({
-        content: "El canal seleccionado no es un canal de texto valido.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const targetMessage = await targetChannel.messages
-      .fetch(messageId)
-      .catch(() => null);
-
-    if (!targetMessage) {
-      await interaction.reply({
-        content:
-          "No pude encontrar ese mensaje en el canal indicado. Revisa canal e ID.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!emojiKey) {
-      await interaction.reply({
-        content: "Emoji invalido. Usa un emoji unicode o custom (<:name:id>).",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const me = await interaction.guild.members.fetchMe().catch(() => null);
-    if (!me?.permissions.has("ManageRoles")) {
-      await interaction.reply({
-        content: "El bot necesita permiso Manage Roles para asignar roles.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (role.position >= me.roles.highest.position) {
-      await interaction.reply({
-        content:
-          "No puedo asignar ese rol porque esta por encima (o al mismo nivel) de mi rol mas alto.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    await upsertReactionRoleRule(interaction.guildId, {
-      channelId: targetChannel.id,
-      emojiKey,
-      messageId,
-      mode,
-      roleId: role.id,
-    });
-
-    if (isReactableMessageLike(targetMessage)) {
-      await targetMessage
-        .react(parseEmojiForReaction(emojiRaw))
-        .catch(() => null);
-    }
-
-    await interaction.reply({
-      content: `Reaction role guardado en <#${targetChannel.id}>. Mensaje: ${messageId}, emoji: ${emojiRaw}, rol: <@&${role.id}>, modo: ${mode}.`,
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === "createreactionpanel") {
-    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!interaction.memberPermissions?.has("ManageRoles")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Roles para usar este comando.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const selectedChannel = interaction.options.getChannel("canal");
-    const targetChannel = selectedChannel ?? interaction.channel;
-
-    if (!isSendableTextChannelLike(targetChannel)) {
-      await interaction.reply({
-        content: "No se pudo resolver un canal de texto valido para publicar.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const title = interaction.options.getString("titulo", true).trim();
-    const description = interaction.options.getString("descripcion")?.trim();
-    const mode = parseReactionRoleMode(interaction.options.getString("modo"));
-
-    const entries = [1, 2, 3]
-      .map((index) => {
-        const emojiRaw = interaction.options.getString(`emoji_${index}`);
-        const role = interaction.options.getRole(`rol_${index}`);
-
-        return {
-          emojiRaw: emojiRaw?.trim() ?? null,
-          role,
-        };
-      })
-      .filter((entry) => Boolean(entry.emojiRaw) || Boolean(entry.role));
-
-    if (entries.length === 0) {
-      await interaction.reply({
-        content: "Debes configurar al menos un par emoji + rol.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const invalidPair = entries.find((entry) => !entry.emojiRaw || !entry.role);
-    if (invalidPair) {
-      await interaction.reply({
-        content:
-          "Cada entrada debe tener ambos valores: emoji y rol (sin pares incompletos).",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const normalizedEntries = entries.map((entry) => ({
-      emojiRaw: entry.emojiRaw as string,
-      role: entry.role as { id: string; position: number },
-      emojiKey: normalizeEmojiKey(entry.emojiRaw as string),
-      reactionValue: parseEmojiForReaction(entry.emojiRaw as string),
-    }));
-
-    if (normalizedEntries.some((entry) => !entry.emojiKey)) {
-      await interaction.reply({
-        content: "Uno o mas emojis son invalidos.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const me = await interaction.guild.members.fetchMe().catch(() => null);
-    if (!me?.permissions.has("ManageRoles")) {
-      await interaction.reply({
-        content: "El bot necesita permiso Manage Roles para asignar roles.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const roleAboveMe = normalizedEntries.find(
-      (entry) => entry.role.position >= me.roles.highest.position,
-    );
-    if (roleAboveMe) {
-      await interaction.reply({
-        content:
-          "Hay un rol configurado por encima (o al mismo nivel) de mi rol mas alto.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const panelLines = normalizedEntries.map(
-      (entry) => `${entry.emojiRaw} <@&${entry.role.id}>`,
-    );
-    const panelMessageText = [
-      `## ${title}`,
-      description ?? "",
-      "Reacciona para recibir o quitar tu rol:",
-      ...panelLines,
-    ]
-      .filter((line) => Boolean(line))
-      .join("\n");
-
-    const sentMessage = await targetChannel
-      .send(panelMessageText)
-      .catch(() => null);
-    if (!isReactableMessageLike(sentMessage)) {
-      await interaction.reply({
-        content: "No pude publicar el panel en el canal seleccionado.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    for (const entry of normalizedEntries) {
-      await sentMessage.react(entry.reactionValue).catch(() => null);
-
-      await upsertReactionRoleRule(interaction.guildId, {
-        channelId: targetChannel.id,
-        emojiKey: entry.emojiKey as string,
-        messageId: sentMessage.id,
-        mode,
-        roleId: entry.role.id,
-      });
-    }
-
-    await interaction.reply({
-      content: `Panel creado en <#${targetChannel.id}>. Mensaje: ${sentMessage.id}. Modo: ${mode}.`,
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === "removereactionrole") {
-    if (!interaction.inGuild() || !interaction.guildId) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!interaction.memberPermissions?.has("ManageRoles")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Roles para usar este comando.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const targetChannel = interaction.options.getChannel("canal", true);
-    const messageId = interaction.options.getString("mensaje_id", true).trim();
-    const emojiRaw = interaction.options.getString("emoji", true);
-    const emojiKey = normalizeEmojiKey(emojiRaw);
-
-    if (!isReactionRoleTextChannelLike(targetChannel)) {
-      await interaction.reply({
-        content: "El canal seleccionado no es un canal de texto valido.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!emojiKey) {
-      await interaction.reply({
-        content: "Emoji invalido. Usa un emoji unicode o custom (<:name:id>).",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const removed = await removeReactionRoleRule(
-      interaction.guildId,
-      messageId,
-      emojiKey,
-    );
-
-    await interaction.reply({
-      content: removed
-        ? "Regla reaction role eliminada."
-        : "No existia una regla para ese mensaje + emoji.",
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === "listreactionroles") {
-    if (!interaction.inGuild() || !interaction.guildId) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const rules = await listReactionRoleRules(interaction.guildId);
-    if (rules.length === 0) {
-      await interaction.reply({
-        content: "No hay reaction roles configurados.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const lines = rules.slice(0, 20).map((rule, index) => {
-      const emojiLabel = rule.emojiKey
-        .replace(/^custom:/, "custom:")
-        .replace(/^unicode:/, "unicode:");
-      const modeLabel = rule.mode ?? "multiple";
-      const channelLabel = rule.channelId
-        ? `<#${rule.channelId}>`
-        : "(canal desconocido)";
-      return `${index + 1}. ${channelLabel} msg:${rule.messageId} | ${emojiLabel} => <@&${rule.roleId}> [${modeLabel}]`;
-    });
-
-    await interaction.reply({
-      content: ["Reaction roles:", ...lines].join("\n"),
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === "setreactionpanelmode") {
-    if (!interaction.inGuild() || !interaction.guildId) {
-      await interaction.reply({
-        content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    if (!interaction.memberPermissions?.has("ManageRoles")) {
-      await interaction.reply({
-        content: "Necesitas el permiso Manage Roles para usar este comando.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const targetChannel = interaction.options.getChannel("canal", true);
-    const messageId = interaction.options.getString("mensaje_id", true).trim();
-    const mode = parseReactionRoleMode(interaction.options.getString("modo"));
-
-    if (!isReactionRoleTextChannelLike(targetChannel)) {
-      await interaction.reply({
-        content: "El canal seleccionado no es un canal de texto valido.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const messageExists = await targetChannel.messages
-      .fetch(messageId)
-      .then(() => true)
-      .catch(() => false);
-    if (!messageExists) {
-      await interaction.reply({
-        content:
-          "No pude encontrar ese mensaje en el canal indicado. Revisa canal e ID.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const updated = await updateReactionRoleModeForMessage(
-      interaction.guildId,
-      messageId,
-      mode,
-    );
-
-    if (updated === 0) {
-      await interaction.reply({
-        content:
-          "No hay reglas reaction role para ese mensaje. Crea primero las reglas del panel.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    await interaction.reply({
-      content: `Panel actualizado: ${updated} regla/s cambiadas a modo ${mode}.`,
-      ephemeral: true,
-    });
-    return;
-  }
-
-  if (interaction.commandName === "listreminder") {
+  if (interaction.commandName === "listtimers") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -1965,29 +1541,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (pending.length === 0) {
       await interaction.reply({
-        content: "No hay recordatorios pendientes.",
+        content: "No hay timers pendientes.",
         ephemeral: true,
       });
       return;
     }
 
     const lines = pending.slice(0, 20).map((entry) => {
-      const kind = resolveReminderKind(entry);
-      const typeLabel =
-        kind === "kd" ? "kd" : kind === "kdaily" ? "kdaily" : "custom";
-      const intervalText = formatReminderDuration(entry.minutesFromCreation);
+      const durationText = formatTimerDuration(entry.minutesFromCreation);
       const dueUnix = Math.floor(new Date(entry.dueAt).getTime() / 1000);
-      return `${typeLabel} | tiempo: ${intervalText} | falta: <t:${dueUnix}:R>`;
+      const repeatText = entry.repeat ? " (repite)" : "";
+      return `\`${entry.id}\` | ${durationText}${repeatText} | <@${entry.createdByUserId}> | falta <t:${dueUnix}:R>`;
     });
 
     await interaction.reply({
-      content: ["Recordatorios pendientes:", ...lines].join("\n"),
+      content: ["Timers pendientes:", ...lines].join("\n"),
       ephemeral: true,
     });
     return;
   }
 
-  if (interaction.commandName === "cancelreminder") {
+  if (interaction.commandName === "canceltimer") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -2004,40 +1578,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    const reminderId = interaction.options.getString("id", true).trim();
-    const removed = await cancelReminder(interaction.guildId, reminderId);
+    const timerId = interaction.options.getString("id", true).trim();
+    const removed = await cancelReminder(interaction.guildId, timerId);
 
     await interaction.reply({
       content: removed
-        ? `Recordatorio ${reminderId} cancelado.`
-        : "No existe un recordatorio con ese ID.",
+        ? `Timer ${timerId} cancelado.`
+        : "No existe un timer con ese ID.",
       ephemeral: true,
     });
     return;
   }
 
-  if (interaction.commandName === "removereminder") {
+  if (interaction.commandName === "removetimer") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const reminderKindInput = interaction.options.getString("tipo");
-    const removeAll = interaction.options.getBoolean("all") ?? false;
-    const reminderKind =
-      reminderKindInput === "kd" ||
-      reminderKindInput === "kdaily" ||
-      reminderKindInput === "custom"
-        ? reminderKindInput
-        : undefined;
-
-    if (!removeAll && !reminderKind) {
-      await interaction.reply({
-        content:
-          "Debes indicar tipo (kd, kdaily o custom), o usar all:true para eliminar todos tus recordatorios.",
         ephemeral: true,
       });
       return;
@@ -2046,35 +1602,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const removedCount = await removeUserReminders({
       guildId: interaction.guildId,
       userId: interaction.user.id,
-      reminderKind: removeAll
-        ? undefined
-        : (reminderKind as ReminderKind | undefined),
     });
 
-    if (removedCount === 0) {
-      await interaction.reply({
-        content: removeAll
-          ? "No tienes recordatorios para eliminar."
-          : reminderKind
-            ? `No tienes recordatorios de tipo ${reminderKind} para eliminar.`
-            : "No tienes recordatorios para eliminar.",
-        ephemeral: true,
-      });
-      return;
-    }
-
     await interaction.reply({
-      content: removeAll
-        ? `Se eliminaron ${removedCount} recordatorio/s tuyos.`
-        : reminderKind
-          ? `Se eliminaron ${removedCount} recordatorio/s de tipo ${reminderKind}.`
-          : `Se eliminaron ${removedCount} recordatorio/s tuyos.`,
+      content:
+        removedCount === 0
+          ? "No tienes timers pendientes para eliminar."
+          : removedCount === 1
+            ? "Se elimino 1 timer tuyo."
+            : `Se eliminaron ${removedCount} timers tuyos.`,
       ephemeral: true,
     });
     return;
   }
 
-  if (interaction.commandName === "setreminder") {
+  if (interaction.commandName === "settimer") {
     if (!interaction.inGuild() || !interaction.guildId) {
       await interaction.reply({
         content: "Este comando solo se puede usar dentro de un servidor.",
@@ -2083,73 +1625,40 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    const reminderType = interaction.options.getSubcommand(true);
-    const customMinutes = interaction.options.getInteger("minutos");
-    const customHours = interaction.options.getInteger("horas");
+    const seconds = interaction.options.getInteger("segundos") ?? 0;
+    const minutes = interaction.options.getInteger("minutos") ?? 0;
+    const hours = interaction.options.getInteger("horas") ?? 0;
     const repeat = interaction.options.getBoolean("repetir") ?? false;
 
-    let minutesFromCreation: number;
-    let reminderMessage: string;
-
-    if (reminderType === "kd") {
-      minutesFromCreation = 30;
-      reminderMessage = pickRandom(KD_REMINDER_TEMPLATES);
-    } else if (reminderType === "kdaily") {
-      minutesFromCreation = 12 * 60;
-      reminderMessage = pickRandom(KDAILY_REMINDER_TEMPLATES);
-    } else if (reminderType === "custom") {
-      if (customMinutes && customHours) {
-        await interaction.reply({
-          content: "Para custom indica solo uno: minutos o horas (no ambos).",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      if (!customMinutes && !customHours) {
-        await interaction.reply({
-          content: "Para custom debes indicar minutos o horas.",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      const durationText = customHours
-        ? `${customHours} hora${customHours === 1 ? "" : "s"}`
-        : `${customMinutes} minuto${customMinutes === 1 ? "" : "s"}`;
-
-      minutesFromCreation = customHours
-        ? customHours * 60
-        : (customMinutes as number);
-      const customBaseTemplate = pickRandom(CUSTOM_REMINDER_TEMPLATES);
-      reminderMessage = customBaseTemplate.replace("{duration}", durationText);
-    } else {
+    const totalSeconds = seconds + minutes * 60 + hours * 3600;
+    if (totalSeconds < 1 || totalSeconds > 604_800) {
       await interaction.reply({
-        content: "Tipo de reminder no soportado.",
+        content:
+          "Indicá un tiempo entre 1 segundo y 7 días (podés combinar segundos, minutos y horas).",
         ephemeral: true,
       });
       return;
     }
+
+    const durationText = formatTimerDuration(totalSeconds / 60);
+    const template = pickRandom(TIMER_TEMPLATES);
+    const reminderMessage = template.replace("{duration}", durationText);
 
     await createReminder({
       guildId: interaction.guildId,
       channelId: interaction.channelId,
       createdByUserId: interaction.user.id,
       deliveryType: "dm",
-      reminderKind: reminderType as ReminderKind,
+      reminderKind: "custom",
       repeat,
       message: reminderMessage,
-      minutesFromCreation,
+      minutesFromCreation: totalSeconds / 60,
     });
 
-    const dueUnix = Math.floor(
-      (Date.now() + minutesFromCreation * 60_000) / 1000,
-    );
-    const repeatText = repeat
-      ? " Este recordatorio se repetira automaticamente."
-      : "";
+    const dueUnix = Math.floor((Date.now() + totalSeconds * 1000) / 1000);
+    const repeatText = repeat ? " Este timer se repetira automaticamente." : "";
     await interaction.reply({
-      content: `Recordatorio privado creado. Karpindomo te escribira por DM <t:${dueUnix}:R>.${repeatText}`,
+      content: `Timer creado. Karpindomo te avisara por DM <t:${dueUnix}:R>.${repeatText}`,
       ephemeral: true,
     });
     return;
