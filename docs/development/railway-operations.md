@@ -36,6 +36,7 @@ Guia operativa para desplegar y mantener bot, API y DB en Railway.
 ### API
 
 1. Pre-deploy: `npx prisma db push`
+   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `reaction_role_panels`, `reaction_role_panel_jobs`).
 2. Build: `npm ci --include=dev && npm run build`
 3. Start: `npm run start`
 

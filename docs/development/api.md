@@ -1,6 +1,6 @@
 # API Guide
 
-Guia de la API de Bonafide.
+Guía de la API de Bonafide.
 
 ## 1. Stack
 
@@ -18,67 +18,98 @@ Archivo ejemplo: `apps/api/.env.example`
 3. `DISCORD_REDIRECT_URI`
 4. `SESSION_SECRET`
 5. `DATABASE_URL`
-6. `BOT_API_TOKEN` (opcional pero requerido para endpoint interno del bot)
-7. `HOST`
-8. `PORT`
-9. `NODE_ENV`
+6. `BOT_API_TOKEN` (para el endpoint interno del bot)
+7. `DISCORD_BOT_TOKEN` (para consultar datos del servidor: preview, emojis, miembros, boosters)
+8. `FRONTEND_APP_URL`
+9. `CORS_ORIGINS`
+10. `HOST`
+11. `PORT`
+12. `NODE_ENV`
 
-## 3. Endpoints publicos
+## 3. Endpoints públicos
 
-Salud y metadata:
+Salud y metadata: `GET /health`, `GET /`
 
-1. `GET /health`
-2. `GET /`
+OAuth Discord: `GET /auth/discord/start`, `GET /auth/discord/callback`
 
-OAuth Discord:
+Sesión: `GET /me`, `GET /guilds`, `POST /auth/logout`
 
-1. `GET /auth/discord/start`
-2. `GET /auth/discord/callback`
+Widget del servidor: `GET /guilds/:guildId/widget` (conectados, totales, boosts)
 
-Sesion:
+Config guild: `GET/PATCH /guilds/:guildId/config`
 
-1. `GET /me`
-2. `GET /guilds`
+XP:
 
-Config guild:
+1. `GET /guilds/:guildId/xp-config`
+2. `PATCH /guilds/:guildId/xp-config`
+3. `GET /guilds/:guildId/xp/leaderboard`
+4. `GET /guilds/:guildId/xp/export`
+5. `POST /guilds/:guildId/xp/import`
+6. `POST /guilds/:guildId/xp/reset-all`
+7. `POST /guilds/:guildId/xp/sync`
 
-1. `GET /guilds/:guildId/config`
-2. `PATCH /guilds/:guildId/config`
+Reaction roles (jobs que ejecuta el bot):
 
-Reminders:
+1. `GET /guilds/:guildId/reaction-roles/panels`
+2. `POST /guilds/:guildId/reaction-roles/panels`
+3. `PATCH /guilds/:guildId/reaction-roles/panels/:messageId`
+4. `DELETE /guilds/:guildId/reaction-roles/panels/:messageId`
+5. `GET /guilds/:guildId/reaction-roles/jobs`
+6. `DELETE /guilds/:guildId/reaction-roles/jobs/:jobId`
 
-1. `GET /guilds/:guildId/reminders`
-2. `POST /guilds/:guildId/reminders`
-3. `DELETE /guilds/:guildId/reminders/:reminderId`
+Emojis del servidor: `GET /guilds/:guildId/emojis`
+
+Boosters de Nitro: `GET /guilds/:guildId/boosters`
+
+Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
+
+Reminders (legacy): `GET/POST /guilds/:guildId/reminders`, `DELETE /guilds/:guildId/reminders/:reminderId`
 
 ## 4. Endpoint interno para bot
 
-1. `GET /internal/guilds/:guildId/config`
-2. `PUT /internal/guilds/:guildId/config`
+Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 
-Auth:
+1. `GET/PUT /internal/guilds/:guildId/config`
+2. `GET /internal/guilds/:guildId/xp-config`
+3. `POST /internal/guilds/:guildId/xp/add`
+4. `POST /internal/guilds/:guildId/xp/level`
+5. `GET /internal/guilds/:guildId/xp/profiles`
+6. `GET /internal/guilds/:guildId/reaction-roles/jobs`
+7. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
 
-1. Header `x-bot-token`
-2. Debe coincidir con `BOT_API_TOKEN`
+## 5. Auditoría
 
-## 5. Persistencia Prisma
+1. Cada mutación del Hub queda registrada (config, XP, panels).
+2. Entradas: guild, actor, acción, detalle, fecha.
+3. Solo lectura: no hay rutas de edición/borrado.
+4. Lectura: `GET /guilds/:guildId/audit-logs` (solo owner).
+
+## 6. Persistencia Prisma
 
 Schema: `apps/api/prisma/schema.prisma`
 
-Tablas actuales:
+Tablas:
 
 1. `guild_configs`
 2. `reaction_role_rules`
+3. `reaction_role_panels`
+4. `reaction_role_panel_jobs`
+5. `xp_configs`
+6. `xp_profiles`
+7. `audit_log_entries`
+8. `discord_sessions`
+9. `oauth_states`
 
-Scripts relevantes (`apps/api/package.json`):
+Scripts (`apps/api/package.json`):
 
 1. `npm run db:generate`
 2. `npm run db:migrate:dev`
 3. `npm run db:migrate:deploy`
-4. `npm run build`
+4. `npx prisma db push --skip-generate` (sincronizar schema sin migraciones)
+5. `npm run build`
 
-## 6. Notas de OAuth
+## 7. Notas de OAuth
 
 1. `DISCORD_REDIRECT_URI` debe coincidir exactamente con Discord Developer Portal.
-2. En produccion usar URL publica HTTPS.
+2. En producción usar URL pública HTTPS.
 3. Si no coincide exacto, callback falla.

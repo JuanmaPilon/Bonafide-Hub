@@ -2,22 +2,43 @@
 
 Plataforma privada para una comunidad de Discord, construida como monorepo con tres piezas principales:
 
-1. Discord bot (operacion dentro de Discord)
-2. API backend (OAuth, configuracion y persistencia)
-3. Web hub (panel para gestion de guild)
+1. Discord bot (operación dentro de Discord)
+2. API backend (OAuth, configuración y persistencia)
+3. Web hub (panel para gestión de guild + home de la comunidad)
 
 ## Estado actual
 
-El bot y la API ya estan operativos con:
+### Discord bot (`apps/discord-bot`)
 
-1. Eventos de entrada/salida de miembros
-2. Logs configurables por guild
-3. Canales de voz dinamicos
-4. Reaction roles
-5. Recordatorios
-6. OAuth Discord en API
-7. Persistencia principal en PostgreSQL via Prisma (API)
-8. Fallback local del bot cuando la API no responde
+1. Eventos de entrada/salida de miembros (logs configurables por guild)
+2. Canales de voz dinámicos (salas temporales)
+3. Sistema de XP: XP por mensaje y por tiempo en voz, niveles, cooldown anti-spam
+4. Roles por nivel (con colores para el hub), prefijos de nickname, roles extra
+5. Anuncios de nivel (rank up) y sincronización de roles por nivel
+6. Rol de entrada automático al unirse
+7. Timers (`/settimer`) con aviso por DM + gestión (`/listtimers`, `/canceltimer`, `/removetimer`)
+8. Comunicados desde markdown (`/publicarcomunicado`)
+9. Estadísticas de miembros/roles (`/memberstats`, `/rolstats`)
+10. Comandos de gestión de XP (`/addlvl`, `/removelvl`, `/setlvl`, `/resetlvl`)
+11. Ejecutor de paneles de reaction roles creados desde la web (job polling ~20s)
+
+### API (`apps/api`)
+
+1. OAuth Discord + sesiones en PostgreSQL
+2. Configuración por guild
+3. Config de XP (niveles, roles, multiplicadores, colores)
+4. Leaderboard enriquecido (avatar, nombre, `isBooster`)
+5. Paneles de reaction roles (jobs encolados que ejecuta el bot)
+6. **Registro de auditoría** de cambios del Hub (solo lectura, visible para el owner)
+7. Widget del servidor (conectados, totales, boosts de Nitro)
+8. Boosters de Nitro (lista de quienes boostean)
+
+### Web hub (`apps/web`)
+
+1. Home de bienvenida con podio top 5 y boosters de Nitro
+2. Dashboard con stats del servidor, leaderboard, neón por rango y badge de booster
+3. Panel Admin: configuración general, reaction roles, sistema de XP (niveles, colores, multiplicadores, import/export) y registro de auditoría
+4. Navegación por hash (`/#/home`, `/#/dashboard`, `/#/admin`, ...)
 
 ## Estructura del repo
 
@@ -28,11 +49,13 @@ apps/
   web/          React/Vite (Guild Hub)
 
 packages/
-  shared/       Espacio para codigo compartido
+  shared/       Placeholder de código compartido (actualmente sin uso)
 
 docs/
-  development/  Documentacion tecnica y operativa
+  development/  Documentación técnica y operativa
 ```
+
+> Nota: `packages/shared` no se usa todavía. Es un placeholder pensado para el futuro código compartido entre apps (tipos/servicios).
 
 ## Arquitectura resumida
 
@@ -53,9 +76,10 @@ Web (apps/web)
 
 Notas importantes:
 
-1. El bot intenta usar configuracion remota en API/DB.
+1. El bot intenta usar configuración remota en API/DB.
 2. Si la API no responde, usa fallback local en `apps/discord-bot/data/guild-config.json`.
-3. Cuando remoto vuelve, el bot puede sincronizar configuracion local al remoto.
+3. Los paneles de reaction roles se crean desde la web: la API encola un job y el bot lo publica/actualiza/borra en Discord (polling ~20s).
+4. El registro de auditoría es de solo escritura; solo el owner puede leerlo desde el panel Admin.
 
 ## Quick start local
 
@@ -65,7 +89,7 @@ Notas importantes:
 cd apps/discord-bot
 npm install
 copy .env.example .env
-npm run register
+npm run register   # registra los slash commands en la guild
 npm run dev
 ```
 
@@ -95,7 +119,13 @@ cd apps/api && npm run build
 cd apps/web && npm run build
 ```
 
-## Documentacion tecnica
+## Base de datos
+
+- Schema: `apps/api/prisma/schema.prisma`
+- Tablas: `guild_configs`, `reaction_role_rules`, `reaction_role_panels`, `reaction_role_panel_jobs`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`
+- Al agregar tablas al schema: `cd apps/api && npx prisma db push --skip-generate` (pre-deploy en Railway)
+
+## Documentación técnica
 
 1. `docs/development/architecture.md`
 2. `docs/development/discord-bot.md`
@@ -107,10 +137,12 @@ cd apps/web && npm run build
 1. Nunca commitear `.env` con secretos.
 2. Mantener secretos en Railway Variables.
 3. Rotar tokens/credentials cuando se exponen.
-4. Mantener permisos del bot con principio de minimo privilegio cuando sea posible.
+4. Mantener permisos del bot con principio de mínimo privilegio cuando sea posible.
+5. El registro de auditoría es de solo lectura (no hay endpoints de edición/borrado).
 
 ## Consideraciones operativas
 
 1. Si cambias comandos slash, volver a correr `npm run register`.
-2. Si el bot no puede llegar a API, entra en fallback local automaticamente.
+2. Si el bot no puede llegar a API, entra en fallback local automáticamente.
 3. En Railway, confirmar variables por servicio y por environment antes de redeploy.
+4. Si agregás tablas Prisma, correr `npx prisma db push` antes del deploy de la API.

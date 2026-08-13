@@ -1,6 +1,6 @@
 # Discord Bot Guide
 
-Guia tecnica y funcional del bot de Discord.
+Guía técnica y funcional del bot de Discord.
 
 ## 1. Stack
 
@@ -10,124 +10,91 @@ Guia tecnica y funcional del bot de Discord.
 
 ## 2. Comandos disponibles
 
-### Basicos
-
-1. `/saludo`
-2. `/ping`
-3. `/help`
-
-### Logs de miembros
-
-1. `/setlogchannel canal:<texto|announcement>`
-2. `/getlogchannel`
-3. `/testmemberlog`
-
-Eventos relacionados:
-
-1. `GuildMemberAdd`
-2. `GuildMemberRemove`
-
-### Voz dinamica
-
-1. `/setvoicecreator canal:<voice>`
-2. `/getvoicecreator`
-3. `/clearvoicecreator`
-
-Comportamiento:
-
-1. Usuario entra al canal creador.
-2. Bot crea sala temporal.
-3. Bot mueve al usuario a la sala.
-4. Cuando la sala temporal queda vacia, se elimina.
-
-### Estadisticas
+### Estadísticas
 
 1. `/memberstats [publico]`
 2. `/rolstats rol:<rol> [listar] [publico]`
 
+### Timers (aviso por DM)
+
+1. `/settimer [segundos] [minutos] [horas] [repetir]` — combina unidades; rango 1s a 7 días
+2. `/listtimers`
+3. `/canceltimer id:<id>` (requiere Manage Server)
+4. `/removetimer` — borra los timers propios
+
 ### Comunicados markdown
 
-1. `/publicarcomunicado archivo:<ruta> [canal]`
+1. `/publicarcomunicado archivo:<ruta> [canal]` (requiere Manage Server)
+   - Fuente: `apps/discord-bot/docs/comunicados/**`
 
-Fuente de archivos:
+### XP (niveles)
 
-1. `apps/discord-bot/docs/comunicados/**`
+1. `/addlvl usuario:<usuario> niveles:<n>` (Manage Server)
+2. `/removelvl usuario:<usuario> niveles:<n>` (Manage Server)
+3. `/setlvl usuario:<usuario> nivel:<n>` (Manage Server)
+4. `/resetlvl usuario:<usuario>` (Manage Server)
 
-### Reaction roles
+> Los comandos de reaction roles por Discord fueron retirados: los paneles se administran desde la web (Admin → Reaction Roles) y el bot los publica vía jobs encolados.
 
-1. `/setreactionrole canal mensaje_id emoji rol [modo]`
-2. `/removereactionrole canal mensaje_id emoji`
-3. `/listreactionroles`
-4. `/setreactionpanelmode canal mensaje_id modo`
-5. `/createreactionpanel titulo emoji_1 rol_1 [modo] [canal] [descripcion] [emoji_2] [rol_2] [emoji_3] [rol_3]`
+## 3. Eventos y automatizaciones
 
-Modos:
+1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada
+2. `GuildMemberRemove` → log de salida
+3. `MessageCreate` → XP por mensaje (cooldown anti-spam)
+4. `VoiceStateUpdate` → XP por tiempo en voz + salas de voz dinámicas
+5. `MessageReactionAdd/Remove` → asigna/quita roles de reaction roles
+6. Polling de jobs de reaction roles (~20s) → crea/edita/borra paneles pedidos desde la web
+7. Polling de `xpSyncRequested` → re-sincroniza roles/nicknames por nivel
+8. Scheduler de timers → avisa por DM al vencer (con opción de repetir)
 
-1. `multiple`
-2. `unique`
-3. `additive`
+## 4. Sistema de XP
 
-### Recordatorios
+1. XP por mensaje (`messageXp`) y por minuto en voz (`voiceXpPerMinute`).
+2. Cooldown anti-spam por usuario.
+3. Niveles con fórmula triangular (`levelBaseXp`).
+4. Roles por nivel (acumular o reemplazar) + roles extra (add/remove).
+5. Prefijo de nickname por nivel (idempotente).
+6. Anuncios de rank (solo al subir de rango).
+7. Multiplicadores de XP por rol.
+8. Cap de nivel (`maxLevel`; 0 = sin límite).
+9. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
 
-1. `/setreminder minutos mensaje [canal] [mencionar_rol]`
-2. `/listreminders`
-3. `/cancelreminder id`
-
-## 3. Variables de entorno del bot
+## 5. Variables de entorno del bot
 
 Archivo ejemplo: `apps/discord-bot/.env.example`
 
-Requeridas para login:
+1. `DISCORD_BOT_TOKEN` — login
+2. `DISCORD_APPLICATION_ID` — registro slash
+3. `DISCORD_GUILD_ID` — registro slash
+4. `BOT_CONFIG_API_URL` — config remota (API)
+5. `BOT_CONFIG_API_TOKEN` — auth hacia API
+6. `BOT_DISABLED` — si es true, no hace login
 
-1. `DISCORD_BOT_TOKEN`
-
-Recomendadas para registro slash:
-
-1. `DISCORD_APPLICATION_ID`
-2. `DISCORD_GUILD_ID`
-
-Integracion con API para config remota:
-
-1. `BOT_CONFIG_API_URL`
-2. `BOT_CONFIG_API_TOKEN`
-
-Control operativo:
-
-1. `BOT_DISABLED`
-
-- Si esta en true, el proceso arranca pero no hace login a Discord
-
-## 4. Permisos recomendados
-
-Minimos tipicos:
+## 6. Permisos recomendados
 
 1. View Channels
 2. Send Messages
 3. Read Message History
 4. Add Reactions
-5. Manage Channels
-6. Move Members
-7. Connect
-8. Manage Roles (reaction roles)
+5. Manage Channels (voz dinámica)
+6. Move Members (voz dinámica)
+7. Connect / Speak (voz)
+8. Manage Roles (roles por nivel, reaction roles, rol de entrada)
 
 Notas:
 
-1. El rol del bot debe estar por encima del rol que intenta asignar/remover.
-2. Para debugging rapido, Admin funciona, pero no es ideal a largo plazo.
+1. El rol del bot debe estar por encima de los roles que intenta asignar/remover.
+2. Para debugging rápido Admin funciona, pero no es ideal a largo plazo.
 
-## 5. Persistencia del bot
+## 7. Persistencia del bot
 
-1. Principal: API + DB via endpoint interno.
+1. Principal: API + DB vía endpoint interno.
 2. Fallback: `apps/discord-bot/data/guild-config.json`.
+3. Los timers se guardan en `apps/discord-bot/data/reminders.json`.
 
-Si API falla o duerme:
+## 8. Flujo recomendado de cambios
 
-1. Bot sigue operando con fallback local.
-2. Cuando API vuelve, puede sincronizar local -> remoto.
-
-## 6. Flujo recomendado de cambios
-
-1. Cambiar codigo en local.
+1. Cambiar código en local.
 2. `npm run build`.
 3. Si tocaste slash commands: `npm run register`.
 4. Validar en Discord.
