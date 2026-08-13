@@ -102,6 +102,15 @@ export async function deleteReactionRolePanel(
   });
 }
 
+export async function deleteReactionRoleJob(
+  guildId: string,
+  jobId: string,
+): Promise<void> {
+  await prisma.reactionRolePanelJob.deleteMany({
+    where: { guildId, id: jobId },
+  });
+}
+
 export async function completeReactionRoleJob(
   guildId: string,
   jobId: string,

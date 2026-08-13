@@ -10,6 +10,8 @@ import {
 import {
   completeReactionRoleJob,
   createReactionRoleJob,
+  deleteReactionRoleJob,
+  deleteReactionRolePanel,
   listPendingReactionRoleJobs,
   listReactionRolePanels,
   listRecentReactionRoleJobs,
@@ -418,6 +420,7 @@ export function buildApp() {
       }
 
       const body = (request.body ?? {}) as {
+        deletePanelMessageId?: string;
         error?: string;
         messageId?: string;
         panel?: {
@@ -427,6 +430,16 @@ export function buildApp() {
           title?: string;
         };
       };
+
+      if (
+        body.deletePanelMessageId &&
+        body.deletePanelMessageId !== body.messageId
+      ) {
+        await deleteReactionRolePanel(
+          params.guildId,
+          body.deletePanelMessageId,
+        );
+      }
 
       await completeReactionRoleJob(params.guildId, params.jobId, {
         error: body.error,
@@ -1339,6 +1352,32 @@ export function buildApp() {
       jobs,
     };
   });
+
+  app.delete(
+    "/guilds/:guildId/reaction-roles/jobs/:jobId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; jobId?: string };
+      if (!params.guildId || !params.jobId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      await deleteReactionRoleJob(params.guildId, params.jobId);
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+      };
+    },
+  );
 
   app.delete(
     "/guilds/:guildId/reaction-roles/panels/:messageId",

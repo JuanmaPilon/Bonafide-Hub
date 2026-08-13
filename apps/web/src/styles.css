@@ -680,6 +680,30 @@ a:hover {
   color: #ff9a9a;
 }
 
+.rr-job-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rr-job-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rr-job-dismiss:hover {
+  color: #ff9a9a;
+  background: rgba(229, 72, 77, 0.12);
+}
+
 .rr-job-ok {
   color: var(--muted);
   font-size: 0.86rem;

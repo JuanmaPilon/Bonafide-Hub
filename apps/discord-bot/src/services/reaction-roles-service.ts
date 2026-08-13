@@ -66,6 +66,7 @@ export async function completeReactionRoleJob(
   guildId: string,
   jobId: string,
   input: {
+    deletePanelMessageId?: string;
     error?: string;
     messageId?: string;
     panel?: {

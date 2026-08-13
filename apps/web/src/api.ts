@@ -383,6 +383,19 @@ export async function listReactionRoleJobs(
   return data.jobs;
 }
 
+export async function deleteReactionRoleJob(
+  guildId: string,
+  jobId: string,
+): Promise<void> {
+  await requestJson<{ ok: boolean }>(
+    `/guilds/${guildId}/reaction-roles/jobs/${encodeURIComponent(jobId)}`,
+    {
+      method: "DELETE",
+      body: JSON.stringify({}),
+    },
+  );
+}
+
 export async function deleteReactionRolePanel(
   guildId: string,
   messageId: string,

@@ -1029,12 +1029,13 @@ function resolveReactionEmoji(
   ) {
     return trimmed;
   }
-  const found = guild.emojis?.cache?.find((emoji) => emoji.name === trimmed);
+  const bare = trimmed.replace(/^:+/u, "").replace(/:+$/u, "");
+  const found = guild.emojis?.cache?.find((emoji) => emoji.name === bare);
   return found
     ? found.animated
       ? `<a:${found.name}:${found.id}>`
       : `<:${found.name}:${found.id}>`
-    : trimmed;
+    : bare;
 }
 
 async function processReactionRoleJob(
@@ -1117,11 +1118,10 @@ async function processReactionRoleJob(
 
     if (job.action === "update") {
       const existingRules = await listReactionRoleRules(job.guildId);
-      const channelId =
-        job.channelId ??
+      const oldChannelId =
         existingRules.find((rule) => rule.messageId === job.messageId)
-          ?.channelId ??
-        null;
+          ?.channelId ?? null;
+      const channelId = job.channelId ?? oldChannelId;
 
       if (!job.messageId || !channelId) {
         await completeReactionRoleJob(job.guildId, job.id, {
@@ -1138,31 +1138,48 @@ async function processReactionRoleJob(
         return;
       }
 
-      const message = await channel.messages
-        .fetch(job.messageId)
-        .catch(() => null);
-      if (!message) {
-        await completeReactionRoleJob(job.guildId, job.id, {
-          error: "No se encontró el mensaje del panel",
-        });
-        return;
-      }
-
       const resolvedRules = job.rules.map((pair) => ({
         emoji: resolveReactionEmoji(guild, pair.emoji),
         roleId: pair.roleId,
       }));
+      const panelText = buildReactionPanelText({
+        description: job.description,
+        pairs: resolvedRules,
+        title: job.title,
+      });
 
-      if (hasEditMethod(message)) {
-        await message
-          .edit(
-            buildReactionPanelText({
-              description: job.description,
-              pairs: resolvedRules,
-              title: job.title,
-            }),
-          )
-          .catch(() => undefined);
+      // Buscamos el mensaje primero en el canal objetivo y, si el canal
+      // cambió, también en el canal donde vivía antes.
+      let message = await channel.messages
+        .fetch(job.messageId)
+        .catch(() => null);
+      if (!message && oldChannelId && oldChannelId !== channelId) {
+        const oldChannel = await guild.channels
+          .fetch(oldChannelId)
+          .catch(() => null);
+        if (isReactionRoleTextChannelLike(oldChannel)) {
+          message = await oldChannel.messages
+            .fetch(job.messageId)
+            .catch(() => null);
+        }
+      }
+
+      let targetMessageId = job.messageId;
+
+      if (!message) {
+        // El mensaje original ya no existe (fue borrado o el canal
+        // cambió): lo volvemos a publicar para no dejar el panel huérfano.
+        const republished = await channel.send(panelText).catch(() => null);
+        if (!isReactableMessageLike(republished)) {
+          await completeReactionRoleJob(job.guildId, job.id, {
+            error: "No se pudo republicar el panel",
+          });
+          return;
+        }
+        message = republished;
+        targetMessageId = republished.id;
+      } else if (hasEditMethod(message)) {
+        await message.edit(panelText).catch(() => undefined);
       }
 
       if (isReactableMessageLike(message)) {
@@ -1200,14 +1217,16 @@ async function processReactionRoleJob(
         await upsertReactionRoleRule(job.guildId, {
           channelId: channelId,
           emojiKey,
-          messageId: job.messageId,
+          messageId: targetMessageId,
           mode: (job.mode as ReactionRoleMode) || "multiple",
           roleId: pair.roleId,
         });
       }
 
       await completeReactionRoleJob(job.guildId, job.id, {
-        messageId: job.messageId,
+        deletePanelMessageId:
+          targetMessageId !== job.messageId ? job.messageId : undefined,
+        messageId: targetMessageId,
         panel: {
           channelId,
           description: job.description ?? undefined,
