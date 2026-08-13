@@ -511,14 +511,23 @@ function App() {
     });
   }
 
-  function changeXpRoleLevel(currentLevel: number, nextLevel: number): void {
+  function changeXpRoleLevel(currentLevel: number, rawValue: number): void {
+    if (!Number.isFinite(rawValue)) {
+      return;
+    }
+
+    const nextLevel = Math.floor(rawValue);
+    if (nextLevel < 0) {
+      return;
+    }
+
     setXpConfig((current) => {
       if (!current) {
         return current;
       }
 
-      if (nextLevel < 0) {
-        return current;
+      if (nextLevel === currentLevel) {
+        return { ...current };
       }
 
       const alreadyExists = current.levelRoles.some(
@@ -526,7 +535,7 @@ function App() {
       );
       if (alreadyExists) {
         pushToast("Ese nivel ya está asignado a otro rol.", "error");
-        return current;
+        return { ...current };
       }
 
       return {
@@ -1165,7 +1174,7 @@ function App() {
                               onChange={(event) =>
                                 changeXpRoleLevel(
                                   rule.level,
-                                  Number(event.target.value) || 1,
+                                  Number(event.target.value),
                                 )
                               }
                             />
