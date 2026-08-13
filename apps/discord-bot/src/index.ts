@@ -31,6 +31,7 @@ import {
   type ReactionRoleMode,
   removeReactionRoleRule,
   removeTemporaryVoiceChannelId,
+  setXpSyncRequested,
   updateReactionRoleModeForMessage,
   upsertReactionRoleRule,
 } from "./services/guild-config-store.js";
@@ -43,6 +44,7 @@ import {
   addRemoteXp,
   computeXpMultiplier,
   fetchRemoteXpConfig,
+  fetchRemoteXpProfiles,
   getErrorMessage,
   isRemoteStoreEnabled,
   setRemoteXpLevel,
@@ -856,10 +858,126 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
   await removeTemporaryVoiceChannelId(channelState.guild.id, channelId);
 }
 
+const XP_SYNC_POLL_INTERVAL_MS = 30_000;
+let xpSyncPollTimer: NodeJS.Timeout | null = null;
+
+async function syncGuildRoles(guildId: string): Promise<void> {
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  try {
+    const [xpConfig, profiles] = await Promise.all([
+      fetchRemoteXpConfig(guildId),
+      fetchRemoteXpProfiles(guildId),
+    ]);
+    const profileByUser = new Map(
+      profiles.map((profile) => [profile.userId, profile]),
+    );
+
+    const guild = await client.guilds.fetch(guildId).catch(() => null);
+    if (!guild) {
+      return;
+    }
+
+    const me = await guild.members.fetchMe().catch(() => null);
+    if (!me?.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      console.warn(
+        `[discord-bot] Bot lacks ManageRoles permission to sync roles (guild ${guildId}).`,
+      );
+      return;
+    }
+
+    const members = await guild.members.fetch().catch(() => null);
+    if (!members) {
+      return;
+    }
+
+    const botHighestPosition = me.roles.highest.position;
+    const allLevelRoleIds = (xpConfig.levelRoles ?? [])
+      .map((rule) => rule.roleId)
+      .filter(Boolean);
+
+    let synced = 0;
+    for (const member of members.values()) {
+      if (member.user.bot) {
+        continue;
+      }
+
+      const level = profileByUser.get(member.id)?.level ?? 0;
+
+      await applyLevelRoles({ guildId, level, userId: member.id }).catch(
+        () => undefined,
+      );
+      await applyNicknameForLevel({ guildId, level, userId: member.id }).catch(
+        () => undefined,
+      );
+
+      const rolesAboveLevel = allLevelRoleIds.filter((roleId) => {
+        const rule = xpConfig.levelRoles?.find(
+          (entry) => entry.roleId === roleId,
+        );
+        if (!rule || rule.level <= level) {
+          return false;
+        }
+        const role = guild.roles.cache.get(roleId);
+        if (!role || role.position >= botHighestPosition) {
+          return false;
+        }
+        return member.roles.cache.has(roleId);
+      });
+
+      if (rolesAboveLevel.length > 0) {
+        await member.roles
+          .remove(rolesAboveLevel, "XP sync: nivel actualizado")
+          .catch(() => undefined);
+      }
+
+      synced += 1;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    console.log(
+      `[discord-bot] XP sync completed for guild ${guildId}: ${synced} members.`,
+    );
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Failed to sync guild roles: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+function startXpSyncChecker(): void {
+  if (xpSyncPollTimer) {
+    return;
+  }
+
+  xpSyncPollTimer = setInterval(() => {
+    void (async () => {
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          const config = await getGuildConfig(guild.id);
+          if (!config.xpSyncRequested) {
+            continue;
+          }
+
+          await setXpSyncRequested(guild.id, false);
+          await syncGuildRoles(guild.id);
+        } catch (error: unknown) {
+          console.warn(
+            `[discord-bot] XP sync poll failed for guild ${guild.id}: ${getErrorMessage(error)}`,
+          );
+        }
+      }
+    })();
+  }, XP_SYNC_POLL_INTERVAL_MS);
+}
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`[discord-bot] Online as ${readyClient.user.tag}`);
   startReminderScheduler();
   startVoiceXpTracker();
+  startXpSyncChecker();
 });
 
 async function handleXpLevelCommand(

@@ -14,6 +14,7 @@ import {
   importXpData,
   loginUrl,
   logout,
+  requestXpSync,
   resetAllXp,
   saveGuildConfig,
   saveXpConfig,
@@ -492,6 +493,34 @@ function App() {
       const message =
         error instanceof Error ? error.message : "Error desconocido";
       pushToast(`No se pudo resetear el XP: ${message}`, "error");
+    } finally {
+      setLoadingGuildData(false);
+    }
+  }
+
+  async function handleSyncRoles(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Re-sincronizar roles y prefijos de nombre de todos los miembros según su nivel actual? El bot lo procesará en unos segundos.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setLoadingGuildData(true);
+    try {
+      await requestXpSync(selectedGuildId);
+      pushToast(
+        "Sincronización encolada. El bot aplicará roles y prefijos en unos segundos.",
+        "success",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error desconocido";
+      pushToast(`No se pudo encolar la sincronización: ${message}`, "error");
     } finally {
       setLoadingGuildData(false);
     }
@@ -1370,6 +1399,13 @@ function App() {
                       type="button"
                     >
                       Resetear niveles de todos
+                    </button>
+                    <button
+                      className="ghost-button"
+                      onClick={() => void handleSyncRoles()}
+                      type="button"
+                    >
+                      Re-sincronizar roles
                     </button>
                   </div>
 

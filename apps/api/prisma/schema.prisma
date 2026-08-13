@@ -13,6 +13,7 @@ model GuildConfig {
   dynamicVoiceCreateChannelId String?
   reactionRolesChannelId      String?
   defaultRoleId               String?
+  xpSyncRequested             Boolean  @default(false)
   enabledModules              String[] @default([])
   temporaryVoiceChannelIds    String[] @default([])
   createdAt                   DateTime @default(now())

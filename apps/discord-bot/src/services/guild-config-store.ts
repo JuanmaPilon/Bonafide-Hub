@@ -8,6 +8,7 @@ type GuildConfig = {
   memberLogChannelId?: string;
   reactionRoles?: ReactionRoleRule[];
   temporaryVoiceChannelIds?: string[];
+  xpSyncRequested?: boolean;
 };
 
 export type ReactionRoleRule = {
@@ -47,6 +48,7 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     memberLogChannelId: input.memberLogChannelId,
     reactionRoles: input.reactionRoles ?? [],
     temporaryVoiceChannelIds: input.temporaryVoiceChannelIds ?? [],
+    xpSyncRequested: input.xpSyncRequested ?? false,
   };
 }
 
@@ -231,6 +233,16 @@ export async function setGuildMemberLogChannelId(
   await mutateGuildConfig(guildId, (current) => ({
     ...current,
     memberLogChannelId: channelId,
+  }));
+}
+
+export async function setXpSyncRequested(
+  guildId: string,
+  requested: boolean,
+): Promise<void> {
+  await mutateGuildConfig(guildId, (current) => ({
+    ...current,
+    xpSyncRequested: requested,
   }));
 }
 

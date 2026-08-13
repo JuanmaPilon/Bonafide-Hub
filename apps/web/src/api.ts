@@ -303,6 +303,13 @@ export async function resetAllXp(guildId: string): Promise<{ reset: number }> {
   return data;
 }
 
+export async function requestXpSync(guildId: string): Promise<void> {
+  await requestJson<{ ok: boolean }>(`/guilds/${guildId}/xp/sync`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export async function saveGuildConfig(
   guildId: string,
   config: GuildConfig,

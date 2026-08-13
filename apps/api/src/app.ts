@@ -494,6 +494,36 @@ export function buildApp() {
     };
   });
 
+  app.get("/internal/guilds/:guildId/xp/profiles", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const profiles = await listXpProfiles(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      profiles: profiles.map((profile) => ({
+        userId: profile.userId,
+        level: profile.level,
+        xp: profile.xp,
+      })),
+    };
+  });
+
   app.get("/auth/discord/start", async (request, reply) => {
     const callbackUrl = resolveCallbackUrl(request);
     const state = await createOAuthState({ callbackUrl });
@@ -1033,6 +1063,29 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       ...result,
+    };
+  });
+
+  app.post("/guilds/:guildId/xp/sync", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    await upsertGuildConfig(params.guildId, { xpSyncRequested: true });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
     };
   });
 

@@ -221,4 +221,42 @@ export function computeXpMultiplier(
   return multiplier;
 }
 
+export async function fetchRemoteXpProfiles(
+  guildId: string,
+): Promise<Array<{ level: number; userId: string; xp: number }>> {
+  if (!remoteApiBaseUrl || !remoteApiToken) {
+    throw new Error("Remote bot xp store is not configured");
+  }
+
+  const controller = createTimeoutController(remoteTimeoutMs);
+  const response = await fetch(
+    `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(guildId)}/xp/profiles`,
+    {
+      headers: {
+        "x-bot-token": remoteApiToken,
+      },
+      method: "GET",
+      signal: controller.signal,
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "unknown");
+    throw new Error(
+      `Remote xp profiles fetch failed (${response.status}): ${details}`,
+    );
+  }
+
+  const payload = (await response.json()) as {
+    ok?: boolean;
+    profiles?: Array<{ level?: number; userId?: string; xp?: number }>;
+  };
+
+  return (payload.profiles ?? []).map((profile) => ({
+    level: profile.level ?? 0,
+    userId: profile.userId ?? "",
+    xp: profile.xp ?? 0,
+  }));
+}
+
 export { getErrorMessage, isRemoteStoreEnabled };

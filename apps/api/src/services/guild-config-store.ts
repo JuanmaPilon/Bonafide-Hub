@@ -18,6 +18,7 @@ export type GuildConfig = {
   reactionRoles?: ReactionRoleRule[];
   reactionRolesChannelId?: string;
   temporaryVoiceChannelIds?: string[];
+  xpSyncRequested?: boolean;
 };
 
 function toGuildConfig(
@@ -28,6 +29,7 @@ function toGuildConfig(
     memberLogChannelId: string | null;
     reactionRolesChannelId: string | null;
     temporaryVoiceChannelIds: string[];
+    xpSyncRequested: boolean;
   } | null,
   reactionRoles: ReactionRoleRule[],
 ): GuildConfig {
@@ -47,6 +49,7 @@ function toGuildConfig(
     reactionRoles,
     reactionRolesChannelId: record.reactionRolesChannelId ?? undefined,
     temporaryVoiceChannelIds: record.temporaryVoiceChannelIds,
+    xpSyncRequested: record.xpSyncRequested,
   };
 }
 
@@ -81,6 +84,7 @@ type NormalizedGuildConfig = {
   reactionRoles: ReactionRoleRule[];
   reactionRolesChannelId?: string;
   temporaryVoiceChannelIds: string[];
+  xpSyncRequested: boolean;
 };
 
 function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
@@ -96,6 +100,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     reactionRoles: normalizedRules,
     reactionRolesChannelId: config.reactionRolesChannelId,
     temporaryVoiceChannelIds: config.temporaryVoiceChannelIds ?? [],
+    xpSyncRequested: config.xpSyncRequested ?? false,
   };
 }
 
@@ -136,6 +141,7 @@ export async function replaceGuildConfig(
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
         defaultRoleId: normalized.defaultRoleId,
+        xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
       },
@@ -144,6 +150,7 @@ export async function replaceGuildConfig(
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
         defaultRoleId: normalized.defaultRoleId,
+        xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
       },
