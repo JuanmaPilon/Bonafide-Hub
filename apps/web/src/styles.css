@@ -1066,6 +1066,25 @@ a:hover {
     0 0 14px rgba(244, 127, 255, 0.4);
 }
 
+.booster-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(244, 127, 255, 0.16);
+  border: 1px solid rgba(244, 127, 255, 0.5);
+  color: #f47fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(244, 127, 255, 0.8);
+  box-shadow: 0 0 8px rgba(244, 127, 255, 0.3);
+  cursor: default;
+  flex-shrink: 0;
+}
+
 .booster-since {
   color: var(--muted);
   font-size: 0.8rem;

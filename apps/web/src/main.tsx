@@ -1682,6 +1682,15 @@ function App() {
                                       entry.username ||
                                       `@${entry.userId}`}
                                   </span>
+                                  {entry.isBooster ? (
+                                    <span
+                                      className="booster-badge"
+                                      title="Server Booster"
+                                      aria-label="Server Booster"
+                                    >
+                                      ◈
+                                    </span>
+                                  ) : null}
                                 </span>
                               </td>
                               <td>
