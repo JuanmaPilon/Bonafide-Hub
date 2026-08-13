@@ -325,3 +325,14 @@ export async function resetXpProfile(
     xp: 0,
   });
 }
+
+/**
+ * Elimina todos los perfiles de XP de una guild (reset total del leaderboard).
+ */
+export async function resetAllXp(guildId: string): Promise<{ reset: number }> {
+  const result = await prisma.xpProfile.deleteMany({
+    where: { guildId },
+  });
+
+  return { reset: result.count };
+}

@@ -25,6 +25,7 @@ import {
   getXpProfile,
   importXpEntries,
   listXpProfiles,
+  resetAllXp,
   resetXpProfile,
   setXpLevel,
   type XpImportEntry,
@@ -1003,6 +1004,30 @@ export function buildApp() {
     }
 
     const result = await importXpEntries(params.guildId, entries);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      ...result,
+    };
+  });
+
+  app.post("/guilds/:guildId/xp/reset-all", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const result = await resetAllXp(params.guildId);
 
     return {
       ok: true,

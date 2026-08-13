@@ -291,6 +291,17 @@ export async function importXpData(
   return data;
 }
 
+export async function resetAllXp(guildId: string): Promise<{ reset: number }> {
+  const data = await requestJson<{ reset: number }>(
+    `/guilds/${guildId}/xp/reset-all`,
+    {
+      method: "POST",
+    },
+  );
+
+  return data;
+}
+
 export async function saveGuildConfig(
   guildId: string,
   config: GuildConfig,

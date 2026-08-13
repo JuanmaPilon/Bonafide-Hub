@@ -14,6 +14,7 @@ import {
   importXpData,
   loginUrl,
   logout,
+  resetAllXp,
   saveGuildConfig,
   saveXpConfig,
   type ApiGuild,
@@ -462,6 +463,34 @@ function App() {
     } catch (error) {
       void error;
       pushToast("No se pudo importar el XP.", "error");
+    } finally {
+      setLoadingGuildData(false);
+    }
+  }
+
+  async function handleResetAllXp(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "⚠️ ¡CUIDADO! Vas a eliminar los niveles y XP de TODOS los miembros del servidor. Esta acción no se puede deshacer. ¿Continuar?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setLoadingGuildData(true);
+    try {
+      const result = await resetAllXp(selectedGuildId);
+      setLeaderboard([]);
+      pushToast(
+        `Se reiniciaron los niveles de ${result.reset} usuarios.`,
+        "success",
+      );
+    } catch (error) {
+      void error;
+      pushToast("No se pudo resetear el XP del servidor.", "error");
     } finally {
       setLoadingGuildData(false);
     }
@@ -1325,6 +1354,13 @@ function App() {
                       hidden
                       onChange={(event) => void handleImportXpFile(event)}
                     />
+                    <button
+                      className="ghost-button danger"
+                      onClick={() => void handleResetAllXp()}
+                      type="button"
+                    >
+                      Resetear niveles de todos
+                    </button>
                   </div>
 
                   <div className="form-actions">
