@@ -489,8 +489,9 @@ function App() {
         "success",
       );
     } catch (error) {
-      void error;
-      pushToast("No se pudo resetear el XP del servidor.", "error");
+      const message =
+        error instanceof Error ? error.message : "Error desconocido";
+      pushToast(`No se pudo resetear el XP: ${message}`, "error");
     } finally {
       setLoadingGuildData(false);
     }

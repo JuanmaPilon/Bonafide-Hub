@@ -296,6 +296,7 @@ export async function resetAllXp(guildId: string): Promise<{ reset: number }> {
     `/guilds/${guildId}/xp/reset-all`,
     {
       method: "POST",
+      body: JSON.stringify({}),
     },
   );
 
