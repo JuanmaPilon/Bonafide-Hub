@@ -1,8 +1,11 @@
 [phases.setup]
-aptPkgs = ["ffmpeg", "python3"]
+aptPkgs = ["python3"]
 
 # python3 es necesario para ejecutar yt-dlp (es un script/zipapp de Python;
 # sin él, el binario baja con `python3: No such file or directory`).
+# ffmpeg NO va acá: el paquete apt de ffmpeg está en el repo "universe",
+# que suele estar deshabilitado en la imagen base de nixpacks, y rompe el
+# build entero. ffmpeg lo provee ffmpeg-static (npm) con fallback en runtime.
 # El yt-dlp se descarga en runtime (última versión) en .cache.
 # Estas variables evitan que el build falle por las install scripts de
 # youtube-dl-exec:

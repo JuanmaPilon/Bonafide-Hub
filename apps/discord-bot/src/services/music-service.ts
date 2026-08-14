@@ -215,6 +215,25 @@ function ensureFfmpeg(): Promise<boolean> {
 
 void ensureFfmpeg();
 
+// ── Diagnóstico de python3 ──────────────────────────────────────────
+// yt-dlp es un script de Python; sin python3 no corre (exit 127).
+function python3Works(): boolean {
+  try {
+    const result = spawnSync("python3", ["--version"], { stdio: "ignore" });
+    return !result.error && result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+if (python3Works()) {
+  console.log("[music] python3 disponible");
+} else {
+  console.error(
+    "[music] ⚠️ python3 NO disponible — yt-dlp no va a funcionar (revisar apt en Railway)",
+  );
+}
+
 export type Track = {
   duration?: string;
   requestedBy: string;
