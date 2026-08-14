@@ -110,6 +110,12 @@ async function playNext(guildId: string): Promise<void> {
     });
     resource.volume?.setVolume(state.volume);
     state.current = next;
+    console.log("[music] playing", {
+      guildId,
+      title: next.title,
+      streamType: streamInfo.type,
+      connectionStatus: state.connection?.state.status ?? "none",
+    });
     state.player.play(resource);
   } catch (error) {
     console.error("[music] failed to stream", {
