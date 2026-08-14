@@ -100,19 +100,19 @@ async function resolveYtDlpBinary(): Promise<string> {
     return explicit;
   }
 
-  // 1. yt-dlp en PATH (p.ej. instalado por apt) — binario real.
-  if (ytdlWorks("yt-dlp")) {
-    return "yt-dlp";
-  }
-
-  // 2. Binario empaquetado por youtube-dl-exec, SOLO si es un binario
-  //    real. Si el postinstall no corrió, deja un shim de Python que
-  //    falla sin python3 (error 127).
+  // 1. Binario empaquetado por youtube-dl-exec, SOLO si es un binario
+  //    real (no el shim de Python que deja si el postinstall no corrió).
   if (existsSync(YTDL_BUNDLED_BIN) && ytdlWorks(YTDL_BUNDLED_BIN)) {
     return YTDL_BUNDLED_BIN;
   }
 
-  // 3. Descargamos la última versión standalone a un cache local.
+  // 2. Descarga previa cacheada (última versión).
+  if (existsSync(YTDL_CACHE_BIN) && ytdlWorks(YTDL_CACHE_BIN)) {
+    return YTDL_CACHE_BIN;
+  }
+
+  // 3. Descargamos la última versión a un cache local. La preferimos a
+  //    la de apt porque es más nueva y soporta --js-runtimes.
   try {
     return await downloadYtDlp(YTDL_CACHE_BIN);
   } catch (error) {
