@@ -1,2 +1,9 @@
 [phases.setup]
 aptPkgs = ["ffmpeg", "yt-dlp"]
+
+# Evitan que el build falle por las install scripts de youtube-dl-exec:
+# - SKIP_PYTHON_CHECK: el preinstall exige python3/python si no está.
+# - SKIP_DOWNLOAD: el postinstall descarga yt-dlp; lo hacemos en runtime.
+[variables]
+YOUTUBE_DL_SKIP_PYTHON_CHECK = "1"
+YOUTUBE_DL_SKIP_DOWNLOAD = "1"
