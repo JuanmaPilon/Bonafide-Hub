@@ -36,6 +36,19 @@ Guía técnica y funcional del bot de Discord.
 
 > Los comandos de reaction roles por Discord fueron retirados: los paneles se administran desde la web (Admin → Reaction Roles) y el bot los publica vía jobs encolados.
 
+### Música
+
+1. `/play cancion:<texto o URL>` — reproduce o encola un tema de YouTube
+2. `/pause`, `/resume`
+3. `/skip`
+4. `/queue`
+5. `/nowplaying`
+6. `/volume nivel:<0-200>`
+7. `/stop` — detiene y limpia cola
+8. `/leave` — sale del canal
+
+> Streaming con `yt-dlp` (vía `youtube-dl-exec`) + `@discordjs/voice`. El bot se desconecta solo cuando el canal queda sin oyentes (15s de gracia) o tras 60s de inactividad.
+
 ## 3. Eventos y automatizaciones
 
 1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada
@@ -69,6 +82,8 @@ Archivo ejemplo: `apps/discord-bot/.env.example`
 4. `BOT_CONFIG_API_URL` — config remota (API)
 5. `BOT_CONFIG_API_TOKEN` — auth hacia API
 6. `BOT_DISABLED` — si es true, no hace login
+7. `YOUTUBE_COOKIE` — opcional: cookies de navegador de YouTube (mitiga 429/403 en IPs de datacenter)
+8. `YOUTUBE_DL_BIN` — opcional: ruta al binario de `yt-dlp` si no se encuentra en PATH ni se descarga automáticamente
 
 ## 6. Permisos recomendados
 

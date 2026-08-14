@@ -15,6 +15,11 @@ import type {
   VoiceBasedChannel,
 } from "discord.js";
 import * as play from "play-dl";
+import { createWriteStream, existsSync, mkdirSync } from "node:fs";
+import { chmod } from "node:fs/promises";
+import https from "node:https";
+import path from "node:path";
+import { create as createYoutubeDl } from "youtube-dl-exec";
 import { env } from "../config/env.js";
 
 const youtubeCookie = env.YOUTUBE_COOKIE?.trim();
@@ -25,6 +30,92 @@ if (youtubeCookie) {
   } catch (error) {
     console.error("[music] Error al configurar cookies de YouTube", { error });
   }
+}
+
+// ── Streaming con yt-dlp ────────────────────────────────────────────
+const YTDL_BIN_NAME = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
+const YTDL_BUNDLED_BIN = path.join(
+  process.cwd(),
+  "node_modules",
+  "youtube-dl-exec",
+  "bin",
+  YTDL_BIN_NAME,
+);
+
+let ytdlInstance: ReturnType<typeof createYoutubeDl> | null = null;
+
+function downloadYtDlp(targetPath: string): Promise<string> {
+  const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${YTDL_BIN_NAME}`;
+  console.log("[music] Descargando yt-dlp...", { url });
+
+  mkdirSync(path.dirname(targetPath), { recursive: true });
+
+  return new Promise((resolve, reject) => {
+    const file = createWriteStream(targetPath);
+    const request = https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        file.destroy();
+        reject(
+          new Error(
+            `No se pudo descargar yt-dlp (HTTP ${response.statusCode})`,
+          ),
+        );
+        return;
+      }
+      response.pipe(file);
+    });
+    request.on("error", (error) => {
+      file.destroy();
+      reject(error);
+    });
+    file.on("error", (error) => {
+      request.destroy();
+      reject(error);
+    });
+    file.on("finish", () => {
+      file.close();
+      void chmod(targetPath, 0o755).catch(() => undefined);
+      resolve(targetPath);
+    });
+  });
+}
+
+async function resolveYtDlpBinary(): Promise<string> {
+  const explicit = process.env.YOUTUBE_DL_BIN?.trim();
+  if (explicit && existsSync(explicit)) {
+    return explicit;
+  }
+  if (existsSync(YTDL_BUNDLED_BIN)) {
+    return YTDL_BUNDLED_BIN;
+  }
+
+  // Preferimos la versión más reciente (el binario de apt puede ser viejo y
+  // no soportar --js-runtimes, necesario contra el anti-bot de YouTube).
+  try {
+    return await downloadYtDlp(YTDL_BUNDLED_BIN);
+  } catch (error) {
+    console.warn("[music] No se pudo descargar yt-dlp, usando el del sistema", {
+      error,
+    });
+  }
+
+  if (process.platform !== "win32") {
+    const systemBin = "/usr/bin/yt-dlp";
+    if (existsSync(systemBin)) {
+      return systemBin;
+    }
+  }
+
+  throw new Error("No hay binario de yt-dlp disponible.");
+}
+
+async function getYoutubeDl(): Promise<ReturnType<typeof createYoutubeDl>> {
+  if (!ytdlInstance) {
+    const binaryPath = await resolveYtDlpBinary();
+    console.log("[music] Usando yt-dlp desde:", binaryPath);
+    ytdlInstance = createYoutubeDl(binaryPath);
+  }
+  return ytdlInstance;
 }
 
 export type Track = {
@@ -43,6 +134,7 @@ type GuildMusicState = {
   guild: Guild | null;
   idleTimer: NodeJS.Timeout | null;
   emptyTimer: NodeJS.Timeout | null;
+  ytdlProcess: { kill(): void } | null;
 };
 
 const musicStates = new Map<string, GuildMusicState>();
@@ -71,6 +163,7 @@ function getState(guildId: string): GuildMusicState {
       guild: null,
       idleTimer: null,
       emptyTimer: null,
+      ytdlProcess: null,
     };
     musicStates.set(guildId, state);
 
@@ -99,6 +192,10 @@ function destroyState(guildId: string): void {
   if (state.emptyTimer) {
     clearTimeout(state.emptyTimer);
     state.emptyTimer = null;
+  }
+  if (state.ytdlProcess) {
+    state.ytdlProcess.kill();
+    state.ytdlProcess = null;
   }
 
   state.queue = [];
@@ -221,26 +318,63 @@ async function playNext(guildId: string): Promise<void> {
 
   cancelIdleLeave(guildId);
 
+  if (state.ytdlProcess) {
+    state.ytdlProcess.kill();
+    state.ytdlProcess = null;
+  }
+
   try {
-    const streamInfo = await play.stream(next.url, {
-      discordPlayerCompatibility: true,
-    });
-    streamInfo.stream.on("error", (error) => {
+    const youtubedl = await getYoutubeDl();
+    const flags = {
+      format: "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
+      output: "-",
+      noPlaylist: true,
+      noCheckCertificates: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+      // yt-dlp necesita un runtime de JS para descifrar el parámetro "n"
+      // de YouTube; usamos el propio Node que ejecuta el bot.
+      jsRuntimes: `node:${process.execPath}`,
+      ...(youtubeCookie ? { addHeader: [`Cookie: ${youtubeCookie}`] } : {}),
+    } as Parameters<typeof youtubedl.exec>[1];
+
+    const proc = youtubedl.exec(next.url, flags);
+    state.ytdlProcess = proc;
+    const stream = proc.stdout;
+
+    if (!stream) {
+      throw new Error("yt-dlp no devolvió un stream de audio.");
+    }
+
+    stream.on("error", (error) => {
       console.error("[music] stream error", {
         error,
         guildId,
         title: next.title,
       });
     });
-    const resource = createAudioResource(streamInfo.stream, {
-      inputType: streamInfo.type as unknown as StreamType,
+
+    proc.catch((error) => {
+      console.error("[music] yt-dlp failed", {
+        error,
+        guildId,
+        title: next.title,
+      });
+      const current = musicStates.get(guildId);
+      if (current && current.current?.url === next.url) {
+        state.player.stop();
+      }
+    });
+
+    const resource = createAudioResource(stream, {
+      inputType: StreamType.Arbitrary,
     });
     resource.volume?.setVolume(state.volume);
     state.current = next;
     console.log("[music] playing", {
       guildId,
       title: next.title,
-      streamType: streamInfo.type,
+      streamType: "arbitrary (yt-dlp)",
       connectionStatus: state.connection?.state.status ?? "none",
     });
     state.player.play(resource);
