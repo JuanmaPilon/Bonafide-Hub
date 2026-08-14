@@ -151,7 +151,9 @@ function downloadFfmpeg(targetPath: string): Promise<string> {
       if (response.statusCode !== 200) {
         file.destroy();
         reject(
-          new Error(`No se pudo descargar ffmpeg (HTTP ${response.statusCode})`),
+          new Error(
+            `No se pudo descargar ffmpeg (HTTP ${response.statusCode})`,
+          ),
         );
         return;
       }
