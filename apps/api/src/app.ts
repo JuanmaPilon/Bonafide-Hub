@@ -120,6 +120,11 @@ type GuildBooster = {
   username: string;
 };
 
+function buildAvatarUrl(userId: string, avatarHash: string): string {
+  const extension = avatarHash.endsWith("_a") ? "gif" : "png";
+  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${extension}?size=128`;
+}
+
 async function fetchAllGuildMembers(
   guildId: string,
 ): Promise<DiscordGuildMember[]> {
@@ -181,7 +186,7 @@ async function fetchGuildMembersForLeaderboard(
 
     const avatarHash = member.user.avatar ?? member.avatar;
     const avatarUrl = avatarHash
-      ? `https://cdn.discordapp.com/avatars/${member.user.id}/${avatarHash}.png?size=64`
+      ? buildAvatarUrl(member.user.id, avatarHash)
       : null;
 
     result.set(member.user.id, {
@@ -202,7 +207,7 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
     .filter((member) => member.user && member.premium_since)
     .map((member) => ({
       avatarUrl: member.user?.avatar
-        ? `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png?size=64`
+        ? buildAvatarUrl(member.user.id, member.user.avatar)
         : null,
       nickname: member.nick ?? null,
       premiumSince: member.premium_since as string,

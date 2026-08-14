@@ -11,8 +11,10 @@
     "register": "tsx src/register-commands.ts"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.19.2",
     "discord.js": "^14.21.0",
     "dotenv": "^16.6.1",
+    "play-dl": "^1.9.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {

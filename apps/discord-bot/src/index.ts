@@ -10,6 +10,7 @@ import {
 } from "discord.js";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
+import { handleMusicCommand } from "./services/music-service.js";
 import {
   cancelReminder,
   createReminder,
@@ -1679,6 +1680,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
             ? "set"
             : "reset";
     await handleXpLevelCommand(interaction, action);
+    return;
+  }
+
+  if (
+    interaction.commandName === "play" ||
+    interaction.commandName === "pause" ||
+    interaction.commandName === "resume" ||
+    interaction.commandName === "skip" ||
+    interaction.commandName === "queue" ||
+    interaction.commandName === "nowplaying" ||
+    interaction.commandName === "volume" ||
+    interaction.commandName === "stop" ||
+    interaction.commandName === "leave"
+  ) {
+    await handleMusicCommand(interaction);
     return;
   }
 

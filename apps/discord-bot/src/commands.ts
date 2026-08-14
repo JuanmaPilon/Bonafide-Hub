@@ -160,6 +160,47 @@ export const commandDefinitions = [
         .setDescription("Usuario objetivo")
         .setRequired(true),
     ),
+  new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("Reproduce una canción o URL de YouTube")
+    .addStringOption((option) =>
+      option
+        .setName("cancion")
+        .setDescription("Búsqueda o URL de YouTube")
+        .setRequired(true),
+    ),
+  new SlashCommandBuilder()
+    .setName("pause")
+    .setDescription("Pausa la reproducción"),
+  new SlashCommandBuilder()
+    .setName("resume")
+    .setDescription("Reanuda la reproducción"),
+  new SlashCommandBuilder()
+    .setName("skip")
+    .setDescription("Salta a la siguiente canción"),
+  new SlashCommandBuilder()
+    .setName("queue")
+    .setDescription("Muestra la cola de reproducción"),
+  new SlashCommandBuilder()
+    .setName("nowplaying")
+    .setDescription("Muestra la canción que está sonando"),
+  new SlashCommandBuilder()
+    .setName("volume")
+    .setDescription("Ajusta el volumen (0-200)")
+    .addIntegerOption((option) =>
+      option
+        .setName("nivel")
+        .setDescription("Volumen 0-200")
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(200),
+    ),
+  new SlashCommandBuilder()
+    .setName("stop")
+    .setDescription("Detiene la música y limpia la cola"),
+  new SlashCommandBuilder()
+    .setName("leave")
+    .setDescription("Saca al bot del canal de voz"),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {};
