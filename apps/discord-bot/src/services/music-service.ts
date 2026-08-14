@@ -575,7 +575,7 @@ async function resolveTrack(query: string): Promise<Track | null> {
   // ytsearch1: busca y devuelve el primer resultado. Con --dump-single-json
   // la respuesta puede venir envuelta como playlist (entries).
   const raw = await youtubedl(isUrl ? trimmed : `ytsearch1:${trimmed}`, flags);
-  const info = (raw as { entries?: typeof raw[] }).entries?.[0] ?? raw;
+  const info = (raw as { entries?: (typeof raw)[] }).entries?.[0] ?? raw;
 
   const url = info.webpage_url || (isUrl ? trimmed : "");
   if (!url) {
