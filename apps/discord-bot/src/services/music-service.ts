@@ -15,11 +15,12 @@ import type {
   VoiceBasedChannel,
 } from "discord.js";
 import * as play from "play-dl";
-import { execFile } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
 import https from "node:https";
 import path from "node:path";
+import ffmpegStatic from "ffmpeg-static";
 import { create as createYoutubeDl } from "youtube-dl-exec";
 import { env } from "../config/env.js";
 
@@ -119,20 +120,108 @@ async function getYoutubeDl(): Promise<ReturnType<typeof createYoutubeDl>> {
   return ytdlInstance;
 }
 
-// ── Diagnóstico de ffmpeg ───────────────────────────────────────────
-// @discordjs/voice convierte el stream a opus con ffmpeg. Si no está
-// disponible, el bot "reproduce" pero nadie escucha nada.
-execFile("ffmpeg", ["-version"], (error, stdout) => {
-  if (error) {
-    console.error(
-      "[music] ⚠️ ffmpeg NO disponible — el audio no se va a escuchar (conversión a opus falla)",
-      { error: error.message },
-    );
-    return;
+// ── ffmpeg ──────────────────────────────────────────────────────────
+// @discordjs/voice (vía prism-media) convierte el stream a opus con
+// ffmpeg, buscándolo en este orden: ffmpeg-static, ffmpeg, avconv,
+// ./ffmpeg. Acá aseguramos que exista un binario operativo (con
+// descarga de respaldo) para que el audio siempre se pueda convertir.
+let ffmpegPromise: Promise<boolean> | null = null;
+
+function ffmpegWorks(binary: string): boolean {
+  try {
+    const result = spawnSync(binary, ["-h"], { stdio: "ignore" });
+    return !result.error;
+  } catch {
+    return false;
   }
-  const version = stdout.split("\n")[0];
-  console.log("[music] ffmpeg disponible:", version);
-});
+}
+
+function downloadFfmpeg(targetPath: string): Promise<string> {
+  const asset = `ffmpeg-${process.platform}-${process.arch}${
+    process.platform === "win32" ? ".exe" : ""
+  }`;
+  const url = `https://github.com/eugeneware/ffmpeg-static/releases/latest/download/${asset}`;
+  console.log("[music] Descargando ffmpeg estático...", { url });
+
+  mkdirSync(path.dirname(targetPath), { recursive: true });
+
+  return new Promise((resolve, reject) => {
+    const file = createWriteStream(targetPath);
+    const request = https.get(url, (response) => {
+      if (response.statusCode !== 200) {
+        file.destroy();
+        reject(
+          new Error(`No se pudo descargar ffmpeg (HTTP ${response.statusCode})`),
+        );
+        return;
+      }
+      response.pipe(file);
+    });
+    request.on("error", (error) => {
+      file.destroy();
+      reject(error);
+    });
+    file.on("error", (error) => {
+      request.destroy();
+      reject(error);
+    });
+    file.on("finish", () => {
+      file.close();
+      void chmod(targetPath, 0o755).catch(() => undefined);
+      resolve(targetPath);
+    });
+  });
+}
+
+function ensureFfmpeg(): Promise<boolean> {
+  if (!ffmpegPromise) {
+    ffmpegPromise = (async () => {
+      // 1. ffmpeg en PATH.
+      if (ffmpegWorks("ffmpeg")) {
+        console.log("[music] ffmpeg disponible (PATH)");
+        return true;
+      }
+
+      // 2. Binario de ffmpeg-static (prism-media lo detecta solo).
+      if (
+        ffmpegStatic &&
+        existsSync(ffmpegStatic) &&
+        ffmpegWorks(ffmpegStatic)
+      ) {
+        console.log("[music] ffmpeg disponible (ffmpeg-static)");
+        return true;
+      }
+
+      // 3. Descarga de respaldo a ./ffmpeg (prism-media también lo busca ahí).
+      const localFfmpeg = path.join(
+        process.cwd(),
+        process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg",
+      );
+      if (existsSync(localFfmpeg) && ffmpegWorks(localFfmpeg)) {
+        console.log("[music] ffmpeg disponible (local):", localFfmpeg);
+        return true;
+      }
+
+      try {
+        await downloadFfmpeg(localFfmpeg);
+        if (ffmpegWorks(localFfmpeg)) {
+          console.log("[music] ffmpeg descargado y operativo:", localFfmpeg);
+          return true;
+        }
+      } catch (error) {
+        console.error("[music] No se pudo descargar ffmpeg", { error });
+      }
+
+      console.error(
+        "[music] ⚠️ ffmpeg NO disponible — el audio no se va a escuchar (conversión a opus falla)",
+      );
+      return false;
+    })();
+  }
+  return ffmpegPromise;
+}
+
+void ensureFfmpeg();
 
 export type Track = {
   duration?: string;
@@ -382,6 +471,7 @@ async function playNext(guildId: string): Promise<void> {
       }
     });
 
+    await ensureFfmpeg();
     const resource = createAudioResource(stream, {
       inputType: StreamType.Arbitrary,
     });
