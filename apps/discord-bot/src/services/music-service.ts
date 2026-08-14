@@ -43,8 +43,18 @@ const YTDL_BUNDLED_BIN = path.join(
   "bin",
   YTDL_BIN_NAME,
 );
+const YTDL_CACHE_BIN = path.join(process.cwd(), ".cache", "yt-dlp", YTDL_BIN_NAME);
 
 let ytdlInstance: ReturnType<typeof createYoutubeDl> | null = null;
+
+function ytdlWorks(binary: string): boolean {
+  try {
+    const result = spawnSync(binary, ["--version"], { stdio: "ignore" });
+    return !result.error && result.status === 0;
+  } catch {
+    return false;
+  }
+}
 
 function downloadYtDlp(targetPath: string): Promise<string> {
   const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${YTDL_BIN_NAME}`;
@@ -87,25 +97,31 @@ async function resolveYtDlpBinary(): Promise<string> {
   if (explicit && existsSync(explicit)) {
     return explicit;
   }
-  if (existsSync(YTDL_BUNDLED_BIN)) {
+
+  // 1. yt-dlp en PATH (p.ej. instalado por apt) — binario real.
+  if (ytdlWorks("yt-dlp")) {
+    return "yt-dlp";
+  }
+
+  // 2. Binario empaquetado por youtube-dl-exec, SOLO si es un binario
+  //    real. Si el postinstall no corrió, deja un shim de Python que
+  //    falla sin python3 (error 127).
+  if (existsSync(YTDL_BUNDLED_BIN) && ytdlWorks(YTDL_BUNDLED_BIN)) {
     return YTDL_BUNDLED_BIN;
   }
 
-  // Preferimos la versión más reciente (el binario de apt puede ser viejo y
-  // no soportar --js-runtimes, necesario contra el anti-bot de YouTube).
+  // 3. Descargamos la última versión standalone a un cache local.
   try {
-    return await downloadYtDlp(YTDL_BUNDLED_BIN);
+    return await downloadYtDlp(YTDL_CACHE_BIN);
   } catch (error) {
     console.warn("[music] No se pudo descargar yt-dlp, usando el del sistema", {
       error,
     });
   }
 
-  if (process.platform !== "win32") {
-    const systemBin = "/usr/bin/yt-dlp";
-    if (existsSync(systemBin)) {
-      return systemBin;
-    }
+  // 4. Último recurso: binario del sistema.
+  if (process.platform !== "win32" && ytdlWorks("/usr/bin/yt-dlp")) {
+    return "/usr/bin/yt-dlp";
   }
 
   throw new Error("No hay binario de yt-dlp disponible.");
