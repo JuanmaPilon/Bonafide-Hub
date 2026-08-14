@@ -43,7 +43,12 @@ const YTDL_BUNDLED_BIN = path.join(
   "bin",
   YTDL_BIN_NAME,
 );
-const YTDL_CACHE_BIN = path.join(process.cwd(), ".cache", "yt-dlp", YTDL_BIN_NAME);
+const YTDL_CACHE_BIN = path.join(
+  process.cwd(),
+  ".cache",
+  "yt-dlp",
+  YTDL_BIN_NAME,
+);
 
 let ytdlInstance: ReturnType<typeof createYoutubeDl> | null = null;
 
