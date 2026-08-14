@@ -15,6 +15,7 @@ import type {
   VoiceBasedChannel,
 } from "discord.js";
 import * as play from "play-dl";
+import { execFile } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
 import https from "node:https";
@@ -117,6 +118,21 @@ async function getYoutubeDl(): Promise<ReturnType<typeof createYoutubeDl>> {
   }
   return ytdlInstance;
 }
+
+// ── Diagnóstico de ffmpeg ───────────────────────────────────────────
+// @discordjs/voice convierte el stream a opus con ffmpeg. Si no está
+// disponible, el bot "reproduce" pero nadie escucha nada.
+execFile("ffmpeg", ["-version"], (error, stdout) => {
+  if (error) {
+    console.error(
+      "[music] ⚠️ ffmpeg NO disponible — el audio no se va a escuchar (conversión a opus falla)",
+      { error: error.message },
+    );
+    return;
+  }
+  const version = stdout.split("\n")[0];
+  console.log("[music] ffmpeg disponible:", version);
+});
 
 export type Track = {
   duration?: string;
@@ -378,6 +394,14 @@ async function playNext(guildId: string): Promise<void> {
       connectionStatus: state.connection?.state.status ?? "none",
     });
     state.player.play(resource);
+
+    // Confirma que el reproductor realmente está consumiendo audio.
+    state.player.once(AudioPlayerStatus.Playing, () => {
+      console.log("[music] player reproduciendo (audio fluyendo)", {
+        guildId,
+        title: next.title,
+      });
+    });
   } catch (error) {
     console.error("[music] failed to stream", {
       error,
@@ -408,6 +432,7 @@ async function joinChannel(
     channelId,
     guildId,
     selfDeaf: true,
+    selfMute: false,
   });
   state.connection = connection;
 
@@ -422,7 +447,23 @@ async function joinChannel(
     }
   });
 
+  // Esperamos a que la conexión esté lista antes de suscribir/reproducir.
+  try {
+    await entersState(connection, VoiceConnectionStatus.Ready, 20_000);
+  } catch (error) {
+    console.error("[music] No se pudo conectar al canal de voz", {
+      guildId,
+      channelId,
+      error,
+    });
+    destroyState(guildId);
+    throw new Error(
+      "No se pudo conectar al canal de voz. Verificá que el bot tenga permisos de Conectar/Hablar.",
+    );
+  }
+
   connection.subscribe(state.player);
+  console.log("[music] conectado al canal de voz", { guildId, channelId });
   return connection;
 }
 
