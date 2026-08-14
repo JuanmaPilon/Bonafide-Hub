@@ -14,7 +14,6 @@ import type {
   GuildMember,
   VoiceBasedChannel,
 } from "discord.js";
-import * as play from "play-dl";
 import { spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
@@ -27,12 +26,8 @@ import { env } from "../config/env.js";
 
 const youtubeCookie = env.YOUTUBE_COOKIE?.trim();
 if (youtubeCookie) {
-  try {
-    play.setToken({ youtube: { cookie: youtubeCookie } });
-    console.log("[music] YouTube cookies configuradas");
-  } catch (error) {
-    console.error("[music] Error al configurar cookies de YouTube", { error });
-  }
+  // Las cookies se mandan como header "Cookie:" a yt-dlp (búsqueda y stream).
+  console.log("[music] YouTube cookies configuradas");
 }
 
 // ── Streaming con yt-dlp ────────────────────────────────────────────
@@ -554,58 +549,46 @@ async function joinChannel(
   return connection;
 }
 
-const RETRY_DELAY_MS = 2_000;
-
-function isRateLimited(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("429");
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const mm = m.toString().padStart(2, "0");
+  const ss = s.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
 async function resolveTrack(query: string): Promise<Track | null> {
   const trimmed = query.trim();
   const isUrl = /^https?:\/\//.test(trimmed);
-  const maxAttempts = 2;
+  const youtubedl = await getYoutubeDl();
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      if (isUrl) {
-        const info = await play.video_info(trimmed);
-        const details = info.video_details;
-        return {
-          duration: details.durationRaw,
-          requestedBy: "",
-          title: details.title ?? trimmed,
-          url: details.url ?? trimmed,
-        };
-      }
+  const flags = {
+    dumpSingleJson: true,
+    quiet: true,
+    noWarnings: true,
+    noPlaylist: true,
+    noCheckCertificates: true,
+    ...(youtubeCookie ? { addHeader: [`Cookie: ${youtubeCookie}`] } : {}),
+  } as Parameters<typeof youtubedl.exec>[1];
 
-      const results = await play.search(trimmed, { limit: 1 });
-      const video = results[0];
-      if (!video) {
-        return null;
-      }
+  // ytsearch1: busca y devuelve el primer resultado. Con --dump-single-json
+  // la respuesta puede venir envuelta como playlist (entries).
+  const raw = await youtubedl(isUrl ? trimmed : `ytsearch1:${trimmed}`, flags);
+  const info = (raw as { entries?: typeof raw[] }).entries?.[0] ?? raw;
 
-      return {
-        duration: video.durationRaw,
-        requestedBy: "",
-        title: video.title ?? trimmed,
-        url: video.url,
-      };
-    } catch (error) {
-      const lastAttempt = attempt === maxAttempts;
-      if (isRateLimited(error) && !lastAttempt) {
-        console.warn("[music] YouTube rate limited, reintentando", {
-          query: trimmed,
-          attempt,
-        });
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-        continue;
-      }
-
-      throw error;
-    }
+  const url = info.webpage_url || (isUrl ? trimmed : "");
+  if (!url) {
+    return null;
   }
 
-  return null;
+  const title = info.title || trimmed;
+  const duration =
+    typeof info.duration === "number" && info.duration > 0
+      ? formatDuration(info.duration)
+      : undefined;
+
+  return { duration, requestedBy: "", title, url };
 }
 
 function replyError(interaction: ChatInputCommandInteraction, message: string) {
@@ -656,8 +639,8 @@ export async function handleMusicCommand(
             query,
           });
           await interaction.editReply(
-            "No pude conectarme con YouTube para buscar el tema (429: YouTube está limitando la IP del servidor). " +
-              "Si YOUTUBE_COOKIE no está configurada, agregala en Railway. También podés probar de nuevo en unos minutos.",
+            "No pude obtener el tema de YouTube en este momento (posible bloqueo 429 o problema temporal). " +
+              "Probá de nuevo en unos minutos.",
           );
           return;
         }
