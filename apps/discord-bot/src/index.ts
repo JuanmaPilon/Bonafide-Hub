@@ -69,6 +69,13 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
+process.on("unhandledRejection", (reason) => {
+  console.error("[discord-bot] Unhandled rejection", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("[discord-bot] Uncaught exception", error);
+});
+
 const xpCooldowns = new Map<string, number>();
 
 function normalizeEmojiKey(input: string): string | null {

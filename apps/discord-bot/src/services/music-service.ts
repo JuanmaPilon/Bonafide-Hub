@@ -10,6 +10,17 @@ import {
 } from "@discordjs/voice";
 import type { ChatInputCommandInteraction, GuildMember } from "discord.js";
 import * as play from "play-dl";
+import { env } from "../config/env.js";
+
+const youtubeCookie = env.YOUTUBE_COOKIE?.trim();
+if (youtubeCookie) {
+  try {
+    play.setToken({ youtube: { cookie: youtubeCookie } });
+    console.log("[music] YouTube cookies configuradas");
+  } catch (error) {
+    console.error("[music] Error al configurar cookies de YouTube", { error });
+  }
+}
 
 export type Track = {
   duration?: string;
@@ -104,6 +115,13 @@ async function playNext(guildId: string): Promise<void> {
   try {
     const streamInfo = await play.stream(next.url, {
       discordPlayerCompatibility: true,
+    });
+    streamInfo.stream.on("error", (error) => {
+      console.error("[music] stream error", {
+        error,
+        guildId,
+        title: next.title,
+      });
     });
     const resource = createAudioResource(streamInfo.stream, {
       inputType: streamInfo.type as unknown as StreamType,
@@ -213,6 +231,11 @@ export async function handleMusicCommand(
       case "play": {
         const query = interaction.options.getString("cancion", true);
         const voiceChannel = member?.voice.channel;
+        console.log("[music] play requested", {
+          guildId,
+          query,
+          voiceChannel: voiceChannel?.id ?? null,
+        });
         if (!voiceChannel?.id) {
           await replyError(
             interaction,
