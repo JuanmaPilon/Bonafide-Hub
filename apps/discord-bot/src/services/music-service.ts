@@ -8,7 +8,12 @@ import {
   VoiceConnection,
   VoiceConnectionStatus,
 } from "@discordjs/voice";
-import type { ChatInputCommandInteraction, GuildMember } from "discord.js";
+import type {
+  ChatInputCommandInteraction,
+  Guild,
+  GuildMember,
+  VoiceBasedChannel,
+} from "discord.js";
 import * as play from "play-dl";
 import { env } from "../config/env.js";
 
@@ -35,10 +40,15 @@ type GuildMusicState = {
   player: ReturnType<typeof createAudioPlayer>;
   queue: Track[];
   volume: number;
+  guild: Guild | null;
+  idleTimer: NodeJS.Timeout | null;
+  emptyTimer: NodeJS.Timeout | null;
 };
 
 const musicStates = new Map<string, GuildMusicState>();
 const AUTO_LEAVE_MS = 60_000;
+const EMPTY_GRACE_MS = 15_000;
+const SWEEP_INTERVAL_MS = 30_000;
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -58,6 +68,9 @@ function getState(guildId: string): GuildMusicState {
       player,
       queue: [],
       volume: 0.5,
+      guild: null,
+      idleTimer: null,
+      emptyTimer: null,
     };
     musicStates.set(guildId, state);
 
@@ -79,12 +92,111 @@ function destroyState(guildId: string): void {
     return;
   }
 
+  if (state.idleTimer) {
+    clearTimeout(state.idleTimer);
+    state.idleTimer = null;
+  }
+  if (state.emptyTimer) {
+    clearTimeout(state.emptyTimer);
+    state.emptyTimer = null;
+  }
+
   state.queue = [];
   state.current = null;
   state.connection?.destroy();
   state.connection = null;
   musicStates.delete(guildId);
 }
+
+function cancelIdleLeave(guildId: string): void {
+  const state = musicStates.get(guildId);
+  if (state?.idleTimer) {
+    clearTimeout(state.idleTimer);
+    state.idleTimer = null;
+  }
+}
+
+function scheduleIdleLeave(guildId: string): void {
+  const state = musicStates.get(guildId);
+  if (!state) {
+    return;
+  }
+
+  cancelIdleLeave(guildId);
+  state.idleTimer = setTimeout(() => {
+    const current = musicStates.get(guildId);
+    if (current && current.queue.length === 0 && !current.current) {
+      console.log("[music] sin actividad, desconectando", { guildId });
+      destroyState(guildId);
+    }
+  }, AUTO_LEAVE_MS);
+}
+
+function scheduleEmptyLeave(guildId: string): void {
+  const state = musicStates.get(guildId);
+  if (!state || state.emptyTimer) {
+    return;
+  }
+
+  state.emptyTimer = setTimeout(() => {
+    const current = musicStates.get(guildId);
+    if (current) {
+      console.log("[music] canal sin oyentes, desconectando", { guildId });
+      destroyState(guildId);
+    }
+  }, EMPTY_GRACE_MS);
+}
+
+function cancelEmptyLeave(guildId: string): void {
+  const state = musicStates.get(guildId);
+  if (state?.emptyTimer) {
+    clearTimeout(state.emptyTimer);
+    state.emptyTimer = null;
+  }
+}
+
+export function checkMusicChannelEmpty(channel: VoiceBasedChannel): void {
+  const state = musicStates.get(channel.guild.id);
+  if (!state?.connection) {
+    return;
+  }
+  if (state.connection.joinConfig.channelId !== channel.id) {
+    return;
+  }
+
+  const humans = channel.members.filter((member) => !member.user.bot).size;
+  if (humans === 0) {
+    scheduleEmptyLeave(channel.guild.id);
+  } else {
+    cancelEmptyLeave(channel.guild.id);
+  }
+}
+
+function sweepMusicStates(): void {
+  for (const [guildId, state] of musicStates) {
+    if (!state.connection || !state.guild) {
+      continue;
+    }
+
+    const channelId = state.connection.joinConfig.channelId;
+    if (!channelId) {
+      destroyState(guildId);
+      continue;
+    }
+    const channel = state.guild.channels.cache.get(channelId);
+    if (!channel?.isVoiceBased()) {
+      console.log("[music] canal de voz ya no existe, desconectando", {
+        guildId,
+      });
+      destroyState(guildId);
+      continue;
+    }
+
+    checkMusicChannelEmpty(channel);
+  }
+}
+
+setInterval(sweepMusicStates, SWEEP_INTERVAL_MS);
 
 async function playNext(guildId: string): Promise<void> {
   const state = musicStates.get(guildId);
@@ -102,15 +214,12 @@ async function playNext(guildId: string): Promise<void> {
 
     // Si nadie más encoló, nos desconectamos solo al rato.
     if (state.connection) {
-      setTimeout(() => {
-        const current = musicStates.get(guildId);
-        if (current && current.queue.length === 0 && !current.current) {
-          destroyState(guildId);
-        }
-      }, AUTO_LEAVE_MS);
+      scheduleIdleLeave(guildId);
     }
     return;
   }
+
+  cancelIdleLeave(guildId);
 
   try {
     const streamInfo = await play.stream(next.url, {
@@ -149,8 +258,10 @@ async function joinChannel(
   guildId: string,
   channelId: string,
   adapterCreator: Parameters<typeof joinVoiceChannel>[0]["adapterCreator"],
+  guild: Guild,
 ): Promise<VoiceConnection> {
   const state = getState(guildId);
+  state.guild = guild;
   if (
     state.connection &&
     state.connection.state.status !== VoiceConnectionStatus.Disconnected
@@ -181,31 +292,58 @@ async function joinChannel(
   return connection;
 }
 
+const RETRY_DELAY_MS = 2_000;
+
+function isRateLimited(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("429");
+}
+
 async function resolveTrack(query: string): Promise<Track | null> {
   const trimmed = query.trim();
-  if (/^https?:\/\//.test(trimmed)) {
-    const info = await play.video_info(trimmed);
-    const details = info.video_details;
-    return {
-      duration: details.durationRaw,
-      requestedBy: "",
-      title: details.title ?? trimmed,
-      url: details.url ?? trimmed,
-    };
+  const isUrl = /^https?:\/\//.test(trimmed);
+  const maxAttempts = 2;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (isUrl) {
+        const info = await play.video_info(trimmed);
+        const details = info.video_details;
+        return {
+          duration: details.durationRaw,
+          requestedBy: "",
+          title: details.title ?? trimmed,
+          url: details.url ?? trimmed,
+        };
+      }
+
+      const results = await play.search(trimmed, { limit: 1 });
+      const video = results[0];
+      if (!video) {
+        return null;
+      }
+
+      return {
+        duration: video.durationRaw,
+        requestedBy: "",
+        title: video.title ?? trimmed,
+        url: video.url,
+      };
+    } catch (error) {
+      const lastAttempt = attempt === maxAttempts;
+      if (isRateLimited(error) && !lastAttempt) {
+        console.warn("[music] YouTube rate limited, reintentando", {
+          query: trimmed,
+          attempt,
+        });
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+
+      throw error;
+    }
   }
 
-  const results = await play.search(trimmed, { limit: 1 });
-  const video = results[0];
-  if (!video) {
-    return null;
-  }
-
-  return {
-    duration: video.durationRaw,
-    requestedBy: "",
-    title: video.title ?? trimmed,
-    url: video.url,
-  };
+  return null;
 }
 
 function replyError(interaction: ChatInputCommandInteraction, message: string) {
@@ -246,7 +384,22 @@ export async function handleMusicCommand(
 
         await interaction.deferReply();
 
-        const track = await resolveTrack(query);
+        let track: Track | null;
+        try {
+          track = await resolveTrack(query);
+        } catch (error) {
+          console.error("[music] resolveTrack failed", {
+            error,
+            guildId,
+            query,
+          });
+          await interaction.editReply(
+            "No pude conectarme con YouTube para buscar el tema (429: YouTube está limitando la IP del servidor). " +
+              "Si YOUTUBE_COOKIE no está configurada, agregala en Railway. También podés probar de nuevo en unos minutos.",
+          );
+          return;
+        }
+
         if (!track) {
           await interaction.editReply(`No encontré nada para "${query}".`);
           return;
@@ -256,10 +409,12 @@ export async function handleMusicCommand(
           guildId,
           voiceChannel.id,
           interaction.guild.voiceAdapterCreator,
+          interaction.guild,
         );
 
         const state = getState(guildId);
         track.requestedBy = interaction.user.tag;
+        cancelIdleLeave(guildId);
         state.queue.push(track);
 
         const duration = track.duration ? ` (${track.duration})` : "";

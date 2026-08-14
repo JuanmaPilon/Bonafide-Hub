@@ -10,7 +10,10 @@ import {
 } from "discord.js";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
-import { handleMusicCommand } from "./services/music-service.js";
+import {
+  checkMusicChannelEmpty,
+  handleMusicCommand,
+} from "./services/music-service.js";
 import {
   cancelReminder,
   createReminder,
@@ -2208,6 +2211,13 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         error,
       });
     });
+  }
+
+  // Auto-leave del bot de música si el canal queda sin oyentes.
+  const botId = client.user?.id;
+  const involvedChannel = newState.channel ?? oldState.channel;
+  if (involvedChannel && newState.id !== botId && oldState.id !== botId) {
+    checkMusicChannelEmpty(involvedChannel);
   }
 });
 
