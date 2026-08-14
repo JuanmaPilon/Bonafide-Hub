@@ -16,3 +16,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Descargas de binarios en runtime (yt-dlp/ffmpeg)
+**/.cache/

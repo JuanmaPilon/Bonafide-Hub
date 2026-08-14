@@ -18,8 +18,9 @@ import * as play from "play-dl";
 import { spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
-import https from "node:https";
 import path from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import ffmpegStatic from "ffmpeg-static";
 import { create as createYoutubeDl } from "youtube-dl-exec";
 import { env } from "../config/env.js";
@@ -61,40 +62,41 @@ function ytdlWorks(binary: string): boolean {
   }
 }
 
-function downloadYtDlp(targetPath: string): Promise<string> {
-  const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${YTDL_BIN_NAME}`;
-  console.log("[music] Descargando yt-dlp...", { url });
-
+async function downloadBinary(
+  label: string,
+  url: string,
+  targetPath: string,
+): Promise<string> {
+  console.log(`[music] Descargando ${label}...`, { url });
   mkdirSync(path.dirname(targetPath), { recursive: true });
 
-  return new Promise((resolve, reject) => {
-    const file = createWriteStream(targetPath);
-    const request = https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        file.destroy();
-        reject(
-          new Error(
-            `No se pudo descargar yt-dlp (HTTP ${response.statusCode})`,
-          ),
-        );
-        return;
-      }
-      response.pipe(file);
-    });
-    request.on("error", (error) => {
-      file.destroy();
-      reject(error);
-    });
-    file.on("error", (error) => {
-      request.destroy();
-      reject(error);
-    });
-    file.on("finish", () => {
-      file.close();
-      void chmod(targetPath, 0o755).catch(() => undefined);
-      resolve(targetPath);
-    });
+  // fetch sigue las redirecciones de GitHub (los /releases/latest
+  // devuelven un 302 al archivo real; https.get no las seguía).
+  const response = await fetch(url, {
+    redirect: "follow",
+    headers: { "User-Agent": "Bonafide-Bot" },
   });
+  if (!response.ok || !response.body) {
+    throw new Error(`No se pudo descargar ${label} (HTTP ${response.status})`);
+  }
+
+  const file = createWriteStream(targetPath);
+  await pipeline(
+    Readable.fromWeb(
+      response.body as unknown as import("node:stream/web").ReadableStream,
+    ),
+    file,
+  );
+  await chmod(targetPath, 0o755).catch(() => undefined);
+  return targetPath;
+}
+
+function downloadYtDlp(targetPath: string): Promise<string> {
+  return downloadBinary(
+    "yt-dlp",
+    `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${YTDL_BIN_NAME}`,
+    targetPath,
+  );
 }
 
 async function resolveYtDlpBinary(): Promise<string> {
@@ -161,39 +163,11 @@ function downloadFfmpeg(targetPath: string): Promise<string> {
   const asset = `ffmpeg-${process.platform}-${process.arch}${
     process.platform === "win32" ? ".exe" : ""
   }`;
-  const url = `https://github.com/eugeneware/ffmpeg-static/releases/latest/download/${asset}`;
-  console.log("[music] Descargando ffmpeg estático...", { url });
-
-  mkdirSync(path.dirname(targetPath), { recursive: true });
-
-  return new Promise((resolve, reject) => {
-    const file = createWriteStream(targetPath);
-    const request = https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        file.destroy();
-        reject(
-          new Error(
-            `No se pudo descargar ffmpeg (HTTP ${response.statusCode})`,
-          ),
-        );
-        return;
-      }
-      response.pipe(file);
-    });
-    request.on("error", (error) => {
-      file.destroy();
-      reject(error);
-    });
-    file.on("error", (error) => {
-      request.destroy();
-      reject(error);
-    });
-    file.on("finish", () => {
-      file.close();
-      void chmod(targetPath, 0o755).catch(() => undefined);
-      resolve(targetPath);
-    });
-  });
+  return downloadBinary(
+    "ffmpeg",
+    `https://github.com/eugeneware/ffmpeg-static/releases/latest/download/${asset}`,
+    targetPath,
+  );
 }
 
 function ensureFfmpeg(): Promise<boolean> {
