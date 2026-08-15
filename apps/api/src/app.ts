@@ -145,6 +145,17 @@ function buildAvatarUrl(userId: string, avatarHash: string): string {
   return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${extension}?size=128`;
 }
 
+// Los avatares de servidor (server avatars) usan OTRA URL en el CDN:
+// /guilds/{guildId}/users/{userId}/avatars/{hash}.{ext}
+function buildServerAvatarUrl(
+  guildId: string,
+  userId: string,
+  avatarHash: string,
+): string {
+  const extension = avatarHash.startsWith("a_") ? "gif" : "png";
+  return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${avatarHash}.${extension}?size=128`;
+}
+
 async function fetchAllGuildMembers(
   guildId: string,
 ): Promise<DiscordGuildMember[]> {
@@ -204,10 +215,17 @@ async function fetchGuildMembersForLeaderboard(
       continue;
     }
 
-    const avatarHash = member.user.avatar ?? member.avatar;
-    const avatarUrl = avatarHash
-      ? buildAvatarUrl(member.user.id, avatarHash)
-      : null;
+    // Avatar global si existe; si no, avatar de servidor (otra URL en el CDN).
+    let avatarUrl: string | null = null;
+    if (member.user.avatar) {
+      avatarUrl = buildAvatarUrl(member.user.id, member.user.avatar);
+    } else if (member.avatar) {
+      avatarUrl = buildServerAvatarUrl(
+        guildId,
+        member.user.id,
+        member.avatar,
+      );
+    }
 
     result.set(member.user.id, {
       avatarUrl,
@@ -225,15 +243,26 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
 
   return members
     .filter((member) => member.user && member.premium_since)
-    .map((member) => ({
-      avatarUrl: member.user?.avatar
-        ? buildAvatarUrl(member.user.id, member.user.avatar)
-        : null,
-      nickname: member.nick ?? null,
-      premiumSince: member.premium_since as string,
-      userId: member.user?.id ?? "",
-      username: member.user?.username ?? "",
-    }))
+    .map((member) => {
+      let avatarUrl: string | null = null;
+      if (member.user?.avatar) {
+        avatarUrl = buildAvatarUrl(member.user.id, member.user.avatar);
+      } else if (member.user && member.avatar) {
+        avatarUrl = buildServerAvatarUrl(
+          guildId,
+          member.user.id,
+          member.avatar,
+        );
+      }
+
+      return {
+        avatarUrl,
+        nickname: member.nick ?? null,
+        premiumSince: member.premium_since as string,
+        userId: member.user?.id ?? "",
+        username: member.user?.username ?? "",
+      };
+    })
     .filter((booster) => booster.userId);
 }
 
@@ -1293,6 +1322,31 @@ export function buildApp() {
       guildId: params.guildId,
       leaderboard: enrichedLeaderboard,
     };
+  });
+
+  // Leaderboard público para la landing (solo la guild de Bonafide).
+  // Devuelve top 15 con nombre y avatar, sin requerir sesión.
+  app.get("/public/leaderboard", async (_request, reply) => {
+    const guildId = env.BONAFIDE_GUILD_ID;
+    if (!guildId) {
+      return { ok: true, leaderboard: [] };
+    }
+
+    const leaderboard = await getLeaderboard(guildId);
+    const memberInfo = await fetchGuildMembersForLeaderboard(
+      guildId,
+    ).catch(() => new Map<string, LeaderboardUserInfo>());
+
+    const preview = leaderboard.slice(0, 15).map((entry) => {
+      const info = memberInfo.get(entry.userId);
+      return {
+        avatarUrl: info?.avatarUrl ?? null,
+        nickname: info?.nickname ?? null,
+        username: info?.username ?? null,
+      };
+    });
+
+    return { ok: true, leaderboard: preview };
   });
 
   app.get("/guilds/:guildId/xp/export", async (request, reply) => {

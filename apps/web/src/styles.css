@@ -84,7 +84,14 @@ a:hover {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
+}
+
+.landing-brand {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent, #ffb454);
+  letter-spacing: 0.3px;
 }
 
 .landing-main {
@@ -100,6 +107,62 @@ a:hover {
 .landing-hero h1 {
   margin: 0 0 16px;
   font-size: clamp(2rem, 6vw, 4.2rem);
+}
+
+.landing-hero-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.landing-banner {
+  width: 100%;
+  max-width: 720px;
+  min-height: 180px;
+  margin-bottom: 28px;
+  border-radius: 18px;
+  border: 1px solid rgba(156, 195, 190, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(
+      circle at 50% 72%,
+      rgba(255, 138, 80, 0.42),
+      rgba(255, 111, 71, 0.1) 40%
+    ),
+    linear-gradient(145deg, rgba(54, 89, 185, 0.46), rgba(223, 90, 61, 0.32));
+}
+
+.landing-banner-placeholder {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.95rem;
+  letter-spacing: 0.4px;
+}
+
+.landing-subtitle {
+  margin: 0 0 24px;
+  max-width: 460px;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.landing-login {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto 28px;
+  padding: 15px 30px;
+  font-size: 1.15rem;
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.landing-discord-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .landing-media {

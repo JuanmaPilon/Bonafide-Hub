@@ -305,6 +305,24 @@ export async function getLeaderboard(
   return data.leaderboard;
 }
 
+export type PublicLeaderboardEntry = {
+  avatarUrl: string | null;
+  nickname: string | null;
+  username: string | null;
+};
+
+// Leaderboard público para la landing (sin sesión).
+export async function getPublicLeaderboard(): Promise<
+  PublicLeaderboardEntry[]
+> {
+  const data = await requestJson<{ leaderboard: PublicLeaderboardEntry[] }>(
+    "/public/leaderboard",
+    { method: "GET" },
+  );
+
+  return data.leaderboard;
+}
+
 export type AuditLogEntry = {
   action: string;
   actorName: string | null;
