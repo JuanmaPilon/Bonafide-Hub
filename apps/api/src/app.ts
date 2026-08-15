@@ -284,6 +284,11 @@ export function buildApp() {
     session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
     guildId: string,
   ): boolean {
+    // Exclusividad: solo se administra el servidor permitido (Bonafide).
+    if (env.BONAFIDE_GUILD_ID && guildId !== env.BONAFIDE_GUILD_ID) {
+      return false;
+    }
+
     // Solo el dueño de la guild puede administrar, aunque otro miembro
     // tenga permiso de Manage Server en Discord.
     return session.guilds.some(
@@ -839,9 +844,16 @@ export function buildApp() {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
 
+    // Exclusividad: si BONAFIDE_GUILD_ID está configurado, la web solo
+    // muestra ese servidor (y solo si el usuario puede administrarlo).
+    const manageable = getManageGuildFilter(session.guilds);
+    const guilds = env.BONAFIDE_GUILD_ID
+      ? manageable.filter((guild) => guild.id === env.BONAFIDE_GUILD_ID)
+      : manageable;
+
     return {
       ok: true,
-      guilds: getManageGuildFilter(session.guilds),
+      guilds,
     };
   });
 
