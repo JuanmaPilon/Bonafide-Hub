@@ -14,7 +14,7 @@ import type {
   GuildMember,
   VoiceBasedChannel,
 } from "discord.js";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
 import path from "node:path";
@@ -229,6 +229,29 @@ function python3Works(): boolean {
   }
 }
 
+function runCommand(
+  command: string,
+  args: string[],
+  timeoutMs: number,
+): Promise<number> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(command, args, { stdio: "ignore" });
+      const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve(code ?? 1);
+      });
+      child.on("error", () => {
+        clearTimeout(timer);
+        resolve(1);
+      });
+    } catch {
+      resolve(1);
+    }
+  });
+}
+
 let pythonPromise: Promise<boolean> | null = null;
 
 function ensurePython(): Promise<boolean> {
@@ -239,28 +262,20 @@ function ensurePython(): Promise<boolean> {
         return true;
       }
 
+      // Instalación asíncrona: no bloquea el event loop del bot.
       console.log(
-        "[music] python3 no está en PATH — intentando instalarlo con apt...",
+        "[music] python3 no está en PATH — instalándolo con apt (async)...",
       );
-      try {
-        spawnSync("apt-get", ["update", "-qq"], {
-          timeout: 60_000,
-          stdio: "ignore",
-        });
-        const install = spawnSync(
-          "apt-get",
-          ["install", "-y", "-qq", "python3"],
-          { timeout: 120_000, stdio: "ignore" },
-        );
-        if (python3Works()) {
-          console.log("[music] python3 instalado en runtime ✅");
-          return true;
-        }
-        console.error("[music] apt-get install python3 falló", {
-          status: install.status,
-        });
-      } catch (error) {
-        console.error("[music] error instalando python3 en runtime", { error });
+      await runCommand("apt-get", ["update", "-qq"], 60_000);
+      await runCommand(
+        "apt-get",
+        ["install", "-y", "-qq", "python3"],
+        180_000,
+      );
+
+      if (python3Works()) {
+        console.log("[music] python3 instalado en runtime ✅");
+        return true;
       }
 
       console.error(
