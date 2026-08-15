@@ -1251,6 +1251,7 @@ function App() {
       setRrDescription("");
       setRrPairs([{ emoji: "", roleId: "" }]);
       void refreshRrJobs();
+      void refreshReactionPanels();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Error desconocido";
@@ -1336,6 +1337,7 @@ function App() {
         "success",
       );
       void refreshRrJobs();
+      void refreshReactionPanels();
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al republicar.",
@@ -2495,7 +2497,7 @@ function App() {
                         <div className="rr-panels-list">
                           <div className="rr-panels-head">
                             <h4>
-                              Paneles existentes ({reactionPanels.length})
+                              Plantillas ({reactionPanels.length})
                             </h4>
                             <button
                               className="icon-button"
@@ -2561,15 +2563,6 @@ function App() {
                                       <button
                                         className="ghost-button"
                                         onClick={() =>
-                                          void handlePublishReactionPanel(panel)
-                                        }
-                                        type="button"
-                                      >
-                                        Publicar
-                                      </button>
-                                      <button
-                                        className="ghost-button"
-                                        onClick={() =>
                                           startEditReactionPanel(panel)
                                         }
                                         type="button"
@@ -2577,13 +2570,22 @@ function App() {
                                         Editar
                                       </button>
                                       <button
-                                        className="ghost-button danger"
+                                        className="primary-button"
+                                        onClick={() =>
+                                          void handlePublishReactionPanel(panel)
+                                        }
+                                        type="button"
+                                      >
+                                        Publicar
+                                      </button>
+                                      <button
+                                        className="danger-button"
                                         onClick={() =>
                                           requestDeleteReactionPanel(panel)
                                         }
                                         type="button"
                                       >
-                                        Eliminar panel
+                                        Eliminar plantilla
                                       </button>
                                     </div>
                                   </div>
@@ -2615,7 +2617,7 @@ function App() {
                           ? "Guardando…"
                           : editingPanel
                             ? "Guardar cambios"
-                            : "Crear panel"}
+                            : "Publicar"}
                       </button>
                     </div>
                   </div>
