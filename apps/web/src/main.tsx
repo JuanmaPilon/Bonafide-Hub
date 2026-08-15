@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
 import {
+  createCommunication,
   createReactionRolePanel,
+  deleteCommunication,
   deleteReactionRoleJob,
   deleteReactionRolePanel,
   exportXpData,
@@ -18,17 +20,23 @@ import {
   getMe,
   getXpConfig,
   importXpData,
+  listCommunications,
+  listPublishedCommunications,
   listReactionRoleJobs,
   listReactionRolePanels,
   loginUrl,
   logout,
+  publishCommunication,
   requestXpSync,
   resetAllXp,
   saveGuildConfig,
   saveXpConfig,
+  updateCommunication,
   updateReactionRolePanel,
   type ApiGuild,
   type AuditLogEntry,
+  type Communication,
+  type CommunicationInput,
   type GuildBooster,
   type GuildChannel,
   type GuildConfig,
@@ -499,6 +507,11 @@ function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
+  const [communications, setCommunications] = useState<Communication[]>([]);
+  const [published, setPublished] = useState<Communication[]>([]);
+  const [commEditor, setCommEditor] = useState<
+    (CommunicationInput & { id: string | null }) | null
+  >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
@@ -590,6 +603,116 @@ function App() {
       cancelled = true;
     };
   }, [selectedGuildId]);
+
+  useEffect(() => {
+    if (!selectedGuildId || !adminEnabled) {
+      setCommunications([]);
+      return;
+    }
+    let cancelled = false;
+    listCommunications(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setCommunications(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGuildId, adminEnabled]);
+
+  useEffect(() => {
+    if (!selectedGuildId) {
+      setPublished([]);
+      return;
+    }
+    let cancelled = false;
+    listPublishedCommunications(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setPublished(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGuildId]);
+
+  async function handleSaveCommunication(): Promise<void> {
+    if (!selectedGuildId || !commEditor) {
+      return;
+    }
+    if (!commEditor.title?.trim() || !commEditor.content?.trim()) {
+      pushToast("Faltan título y/o contenido.", "error");
+      return;
+    }
+    try {
+      if (commEditor.id) {
+        const updated = await updateCommunication(
+          selectedGuildId,
+          commEditor.id,
+          {
+            title: commEditor.title,
+            content: commEditor.content,
+            channelId: commEditor.channelId,
+          },
+        );
+        setCommunications((current) =>
+          current.map((item) => (item.id === updated.id ? updated : item)),
+        );
+        pushToast("Comunicado actualizado.", "success");
+      } else {
+        const created = await createCommunication(selectedGuildId, commEditor);
+        setCommunications((current) => [created, ...current]);
+        pushToast("Comunicado guardado (borrador).", "success");
+      }
+      setCommEditor(null);
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al guardar.",
+        "error",
+      );
+    }
+  }
+
+  async function handlePublishCommunication(id: string): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const updated = await publishCommunication(selectedGuildId, id);
+      setCommunications((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      const list = await listPublishedCommunications(selectedGuildId);
+      setPublished(list);
+      pushToast("Comunicado publicado en Discord.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al publicar.",
+        "error",
+      );
+    }
+  }
+
+  async function handleDeleteCommunication(id: string): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteCommunication(selectedGuildId, id);
+      setCommunications((current) => current.filter((item) => item.id !== id));
+      setPublished((current) => current.filter((item) => item.id !== id));
+      pushToast("Comunicado eliminado.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al eliminar.",
+        "error",
+      );
+    }
+  }
 
   async function handleSave(): Promise<void> {
     if (!selectedGuildId) {
@@ -1717,6 +1840,90 @@ function App() {
                   <div className="admin-card">
                     <div className="admin-card-header">
                       <div>
+                        <h3>Comunicados</h3>
+                        <p>
+                          Creá anuncios (reclutamiento, raids, etc.). Al
+                          publicar se envían a un canal de Discord y, si son
+                          largos, se mandan partidos en varios mensajes.
+                        </p>
+                      </div>
+                      <button
+                        className="primary-button"
+                        onClick={() =>
+                          setCommEditor({
+                            id: null,
+                            title: "",
+                            content: "",
+                            channelId: "",
+                          })
+                        }
+                        type="button"
+                      >
+                        Nuevo comunicado
+                      </button>
+                    </div>
+                    <div className="admin-card-body">
+                      {communications.length === 0 ? (
+                        <div className="empty-state">
+                          No hay comunicados todavía. Creá el primero.
+                        </div>
+                      ) : (
+                        communications.map((comm) => (
+                          <div className="comunicado-admin-row" key={comm.id}>
+                            <div className="comunicado-admin-info">
+                              <strong>{comm.title}</strong>
+                              <span
+                                className={`comunicado-status comunicado-status-${comm.status}`}
+                              >
+                                {comm.status === "published"
+                                  ? "Publicado"
+                                  : "Borrador"}
+                              </span>
+                            </div>
+                            <div className="comunicado-admin-actions">
+                              <button
+                                className="ghost-button"
+                                onClick={() =>
+                                  setCommEditor({
+                                    id: comm.id,
+                                    title: comm.title,
+                                    content: comm.content,
+                                    channelId: comm.channelId ?? "",
+                                  })
+                                }
+                                type="button"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                className="primary-button"
+                                disabled={comm.status === "published"}
+                                onClick={() =>
+                                  void handlePublishCommunication(comm.id)
+                                }
+                                type="button"
+                              >
+                                Publicar
+                              </button>
+                              <button
+                                className="danger-button"
+                                onClick={() =>
+                                  void handleDeleteCommunication(comm.id)
+                                }
+                                type="button"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="admin-card">
+                    <div className="admin-card-header">
+                      <div>
                         <h3>Configuración general del servidor</h3>
                         <p>
                           Canales y roles base del servidor. Se guardan por
@@ -2635,6 +2842,33 @@ function App() {
                     ? "No tienes permisos para ver el panel Admin en esta guild."
                     : "No hay guild seleccionada o no tenes permisos para ver una."}
                 </div>
+              ) : activeTab === "comunicados" ? (
+                <div className="comunicados-stack">
+                  {published.length === 0 ? (
+                    <div className="empty-state">
+                      Todavía no hay comunicados publicados.
+                    </div>
+                  ) : (
+                    published.map((comm) => (
+                      <article className="comunicado-card" key={comm.id}>
+                        <div className="comunicado-card-header">
+                          <h3>{comm.title}</h3>
+                          {comm.publishedAt ? (
+                            <span className="comunicado-date">
+                              {new Date(comm.publishedAt).toLocaleDateString()}
+                            </span>
+                          ) : null}
+                        </div>
+                        {comm.authorName ? (
+                          <div className="comunicado-author">
+                            Por {comm.authorName}
+                          </div>
+                        ) : null}
+                        <div className="comunicado-content">{comm.content}</div>
+                      </article>
+                    ))
+                  )}
+                </div>
               ) : activeTab === "dashboard" ? null : (
                 <div className="empty-state">
                   Módulo en preparación. Esta tab ya está lista para conectar su
@@ -2699,6 +2933,91 @@ function App() {
                 type="button"
               >
                 Listo
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {commEditor != null ? (
+        <div className="modal-overlay" onClick={() => setCommEditor(null)}>
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h4>{commEditor.id ? "Editar comunicado" : "Nuevo comunicado"}</h4>
+            <div className="comm-form">
+              <label>
+                <span>Título</span>
+                <input
+                  type="text"
+                  value={commEditor.title}
+                  onChange={(event) =>
+                    setCommEditor((current) =>
+                      current
+                        ? { ...current, title: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder="Ej: Reclutamiento abierto"
+                />
+              </label>
+              <label>
+                <span>Contenido</span>
+                <textarea
+                  className="textarea"
+                  rows={8}
+                  value={commEditor.content}
+                  onChange={(event) =>
+                    setCommEditor((current) =>
+                      current
+                        ? { ...current, content: event.target.value }
+                        : current,
+                    )
+                  }
+                  placeholder={
+                    "Escribí el comunicado. Se respetan los saltos de línea.\nLos mensajes largos se dividen automáticamente al publicar en Discord."
+                  }
+                />
+              </label>
+              <label>
+                <span>Canal de publicación (Discord)</span>
+                <select
+                  className="select"
+                  value={commEditor.channelId}
+                  onChange={(event) =>
+                    setCommEditor((current) =>
+                      current
+                        ? { ...current, channelId: event.target.value }
+                        : current,
+                    )
+                  }
+                >
+                  <option value="">Sin canal (solo web)</option>
+                  {textChannels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="form-actions">
+              <button
+                className="ghost-button"
+                onClick={() => setCommEditor(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => void handleSaveCommunication()}
+                type="button"
+              >
+                {commEditor.id ? "Guardar cambios" : "Guardar borrador"}
               </button>
             </div>
           </div>

@@ -61,6 +61,22 @@ model ReactionRolePanelJob {
   @@map("reaction_role_panel_jobs")
 }
 
+model Communication {
+  id          String    @id @default(cuid())
+  guildId     String
+  title       String
+  content     String
+  authorName  String?
+  channelId   String?
+  status      String    @default("draft")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  @@index([guildId, status])
+  @@map("communications")
+}
+
 model ReactionRolePanel {
   guildId     String
   messageId   String

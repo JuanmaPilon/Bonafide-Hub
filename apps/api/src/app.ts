@@ -22,6 +22,18 @@ import {
   listAuditLogEntries,
 } from "./services/audit-log-store.js";
 import {
+  createCommunication,
+  deleteCommunication,
+  getCommunication,
+  listCommunications,
+  listPublishedCommunications,
+  markPublished,
+  publishToDiscordChannel,
+  splitForDiscord,
+  updateCommunication,
+  type Communication,
+} from "./services/communications-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -1755,6 +1767,231 @@ export function buildApp() {
       config,
     };
   });
+
+  app.get(
+    "/guilds/:guildId/communications/published",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      if (!isGuildMember(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const communications = await listPublishedCommunications(params.guildId);
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        communications,
+      };
+    },
+  );
+
+  app.get("/guilds/:guildId/communications", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const communications = await listCommunications(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      communications,
+    };
+  });
+
+  app.post("/guilds/:guildId/communications", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = request.body as {
+      authorName?: string;
+      channelId?: string;
+      content?: string;
+      title?: string;
+    };
+
+    const title = body.title?.trim();
+    const content = body.content?.trim();
+    if (!title || !content) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Faltan title o content" });
+    }
+
+    const communication = await createCommunication({
+      authorName: body.authorName ?? session.user?.global_name ?? undefined,
+      channelId: body.channelId,
+      content,
+      guildId: params.guildId,
+      title,
+    });
+
+    await logAdminAction(session, params.guildId, "create:communication", {
+      details: `Comunicado creado: ${title}`,
+      targetType: "communication",
+      targetId: communication.id,
+    });
+
+    return { ok: true, communication };
+  });
+
+  app.patch(
+    "/guilds/:guildId/communications/:communicationId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        communicationId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.communicationId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const existing = await getCommunication(params.communicationId);
+      if (!existing || existing.guildId !== params.guildId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      const body = request.body as {
+        authorName?: string;
+        channelId?: string;
+        content?: string;
+        title?: string;
+      };
+
+      const communication = await updateCommunication({
+        authorName: body.authorName,
+        channelId: body.channelId,
+        content: body.content?.trim(),
+        id: params.communicationId,
+        title: body.title?.trim(),
+      });
+
+      return { ok: true, communication };
+    },
+  );
+
+  app.delete(
+    "/guilds/:guildId/communications/:communicationId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        communicationId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.communicationId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const existing = await getCommunication(params.communicationId);
+      if (!existing || existing.guildId !== params.guildId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      const deleted = await deleteCommunication(params.communicationId);
+
+      return { ok: true, deleted };
+    },
+  );
+
+  app.post(
+    "/guilds/:guildId/communications/:communicationId/publish",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        communicationId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.communicationId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const existing = await getCommunication(params.communicationId);
+      if (!existing || existing.guildId !== params.guildId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      if (!existing.channelId) {
+        return reply
+          .code(400)
+          .send({
+            ok: false,
+            error: "El comunicado no tiene canal de publicación",
+          });
+      }
+
+      const chunks = splitForDiscord(existing.content);
+      const result = await publishToDiscordChannel(existing.channelId, chunks);
+      if (!result.ok) {
+        return reply.code(502).send({ ok: false, error: result.reason });
+      }
+
+      const communication = await markPublished(params.communicationId);
+
+      await logAdminAction(session, params.guildId, "publish:communication", {
+        details: `Comunicado publicado: ${existing.title}`,
+        targetType: "communication",
+        targetId: existing.id,
+      });
+
+      return { ok: true, communication };
+    },
+  );
 
   app.get("/guilds/:guildId/reminders", async (request, reply) => {
     const session = await requireSession(request);

@@ -17,6 +17,26 @@ export type GuildConfig = {
   reactionRolesChannelId?: string;
 };
 
+export type Communication = {
+  authorName?: string;
+  channelId?: string;
+  content: string;
+  createdAt: string;
+  guildId: string;
+  id: string;
+  publishedAt?: string;
+  status: "draft" | "published";
+  title: string;
+  updatedAt: string;
+};
+
+export type CommunicationInput = {
+  authorName?: string;
+  channelId?: string;
+  content?: string;
+  title?: string;
+};
+
 export type GuildWidgetStatus = {
   available: boolean;
   boostCount: number | null;
@@ -510,6 +530,74 @@ export async function saveGuildConfig(
   );
 
   return data.config;
+}
+
+export async function listCommunications(
+  guildId: string,
+): Promise<Communication[]> {
+  const data = await requestJson<{ communications: Communication[] }>(
+    `/guilds/${guildId}/communications`,
+  );
+  return data.communications;
+}
+
+export async function listPublishedCommunications(
+  guildId: string,
+): Promise<Communication[]> {
+  const data = await requestJson<{ communications: Communication[] }>(
+    `/guilds/${guildId}/communications/published`,
+  );
+  return data.communications;
+}
+
+export async function createCommunication(
+  guildId: string,
+  input: CommunicationInput,
+): Promise<Communication> {
+  const data = await requestJson<{ communication: Communication }>(
+    `/guilds/${guildId}/communications`,
+    {
+      body: JSON.stringify(input),
+      method: "POST",
+    },
+  );
+  return data.communication;
+}
+
+export async function updateCommunication(
+  guildId: string,
+  communicationId: string,
+  input: CommunicationInput,
+): Promise<Communication> {
+  const data = await requestJson<{ communication: Communication }>(
+    `/guilds/${guildId}/communications/${communicationId}`,
+    {
+      body: JSON.stringify(input),
+      method: "PATCH",
+    },
+  );
+  return data.communication;
+}
+
+export async function deleteCommunication(
+  guildId: string,
+  communicationId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/communications/${communicationId}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function publishCommunication(
+  guildId: string,
+  communicationId: string,
+): Promise<Communication> {
+  const data = await requestJson<{ communication: Communication }>(
+    `/guilds/${guildId}/communications/${communicationId}/publish`,
+    { method: "POST" },
+  );
+  return data.communication;
 }
 
 export async function logout(): Promise<void> {
