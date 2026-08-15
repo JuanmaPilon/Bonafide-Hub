@@ -220,11 +220,7 @@ async function fetchGuildMembersForLeaderboard(
     if (member.user.avatar) {
       avatarUrl = buildAvatarUrl(member.user.id, member.user.avatar);
     } else if (member.avatar) {
-      avatarUrl = buildServerAvatarUrl(
-        guildId,
-        member.user.id,
-        member.avatar,
-      );
+      avatarUrl = buildServerAvatarUrl(guildId, member.user.id, member.avatar);
     }
 
     result.set(member.user.id, {
@@ -1325,7 +1321,7 @@ export function buildApp() {
   });
 
   // Leaderboard público para la landing (solo la guild de Bonafide).
-  // Devuelve top 15 con nombre y avatar, sin requerir sesión.
+  // Devuelve top 30 con nombre, avatar y si es booster, sin sesión.
   app.get("/public/leaderboard", async (_request, reply) => {
     const guildId = env.BONAFIDE_GUILD_ID;
     if (!guildId) {
@@ -1333,11 +1329,11 @@ export function buildApp() {
     }
 
     const leaderboard = await getLeaderboard(guildId);
-    const memberInfo = await fetchGuildMembersForLeaderboard(
-      guildId,
-    ).catch(() => new Map<string, LeaderboardUserInfo>());
+    const memberInfo = await fetchGuildMembersForLeaderboard(guildId).catch(
+      () => new Map<string, LeaderboardUserInfo>(),
+    );
 
-    const preview = leaderboard.slice(0, 15).map((entry) => {
+    const preview = leaderboard.slice(0, 30).map((entry) => {
       const info = memberInfo.get(entry.userId);
       return {
         avatarUrl: info?.avatarUrl ?? null,

@@ -168,7 +168,7 @@ export type LeaderboardEntry = {
 
 export async function getLeaderboard(
   guildId: string,
-  limit = 20,
+  limit = 50,
 ): Promise<LeaderboardEntry[]> {
   const records = await prisma.xpProfile.findMany({
     where: { guildId },
