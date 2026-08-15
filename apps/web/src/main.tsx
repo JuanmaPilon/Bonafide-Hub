@@ -512,6 +512,9 @@ function App() {
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
+  const [expandedPublished, setExpandedPublished] = useState<Set<string>>(
+    new Set(),
+  );
   const [commEditor, setCommEditor] = useState<
     (CommunicationInput & { id: string | null }) | null
   >(null);
@@ -653,6 +656,18 @@ function App() {
     ]);
     setCommunications(list);
     setPublished(publishedList);
+  }
+
+  function togglePublished(id: string): void {
+    setExpandedPublished((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   async function handleSaveCommunication(): Promise<void> {
@@ -2967,24 +2982,51 @@ function App() {
                       Todavía no hay comunicados publicados.
                     </div>
                   ) : (
-                    published.map((comm) => (
-                      <article className="comunicado-card" key={comm.id}>
-                        <div className="comunicado-card-header">
-                          <h3>{comm.title}</h3>
-                          {comm.publishedAt ? (
-                            <span className="comunicado-date">
-                              {new Date(comm.publishedAt).toLocaleDateString()}
+                    published.map((comm) => {
+                      const expanded = expandedPublished.has(comm.id);
+                      return (
+                        <article
+                          className="comunicado-card comunicado-acc"
+                          key={comm.id}
+                        >
+                          <button
+                            className="comunicado-acc-header"
+                            onClick={() => togglePublished(comm.id)}
+                            type="button"
+                            aria-expanded={expanded}
+                          >
+                            <span className="comunicado-acc-heading">
+                              <strong>{comm.title}</strong>
+                              {comm.publishedAt ? (
+                                <span className="comunicado-date">
+                                  {new Date(
+                                    comm.publishedAt,
+                                  ).toLocaleDateString()}
+                                </span>
+                              ) : null}
                             </span>
+                            <span
+                              className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
+                              aria-hidden="true"
+                            >
+                              ▸
+                            </span>
+                          </button>
+                          {expanded ? (
+                            <div className="comunicado-acc-body">
+                              {comm.authorName ? (
+                                <div className="comunicado-author">
+                                  Por {comm.authorName}
+                                </div>
+                              ) : null}
+                              <div className="comunicado-content">
+                                {comm.content}
+                              </div>
+                            </div>
                           ) : null}
-                        </div>
-                        {comm.authorName ? (
-                          <div className="comunicado-author">
-                            Por {comm.authorName}
-                          </div>
-                        ) : null}
-                        <div className="comunicado-content">{comm.content}</div>
-                      </article>
-                    ))
+                        </article>
+                      );
+                    })
                   )}
                 </div>
               ) : activeTab === "dashboard" ? null : (
