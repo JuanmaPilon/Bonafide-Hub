@@ -8,13 +8,20 @@ import {
   VoiceConnection,
   VoiceConnectionStatus,
 } from "@discordjs/voice";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  PermissionFlagsBits,
+} from "discord.js";
 import type {
+  ButtonInteraction,
   ChatInputCommandInteraction,
   Guild,
   GuildMember,
   VoiceBasedChannel,
 } from "discord.js";
-import { PermissionFlagsBits } from "discord.js";
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
@@ -343,6 +350,8 @@ type GuildMusicState = {
   idleTimer: NodeJS.Timeout | null;
   emptyTimer: NodeJS.Timeout | null;
   ytdlProcess: { kill(): void } | null;
+  nowPlayingChannelId: string | null;
+  nowPlayingMessageId: string | null;
 };
 
 const musicStates = new Map<string, GuildMusicState>();
@@ -372,6 +381,8 @@ function getState(guildId: string): GuildMusicState {
       idleTimer: null,
       emptyTimer: null,
       ytdlProcess: null,
+      nowPlayingChannelId: null,
+      nowPlayingMessageId: null,
     };
     musicStates.set(guildId, state);
 
@@ -393,6 +404,8 @@ function destroyState(guildId: string): void {
     return;
   }
 
+  const { guild, nowPlayingChannelId, nowPlayingMessageId } = state;
+
   if (state.idleTimer) {
     clearTimeout(state.idleTimer);
     state.idleTimer = null;
@@ -411,6 +424,10 @@ function destroyState(guildId: string): void {
   state.connection?.destroy();
   state.connection = null;
   musicStates.delete(guildId);
+
+  if (guild && nowPlayingChannelId && nowPlayingMessageId) {
+    void deleteMessageById(guild, nowPlayingChannelId, nowPlayingMessageId);
+  }
 }
 
 function cancelIdleLeave(guildId: string): void {
@@ -595,6 +612,7 @@ async function playNext(guildId: string): Promise<void> {
         title: next.title,
       });
     });
+    void updateNowPlaying(guildId);
   } catch (error) {
     console.error("[music] failed to stream", {
       error,
@@ -709,6 +727,269 @@ function formatDuration(seconds: number): string {
   const mm = m.toString().padStart(2, "0");
   const ss = s.toString().padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
+// ── Player embed con botones (estilo Rythm) ─────────────────────────
+function applyVolume(state: GuildMusicState): void {
+  const playerState = state.player.state as {
+    resource?: { volume?: { setVolume(volume: number): void } };
+  };
+  playerState.resource?.volume?.setVolume(state.volume);
+}
+
+function buildNowPlayingEmbed(state: GuildMusicState): EmbedBuilder {
+  const paused = state.player.state.status === AudioPlayerStatus.Paused;
+  const embed = new EmbedBuilder()
+    .setColor(paused ? 0xf0b429 : 0x43b581)
+    .setTitle(
+      state.current
+        ? paused
+          ? "⏸️ Pausado"
+          : "▶️ Reproduciendo"
+        : "🎵 Música",
+    );
+
+  if (!state.current) {
+    embed.setDescription("No hay nada sonando.");
+    return embed;
+  }
+
+  embed.setDescription(state.current.title);
+  const lines: string[] = [];
+  if (state.current.requestedBy) {
+    lines.push(`Pedida por: **${state.current.requestedBy}**`);
+  }
+  if (state.current.duration) {
+    lines.push(`Duración: ${state.current.duration}`);
+  }
+  if (lines.length > 0) {
+    embed.addFields({ name: "\u200b", value: lines.join("\n") });
+  }
+  embed.addFields(
+    {
+      name: "Cola",
+      value:
+        state.queue.length > 0
+          ? `${state.queue.length} tema/s pendiente/s`
+          : "Vacía",
+      inline: true,
+    },
+    {
+      name: "Volumen",
+      value: `${Math.round(state.volume * 100)}%`,
+      inline: true,
+    },
+  );
+
+  return embed;
+}
+
+function buildMusicComponents(): ActionRowBuilder<ButtonBuilder>[] {
+  const playPause = new ButtonBuilder()
+    .setCustomId("music:playpause")
+    .setStyle(ButtonStyle.Primary)
+    .setEmoji("⏯️");
+  const skip = new ButtonBuilder()
+    .setCustomId("music:skip")
+    .setStyle(ButtonStyle.Primary)
+    .setEmoji("⏭️");
+  const stop = new ButtonBuilder()
+    .setCustomId("music:stop")
+    .setStyle(ButtonStyle.Danger)
+    .setEmoji("⏹️");
+  const leave = new ButtonBuilder()
+    .setCustomId("music:leave")
+    .setStyle(ButtonStyle.Danger)
+    .setEmoji("👋");
+  const volDown = new ButtonBuilder()
+    .setCustomId("music:vol-")
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🔉");
+  const volUp = new ButtonBuilder()
+    .setCustomId("music:vol+")
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("🔊");
+  const queue = new ButtonBuilder()
+    .setCustomId("music:queue")
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji("📜");
+
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    playPause,
+    skip,
+    stop,
+    leave,
+  );
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    volDown,
+    volUp,
+    queue,
+  );
+  return [row1, row2];
+}
+
+async function deleteMessageById(
+  guild: Guild,
+  channelId: string,
+  messageId: string,
+): Promise<void> {
+  const channel = guild.channels.cache.get(channelId);
+  if (!channel?.isTextBased()) {
+    return;
+  }
+  const message = await channel.messages.fetch(messageId).catch(() => null);
+  if (message) {
+    await message.delete().catch(() => {});
+  }
+}
+
+async function deleteNowPlayingMessage(guildId: string): Promise<void> {
+  const state = musicStates.get(guildId);
+  if (!state?.guild || !state.nowPlayingMessageId) {
+    return;
+  }
+  const channelId = state.nowPlayingChannelId;
+  if (channelId) {
+    await deleteMessageById(state.guild, channelId, state.nowPlayingMessageId);
+  }
+  state.nowPlayingMessageId = null;
+}
+
+async function updateNowPlaying(guildId: string): Promise<void> {
+  const state = musicStates.get(guildId);
+  if (!state?.guild || !state.nowPlayingChannelId) {
+    return;
+  }
+
+  // Si no hay nada sonando ni en cola, borramos el mensaje del player.
+  if (!state.current && state.queue.length === 0) {
+    await deleteNowPlayingMessage(guildId);
+    return;
+  }
+
+  const channel = state.guild.channels.cache.get(state.nowPlayingChannelId);
+  if (!channel?.isTextBased()) {
+    return;
+  }
+
+  const embed = buildNowPlayingEmbed(state);
+  const components = buildMusicComponents();
+
+  if (state.nowPlayingMessageId) {
+    const message = await channel.messages
+      .fetch(state.nowPlayingMessageId)
+      .catch(() => null);
+    if (message) {
+      await message.edit({ embeds: [embed], components }).catch(() => {});
+      return;
+    }
+    state.nowPlayingMessageId = null;
+  }
+
+  const sent = await channel
+    .send({ embeds: [embed], components })
+    .catch(() => null);
+  if (sent) {
+    state.nowPlayingMessageId = sent.id;
+  }
+}
+
+// Maneja los botones del player (estilo Rythm).
+export async function handleMusicButton(
+  interaction: ButtonInteraction,
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    await interaction.reply({
+      content: "Este botón solo funciona dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const guildId = interaction.guildId;
+  const member = interaction.member as GuildMember | null;
+
+  if (!(await canUseMusic(guildId, member))) {
+    await interaction.reply({
+      content:
+        "No tenés permiso para controlar la música (se requiere el rol DJ).",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const action = interaction.customId.replace("music:", "");
+  const state = getState(guildId);
+
+  switch (action) {
+    case "playpause": {
+      if (state.player.state.status === AudioPlayerStatus.Playing) {
+        state.player.pause();
+      } else if (state.player.state.status === AudioPlayerStatus.Paused) {
+        state.player.unpause();
+      }
+      await interaction.deferUpdate().catch(() => {});
+      await updateNowPlaying(guildId);
+      return;
+    }
+    case "skip": {
+      if (state.current) {
+        state.player.stop();
+      }
+      await interaction.deferUpdate().catch(() => {});
+      await updateNowPlaying(guildId);
+      return;
+    }
+    case "stop": {
+      state.queue = [];
+      state.current = null;
+      state.player.stop();
+      await interaction.deferUpdate().catch(() => {});
+      await updateNowPlaying(guildId);
+      return;
+    }
+    case "leave": {
+      destroyState(guildId);
+      await interaction.deferUpdate().catch(() => {});
+      return;
+    }
+    case "vol-": {
+      state.volume = Math.max(0, state.volume - 0.1);
+      applyVolume(state);
+      await interaction.deferUpdate().catch(() => {});
+      await updateNowPlaying(guildId);
+      return;
+    }
+    case "vol+": {
+      state.volume = Math.min(2, state.volume + 0.1);
+      applyVolume(state);
+      await interaction.deferUpdate().catch(() => {});
+      await updateNowPlaying(guildId);
+      return;
+    }
+    case "queue": {
+      const lines: string[] = [];
+      if (state.current) {
+        lines.push(`▶️ **Sonando:** ${state.current.title}`);
+      }
+      const pending = state.queue.slice(0, 10);
+      pending.forEach((track, index) => {
+        lines.push(
+          `${index + 1}. ${track.title}${track.duration ? ` (${track.duration})` : ""}`,
+        );
+      });
+      if (state.queue.length > pending.length) {
+        lines.push(`...y ${state.queue.length - pending.length} más.`);
+      }
+      await interaction.reply({
+        content: lines.length > 0 ? lines.join("\n") : "La cola está vacía.",
+        ephemeral: true,
+      });
+      return;
+    }
+    default:
+      await interaction.deferUpdate().catch(() => {});
+  }
 }
 
 async function resolveTrack(
@@ -898,6 +1179,8 @@ export async function handleMusicCommand(
         track.requestedBy = interaction.user.tag;
         cancelIdleLeave(guildId);
         state.queue.push(track);
+        // Canal donde vive el player embed con botones.
+        state.nowPlayingChannelId = interaction.channelId;
 
         const duration = track.duration ? ` (${track.duration})` : "";
         if (state.player.state.status !== AudioPlayerStatus.Idle) {
@@ -910,6 +1193,7 @@ export async function handleMusicCommand(
           );
           void playNext(guildId);
         }
+        void updateNowPlaying(guildId);
         return;
       }
 
@@ -921,6 +1205,7 @@ export async function handleMusicCommand(
         }
         state.player.pause();
         await interaction.reply("⏸️ Reproducción pausada.");
+        void updateNowPlaying(guildId);
         return;
       }
 
@@ -932,6 +1217,7 @@ export async function handleMusicCommand(
         }
         state.player.unpause();
         await interaction.reply("▶️ Reproducción reanudada.");
+        void updateNowPlaying(guildId);
         return;
       }
 
@@ -944,6 +1230,7 @@ export async function handleMusicCommand(
         const title = state.current.title;
         state.player.stop();
         await interaction.reply(`⏭️ Saltando: **${title}**`);
+        void updateNowPlaying(guildId);
         return;
       }
 
@@ -986,13 +1273,10 @@ export async function handleMusicCommand(
       case "volume": {
         const state = getState(guildId);
         const level = interaction.options.getInteger("nivel", true);
-        const normalized = Math.max(0, Math.min(200, level)) / 100;
-        state.volume = normalized;
-        const playerState = state.player.state as {
-          resource?: { volume?: { setVolume(volume: number): void } };
-        };
-        playerState.resource?.volume?.setVolume(normalized);
+        state.volume = Math.max(0, Math.min(200, level)) / 100;
+        applyVolume(state);
         await interaction.reply(`🔊 Volumen: **${level}%**`);
+        void updateNowPlaying(guildId);
         return;
       }
 

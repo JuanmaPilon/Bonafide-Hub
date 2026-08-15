@@ -12,6 +12,7 @@ import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
 import {
   checkMusicChannelEmpty,
+  handleMusicButton,
   handleMusicCommand,
 } from "./services/music-service.js";
 import {
@@ -1364,6 +1365,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         value: file,
       })),
     );
+    return;
+  }
+
+  if (interaction.isButton()) {
+    // Botones del player de música (estilo Rythm).
+    if (interaction.customId.startsWith("music:")) {
+      await handleMusicButton(interaction);
+    }
     return;
   }
 
