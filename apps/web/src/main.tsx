@@ -1134,8 +1134,7 @@ function App() {
       .join("   ");
 
     return [
-      rrTitle.trim() ? `**${rrTitle.trim()}**` : "",
-      rrDescription.trim(),
+      rrDescription.trim() ? `**${rrDescription.trim()}**` : "",
       roleRow,
     ].filter((line) => line.length > 0);
   }

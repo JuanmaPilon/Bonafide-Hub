@@ -965,16 +965,14 @@ let reactionRoleJobTimer: NodeJS.Timeout | null = null;
 function buildReactionPanelText(input: {
   description?: string | null;
   pairs: ReactionRolePair[];
-  title?: string | null;
 }): string {
-  // Las parejas emoji+rol van consecutivas en una sola línea para que el
-  // mensaje no quede largo apilando un rol debajo de otro.
+  // La descripción es el encabezado del mensaje (en negrita); las parejas
+  // emoji+rol van consecutivas en una sola línea para no apilar roles.
   const roleRow = input.pairs
     .map((pair) => `${pair.emoji} <@&${pair.roleId}>`)
     .join("   ");
   return [
-    input.title ? `**${input.title}**` : "",
-    input.description ?? "",
+    input.description ? `**${input.description}**` : "",
     roleRow,
   ]
     .filter((line) => Boolean(line))
@@ -1052,7 +1050,6 @@ async function processReactionRoleJob(
       const panelText = buildReactionPanelText({
         description: job.description,
         pairs: resolvedRules,
-        title: job.title,
       });
       const sentMessage = await channel.send(panelText).catch(() => null);
       if (!isReactableMessageLike(sentMessage)) {
@@ -1121,7 +1118,6 @@ async function processReactionRoleJob(
       const panelText = buildReactionPanelText({
         description: job.description,
         pairs: resolvedRules,
-        title: job.title,
       });
 
       // Buscamos el mensaje primero en el canal objetivo y, si el canal
