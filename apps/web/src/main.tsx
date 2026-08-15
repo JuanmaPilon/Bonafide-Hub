@@ -1106,20 +1106,21 @@ function App() {
   }
 
   function rrPreviewLines(): string[] {
-    const lines = rrPairs
+    const roleRow = rrPairs
       .filter((pair) => pair.emoji.trim() && pair.roleId)
       .map((pair) => {
         const emoji = normalizeEmoji(pair.emoji);
         const roleName =
           guildRoles.find((role) => role.id === pair.roleId)?.name ?? "Rol";
         return `${emoji} ${roleName}`;
-      });
+      })
+      .join("   ");
 
     return [
       rrTitle.trim() ? `## ${rrTitle.trim()}` : "",
       rrDescription.trim(),
       "Reacciona para recibir o quitar tu rol:",
-      ...lines,
+      roleRow,
     ].filter((line) => line.length > 0);
   }
 
@@ -1300,6 +1301,47 @@ function App() {
       pushToast(`No se pudo eliminar el panel: ${message}`, "error");
     } finally {
       setLoadingGuildData(false);
+    }
+  }
+
+  // Republica el mensaje de un panel (útil si se borró en Discord o para
+  // refrescarlo) reutilizando los datos guardados del panel.
+  async function handlePublishReactionPanel(
+    panel: ReactionRolePanel,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const pairs = panel.rules
+        .map((rule) => ({
+          emoji: emojiKeyToEditable(rule.emojiKey),
+          roleId: rule.roleId,
+        }))
+        .filter((pair) => pair.emoji && pair.roleId);
+
+      if (pairs.length === 0) {
+        pushToast("El panel no tiene emoji/roles para publicar.", "error");
+        return;
+      }
+
+      await updateReactionRolePanel(selectedGuildId, panel.messageId, {
+        channelId: panel.channelId ?? undefined,
+        description: panel.description,
+        mode: panel.mode,
+        pairs,
+        title: panel.title,
+      });
+      pushToast(
+        "Panel encolado. El bot lo republicará en unos segundos.",
+        "success",
+      );
+      void refreshRrJobs();
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al republicar.",
+        "error",
+      );
     }
   }
 
@@ -2518,6 +2560,15 @@ function App() {
                                       })}
                                     </div>
                                     <div className="rr-panel-actions">
+                                      <button
+                                        className="ghost-button"
+                                        onClick={() =>
+                                          void handlePublishReactionPanel(panel)
+                                        }
+                                        type="button"
+                                      >
+                                        Publicar
+                                      </button>
                                       <button
                                         className="ghost-button"
                                         onClick={() =>

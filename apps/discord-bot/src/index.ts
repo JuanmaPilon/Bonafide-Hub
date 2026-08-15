@@ -967,12 +967,16 @@ function buildReactionPanelText(input: {
   pairs: ReactionRolePair[];
   title?: string | null;
 }): string {
-  const lines = input.pairs.map((pair) => `${pair.emoji} <@&${pair.roleId}>`);
+  // Las parejas emoji+rol van consecutivas en una sola línea para que el
+  // mensaje no quede largo apilando un rol debajo de otro.
+  const roleRow = input.pairs
+    .map((pair) => `${pair.emoji} <@&${pair.roleId}>`)
+    .join("   ");
   return [
     input.title ? `## ${input.title}` : "",
     input.description ?? "",
     "Reacciona para recibir o quitar tu rol:",
-    ...lines,
+    roleRow,
   ]
     .filter((line) => Boolean(line))
     .join("\n");
