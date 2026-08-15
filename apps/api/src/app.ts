@@ -139,7 +139,9 @@ type GuildBooster = {
 };
 
 function buildAvatarUrl(userId: string, avatarHash: string): string {
-  const extension = avatarHash.endsWith("_a") ? "gif" : "png";
+  // Discord marca los avatares animados con el hash PREFIJADO "a_"
+  // (ej: a_4f8a...). Con eso elegimos la extensión gif.
+  const extension = avatarHash.startsWith("a_") ? "gif" : "png";
   return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${extension}?size=128`;
 }
 
