@@ -20,14 +20,50 @@ import { chmod } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { writeFileSync } from "node:fs";
 import ffmpegStatic from "ffmpeg-static";
 import { create as createYoutubeDl } from "youtube-dl-exec";
 import { env } from "../config/env.js";
 
 const youtubeCookie = env.YOUTUBE_COOKIE?.trim();
+
+// yt-dlp NO acepta cookies por header (--add-header es deprecado y YouTube
+// lo ignora). Hay que pasarle un ARCHIVO de cookies en formato Netscape
+// mediante --cookies. Convertimos la cadena "a=b; c=d" a ese formato.
+function writeYoutubeCookiesFile(cookieString: string): string {
+  const dir = path.join(process.cwd(), ".cache");
+  mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, "youtube-cookies.txt");
+
+  const lines: string[] = ["# Netscape HTTP Cookie File", "# Generado por Bonafide"];
+  for (const part of cookieString.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) {
+      continue;
+    }
+    const name = part.slice(0, idx).trim();
+    const value = part.slice(idx + 1).trim();
+    if (!name) {
+      continue;
+    }
+    const secure =
+      name.startsWith("__Secure-") || name.startsWith("__Host-");
+    // Expiración lejana (2100-01-01).
+    const expires = 4102444800;
+    lines.push(
+      `.youtube.com\tTRUE\t/\t${secure ? "TRUE" : "FALSE"}\t${expires}\t${name}\t${value}`,
+    );
+  }
+
+  writeFileSync(target, lines.join("\n"), "utf8");
+  return target;
+}
+
+const YOUTUBE_COOKIES_FILE = youtubeCookie
+  ? writeYoutubeCookiesFile(youtubeCookie)
+  : null;
 if (youtubeCookie) {
-  // Las cookies se mandan como header "Cookie:" a yt-dlp (búsqueda y stream).
-  console.log("[music] YouTube cookies configuradas");
+  console.log("[music] YouTube cookies configuradas (archivo Netscape)");
 }
 
 // ── Streaming con yt-dlp ────────────────────────────────────────────
@@ -502,7 +538,7 @@ async function playNext(guildId: string): Promise<void> {
       // yt-dlp necesita un runtime de JS para descifrar el parámetro "n"
       // de YouTube; usamos el propio Node que ejecuta el bot.
       jsRuntimes: `node:${process.execPath}`,
-      ...(youtubeCookie ? { addHeader: [`Cookie: ${youtubeCookie}`] } : {}),
+      ...(YOUTUBE_COOKIES_FILE ? { cookies: YOUTUBE_COOKIES_FILE } : {}),
     } as Parameters<typeof youtubedl.exec>[1];
 
     const proc = youtubedl.exec(next.url, flags);
@@ -639,7 +675,7 @@ async function resolveTrack(query: string): Promise<Track | null> {
     noWarnings: true,
     noPlaylist: true,
     noCheckCertificates: true,
-    ...(youtubeCookie ? { addHeader: [`Cookie: ${youtubeCookie}`] } : {}),
+    ...(YOUTUBE_COOKIES_FILE ? { cookies: YOUTUBE_COOKIES_FILE } : {}),
   } as Parameters<typeof youtubedl.exec>[1];
 
   // ytsearch1: busca y devuelve el primer resultado. Con --dump-single-json
