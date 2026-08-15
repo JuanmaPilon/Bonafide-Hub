@@ -1341,6 +1341,7 @@ export function buildApp() {
       const info = memberInfo.get(entry.userId);
       return {
         avatarUrl: info?.avatarUrl ?? null,
+        isBooster: info?.isBooster ?? false,
         nickname: info?.nickname ?? null,
         username: info?.username ?? null,
       };

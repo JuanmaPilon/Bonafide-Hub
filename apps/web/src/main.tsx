@@ -1664,10 +1664,16 @@ function App() {
   }, [username]);
 
   if (!username) {
-    const previewNames =
+    const previewPills =
       landingPreview.length > 0
-        ? landingPreview.map((entry) => entry.nickname ?? entry.username ?? "—")
-        : [...LANDING_PREVIEW_USERS];
+        ? landingPreview.map((entry) => ({
+            isBooster: entry.isBooster,
+            name: entry.nickname ?? entry.username ?? "—",
+          }))
+        : LANDING_PREVIEW_USERS.map((name) => ({
+            isBooster: false,
+            name,
+          }));
 
     return (
       <div className="shell landing-shell">
@@ -1701,14 +1707,30 @@ function App() {
               <div className="cover-art" />
               <div className="carousel-mask">
                 <div className="carousel-track">
-                  {previewNames.map((name, index) => (
-                    <span className="user-pill" key={`a-${index}`}>
-                      {name}
+                  {previewPills.map((pill, index) => (
+                    <span
+                      className={`user-pill${pill.isBooster ? " booster-pill" : ""}`}
+                      key={`a-${index}`}
+                    >
+                      {pill.isBooster ? (
+                        <span className="booster-gem" aria-hidden="true">
+                          ◈
+                        </span>
+                      ) : null}
+                      {pill.name}
                     </span>
                   ))}
-                  {previewNames.map((name, index) => (
-                    <span className="user-pill" key={`b-${index}`}>
-                      {name}
+                  {previewPills.map((pill, index) => (
+                    <span
+                      className={`user-pill${pill.isBooster ? " booster-pill" : ""}`}
+                      key={`b-${index}`}
+                    >
+                      {pill.isBooster ? (
+                        <span className="booster-gem" aria-hidden="true">
+                          ◈
+                        </span>
+                      ) : null}
+                      {pill.name}
                     </span>
                   ))}
                 </div>

@@ -163,12 +163,29 @@ a:hover {
 .user-pill {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   white-space: nowrap;
   padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid rgba(106, 168, 255, 0.52);
   background: rgba(12, 19, 36, 0.86);
   font-size: 0.86rem;
+}
+
+.booster-pill {
+  border-color: rgba(244, 127, 255, 0.55);
+  background: rgba(60, 20, 70, 0.6);
+  color: #ffd1ff;
+  text-shadow: 0 0 8px rgba(244, 127, 255, 0.5);
+}
+
+.booster-gem {
+  color: #f47fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  text-shadow:
+    0 0 8px #f47fff,
+    0 0 16px #f47fff66;
 }
 
 .app-shell {

@@ -307,6 +307,7 @@ export async function getLeaderboard(
 
 export type PublicLeaderboardEntry = {
   avatarUrl: string | null;
+  isBooster: boolean;
   nickname: string | null;
   username: string | null;
 };
