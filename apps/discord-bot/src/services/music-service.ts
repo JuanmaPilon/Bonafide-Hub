@@ -267,11 +267,7 @@ function ensurePython(): Promise<boolean> {
         "[music] python3 no está en PATH — instalándolo con apt (async)...",
       );
       await runCommand("apt-get", ["update", "-qq"], 60_000);
-      await runCommand(
-        "apt-get",
-        ["install", "-y", "-qq", "python3"],
-        180_000,
-      );
+      await runCommand("apt-get", ["install", "-y", "-qq", "python3"], 180_000);
 
       if (python3Works()) {
         console.log("[music] python3 instalado en runtime ✅");
