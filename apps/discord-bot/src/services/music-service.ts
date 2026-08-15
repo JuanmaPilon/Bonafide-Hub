@@ -666,7 +666,10 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
-async function resolveTrack(query: string): Promise<Track | null> {
+async function resolveTrack(
+  query: string,
+  fuente: "youtube" | "soundcloud" = "youtube",
+): Promise<Track | null> {
   const trimmed = query.trim();
   const isUrl = /^https?:\/\//.test(trimmed);
   const youtubedl = await getYoutubeDl();
@@ -684,10 +687,15 @@ async function resolveTrack(query: string): Promise<Track | null> {
     ...(YOUTUBE_COOKIES_FILE ? { cookies: YOUTUBE_COOKIES_FILE } : {}),
   } as Parameters<typeof youtubedl.exec>[1];
 
-  // ytsearch1: busca y devuelve el primer resultado. Con --flat-playlist no
-  // se extraen formatos (eso falla desde IPs de datacenter); solo tomamos
-  // id/título/URL de los resultados.
-  const raw = await youtubedl(isUrl ? trimmed : `ytsearch1:${trimmed}`, flags);
+  // URL directa (YouTube/SoundCloud) o búsqueda según la fuente.
+  // Con --flat-playlist no se extraen formatos (en YouTube eso falla desde
+  // IPs de datacenter); solo tomamos id/título/URL de los resultados.
+  const target = isUrl
+    ? trimmed
+    : fuente === "soundcloud"
+      ? `scsearch1:${trimmed}`
+      : `ytsearch1:${trimmed}`;
+  const raw = await youtubedl(target, flags);
   const info = (raw as { entries?: (typeof raw)[] }).entries?.[0] ?? raw;
 
   // Solo aceptamos URLs de video reales (no "ytsearch1:..." ni entradas nulas).
@@ -696,7 +704,11 @@ async function resolveTrack(query: string): Promise<Track | null> {
       ? info.webpage_url
       : (info as { url?: string }).url;
   const url =
-    candidate && /^https?:\/\//.test(candidate) ? candidate : isUrl ? trimmed : "";
+    candidate && /^https?:\/\//.test(candidate)
+      ? candidate
+      : isUrl
+        ? trimmed
+        : "";
 
   if (!url) {
     console.warn("[music] búsqueda sin resultado utilizable", {
@@ -738,10 +750,13 @@ export async function handleMusicCommand(
     switch (interaction.commandName) {
       case "play": {
         const query = interaction.options.getString("cancion", true);
+        const fuente = (interaction.options.getString("fuente") ??
+          "youtube") as "youtube" | "soundcloud";
         const voiceChannel = member?.voice.channel;
         console.log("[music] play requested", {
           guildId,
           query,
+          fuente,
           voiceChannel: voiceChannel?.id ?? null,
         });
         if (!voiceChannel?.id) {
@@ -756,15 +771,16 @@ export async function handleMusicCommand(
 
         let track: Track | null;
         try {
-          track = await resolveTrack(query);
+          track = await resolveTrack(query, fuente);
         } catch (error) {
           console.error("[music] resolveTrack failed", {
             error,
             guildId,
             query,
+            fuente,
           });
           await interaction.editReply(
-            "No pude obtener el tema de YouTube en este momento (posible bloqueo 429 o problema temporal). " +
+            "No pude obtener el tema en este momento (posible bloqueo 429 o problema temporal). " +
               "Probá de nuevo en unos minutos.",
           );
           return;

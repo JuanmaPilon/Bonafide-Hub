@@ -162,12 +162,21 @@ export const commandDefinitions = [
     ),
   new SlashCommandBuilder()
     .setName("play")
-    .setDescription("Reproduce una canción o URL de YouTube")
+    .setDescription("Reproduce una canción o URL (YouTube / SoundCloud)")
     .addStringOption((option) =>
       option
         .setName("cancion")
-        .setDescription("Búsqueda o URL de YouTube")
+        .setDescription("Búsqueda o URL de YouTube/SoundCloud")
         .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("fuente")
+        .setDescription("Dónde buscar (YouTube por defecto)")
+        .addChoices(
+          { name: "YouTube", value: "youtube" },
+          { name: "SoundCloud", value: "soundcloud" },
+        ),
     ),
   new SlashCommandBuilder()
     .setName("pause")

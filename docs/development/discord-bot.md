@@ -38,7 +38,7 @@ Guía técnica y funcional del bot de Discord.
 
 ### Música
 
-1. `/play cancion:<texto o URL>` — reproduce o encola un tema de YouTube
+1. `/play cancion:<texto o URL> [fuente:youtube|soundcloud]` — reproduce o encola un tema (YouTube por defecto; SoundCloud funciona desde IPs de datacenter, YouTube no)
 2. `/pause`, `/resume`
 3. `/skip`
 4. `/queue`
