@@ -638,9 +638,11 @@ async function searchSoundCloud(query: string): Promise<Track[]> {
 
   const raw = await youtubedl(`scsearch5:${query}`, flags);
   const entries =
-    (raw as {
-      entries?: Array<{ title?: string; url?: string; webpage_url?: string }>;
-    }).entries ?? [];
+    (
+      raw as {
+        entries?: Array<{ title?: string; url?: string; webpage_url?: string }>;
+      }
+    ).entries ?? [];
 
   const seen = new Set<string>();
   const tracks: Track[] = [];
@@ -999,12 +1001,12 @@ export async function handleMusicButton(
       return;
     }
     case "vol-": {
-      state.volume = Math.max(0, state.volume - 0.1);
+      state.volume = Math.max(0, state.volume - 0.15);
       applyVolume(state);
       break;
     }
     case "vol+": {
-      state.volume = Math.min(2, state.volume + 0.1);
+      state.volume = Math.min(1.5, state.volume + 0.15);
       applyVolume(state);
       break;
     }
