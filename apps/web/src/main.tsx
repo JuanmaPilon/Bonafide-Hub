@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import {
   createCommunication,
   createReactionRolePanel,
@@ -55,6 +57,13 @@ import {
   type XpRoleRule,
 } from "./api";
 import "./styles.css";
+
+// Renderiza markdown de forma segura (sanitizado) para el contenido de
+// los comunicados en el hub. breaks:true respeta los saltos de línea.
+function renderMarkdown(text: string): string {
+  const html = marked.parse(text, { async: false, breaks: true });
+  return DOMPurify.sanitize(typeof html === "string" ? html : "");
+}
 
 type HubTab =
   | "home"
@@ -3019,9 +3028,12 @@ function App() {
                                   Por {comm.authorName}
                                 </div>
                               ) : null}
-                              <div className="comunicado-content">
-                                {comm.content}
-                              </div>
+                              <div
+                                className="comunicado-content comunicado-markdown"
+                                dangerouslySetInnerHTML={{
+                                  __html: renderMarkdown(comm.content),
+                                }}
+                              />
                             </div>
                           ) : null}
                         </article>
