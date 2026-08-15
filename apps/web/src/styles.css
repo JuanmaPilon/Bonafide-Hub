@@ -118,14 +118,11 @@ a:hover {
 
 .landing-banner {
   width: 100%;
-  max-width: 720px;
-  min-height: 180px;
+  max-width: 780px;
+  min-height: 220px;
   margin-bottom: 28px;
   border-radius: 18px;
   border: 1px solid rgba(156, 195, 190, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background:
     radial-gradient(
       circle at 50% 72%,
@@ -133,19 +130,6 @@ a:hover {
       rgba(255, 111, 71, 0.1) 40%
     ),
     linear-gradient(145deg, rgba(54, 89, 185, 0.46), rgba(223, 90, 61, 0.32));
-}
-
-.landing-banner-placeholder {
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 0.95rem;
-  letter-spacing: 0.4px;
-}
-
-.landing-subtitle {
-  margin: 0 0 24px;
-  max-width: 460px;
-  color: var(--muted);
-  font-size: 1.05rem;
 }
 
 .landing-login {
@@ -169,6 +153,7 @@ a:hover {
   position: relative;
   overflow: hidden;
   border-radius: 18px;
+  width: 100%;
 }
 
 .landing-media .cover-art {

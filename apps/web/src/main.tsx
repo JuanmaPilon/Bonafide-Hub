@@ -1683,17 +1683,9 @@ function App() {
               className="landing-banner"
               role="img"
               aria-label="Banner de Bonafide"
-            >
-              {/* Espacio reservado para el banner (imagen próximamente). */}
-              <span className="landing-banner-placeholder">
-                Banner de la guild — próximamente
-              </span>
-            </div>
+            />
 
             <h1>Bienvenido a Bonafide</h1>
-            <p className="landing-subtitle">
-              El hub de la comunidad: raids, comunicados, XP y más.
-            </p>
 
             <a className="primary-button landing-login" href={loginUrl()}>
               <svg
