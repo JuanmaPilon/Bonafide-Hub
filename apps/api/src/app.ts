@@ -296,6 +296,17 @@ export function buildApp() {
     );
   }
 
+  function isGuildMember(
+    session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
+    guildId: string,
+  ): boolean {
+    // Exclusividad: solo el servidor permitido (Bonafide).
+    if (env.BONAFIDE_GUILD_ID && guildId !== env.BONAFIDE_GUILD_ID) {
+      return false;
+    }
+    return session.guilds.some((guild) => guild.id === guildId);
+  }
+
   function isGuildOwner(
     session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
     guildId: string,
@@ -845,11 +856,11 @@ export function buildApp() {
     }
 
     // Exclusividad: si BONAFIDE_GUILD_ID está configurado, la web solo
-    // muestra ese servidor (y solo si el usuario puede administrarlo).
-    const manageable = getManageGuildFilter(session.guilds);
+    // muestra ese servidor, y para CUALQUIER miembro (no solo quienes lo
+    // administran). El panel de admin sigue siendo solo del dueño.
     const guilds = env.BONAFIDE_GUILD_ID
-      ? manageable.filter((guild) => guild.id === env.BONAFIDE_GUILD_ID)
-      : manageable;
+      ? session.guilds.filter((guild) => guild.id === env.BONAFIDE_GUILD_ID)
+      : getManageGuildFilter(session.guilds);
 
     return {
       ok: true,
@@ -868,7 +879,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!isGuildMember(session, params.guildId)) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -950,7 +961,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!isGuildMember(session, params.guildId)) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1165,7 +1176,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!isGuildMember(session, params.guildId)) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1228,7 +1239,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!isGuildMember(session, params.guildId)) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1647,7 +1658,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!isGuildMember(session, params.guildId)) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
