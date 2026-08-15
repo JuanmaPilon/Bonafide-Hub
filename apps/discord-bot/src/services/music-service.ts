@@ -906,15 +906,21 @@ export async function handleMusicButton(
     return;
   }
 
+  // Confirmamos la interacción PRIMERO: Discord espera respuesta en 3s y
+  // si tardamos (la config remota puede tardar más), desactiva los botones.
+  await interaction.deferUpdate().catch(() => {});
+
   const guildId = interaction.guildId;
   const member = interaction.member as GuildMember | null;
 
   if (!(await canUseMusic(guildId, member))) {
-    await interaction.reply({
-      content:
-        "No tenés permiso para controlar la música (se requiere el rol DJ).",
-      ephemeral: true,
-    });
+    await interaction
+      .followUp({
+        content:
+          "No tenés permiso para controlar la música (se requiere el rol DJ).",
+        ephemeral: true,
+      })
+      .catch(() => {});
     return;
   }
 
@@ -928,44 +934,33 @@ export async function handleMusicButton(
       } else if (state.player.state.status === AudioPlayerStatus.Paused) {
         state.player.unpause();
       }
-      await interaction.deferUpdate().catch(() => {});
-      await updateNowPlaying(guildId);
-      return;
+      break;
     }
     case "skip": {
       if (state.current) {
         state.player.stop();
       }
-      await interaction.deferUpdate().catch(() => {});
-      await updateNowPlaying(guildId);
-      return;
+      break;
     }
     case "stop": {
       state.queue = [];
       state.current = null;
       state.player.stop();
-      await interaction.deferUpdate().catch(() => {});
-      await updateNowPlaying(guildId);
-      return;
+      break;
     }
     case "leave": {
       destroyState(guildId);
-      await interaction.deferUpdate().catch(() => {});
       return;
     }
     case "vol-": {
       state.volume = Math.max(0, state.volume - 0.1);
       applyVolume(state);
-      await interaction.deferUpdate().catch(() => {});
-      await updateNowPlaying(guildId);
-      return;
+      break;
     }
     case "vol+": {
       state.volume = Math.min(2, state.volume + 0.1);
       applyVolume(state);
-      await interaction.deferUpdate().catch(() => {});
-      await updateNowPlaying(guildId);
-      return;
+      break;
     }
     case "queue": {
       const lines: string[] = [];
@@ -981,15 +976,19 @@ export async function handleMusicButton(
       if (state.queue.length > pending.length) {
         lines.push(`...y ${state.queue.length - pending.length} más.`);
       }
-      await interaction.reply({
-        content: lines.length > 0 ? lines.join("\n") : "La cola está vacía.",
-        ephemeral: true,
-      });
+      await interaction
+        .followUp({
+          content: lines.length > 0 ? lines.join("\n") : "La cola está vacía.",
+          ephemeral: true,
+        })
+        .catch(() => {});
       return;
     }
     default:
-      await interaction.deferUpdate().catch(() => {});
+      return;
   }
+
+  await updateNowPlaying(guildId);
 }
 
 async function resolveTrack(
