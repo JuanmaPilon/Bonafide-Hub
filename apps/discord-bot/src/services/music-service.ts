@@ -673,6 +673,7 @@ async function resolveTrack(query: string): Promise<Track | null> {
 
   const flags = {
     dumpSingleJson: true,
+    flatPlaylist: true,
     quiet: true,
     noWarnings: true,
     noPlaylist: true,
@@ -683,19 +684,19 @@ async function resolveTrack(query: string): Promise<Track | null> {
     ...(YOUTUBE_COOKIES_FILE ? { cookies: YOUTUBE_COOKIES_FILE } : {}),
   } as Parameters<typeof youtubedl.exec>[1];
 
-  // ytsearch1: busca y devuelve el primer resultado. Con --dump-single-json
-  // la respuesta puede venir envuelta como playlist (entries).
+  // ytsearch1: busca y devuelve el primer resultado. Con --flat-playlist no
+  // se extraen formatos (eso falla desde IPs de datacenter); solo tomamos
+  // id/título/URL de los resultados.
   const raw = await youtubedl(isUrl ? trimmed : `ytsearch1:${trimmed}`, flags);
   const info = (raw as { entries?: (typeof raw)[] }).entries?.[0] ?? raw;
 
   // Solo aceptamos URLs de video reales (no "ytsearch1:..." ni entradas nulas).
-  const url =
-    typeof info.webpage_url === "string" &&
-    /^https?:\/\//.test(info.webpage_url)
+  const candidate =
+    typeof info.webpage_url === "string"
       ? info.webpage_url
-      : isUrl
-        ? trimmed
-        : "";
+      : (info as { url?: string }).url;
+  const url =
+    candidate && /^https?:\/\//.test(candidate) ? candidate : isUrl ? trimmed : "";
 
   if (!url) {
     console.warn("[music] búsqueda sin resultado utilizable", {
