@@ -1786,6 +1786,62 @@ function App() {
                           </select>
                         </label>
 
+                        <div className="music-section">
+                          <h4>Música (rol DJ)</h4>
+                          <label className="xp-remove-check">
+                            <input
+                              type="checkbox"
+                              checked={config.musicEnabled !== false}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  musicEnabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            Música habilitada
+                          </label>
+                          <p className="music-hint">
+                            Sin roles seleccionados, cualquier miembro puede
+                            usar los comandos de música. Si elegís roles, solo
+                            esos roles (y los admins) podrán usarlos.
+                          </p>
+                          <div className="xp-remove-roles">
+                            {guildRoles.map((role) => {
+                              const currentIds = config.musicRoleIds ?? [];
+                              const checked = currentIds.includes(role.id);
+                              return (
+                                <label
+                                  className="xp-remove-check"
+                                  key={role.id}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(event) => {
+                                      const nextIds = event.target.checked
+                                        ? [...currentIds, role.id]
+                                        : currentIds.filter(
+                                            (id) => id !== role.id,
+                                          );
+                                      setConfig((current) => ({
+                                        ...current,
+                                        musicRoleIds: nextIds,
+                                      }));
+                                    }}
+                                  />
+                                  {role.name}
+                                </label>
+                              );
+                            })}
+                            {guildRoles.length === 0 && (
+                              <span className="music-hint">
+                                No se pudieron cargar los roles.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
                         <label>
                           <span>
                             Canal para creación dinámica de salas (voz)
