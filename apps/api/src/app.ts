@@ -10,11 +10,14 @@ import {
 import {
   completeReactionRoleJob,
   createReactionRoleJob,
+  createReactionRoleTemplate,
   deleteReactionRoleJob,
   deleteReactionRolePanel,
+  getReactionRolePanel,
   listPendingReactionRoleJobs,
   listReactionRolePanels,
   listRecentReactionRoleJobs,
+  updateReactionRoleTemplate,
   type ReactionRolePair,
 } from "./services/reaction-roles-store.js";
 import {
@@ -1472,6 +1475,8 @@ export function buildApp() {
     };
   });
 
+  // Crea una PLANTILLA (borrador) de reaction roles. No se publica en
+  // Discord hasta que se aprieta "Publicar".
   app.post("/guilds/:guildId/reaction-roles/panels", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -1504,20 +1509,8 @@ export function buildApp() {
           .filter((pair) => pair.emoji && pair.roleId)
       : [];
 
-    if (!channelId) {
-      return reply.code(400).send({ ok: false, error: "Missing channelId" });
-    }
-
-    if (pairs.length === 0) {
-      return reply.code(400).send({
-        ok: false,
-        error: "Debes agregar al menos un par emoji + rol",
-      });
-    }
-
-    const result = await createReactionRoleJob({
-      action: "create",
-      channelId,
+    const panel = await createReactionRoleTemplate({
+      channelId: channelId || undefined,
       description: body.description?.trim() || undefined,
       guildId: params.guildId,
       mode:
@@ -1529,14 +1522,15 @@ export function buildApp() {
     });
 
     await logAdminAction(session, params.guildId, "reaction-panel:create", {
-      details: `Panel encolado${body.title?.trim() ? `: "${body.title.trim()}"` : ""} (${pairs.length} regla/s).`,
+      details: `Plantilla creada${body.title?.trim() ? `: "${body.title.trim()}"` : ""} (borrador).`,
       targetType: "reaction-panel",
+      targetId: panel.messageId,
     });
 
     return {
       ok: true,
       guildId: params.guildId,
-      ...result,
+      panel,
     };
   });
 
@@ -1634,14 +1628,27 @@ export function buildApp() {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
-      await createReactionRoleJob({
-        action: "delete",
-        guildId: params.guildId,
-        messageId: params.messageId,
-      });
+      const panel = await getReactionRolePanel(
+        params.guildId,
+        params.messageId,
+      );
+      if (!panel) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      // Si está publicado, el bot borra el mensaje de Discord.
+      if (panel.status === "published") {
+        await createReactionRoleJob({
+          action: "delete",
+          guildId: params.guildId,
+          messageId: panel.messageId,
+        });
+      }
+
+      await deleteReactionRolePanel(params.guildId, params.messageId);
 
       await logAdminAction(session, params.guildId, "reaction-panel:delete", {
-        details: "Eliminación de panel de reaction roles encolada.",
+        details: "Plantilla de reaction roles eliminada.",
         targetId: params.messageId,
         targetType: "reaction-panel",
       });
@@ -1649,6 +1656,76 @@ export function buildApp() {
       return {
         ok: true,
         guildId: params.guildId,
+        deleted: true,
+      };
+    },
+  );
+
+  // Publica una plantilla: crea el mensaje en Discord si es borrador, o lo
+  // actualiza (re-publica) si ya estaba publicado.
+  app.post(
+    "/guilds/:guildId/reaction-roles/panels/:messageId/publish",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        messageId?: string;
+      };
+      if (!params.guildId || !params.messageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const panel = await getReactionRolePanel(
+        params.guildId,
+        params.messageId,
+      );
+      if (!panel) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      if (!panel.channelId) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Elegí un canal de texto antes de publicar",
+        });
+      }
+      if (panel.rules.length === 0) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Agregá al menos un par emoji + rol",
+        });
+      }
+
+      const action = panel.status === "published" ? "update" : "create";
+      const result = await createReactionRoleJob({
+        action,
+        channelId: panel.channelId,
+        description: panel.description,
+        guildId: params.guildId,
+        messageId: panel.messageId,
+        mode: panel.mode,
+        rules: panel.rules,
+        title: panel.title,
+      });
+
+      await logAdminAction(session, params.guildId, "reaction-panel:publish", {
+        details: `Publicación de plantilla encolada${panel.title ? `: "${panel.title}"` : ""} (${action}).`,
+        targetId: params.messageId,
+        targetType: "reaction-panel",
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        ...result,
       };
     },
   );
@@ -1690,16 +1767,9 @@ export function buildApp() {
             .filter((pair) => pair.emoji && pair.roleId)
         : [];
 
-      if (pairs.length === 0) {
-        return reply.code(400).send({
-          ok: false,
-          error: "Debes agregar al menos un par emoji + rol",
-        });
-      }
-
-      const result = await createReactionRoleJob({
-        action: "update",
-        channelId,
+      // Editar solo guarda la plantilla; no toca Discord hasta publicar.
+      const panel = await updateReactionRoleTemplate({
+        channelId: channelId || undefined,
         description: body.description?.trim() || undefined,
         guildId: params.guildId,
         messageId: params.messageId,
@@ -1711,8 +1781,12 @@ export function buildApp() {
         title: body.title?.trim() || undefined,
       });
 
+      if (!panel) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
       await logAdminAction(session, params.guildId, "reaction-panel:update", {
-        details: `Actualización de panel encolada${body.title?.trim() ? `: "${body.title.trim()}"` : ""}.`,
+        details: `Plantilla actualizada${body.title?.trim() ? `: "${body.title.trim()}"` : ""}.`,
         targetId: params.messageId,
         targetType: "reaction-panel",
       });
@@ -1720,7 +1794,7 @@ export function buildApp() {
       return {
         ok: true,
         guildId: params.guildId,
-        ...result,
+        panel,
       };
     },
   );

@@ -31,6 +31,7 @@ import {
   loginUrl,
   logout,
   publishCommunication,
+  publishReactionRolePanel,
   requestXpSync,
   resetAllXp,
   saveGuildConfig,
@@ -1078,6 +1079,22 @@ function App() {
     return emojiKey;
   }
 
+  // Las reglas de una plantilla guardan el emoji directo; las de paneles
+  // viejos pueden venir como emojiKey (custom:/unicode:).
+  function reactionRuleEmojiToEditable(emoji: string): string {
+    if (emoji.startsWith("custom:") || emoji.startsWith("unicode:")) {
+      return emojiKeyToEditable(emoji);
+    }
+    return emoji;
+  }
+
+  function formatReactionRuleEmoji(emoji: string): string {
+    if (emoji.startsWith("custom:") || emoji.startsWith("unicode:")) {
+      return formatEmojiKey(emoji);
+    }
+    return emoji;
+  }
+
   function levelColorFor(level: number): string | undefined {
     if (!xpConfig) {
       return undefined;
@@ -1183,7 +1200,7 @@ function App() {
     );
     setRrPairs(
       panel.rules.map((rule) => ({
-        emoji: emojiKeyToEditable(rule.emojiKey),
+        emoji: reactionRuleEmojiToEditable(rule.emoji),
         roleId: rule.roleId,
       })),
     );
@@ -1208,17 +1225,9 @@ function App() {
         emoji: normalizeEmoji(pair.emoji),
         roleId: pair.roleId,
       }));
-    if (!rrChannelId) {
-      pushToast("Elegí un canal de texto.", "error");
-      return;
-    }
-    if (validPairs.length === 0) {
-      pushToast("Completá al menos un par emoji + rol.", "error");
-      return;
-    }
 
     const input = {
-      channelId: rrChannelId,
+      channelId: rrChannelId || undefined,
       description: rrDescription.trim() || undefined,
       mode: rrMode,
       pairs: validPairs,
@@ -1233,16 +1242,10 @@ function App() {
           editingPanel.messageId,
           input,
         );
-        pushToast(
-          "Panel actualizado. El bot lo editará en unos segundos.",
-          "success",
-        );
+        pushToast("Plantilla guardada.", "success");
       } else {
         await createReactionRolePanel(selectedGuildId, input);
-        pushToast(
-          "Panel encolado. El bot lo creará en unos segundos.",
-          "success",
-        );
+        pushToast("Plantilla guardada (borrador).", "success");
       }
 
       setEditingPanel(null);
@@ -1255,7 +1258,7 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Error desconocido";
-      pushToast(`No se pudo guardar el panel: ${message}`, "error");
+      pushToast(`No se pudo guardar la plantilla: ${message}`, "error");
     } finally {
       setSavingAction(null);
     }
@@ -1293,7 +1296,7 @@ function App() {
     setLoadingGuildData(true);
     try {
       await deleteReactionRolePanel(selectedGuildId, panel.messageId);
-      pushToast("Panel eliminado (el bot borra el mensaje).", "success");
+      pushToast("Plantilla eliminada.", "success");
       void refreshRrJobs();
     } catch (error) {
       const message =
@@ -1304,8 +1307,7 @@ function App() {
     }
   }
 
-  // Republica el mensaje de un panel (útil si se borró en Discord o para
-  // refrescarlo) reutilizando los datos guardados del panel.
+  // Publica/re-publica una plantilla (crea o actualiza el mensaje en Discord).
   async function handlePublishReactionPanel(
     panel: ReactionRolePanel,
   ): Promise<void> {
@@ -1313,34 +1315,16 @@ function App() {
       return;
     }
     try {
-      const pairs = panel.rules
-        .map((rule) => ({
-          emoji: emojiKeyToEditable(rule.emojiKey),
-          roleId: rule.roleId,
-        }))
-        .filter((pair) => pair.emoji && pair.roleId);
-
-      if (pairs.length === 0) {
-        pushToast("El panel no tiene emoji/roles para publicar.", "error");
-        return;
-      }
-
-      await updateReactionRolePanel(selectedGuildId, panel.messageId, {
-        channelId: panel.channelId ?? undefined,
-        description: panel.description,
-        mode: panel.mode,
-        pairs,
-        title: panel.title,
-      });
+      await publishReactionRolePanel(selectedGuildId, panel.messageId);
       pushToast(
-        "Panel encolado. El bot lo republicará en unos segundos.",
+        "Publicación encolada. El bot la aplicará en unos segundos.",
         "success",
       );
       void refreshRrJobs();
       void refreshReactionPanels();
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Error al republicar.",
+        error instanceof Error ? error.message : "Error al publicar.",
         "error",
       );
     }
@@ -2531,10 +2515,13 @@ function App() {
                                   type="button"
                                 >
                                   <span className="rr-panel-title">
-                                    {panel.title || "Panel sin título"}
+                                    {panel.title || "Plantilla sin título"}
                                   </span>
                                   <span className="rr-panel-meta">
-                                    #{channelName} · {panel.rules.length} rol/es
+                                    {panel.status === "draft"
+                                      ? "Borrador"
+                                      : `#${channelName}`}{" "}
+                                    · {panel.rules.length} rol/es
                                   </span>
                                   <span className="rr-caret">
                                     {expanded ? "▴" : "▾"}
@@ -2543,18 +2530,19 @@ function App() {
                                 {expanded ? (
                                   <div className="rr-panel-body">
                                     <div className="rr-rules">
-                                      {panel.rules.map((rule) => {
+                                      {panel.rules.map((rule, index) => {
                                         const roleName =
                                           guildRoles.find(
-                                            (role) => role.id === rule.roleId,
+                                            (role) =>
+                                              role.id === rule.roleId,
                                           )?.name ?? rule.roleId;
                                         return (
                                           <span
                                             className="rr-rule"
-                                            key={rule.emojiKey}
+                                            key={`${rule.emoji}-${index}`}
                                           >
-                                            {formatEmojiKey(rule.emojiKey)} →{" "}
-                                            {roleName}
+                                            {formatReactionRuleEmoji(rule.emoji)}{" "}
+                                            → {roleName}
                                           </span>
                                         );
                                       })}
@@ -2576,7 +2564,9 @@ function App() {
                                         }
                                         type="button"
                                       >
-                                        Publicar
+                                        {panel.status === "published"
+                                          ? "Republicar"
+                                          : "Publicar"}
                                       </button>
                                       <button
                                         className="danger-button"
@@ -2617,7 +2607,7 @@ function App() {
                           ? "Guardando…"
                           : editingPanel
                             ? "Guardar cambios"
-                            : "Publicar"}
+                            : "Guardar plantilla"}
                       </button>
                     </div>
                   </div>

@@ -420,26 +420,34 @@ export type ReactionRolePairInput = {
   roleId: string;
 };
 
+export type ReactionRoleRuleData = {
+  emoji: string;
+  roleId: string;
+};
+
 export type ReactionRolePanel = {
   channelId: string | null;
+  createdAt: string;
   description?: string;
   messageId: string;
   mode: string;
-  rules: Array<{ emojiKey: string; roleId: string }>;
+  rules: ReactionRoleRuleData[];
+  status: "draft" | "published";
   title?: string;
+  updatedAt: string;
 };
 
 export async function createReactionRolePanel(
   guildId: string,
   input: {
-    channelId: string;
+    channelId?: string;
     description?: string;
     mode?: string;
     pairs: ReactionRolePairInput[];
     title?: string;
   },
-): Promise<{ jobId: string }> {
-  const data = await requestJson<{ jobId: string }>(
+): Promise<ReactionRolePanel> {
+  const data = await requestJson<{ panel: ReactionRolePanel }>(
     `/guilds/${guildId}/reaction-roles/panels`,
     {
       method: "POST",
@@ -447,7 +455,7 @@ export async function createReactionRolePanel(
     },
   );
 
-  return data;
+  return data.panel;
 }
 
 export async function listReactionRolePanels(
@@ -541,8 +549,8 @@ export async function updateReactionRolePanel(
     pairs: ReactionRolePairInput[];
     title?: string;
   },
-): Promise<{ jobId: string }> {
-  const data = await requestJson<{ jobId: string }>(
+): Promise<ReactionRolePanel> {
+  const data = await requestJson<{ panel: ReactionRolePanel }>(
     `/guilds/${guildId}/reaction-roles/panels/${encodeURIComponent(messageId)}`,
     {
       method: "PATCH",
@@ -550,7 +558,17 @@ export async function updateReactionRolePanel(
     },
   );
 
-  return data;
+  return data.panel;
+}
+
+export async function publishReactionRolePanel(
+  guildId: string,
+  messageId: string,
+): Promise<{ jobId: string }> {
+  return requestJson<{ jobId: string }>(
+    `/guilds/${guildId}/reaction-roles/panels/${encodeURIComponent(messageId)}/publish`,
+    { method: "POST" },
+  );
 }
 
 export async function saveGuildConfig(

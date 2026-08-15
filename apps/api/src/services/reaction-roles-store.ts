@@ -1,9 +1,33 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../db/prisma.js";
 
 export type ReactionRolePair = {
   emoji: string;
   roleId: string;
 };
+
+export type ReactionRoleRuleData = {
+  emoji: string;
+  roleId: string;
+};
+
+// Los borradores no tienen mensaje real en Discord; usamos un id sintético
+// que solo sirve de clave hasta publicar (messageId se reemplaza por el real).
+function syntheticDraftMessageId(): string {
+  return `draft_${randomUUID()}`;
+}
+
+function parseRules(value: unknown): ReactionRoleRuleData[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => ({
+      emoji: String((item as { emoji?: unknown })?.emoji ?? ""),
+      roleId: String((item as { roleId?: unknown })?.roleId ?? ""),
+    }))
+    .filter((rule) => rule.emoji && rule.roleId);
+}
 
 export async function createReactionRoleJob(input: {
   action: "create" | "delete" | "update";
@@ -64,31 +88,92 @@ export async function listPendingReactionRoleJobs(
   }));
 }
 
-export async function upsertReactionRolePanel(
+export async function createReactionRoleTemplate(input: {
+  channelId?: string;
+  description?: string;
+  guildId: string;
+  mode?: string;
+  rules: ReactionRoleRuleData[];
+  title?: string;
+}): Promise<ReactionRolePanel> {
+  const record = await prisma.reactionRolePanel.create({
+    data: {
+      channelId: input.channelId ?? null,
+      description: input.description || null,
+      guildId: input.guildId,
+      messageId: syntheticDraftMessageId(),
+      mode: input.mode ?? "multiple",
+      rules: input.rules,
+      status: "draft",
+      title: input.title || null,
+    },
+  });
+  return toReactionRolePanel(record);
+}
+
+export async function updateReactionRoleTemplate(input: {
+  channelId?: string;
+  description?: string;
+  guildId: string;
+  messageId: string;
+  mode?: string;
+  rules: ReactionRoleRuleData[];
+  title?: string;
+}): Promise<ReactionRolePanel | null> {
+  try {
+    const record = await prisma.reactionRolePanel.update({
+      where: {
+        guildId_messageId: {
+          guildId: input.guildId,
+          messageId: input.messageId,
+        },
+      },
+      data: {
+        channelId: input.channelId ?? null,
+        description: input.description || null,
+        mode: input.mode ?? "multiple",
+        rules: input.rules,
+        title: input.title || null,
+      },
+    });
+    return toReactionRolePanel(record);
+  } catch {
+    return null;
+  }
+}
+
+export async function getReactionRolePanel(
   guildId: string,
   messageId: string,
-  panel: {
-    channelId?: string;
-    description?: string;
-    mode?: string;
-    title?: string;
-  },
-): Promise<void> {
-  await prisma.reactionRolePanel.upsert({
+): Promise<ReactionRolePanel | null> {
+  const record = await prisma.reactionRolePanel.findUnique({
     where: { guildId_messageId: { guildId, messageId } },
-    update: {
-      channelId: panel.channelId,
-      description: panel.description,
-      mode: panel.mode ?? "multiple",
-      title: panel.title,
-    },
-    create: {
-      channelId: panel.channelId,
-      description: panel.description,
-      guildId,
-      messageId,
-      mode: panel.mode ?? "multiple",
-      title: panel.title,
+  });
+  return record ? toReactionRolePanel(record) : null;
+}
+
+// Al completar un job de publicación, el panel pasa de borrador a publicado
+// y su messageId sintético se reemplaza por el del mensaje real en Discord.
+export async function markReactionRoleTemplatePublished(input: {
+  channelId: string;
+  description?: string;
+  guildId: string;
+  messageId: string;
+  mode?: string;
+  realMessageId: string;
+  rules: ReactionRoleRuleData[];
+  title?: string;
+}): Promise<void> {
+  await prisma.reactionRolePanel.updateMany({
+    where: { guildId: input.guildId, messageId: input.messageId },
+    data: {
+      channelId: input.channelId,
+      description: input.description || null,
+      messageId: input.realMessageId,
+      mode: input.mode ?? "multiple",
+      rules: input.rules,
+      status: "published",
+      title: input.title || null,
     },
   });
 }
@@ -133,8 +218,18 @@ export async function completeReactionRoleJob(
     await deleteReactionRolePanel(guildId, job.messageId);
   }
 
-  if (input.panel && input.messageId) {
-    await upsertReactionRolePanel(guildId, input.messageId, input.panel);
+  if (job && input.panel && input.messageId) {
+    // El job.messageId es la clave del panel (sintética si era borrador).
+    await markReactionRoleTemplatePublished({
+      channelId: input.panel.channelId ?? job.channelId ?? "",
+      description: input.panel.description,
+      guildId,
+      messageId: job.messageId ?? "",
+      mode: input.panel.mode ?? job.mode,
+      realMessageId: input.messageId,
+      rules: (Array.isArray(job.rules) ? job.rules : []) as ReactionRoleRuleData[],
+      title: input.panel.title,
+    });
   }
 
   await prisma.reactionRolePanelJob.update({
@@ -149,52 +244,76 @@ export async function completeReactionRoleJob(
 
 export type ReactionRolePanel = {
   channelId: string | null;
+  createdAt: Date;
   description?: string;
   messageId: string;
   mode: string;
-  rules: Array<{ emojiKey: string; roleId: string }>;
+  rules: ReactionRoleRuleData[];
+  status: "draft" | "published";
   title?: string;
+  updatedAt: Date;
 };
+
+function toReactionRolePanel(record: {
+  channelId: string | null;
+  createdAt: Date;
+  description: string | null;
+  messageId: string;
+  mode: string;
+  rules: unknown;
+  status: string;
+  title: string | null;
+  updatedAt: Date;
+}): ReactionRolePanel {
+  return {
+    channelId: record.channelId,
+    createdAt: record.createdAt,
+    description: record.description ?? undefined,
+    messageId: record.messageId,
+    mode: record.mode,
+    rules: parseRules(record.rules),
+    status: (record.status === "draft" ? "draft" : "published") as
+      | "draft"
+      | "published",
+    title: record.title ?? undefined,
+    updatedAt: record.updatedAt,
+  };
+}
 
 export async function listReactionRolePanels(
   guildId: string,
 ): Promise<ReactionRolePanel[]> {
   const [rules, panels] = await Promise.all([
-    prisma.reactionRoleRule.findMany({
+    prisma.reactionRoleRule.findMany({ where: { guildId } }),
+    prisma.reactionRolePanel.findMany({
       where: { guildId },
-      orderBy: [{ messageId: "asc" }, { emojiKey: "asc" }],
+      orderBy: { createdAt: "desc" },
     }),
-    prisma.reactionRolePanel.findMany({ where: { guildId } }),
   ]);
 
-  const panelByMessage = new Map<string, ReactionRolePanel>();
-
-  for (const panel of panels) {
-    panelByMessage.set(panel.messageId, {
-      channelId: panel.channelId,
-      description: panel.description ?? undefined,
-      messageId: panel.messageId,
-      mode: panel.mode,
-      rules: [],
-      title: panel.title ?? undefined,
-    });
-  }
-
+  // Reglas por mensaje publicado (migración: paneles viejos sin rules JSON).
+  const rulesByMessage = new Map<
+    string,
+    Array<{ emojiKey: string; roleId: string }>
+  >();
   for (const rule of rules) {
-    const existing = panelByMessage.get(rule.messageId);
-    if (existing) {
-      existing.rules.push({ emojiKey: rule.emojiKey, roleId: rule.roleId });
-    } else {
-      panelByMessage.set(rule.messageId, {
-        channelId: rule.channelId,
-        messageId: rule.messageId,
-        mode: rule.mode ?? "multiple",
-        rules: [{ emojiKey: rule.emojiKey, roleId: rule.roleId }],
-      });
-    }
+    const list = rulesByMessage.get(rule.messageId) ?? [];
+    list.push({ emojiKey: rule.emojiKey, roleId: rule.roleId });
+    rulesByMessage.set(rule.messageId, list);
   }
 
-  return Array.from(panelByMessage.values());
+  return panels.map((panel) => {
+    const panelData = toReactionRolePanel(panel);
+    if (panelData.rules.length === 0 && panel.messageId) {
+      panelData.rules = (rulesByMessage.get(panel.messageId) ?? []).map(
+        (rule) => ({
+          emoji: rule.emojiKey,
+          roleId: rule.roleId,
+        }),
+      );
+    }
+    return panelData;
+  });
 }
 
 export type ReactionRoleJobSummary = {

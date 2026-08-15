@@ -102,6 +102,11 @@ model ReactionRolePanel {
   title       String?
   description String?
   mode        String   @default("multiple")
+  // "draft" = plantilla guardada sin publicar (messageId sintético);
+  // "published" = tiene un mensaje real en Discord.
+  status      String   @default("published")
+  // Pares emoji/rol de la plantilla (fuente de verdad para el panel).
+  rules       Json     @default("[]")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
