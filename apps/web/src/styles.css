@@ -398,27 +398,6 @@ a:hover {
   width: auto;
 }
 
-.music-section {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(6, 16, 24, 0.5);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.music-section h4 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.music-hint {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
 .xp-mode-toggle {
   display: inline-flex;
   border-radius: 999px;
