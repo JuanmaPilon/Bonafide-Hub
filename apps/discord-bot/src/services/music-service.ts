@@ -35,7 +35,10 @@ function writeYoutubeCookiesFile(cookieString: string): string {
   mkdirSync(dir, { recursive: true });
   const target = path.join(dir, "youtube-cookies.txt");
 
-  const lines: string[] = ["# Netscape HTTP Cookie File", "# Generado por Bonafide"];
+  const lines: string[] = [
+    "# Netscape HTTP Cookie File",
+    "# Generado por Bonafide",
+  ];
   for (const part of cookieString.split(";")) {
     const idx = part.indexOf("=");
     if (idx === -1) {
@@ -46,8 +49,7 @@ function writeYoutubeCookiesFile(cookieString: string): string {
     if (!name) {
       continue;
     }
-    const secure =
-      name.startsWith("__Secure-") || name.startsWith("__Host-");
+    const secure = name.startsWith("__Secure-") || name.startsWith("__Host-");
     // Expiración lejana (2100-01-01).
     const expires = 4102444800;
     lines.push(
@@ -683,8 +685,21 @@ async function resolveTrack(query: string): Promise<Track | null> {
   const raw = await youtubedl(isUrl ? trimmed : `ytsearch1:${trimmed}`, flags);
   const info = (raw as { entries?: (typeof raw)[] }).entries?.[0] ?? raw;
 
-  const url = info.webpage_url || (isUrl ? trimmed : "");
+  // Solo aceptamos URLs de video reales (no "ytsearch1:..." ni entradas nulas).
+  const url =
+    typeof info.webpage_url === "string" &&
+    /^https?:\/\//.test(info.webpage_url)
+      ? info.webpage_url
+      : isUrl
+        ? trimmed
+        : "";
+
   if (!url) {
+    console.warn("[music] búsqueda sin resultado utilizable", {
+      query: trimmed,
+      type: raw._type,
+      hasEntries: Boolean((raw as { entries?: unknown[] }).entries?.length),
+    });
     return null;
   }
 
