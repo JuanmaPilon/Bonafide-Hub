@@ -594,6 +594,7 @@ async function playNext(guildId: string): Promise<void> {
     await ensureFfmpeg();
     const resource = createAudioResource(stream, {
       inputType: StreamType.Arbitrary,
+      inlineVolume: true,
     });
     resource.volume?.setVolume(state.volume);
     state.current = next;
