@@ -973,7 +973,7 @@ function buildReactionPanelText(input: {
     .map((pair) => `${pair.emoji} <@&${pair.roleId}>`)
     .join("   ");
   return [
-    input.title ? `## ${input.title}` : "",
+    input.title ? `**${input.title}**` : "",
     input.description ?? "",
     roleRow,
   ]

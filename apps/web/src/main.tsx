@@ -1134,7 +1134,7 @@ function App() {
       .join("   ");
 
     return [
-      rrTitle.trim() ? `## ${rrTitle.trim()}` : "",
+      rrTitle.trim() ? `**${rrTitle.trim()}**` : "",
       rrDescription.trim(),
       roleRow,
     ].filter((line) => line.length > 0);
@@ -2392,9 +2392,9 @@ function App() {
                         </div>
                         {rrPreviewLines().length > 0 ? (
                           rrPreviewLines().map((line, index) =>
-                            line.startsWith("## ") ? (
+                            line.startsWith("**") && line.endsWith("**") ? (
                               <div className="rr-preview-title" key={index}>
-                                {line.replace(/^## /, "")}
+                                {line.slice(2, -2)}
                               </div>
                             ) : (
                               <div className="rr-preview-line" key={index}>
@@ -2480,9 +2480,7 @@ function App() {
                       {reactionPanels.length > 0 ? (
                         <div className="rr-panels-list">
                           <div className="rr-panels-head">
-                            <h4>
-                              Plantillas ({reactionPanels.length})
-                            </h4>
+                            <h4>Plantillas ({reactionPanels.length})</h4>
                             <button
                               className="icon-button"
                               onClick={() => void refreshReactionPanels()}
@@ -2533,15 +2531,16 @@ function App() {
                                       {panel.rules.map((rule, index) => {
                                         const roleName =
                                           guildRoles.find(
-                                            (role) =>
-                                              role.id === rule.roleId,
+                                            (role) => role.id === rule.roleId,
                                           )?.name ?? rule.roleId;
                                         return (
                                           <span
                                             className="rr-rule"
                                             key={`${rule.emoji}-${index}`}
                                           >
-                                            {formatReactionRuleEmoji(rule.emoji)}{" "}
+                                            {formatReactionRuleEmoji(
+                                              rule.emoji,
+                                            )}{" "}
                                             → {roleName}
                                           </span>
                                         );
