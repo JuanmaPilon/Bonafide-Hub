@@ -1119,7 +1119,6 @@ function App() {
     return [
       rrTitle.trim() ? `## ${rrTitle.trim()}` : "",
       rrDescription.trim(),
-      "Reacciona para recibir o quitar tu rol:",
       roleRow,
     ].filter((line) => line.length > 0);
   }

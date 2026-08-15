@@ -975,7 +975,6 @@ function buildReactionPanelText(input: {
   return [
     input.title ? `## ${input.title}` : "",
     input.description ?? "",
-    "Reacciona para recibir o quitar tu rol:",
     roleRow,
   ]
     .filter((line) => Boolean(line))
