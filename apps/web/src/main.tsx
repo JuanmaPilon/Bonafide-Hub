@@ -1666,17 +1666,11 @@ function App() {
   if (!username) {
     const previewNames =
       landingPreview.length > 0
-        ? landingPreview.map(
-            (entry) => entry.nickname ?? entry.username ?? "—",
-          )
+        ? landingPreview.map((entry) => entry.nickname ?? entry.username ?? "—")
         : [...LANDING_PREVIEW_USERS];
 
     return (
       <div className="shell landing-shell">
-        <header className="landing-topbar">
-          <strong className="landing-brand">Bonafide</strong>
-        </header>
-
         <main className="landing-main">
           <section className="panel landing-hero landing-hero-center">
             <div

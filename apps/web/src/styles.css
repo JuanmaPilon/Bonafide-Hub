@@ -78,22 +78,6 @@ a:hover {
   gap: 20px;
 }
 
-.landing-topbar {
-  max-width: 1320px;
-  width: 100%;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.landing-brand {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: var(--accent, #ffb454);
-  letter-spacing: 0.3px;
-}
-
 .landing-main {
   max-width: 1320px;
   width: 100%;
