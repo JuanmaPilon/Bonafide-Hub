@@ -28,8 +28,10 @@ import {
   listCommunications,
   listPublishedCommunications,
   markPublished,
-  publishToDiscordChannel,
+  postMessages,
   splitForDiscord,
+  syncCommunicationAfterEdit,
+  syncMessages,
   updateCommunication,
   type Communication,
 } from "./services/communications-store.js";
@@ -1906,7 +1908,20 @@ export function buildApp() {
         title: body.title?.trim(),
       });
 
-      return { ok: true, communication };
+      if (!communication) {
+        return reply
+          .code(500)
+          .send({ ok: false, error: "No se pudo actualizar" });
+      }
+
+      // Si el comunicado estaba publicado, reflejamos el cambio en Discord:
+      // edita los mensajes en el lugar, o migra al canal nuevo si cambió.
+      const synced =
+        existing.discordMessageIds.length > 0
+          ? await syncCommunicationAfterEdit(existing, communication)
+          : communication;
+
+      return { ok: true, communication: synced };
     },
   );
 
@@ -1975,13 +1990,41 @@ export function buildApp() {
           });
       }
 
-      const chunks = splitForDiscord(existing.content);
-      const result = await publishToDiscordChannel(existing.channelId, chunks);
-      if (!result.ok) {
-        return reply.code(502).send({ ok: false, error: result.reason });
+      const token = env.DISCORD_BOT_TOKEN;
+      if (!token) {
+        return reply.code(502).send({
+          ok: false,
+          error: "DISCORD_BOT_TOKEN no está configurado",
+        });
       }
 
-      const communication = await markPublished(params.communicationId);
+      const chunks = splitForDiscord(existing.content);
+
+      // Si ya estaba publicado, editamos los mensajes en el lugar
+      // (re-publicar). Si no, publicamos mensajes nuevos.
+      let messageIds: string[];
+      if (existing.discordMessageIds.length > 0) {
+        messageIds = await syncMessages(
+          token,
+          existing.channelId,
+          existing.discordMessageIds,
+          chunks,
+        );
+      } else {
+        messageIds = await postMessages(token, existing.channelId, chunks);
+      }
+
+      if (messageIds.length === 0) {
+        return reply.code(502).send({
+          ok: false,
+          error: "No se pudo publicar el comunicado en Discord.",
+        });
+      }
+
+      const communication = await markPublished(
+        params.communicationId,
+        messageIds,
+      );
 
       await logAdminAction(session, params.guildId, "publish:communication", {
         details: `Comunicado publicado: ${existing.title}`,

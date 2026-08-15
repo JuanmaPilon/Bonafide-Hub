@@ -62,16 +62,17 @@ model ReactionRolePanelJob {
 }
 
 model Communication {
-  id          String    @id @default(cuid())
-  guildId     String
-  title       String
-  content     String
-  authorName  String?
-  channelId   String?
-  status      String    @default("draft")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  publishedAt DateTime?
+  id                String    @id @default(cuid())
+  guildId           String
+  title             String
+  content           String
+  authorName        String?
+  channelId         String?
+  status            String    @default("draft")
+  discordMessageIds String[]  @default([])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  publishedAt       DateTime?
 
   @@index([guildId, status])
   @@map("communications")

@@ -8,6 +8,7 @@ export type Communication = {
   channelId?: string;
   content: string;
   createdAt: Date;
+  discordMessageIds: string[];
   guildId: string;
   id: string;
   publishedAt?: Date;
@@ -21,6 +22,7 @@ function toCommunication(record: {
   channelId: string | null;
   content: string;
   createdAt: Date;
+  discordMessageIds: string[];
   guildId: string;
   id: string;
   publishedAt: Date | null;
@@ -33,6 +35,7 @@ function toCommunication(record: {
     channelId: record.channelId ?? undefined,
     content: record.content,
     createdAt: record.createdAt,
+    discordMessageIds: record.discordMessageIds,
     guildId: record.guildId,
     id: record.id,
     publishedAt: record.publishedAt ?? undefined,
@@ -94,6 +97,7 @@ export async function updateCommunication(input: {
   authorName?: string;
   channelId?: string;
   content?: string;
+  discordMessageIds?: string[];
   id: string;
   title?: string;
 }): Promise<Communication | null> {
@@ -107,6 +111,9 @@ export async function updateCommunication(input: {
         ? { channelId: input.channelId.trim() || null }
         : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
+      ...(input.discordMessageIds !== undefined
+        ? { discordMessageIds: input.discordMessageIds }
+        : {}),
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     },
   });
@@ -122,11 +129,18 @@ export async function deleteCommunication(id: string): Promise<boolean> {
   }
 }
 
-export async function markPublished(id: string): Promise<Communication | null> {
+export async function markPublished(
+  id: string,
+  discordMessageIds: string[],
+): Promise<Communication | null> {
   try {
     const record = await prisma.communication.update({
       where: { id },
-      data: { status: "published", publishedAt: new Date() },
+      data: {
+        status: "published",
+        publishedAt: new Date(),
+        discordMessageIds,
+      },
     });
     return toCommunication(record);
   } catch {
@@ -158,44 +172,176 @@ export function splitForDiscord(content: string, maxLength = 1900): string[] {
   return chunks;
 }
 
-// Publica los mensajes en un canal de Discord usando el token del bot.
-export async function publishToDiscordChannel(
+// ── Mensajes en Discord ─────────────────────────────────────────────
+// Guardamos los IDs de los mensajes que publica el bot para poder
+// editarlos o borrarlos cuando el comunicado cambia o se re-publica.
+
+async function discordRequest(
+  token: string,
+  path: string,
+  init?: { method?: string; body?: unknown },
+): Promise<Response> {
+  return fetch(`https://discord.com/api/v10${path}`, {
+    method: init?.method ?? "GET",
+    headers: {
+      Authorization: `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+}
+
+async function postMessage(
+  token: string,
+  channelId: string,
+  content: string,
+): Promise<string | null> {
+  const response = await discordRequest(
+    token,
+    `/channels/${encodeURIComponent(channelId)}/messages`,
+    { method: "POST", body: { content } },
+  );
+  if (!response.ok) {
+    return null;
+  }
+  const data = (await response.json()) as { id?: string };
+  return data.id ?? null;
+}
+
+async function patchMessage(
+  token: string,
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<boolean> {
+  const response = await discordRequest(
+    token,
+    `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    { method: "PATCH", body: { content } },
+  );
+  return response.ok;
+}
+
+async function deleteMessage(
+  token: string,
+  channelId: string,
+  messageId: string,
+): Promise<boolean> {
+  const response = await discordRequest(
+    token,
+    `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    { method: "DELETE" },
+  );
+  return response.ok;
+}
+
+// Publica mensajes nuevos y devuelve sus IDs en orden.
+export async function postMessages(
+  token: string,
   channelId: string,
   chunks: string[],
-): Promise<{ ok: boolean; reason?: string }> {
-  const token = env.DISCORD_BOT_TOKEN;
-  if (!token) {
-    return { ok: false, reason: "DISCORD_BOT_TOKEN no está configurado" };
-  }
-
+): Promise<string[]> {
+  const ids: string[] = [];
   for (const chunk of chunks) {
-    const response = await fetch(
-      `https://discord.com/api/v10/channels/${encodeURIComponent(channelId)}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bot ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content: chunk }),
-      },
-    );
-
-    if (!response.ok) {
-      const details = await response.text().catch(() => "");
-      if (response.status === 403 || response.status === 404) {
-        return {
-          ok: false,
-          reason:
-            "El bot no tiene permisos para publicar en ese canal (View Channel / Send Messages).",
-        };
-      }
-      return {
-        ok: false,
-        reason: `Error al publicar en el canal (${response.status}): ${details.slice(0, 200)}`,
-      };
+    const id = await postMessage(token, channelId, chunk);
+    if (id) {
+      ids.push(id);
     }
   }
+  return ids;
+}
 
-  return { ok: true };
+// Borra mensajes existentes.
+export async function deleteMessages(
+  token: string,
+  channelId: string,
+  messageIds: string[],
+): Promise<void> {
+  for (const id of messageIds) {
+    await deleteMessage(token, channelId, id);
+  }
+}
+
+// Edita en el lugar los mensajes existentes, publica los que faltan y
+// borra los sobrantes. Devuelve los IDs finales en orden.
+export async function syncMessages(
+  token: string,
+  channelId: string,
+  existingIds: string[],
+  chunks: string[],
+): Promise<string[]> {
+  const finalIds: string[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const oldId = existingIds[i];
+    if (oldId) {
+      const edited = await patchMessage(token, channelId, oldId, chunks[i]);
+      if (edited) {
+        finalIds.push(oldId);
+      } else {
+        // El mensaje pudo haber sido borrado: lo re-publicamos.
+        const newId = await postMessage(token, channelId, chunks[i]);
+        if (newId) {
+          finalIds.push(newId);
+        }
+      }
+    } else {
+      const newId = await postMessage(token, channelId, chunks[i]);
+      if (newId) {
+        finalIds.push(newId);
+      }
+    }
+  }
+  // Sobrantes (ahora hay menos mensajes que antes).
+  for (let i = chunks.length; i < existingIds.length; i++) {
+    await deleteMessage(token, channelId, existingIds[i]);
+  }
+  return finalIds;
+}
+
+// Tras editar un comunicado publicado, refleja el cambio en Discord.
+// Si se cambió de canal, borra los mensajes viejos y publica en el nuevo.
+export async function syncCommunicationAfterEdit(
+  existing: Communication,
+  updated: Communication,
+): Promise<Communication> {
+  const token = env.DISCORD_BOT_TOKEN;
+  const hadMessages = existing.discordMessageIds.length > 0;
+  if (!token || !hadMessages) {
+    return updated;
+  }
+
+  const oldChannel = existing.channelId;
+  const newChannel = updated.channelId;
+
+  if (!newChannel) {
+    // Se quitó el canal: borramos los mensajes publicados.
+    if (oldChannel) {
+      await deleteMessages(token, oldChannel, existing.discordMessageIds);
+    }
+    return (
+      (await updateCommunication({ id: updated.id, discordMessageIds: [] })) ??
+      updated
+    );
+  }
+
+  const chunks = splitForDiscord(updated.content);
+  let messageIds: string[];
+  if (newChannel !== oldChannel) {
+    if (oldChannel) {
+      await deleteMessages(token, oldChannel, existing.discordMessageIds);
+    }
+    messageIds = await postMessages(token, newChannel, chunks);
+  } else {
+    messageIds = await syncMessages(
+      token,
+      newChannel,
+      existing.discordMessageIds,
+      chunks,
+    );
+  }
+
+  return (
+    (await updateCommunication({ id: updated.id, discordMessageIds: messageIds })) ??
+    updated
+  );
 }

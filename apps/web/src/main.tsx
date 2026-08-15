@@ -662,6 +662,10 @@ function App() {
         setCommunications((current) =>
           current.map((item) => (item.id === updated.id ? updated : item)),
         );
+        if (updated.status === "published") {
+          const list = await listPublishedCommunications(selectedGuildId);
+          setPublished(list);
+        }
         pushToast("Comunicado actualizado.", "success");
       } else {
         const created = await createCommunication(selectedGuildId, commEditor);
@@ -1841,11 +1845,6 @@ function App() {
                     <div className="admin-card-header">
                       <div>
                         <h3>Comunicados</h3>
-                        <p>
-                          Creá anuncios (reclutamiento, raids, etc.). Al
-                          publicar se envían a un canal de Discord y, si son
-                          largos, se mandan partidos en varios mensajes.
-                        </p>
                       </div>
                       <button
                         className="primary-button"
@@ -1897,13 +1896,14 @@ function App() {
                               </button>
                               <button
                                 className="primary-button"
-                                disabled={comm.status === "published"}
                                 onClick={() =>
                                   void handlePublishCommunication(comm.id)
                                 }
                                 type="button"
                               >
-                                Publicar
+                                {comm.status === "published"
+                                  ? "Republicar"
+                                  : "Publicar"}
                               </button>
                               <button
                                 className="danger-button"
