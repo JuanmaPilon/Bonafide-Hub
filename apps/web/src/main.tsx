@@ -2297,7 +2297,7 @@ function App() {
                           <input
                             value={rrTitle}
                             onChange={(event) => setRrTitle(event.target.value)}
-                            placeholder="Rangos"
+                            placeholder="Título"
                           />
                         </label>
                         <label>
@@ -2307,7 +2307,7 @@ function App() {
                             onChange={(event) =>
                               setRrDescription(event.target.value)
                             }
-                            placeholder="Reacciona para recibir tu rol"
+                            placeholder="Descripción"
                           />
                         </label>
                         <label>
@@ -2418,8 +2418,7 @@ function App() {
                           )
                         ) : (
                           <div className="rr-preview-line muted">
-                            Completá el título, la descripción y al menos un
-                            emoji + rol para ver el mensaje.
+                            Sin contenido para previsualizar.
                           </div>
                         )}
                       </div>
