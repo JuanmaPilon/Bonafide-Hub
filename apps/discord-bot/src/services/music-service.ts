@@ -325,6 +325,7 @@ void ensurePython();
 
 export type Track = {
   duration?: string;
+  query?: string;
   requestedBy: string;
   title: string;
   url: string;
@@ -567,7 +568,7 @@ async function playNext(guildId: string): Promise<void> {
       });
       const current = musicStates.get(guildId);
       if (current && current.current?.url === next.url) {
-        state.player.stop();
+        void handleStreamFailure(guildId, next);
       }
     });
 
@@ -598,6 +599,48 @@ async function playNext(guildId: string): Promise<void> {
       guildId,
       url: next.url,
     });
+    void playNext(guildId);
+  }
+}
+
+// Si un tema de YouTube no se puede transmitir (p. ej. IP de datacenter
+// bloqueada), reintentamos el mismo texto en SoundCloud automáticamente.
+async function handleStreamFailure(
+  guildId: string,
+  next: Track,
+): Promise<void> {
+  const state = musicStates.get(guildId);
+  if (!state) {
+    return;
+  }
+
+  const isYouTubeUrl = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(
+    next.url,
+  );
+
+  if (isYouTubeUrl && next.query) {
+    try {
+      const fallback = await resolveTrack(next.query, "soundcloud");
+      if (fallback) {
+        state.queue.unshift(fallback);
+        console.log("[music] YouTube falló — reintentando en SoundCloud", {
+          guildId,
+          query: next.query,
+          fallbackTitle: fallback.title,
+        });
+      }
+    } catch (error) {
+      console.error("[music] fallback a SoundCloud falló", {
+        error,
+        guildId,
+        query: next.query,
+      });
+    }
+  }
+
+  if (state.player.state.status !== AudioPlayerStatus.Idle) {
+    state.player.stop();
+  } else {
     void playNext(guildId);
   }
 }
@@ -725,7 +768,13 @@ async function resolveTrack(
       ? formatDuration(info.duration)
       : undefined;
 
-  return { duration, requestedBy: "", title, url };
+  return {
+    duration,
+    requestedBy: "",
+    title,
+    url,
+    query: isUrl ? undefined : trimmed,
+  };
 }
 
 function replyError(interaction: ChatInputCommandInteraction, message: string) {
