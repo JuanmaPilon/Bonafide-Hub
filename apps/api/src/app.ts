@@ -38,6 +38,7 @@ import {
   type Communication,
   type CommunicationInstance,
 } from "./services/communications-store.js";
+import { resolveMentions } from "./services/mention-resolver.js";
 import {
   getGuildConfig,
   type GuildConfig,
@@ -2060,7 +2061,9 @@ export function buildApp() {
         });
       }
 
-      const chunks = splitForDiscord(existing.content);
+      const chunks = splitForDiscord(
+        await resolveMentions(existing.content, existing.guildId),
+      );
       const messageIds = await postMessages(token, existing.channelId, chunks);
 
       if (messageIds.length === 0) {

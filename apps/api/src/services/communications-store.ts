@@ -288,7 +288,11 @@ async function postMessage(
   const response = await discordRequest(
     token,
     `/channels/${encodeURIComponent(channelId)}/messages`,
-    { method: "POST", body: { content } },
+    {
+      method: "POST",
+      // allowed_mentions: solo usuarios y roles (nunca @everyone/@here).
+      body: { content, allowed_mentions: { parse: ["users", "roles"] } },
+    },
   );
   if (!response.ok) {
     return null;
