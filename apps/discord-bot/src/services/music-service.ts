@@ -677,6 +677,9 @@ async function resolveTrack(query: string): Promise<Track | null> {
     noWarnings: true,
     noPlaylist: true,
     noCheckCertificates: true,
+    // yt-dlp necesita un runtime de JS para descifrar el parámetro "n" de
+    // YouTube; sin esto, la extracción de formatos falla.
+    jsRuntimes: `node:${process.execPath}`,
     ...(YOUTUBE_COOKIES_FILE ? { cookies: YOUTUBE_COOKIES_FILE } : {}),
   } as Parameters<typeof youtubedl.exec>[1];
 
