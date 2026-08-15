@@ -118,13 +118,19 @@ export type SessionResponse = {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  // Solo mandamos Content-Type: application/json cuando hay body.
+  // Fastify 5 responde 400 "Bad Request" a un POST/DELETE sin body pero
+  // con ese content-type (FST_ERR_CTP_EMPTY_JSON_BODY).
+  const hasBody =
+    init?.body != null &&
+    (typeof init.body === "string" ? init.body.length > 0 : true);
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
+    ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
-    ...init,
   });
 
   if (!response.ok) {
