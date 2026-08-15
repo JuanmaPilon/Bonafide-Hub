@@ -6,6 +6,8 @@ type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   memberLogChannelId?: string;
+  musicEnabled?: boolean;
+  musicRoleIds?: string[];
   reactionRoles?: ReactionRoleRule[];
   temporaryVoiceChannelIds?: string[];
   xpSyncRequested?: boolean;
@@ -46,6 +48,8 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     defaultRoleId: input.defaultRoleId,
     dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
     memberLogChannelId: input.memberLogChannelId,
+    musicEnabled: input.musicEnabled ?? true,
+    musicRoleIds: input.musicRoleIds ?? [],
     reactionRoles: input.reactionRoles ?? [],
     temporaryVoiceChannelIds: input.temporaryVoiceChannelIds ?? [],
     xpSyncRequested: input.xpSyncRequested ?? false,

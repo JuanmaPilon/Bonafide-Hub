@@ -14,6 +14,7 @@ import type {
   GuildMember,
   VoiceBasedChannel,
 } from "discord.js";
+import { PermissionFlagsBits } from "discord.js";
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { chmod } from "node:fs/promises";
@@ -24,6 +25,7 @@ import { writeFileSync } from "node:fs";
 import ffmpegStatic from "ffmpeg-static";
 import { create as createYoutubeDl } from "youtube-dl-exec";
 import { env } from "../config/env.js";
+import { getGuildConfig } from "./guild-config-store.js";
 
 const youtubeCookie = env.YOUTUBE_COOKIE?.trim();
 
@@ -781,6 +783,42 @@ function replyError(interaction: ChatInputCommandInteraction, message: string) {
   return interaction.reply({ content: message, ephemeral: true });
 }
 
+// Permiso para usar música: admin siempre puede; si hay roles DJ
+// configurados (panel de admin), hay que tener uno de esos roles.
+async function canUseMusic(
+  guildId: string,
+  member: GuildMember | null,
+): Promise<boolean> {
+  if (!member) {
+    return false;
+  }
+
+  if (
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
+    member.permissions.has(PermissionFlagsBits.ManageGuild)
+  ) {
+    return true;
+  }
+
+  let config: Awaited<ReturnType<typeof getGuildConfig>> | undefined;
+  try {
+    config = await getGuildConfig(guildId);
+  } catch {
+    config = undefined;
+  }
+
+  if (config?.musicEnabled === false) {
+    return false;
+  }
+
+  const roleIds = config?.musicRoleIds ?? [];
+  if (roleIds.length === 0) {
+    return true; // sin restricción de rol
+  }
+
+  return roleIds.some((roleId) => member.roles.cache.has(roleId));
+}
+
 export async function handleMusicCommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -794,6 +832,15 @@ export async function handleMusicCommand(
 
   const guildId = interaction.guildId;
   const member = interaction.member as GuildMember | null;
+
+  const allowed = await canUseMusic(guildId, member);
+  if (!allowed) {
+    await replyError(
+      interaction,
+      "No tenés permiso para usar la música. Se requiere el rol de DJ configurado en el panel de admin.",
+    );
+    return;
+  }
 
   try {
     switch (interaction.commandName) {

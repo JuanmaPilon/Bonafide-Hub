@@ -15,6 +15,8 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   memberLogChannelId?: string;
+  musicEnabled?: boolean;
+  musicRoleIds?: string[];
   reactionRoles?: ReactionRoleRule[];
   reactionRolesChannelId?: string;
   temporaryVoiceChannelIds?: string[];
@@ -27,6 +29,8 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
     memberLogChannelId: string | null;
+    musicEnabled: boolean;
+    musicRoleIds: string[];
     reactionRolesChannelId: string | null;
     temporaryVoiceChannelIds: string[];
     xpSyncRequested: boolean;
@@ -46,6 +50,8 @@ function toGuildConfig(
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
     memberLogChannelId: record.memberLogChannelId ?? undefined,
+    musicEnabled: record.musicEnabled,
+    musicRoleIds: record.musicRoleIds,
     reactionRoles,
     reactionRolesChannelId: record.reactionRolesChannelId ?? undefined,
     temporaryVoiceChannelIds: record.temporaryVoiceChannelIds,
@@ -81,6 +87,8 @@ type NormalizedGuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
   memberLogChannelId?: string;
+  musicEnabled: boolean;
+  musicRoleIds: string[];
   reactionRoles: ReactionRoleRule[];
   reactionRolesChannelId?: string;
   temporaryVoiceChannelIds: string[];
@@ -97,6 +105,8 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
     memberLogChannelId: config.memberLogChannelId,
+    musicEnabled: config.musicEnabled ?? true,
+    musicRoleIds: config.musicRoleIds ?? [],
     reactionRoles: normalizedRules,
     reactionRolesChannelId: config.reactionRolesChannelId,
     temporaryVoiceChannelIds: config.temporaryVoiceChannelIds ?? [],
@@ -144,6 +154,8 @@ export async function replaceGuildConfig(
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
+        musicEnabled: normalized.musicEnabled,
+        musicRoleIds: normalized.musicRoleIds,
       },
       update: {
         memberLogChannelId: normalized.memberLogChannelId,
@@ -153,6 +165,8 @@ export async function replaceGuildConfig(
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
+        musicEnabled: normalized.musicEnabled,
+        musicRoleIds: normalized.musicRoleIds,
       },
     });
 

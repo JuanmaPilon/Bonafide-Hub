@@ -16,6 +16,8 @@ model GuildConfig {
   xpSyncRequested             Boolean  @default(false)
   enabledModules              String[] @default([])
   temporaryVoiceChannelIds    String[] @default([])
+  musicEnabled                Boolean  @default(true)
+  musicRoleIds                String[] @default([])
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 

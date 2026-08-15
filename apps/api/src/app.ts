@@ -1724,6 +1724,14 @@ export function buildApp() {
       allowedBody.enabledModules = body.enabledModules;
     }
 
+    if (body.musicEnabled !== undefined) {
+      allowedBody.musicEnabled = body.musicEnabled;
+    }
+
+    if (body.musicRoleIds !== undefined) {
+      allowedBody.musicRoleIds = body.musicRoleIds;
+    }
+
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
     await logAdminAction(session, params.guildId, "update:guild-config", {

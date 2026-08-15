@@ -12,6 +12,8 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   memberLogChannelId?: string;
+  musicEnabled?: boolean;
+  musicRoleIds?: string[];
   reactionRolesChannelId?: string;
 };
 
