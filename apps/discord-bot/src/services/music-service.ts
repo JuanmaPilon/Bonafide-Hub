@@ -131,6 +131,7 @@ async function resolveYtDlpBinary(): Promise<string> {
 
 async function getYoutubeDl(): Promise<ReturnType<typeof createYoutubeDl>> {
   if (!ytdlInstance) {
+    await ensurePython();
     const binaryPath = await resolveYtDlpBinary();
     console.log("[music] Usando yt-dlp desde:", binaryPath);
     ytdlInstance = createYoutubeDl(binaryPath);
@@ -215,8 +216,10 @@ function ensureFfmpeg(): Promise<boolean> {
 
 void ensureFfmpeg();
 
-// ── Diagnóstico de python3 ──────────────────────────────────────────
+// ── python3 ─────────────────────────────────────────────────────────
 // yt-dlp es un script de Python; sin python3 no corre (exit 127).
+// El apt del build no está instalando paquetes en Railway, así que el
+// bot intenta instalarlo en runtime (el contenedor corre como root).
 function python3Works(): boolean {
   try {
     const result = spawnSync("python3", ["--version"], { stdio: "ignore" });
@@ -226,13 +229,50 @@ function python3Works(): boolean {
   }
 }
 
-if (python3Works()) {
-  console.log("[music] python3 disponible");
-} else {
-  console.error(
-    "[music] ⚠️ python3 NO disponible — yt-dlp no va a funcionar (revisar apt en Railway)",
-  );
+let pythonPromise: Promise<boolean> | null = null;
+
+function ensurePython(): Promise<boolean> {
+  if (!pythonPromise) {
+    pythonPromise = (async () => {
+      if (python3Works()) {
+        console.log("[music] python3 disponible");
+        return true;
+      }
+
+      console.log(
+        "[music] python3 no está en PATH — intentando instalarlo con apt...",
+      );
+      try {
+        spawnSync("apt-get", ["update", "-qq"], {
+          timeout: 60_000,
+          stdio: "ignore",
+        });
+        const install = spawnSync(
+          "apt-get",
+          ["install", "-y", "-qq", "python3"],
+          { timeout: 120_000, stdio: "ignore" },
+        );
+        if (python3Works()) {
+          console.log("[music] python3 instalado en runtime ✅");
+          return true;
+        }
+        console.error("[music] apt-get install python3 falló", {
+          status: install.status,
+        });
+      } catch (error) {
+        console.error("[music] error instalando python3 en runtime", { error });
+      }
+
+      console.error(
+        "[music] ⚠️ python3 NO disponible — yt-dlp no va a funcionar",
+      );
+      return false;
+    })();
+  }
+  return pythonPromise;
 }
+
+void ensurePython();
 
 export type Track = {
   duration?: string;
