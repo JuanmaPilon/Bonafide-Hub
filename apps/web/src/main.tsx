@@ -106,27 +106,10 @@ function formatGuildLabel(guild: ApiGuild): string {
   return guild.owner ? `${guild.name} (owner)` : guild.name;
 }
 
-function hasPermissionBit(permissions: string, bitIndex: number): boolean {
-  try {
-    const mask = 1n << BigInt(bitIndex);
-    return (BigInt(permissions) & mask) === mask;
-  } catch {
-    return false;
-  }
-}
-
 function canAccessAdmin(guild: ApiGuild | null): boolean {
-  if (!guild) {
-    return false;
-  }
-
-  if (guild.owner) {
-    return true;
-  }
-
-  const hasAdministrator = hasPermissionBit(guild.permissions, 3);
-  const hasManageGuild = hasPermissionBit(guild.permissions, 5);
-  return hasAdministrator || hasManageGuild;
+  // El panel de admin es solo para gente privilegiada: únicamente el dueño
+  // de la guild (aunque otro tenga permiso de Manage Server en Discord).
+  return guild?.owner === true;
 }
 
 function guildIconUrl(guild: ApiGuild | null): string | null {

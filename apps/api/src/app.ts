@@ -284,23 +284,11 @@ export function buildApp() {
     session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
     guildId: string,
   ): boolean {
-    return session.guilds.some((guild) => {
-      if (guild.id !== guildId) {
-        return false;
-      }
-
-      if (guild.owner) {
-        return true;
-      }
-
-      try {
-        const permissions = BigInt(guild.permissions);
-        const manageGuildBit = 1n << 5n;
-        return (permissions & manageGuildBit) === manageGuildBit;
-      } catch {
-        return false;
-      }
-    });
+    // Solo el dueño de la guild puede administrar, aunque otro miembro
+    // tenga permiso de Manage Server en Discord.
+    return session.guilds.some(
+      (guild) => guild.id === guildId && guild.owner === true,
+    );
   }
 
   function isGuildOwner(
