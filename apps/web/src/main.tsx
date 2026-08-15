@@ -508,6 +508,7 @@ function App() {
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditExpanded, setAuditExpanded] = useState(false);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
@@ -1893,120 +1894,6 @@ function App() {
                   <div className="admin-card">
                     <div className="admin-card-header">
                       <div>
-                        <h3>Comunicados</h3>
-                      </div>
-                      <button
-                        className="primary-button"
-                        onClick={() =>
-                          setCommEditor({
-                            id: null,
-                            title: "",
-                            content: "",
-                            channelId: "",
-                          })
-                        }
-                        type="button"
-                      >
-                        Nueva plantilla
-                      </button>
-                    </div>
-                    <div className="admin-card-body">
-                      {communications.length === 0 ? (
-                        <div className="empty-state">
-                          No hay plantillas todavía. Creá la primera.
-                        </div>
-                      ) : (
-                        communications.map((comm) => (
-                          <div className="comunicado-admin-block" key={comm.id}>
-                            <div className="comunicado-admin-row">
-                              <div className="comunicado-admin-info">
-                                <strong>{comm.title}</strong>
-                                <span
-                                  className={`comunicado-status comunicado-status-${comm.instances.length > 0 ? "published" : "draft"}`}
-                                >
-                                  {comm.instances.length > 0
-                                    ? `Publicado (${comm.instances.length})`
-                                    : "Borrador"}
-                                </span>
-                              </div>
-                              <div className="comunicado-admin-actions">
-                                <button
-                                  className="ghost-button"
-                                  onClick={() =>
-                                    setCommEditor({
-                                      id: comm.id,
-                                      title: comm.title,
-                                      content: comm.content,
-                                      channelId: comm.channelId ?? "",
-                                    })
-                                  }
-                                  type="button"
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="primary-button"
-                                  onClick={() =>
-                                    void handlePublishCommunication(comm.id)
-                                  }
-                                  type="button"
-                                >
-                                  {comm.instances.length > 0
-                                    ? "Republicar"
-                                    : "Publicar"}
-                                </button>
-                                <button
-                                  className="danger-button"
-                                  onClick={() =>
-                                    requestDeleteCommunication(comm)
-                                  }
-                                  type="button"
-                                >
-                                  Eliminar plantilla
-                                </button>
-                              </div>
-                            </div>
-                            {comm.instances.length > 0 ? (
-                              <div className="comunicado-instances">
-                                {comm.instances.map((instance) => (
-                                  <div
-                                    className="comunicado-instance-row"
-                                    key={instance.id}
-                                  >
-                                    <span>
-                                      Mensaje ·{" "}
-                                      {new Date(
-                                        instance.publishedAt,
-                                      ).toLocaleDateString()}{" "}
-                                      {new Date(
-                                        instance.publishedAt,
-                                      ).toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </span>
-                                    <button
-                                      className="ghost-button danger"
-                                      onClick={() =>
-                                        requestDeleteInstance(instance)
-                                      }
-                                      type="button"
-                                    >
-                                      Eliminar mensaje
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="admin-card">
-                    <div className="admin-card-header">
-                      <div>
                         <h3>Configuración general del servidor</h3>
                         <p>
                           Canales y roles base del servidor. Se guardan por
@@ -2117,6 +2004,134 @@ function App() {
                           ? "Guardando…"
                           : "Guardar cambios"}
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="admin-card">
+                    <div className="admin-card-header">
+                      <div>
+                        <h3>Plantillas</h3>
+                      </div>
+                      <button
+                        className="primary-button"
+                        onClick={() =>
+                          setCommEditor({
+                            id: null,
+                            title: "",
+                            content: "",
+                            channelId: "",
+                          })
+                        }
+                        type="button"
+                      >
+                        Nueva plantilla
+                      </button>
+                    </div>
+                    <div className="admin-card-body">
+                      {communications.length === 0 ? (
+                        <div className="empty-state comunicados-empty">
+                          <p>No existen plantillas.</p>
+                          <button
+                            className="primary-button"
+                            onClick={() =>
+                              setCommEditor({
+                                id: null,
+                                title: "",
+                                content: "",
+                                channelId: "",
+                              })
+                            }
+                            type="button"
+                          >
+                            Crear plantilla
+                          </button>
+                        </div>
+                      ) : (
+                        communications.map((comm) => (
+                          <div className="comunicado-admin-block" key={comm.id}>
+                            <div className="comunicado-admin-row">
+                              <div className="comunicado-admin-info">
+                                <strong>{comm.title}</strong>
+                                <span
+                                  className={`comunicado-status comunicado-status-${comm.instances.length > 0 ? "published" : "draft"}`}
+                                >
+                                  {comm.instances.length > 0
+                                    ? `Publicado (${comm.instances.length})`
+                                    : "Borrador"}
+                                </span>
+                              </div>
+                              <div className="comunicado-admin-actions">
+                                <button
+                                  className="ghost-button"
+                                  onClick={() =>
+                                    setCommEditor({
+                                      id: comm.id,
+                                      title: comm.title,
+                                      content: comm.content,
+                                      channelId: comm.channelId ?? "",
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="primary-button"
+                                  onClick={() =>
+                                    void handlePublishCommunication(comm.id)
+                                  }
+                                  type="button"
+                                >
+                                  {comm.instances.length > 0
+                                    ? "Republicar"
+                                    : "Publicar"}
+                                </button>
+                                <button
+                                  className="danger-button"
+                                  onClick={() =>
+                                    requestDeleteCommunication(comm)
+                                  }
+                                  type="button"
+                                >
+                                  Eliminar plantilla
+                                </button>
+                              </div>
+                            </div>
+                            {comm.instances.length > 0 ? (
+                              <div className="comunicado-instances">
+                                {comm.instances.map((instance) => (
+                                  <div
+                                    className="comunicado-instance-row"
+                                    key={instance.id}
+                                  >
+                                    <span>
+                                      Mensaje ·{" "}
+                                      {new Date(
+                                        instance.publishedAt,
+                                      ).toLocaleDateString()}{" "}
+                                      {new Date(
+                                        instance.publishedAt,
+                                      ).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() =>
+                                        requestDeleteInstance(instance)
+                                      }
+                                      type="button"
+                                    >
+                                      Eliminar mensaje
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -2872,51 +2887,71 @@ function App() {
                           visible únicamente para el owner.
                         </p>
                       </div>
-                      <button
-                        className="icon-button"
-                        onClick={() => void refreshAuditLogs()}
-                        title="Refrescar registro"
-                        aria-label="Refrescar registro"
-                        type="button"
-                      >
-                        <RefreshIcon />
-                      </button>
+                      <div className="audit-header-actions">
+                        <span className="audit-count">
+                          {auditLogs.length} registro
+                          {auditLogs.length === 1 ? "" : "s"}
+                        </span>
+                        <button
+                          className="icon-button"
+                          onClick={() => void refreshAuditLogs()}
+                          title="Refrescar registro"
+                          aria-label="Refrescar registro"
+                          type="button"
+                        >
+                          <RefreshIcon />
+                        </button>
+                        <button
+                          className="ghost-button"
+                          onClick={() =>
+                            setAuditExpanded((current) => !current)
+                          }
+                          type="button"
+                          aria-expanded={auditExpanded}
+                        >
+                          {auditExpanded ? "Ocultar" : "Ver registro"}
+                        </button>
+                      </div>
                     </div>
-                    <div className="admin-card-body">
-                      {selectedGuild?.owner ? (
-                        auditLogs.length === 0 ? (
-                          <div className="empty-state">
-                            Aún no hay cambios registrados. Las acciones del
-                            panel Admin quedan anotadas acá.
-                          </div>
-                        ) : (
-                          <div className="audit-list">
-                            {auditLogs.map((entry) => (
-                              <div className="audit-row" key={entry.id}>
-                                <span className="audit-time">
-                                  {new Date(entry.createdAt).toLocaleString()}
-                                </span>
-                                <span className="audit-actor">
-                                  {entry.actorName ?? entry.actorUserId ?? "—"}
-                                </span>
-                                <span className="audit-action">
-                                  {entry.action}
-                                </span>
-                                {entry.details ? (
-                                  <span className="audit-detail">
-                                    {entry.details}
+                    {auditExpanded ? (
+                      <div className="admin-card-body">
+                        {selectedGuild?.owner ? (
+                          auditLogs.length === 0 ? (
+                            <div className="empty-state">
+                              Aún no hay cambios registrados. Las acciones del
+                              panel Admin quedan anotadas acá.
+                            </div>
+                          ) : (
+                            <div className="audit-list">
+                              {auditLogs.map((entry) => (
+                                <div className="audit-row" key={entry.id}>
+                                  <span className="audit-time">
+                                    {new Date(entry.createdAt).toLocaleString()}
                                   </span>
-                                ) : null}
-                              </div>
-                            ))}
+                                  <span className="audit-actor">
+                                    {entry.actorName ??
+                                      entry.actorUserId ??
+                                      "—"}
+                                  </span>
+                                  <span className="audit-action">
+                                    {entry.action}
+                                  </span>
+                                  {entry.details ? (
+                                    <span className="audit-detail">
+                                      {entry.details}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        ) : (
+                          <div className="empty-state">
+                            Solo el owner de la guild puede ver este registro.
                           </div>
-                        )
-                      ) : (
-                        <div className="empty-state">
-                          Solo el owner de la guild puede ver este registro.
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </>
               ) : activeTab === "admin" ? (

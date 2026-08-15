@@ -1691,6 +1691,31 @@ input {
   white-space: nowrap;
 }
 
+.comunicados-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.comunicados-empty p {
+  margin: 0;
+}
+
+.audit-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.audit-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
 .comm-form {
   display: grid;
   gap: 14px;
