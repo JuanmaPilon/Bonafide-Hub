@@ -797,14 +797,21 @@ export function buildApp() {
     });
 
     if (!tokenResponse.ok) {
-      const errorBody = (await tokenResponse
-        .json()
-        .catch(() => null)) as Record<string, unknown> | null;
+      const raw = await tokenResponse.text().catch(() => "");
+      let errorBody: unknown = null;
+      try {
+        errorBody = raw ? JSON.parse(raw) : null;
+      } catch {
+        errorBody = raw.slice(0, 300);
+      }
 
       return reply.code(400).send({
         ok: false,
         error: "Failed to exchange Discord code",
-        details: errorBody,
+        details: {
+          status: tokenResponse.status,
+          body: errorBody,
+        },
       });
     }
 
