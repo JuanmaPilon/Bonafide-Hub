@@ -17,6 +17,17 @@ export type GuildConfig = {
   reactionRolesChannelId?: string;
 };
 
+export type CommunicationInstance = {
+  authorName?: string;
+  channelId: string;
+  communicationId: string;
+  content: string;
+  discordMessageIds: string[];
+  id: string;
+  publishedAt: string;
+  title: string;
+};
+
 export type Communication = {
   authorName?: string;
   channelId?: string;
@@ -24,7 +35,7 @@ export type Communication = {
   createdAt: string;
   guildId: string;
   id: string;
-  publishedAt?: string;
+  instances: CommunicationInstance[];
   status: "draft" | "published";
   title: string;
   updatedAt: string;
@@ -549,8 +560,8 @@ export async function listCommunications(
 
 export async function listPublishedCommunications(
   guildId: string,
-): Promise<Communication[]> {
-  const data = await requestJson<{ communications: Communication[] }>(
+): Promise<CommunicationInstance[]> {
+  const data = await requestJson<{ communications: CommunicationInstance[] }>(
     `/guilds/${guildId}/communications/published`,
   );
   return data.communications;
@@ -598,12 +609,23 @@ export async function deleteCommunication(
 export async function publishCommunication(
   guildId: string,
   communicationId: string,
-): Promise<Communication> {
-  const data = await requestJson<{ communication: Communication }>(
+): Promise<CommunicationInstance> {
+  const data = await requestJson<{ instance: CommunicationInstance }>(
     `/guilds/${guildId}/communications/${communicationId}/publish`,
     { method: "POST" },
   );
-  return data.communication;
+  return data.instance;
+}
+
+export async function deleteCommunicationInstance(
+  guildId: string,
+  communicationId: string,
+  instanceId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/communications/${communicationId}/instances/${instanceId}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function logout(): Promise<void> {

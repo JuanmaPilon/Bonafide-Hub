@@ -25,15 +25,18 @@ import {
   createCommunication,
   deleteCommunication,
   getCommunication,
+  createCommunicationInstance,
+  deleteCommunicationInstance,
+  deleteMessages,
+  getCommunicationInstance,
   listCommunications,
-  listPublishedCommunications,
-  markPublished,
+  listPublishedInstances,
+  markCommunicationPublished,
   postMessages,
   splitForDiscord,
-  syncCommunicationAfterEdit,
-  syncMessages,
   updateCommunication,
   type Communication,
+  type CommunicationInstance,
 } from "./services/communications-store.js";
 import {
   getGuildConfig,
@@ -1787,7 +1790,7 @@ export function buildApp() {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
-      const communications = await listPublishedCommunications(params.guildId);
+      const communications = await listPublishedInstances(params.guildId);
 
       return {
         ok: true,
@@ -1914,14 +1917,9 @@ export function buildApp() {
           .send({ ok: false, error: "No se pudo actualizar" });
       }
 
-      // Si el comunicado estaba publicado, reflejamos el cambio en Discord:
-      // edita los mensajes en el lugar, o migra al canal nuevo si cambió.
-      const synced =
-        existing.discordMessageIds.length > 0
-          ? await syncCommunicationAfterEdit(existing, communication)
-          : communication;
-
-      return { ok: true, communication: synced };
+      // Editar solo guarda la plantilla; no toca los mensajes ya
+      // publicados en Discord. Para cambiar lo publicado se re-publica.
+      return { ok: true, communication };
     },
   );
 
@@ -1950,7 +1948,66 @@ export function buildApp() {
         return reply.code(404).send({ ok: false, error: "Not found" });
       }
 
+      // Borrar la plantilla también borra todos sus mensajes de Discord.
+      const token = env.DISCORD_BOT_TOKEN;
+      if (token) {
+        for (const instance of existing.instances) {
+          await deleteMessages(
+            token,
+            instance.channelId,
+            instance.discordMessageIds,
+          );
+        }
+      }
+
       const deleted = await deleteCommunication(params.communicationId);
+
+      return { ok: true, deleted };
+    },
+  );
+
+  app.delete(
+    "/guilds/:guildId/communications/:communicationId/instances/:instanceId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        communicationId?: string;
+        guildId?: string;
+        instanceId?: string;
+      };
+      if (!params.guildId || !params.communicationId || !params.instanceId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const existing = await getCommunication(params.communicationId);
+      if (!existing || existing.guildId !== params.guildId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      const instance = await getCommunicationInstance(params.instanceId);
+      if (!instance || instance.communicationId !== params.communicationId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      // Eliminar el mensaje también lo borra de Discord.
+      const token = env.DISCORD_BOT_TOKEN;
+      if (token) {
+        await deleteMessages(
+          token,
+          instance.channelId,
+          instance.discordMessageIds,
+        );
+      }
+
+      const deleted = await deleteCommunicationInstance(params.instanceId);
 
       return { ok: true, deleted };
     },
@@ -1982,12 +2039,10 @@ export function buildApp() {
       }
 
       if (!existing.channelId) {
-        return reply
-          .code(400)
-          .send({
-            ok: false,
-            error: "El comunicado no tiene canal de publicación",
-          });
+        return reply.code(400).send({
+          ok: false,
+          error: "El comunicado no tiene canal de publicación",
+        });
       }
 
       const token = env.DISCORD_BOT_TOKEN;
@@ -1999,20 +2054,7 @@ export function buildApp() {
       }
 
       const chunks = splitForDiscord(existing.content);
-
-      // Si ya estaba publicado, editamos los mensajes en el lugar
-      // (re-publicar). Si no, publicamos mensajes nuevos.
-      let messageIds: string[];
-      if (existing.discordMessageIds.length > 0) {
-        messageIds = await syncMessages(
-          token,
-          existing.channelId,
-          existing.discordMessageIds,
-          chunks,
-        );
-      } else {
-        messageIds = await postMessages(token, existing.channelId, chunks);
-      }
+      const messageIds = await postMessages(token, existing.channelId, chunks);
 
       if (messageIds.length === 0) {
         return reply.code(502).send({
@@ -2021,10 +2063,19 @@ export function buildApp() {
         });
       }
 
-      const communication = await markPublished(
-        params.communicationId,
-        messageIds,
-      );
+      // Cada publicación crea una instancia nueva (un mensaje nuevo en
+      // Discord). Republicar NO edita lo anterior: genera otra instancia.
+      const instance = await createCommunicationInstance({
+        authorName: existing.authorName,
+        channelId: existing.channelId,
+        communicationId: existing.id,
+        content: existing.content,
+        discordMessageIds: messageIds,
+        guildId: existing.guildId,
+        title: existing.title,
+      });
+
+      await markCommunicationPublished(existing.id);
 
       await logAdminAction(session, params.guildId, "publish:communication", {
         details: `Comunicado publicado: ${existing.title}`,
@@ -2032,7 +2083,7 @@ export function buildApp() {
         targetId: existing.id,
       });
 
-      return { ok: true, communication };
+      return { ok: true, instance };
     },
   );
 

@@ -1653,6 +1653,44 @@ input {
   flex-shrink: 0;
 }
 
+.comunicado-admin-block {
+  border: 1px solid rgba(133, 156, 212, 0.18);
+  background: rgba(10, 16, 31, 0.6);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.comunicado-admin-block > .comunicado-admin-row {
+  margin-bottom: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.comunicado-instances {
+  border-top: 1px solid rgba(133, 156, 212, 0.14);
+  padding: 4px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comunicado-instance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.comunicado-instance-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .comm-form {
   display: grid;
   gap: 14px;

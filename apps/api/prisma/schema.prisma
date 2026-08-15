@@ -62,20 +62,37 @@ model ReactionRolePanelJob {
 }
 
 model Communication {
-  id                String    @id @default(cuid())
-  guildId           String
-  title             String
-  content           String
-  authorName        String?
-  channelId         String?
-  status            String    @default("draft")
-  discordMessageIds String[]  @default([])
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  publishedAt       DateTime?
+  id         String    @id @default(cuid())
+  guildId    String
+  title      String
+  content    String
+  authorName String?
+  channelId  String?
+  status     String    @default("draft")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  instances  CommunicationInstance[]
 
   @@index([guildId, status])
   @@map("communications")
+}
+
+// Cada vez que se publica una plantilla se crea una instancia: el
+// "mensaje" concreto que quedó en Discord (con snapshot del contenido).
+model CommunicationInstance {
+  id                String   @id @default(cuid())
+  communicationId   String
+  guildId           String
+  channelId         String
+  discordMessageIds String[] @default([])
+  title             String
+  content           String
+  authorName        String?
+  publishedAt       DateTime @default(now())
+  communication     Communication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
+
+  @@index([communicationId])
+  @@map("communication_instances")
 }
 
 model ReactionRolePanel {

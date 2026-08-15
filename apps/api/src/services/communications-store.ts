@@ -3,29 +3,75 @@ import { prisma } from "../db/prisma.js";
 
 export type CommunicationStatus = "draft" | "published";
 
+// Una instancia es una publicación concreta en Discord (cada vez que se
+// publica una plantilla se crea una instancia con snapshot del contenido).
+export type CommunicationInstance = {
+  authorName?: string;
+  channelId: string;
+  communicationId: string;
+  content: string;
+  discordMessageIds: string[];
+  guildId: string;
+  id: string;
+  publishedAt: Date;
+  title: string;
+};
+
 export type Communication = {
   authorName?: string;
   channelId?: string;
   content: string;
   createdAt: Date;
-  discordMessageIds: string[];
   guildId: string;
   id: string;
-  publishedAt?: Date;
+  instances: CommunicationInstance[];
   status: CommunicationStatus;
   title: string;
   updatedAt: Date;
 };
+
+function toCommunicationInstance(record: {
+  authorName: string | null;
+  channelId: string;
+  communicationId: string;
+  content: string;
+  discordMessageIds: string[];
+  guildId: string;
+  id: string;
+  publishedAt: Date;
+  title: string;
+}): CommunicationInstance {
+  return {
+    authorName: record.authorName ?? undefined,
+    channelId: record.channelId,
+    communicationId: record.communicationId,
+    content: record.content,
+    discordMessageIds: record.discordMessageIds,
+    guildId: record.guildId,
+    id: record.id,
+    publishedAt: record.publishedAt,
+    title: record.title,
+  };
+}
 
 function toCommunication(record: {
   authorName: string | null;
   channelId: string | null;
   content: string;
   createdAt: Date;
-  discordMessageIds: string[];
   guildId: string;
   id: string;
-  publishedAt: Date | null;
+  instances: Array<{
+    authorName: string | null;
+    channelId: string;
+    communicationId: string;
+    content: string;
+    discordMessageIds: string[];
+    guildId: string;
+    id: string;
+    publishedAt: Date;
+    title: string;
+  }>;
   status: string;
   title: string;
   updatedAt: Date;
@@ -35,10 +81,9 @@ function toCommunication(record: {
     channelId: record.channelId ?? undefined,
     content: record.content,
     createdAt: record.createdAt,
-    discordMessageIds: record.discordMessageIds,
     guildId: record.guildId,
     id: record.id,
-    publishedAt: record.publishedAt ?? undefined,
+    instances: record.instances.map(toCommunicationInstance),
     status: (record.status === "published"
       ? "published"
       : "draft") as CommunicationStatus,
@@ -52,17 +97,8 @@ export async function listCommunications(
 ): Promise<Communication[]> {
   const records = await prisma.communication.findMany({
     where: { guildId },
+    include: { instances: { orderBy: { publishedAt: "desc" } } },
     orderBy: { createdAt: "desc" },
-  });
-  return records.map(toCommunication);
-}
-
-export async function listPublishedCommunications(
-  guildId: string,
-): Promise<Communication[]> {
-  const records = await prisma.communication.findMany({
-    where: { guildId, status: "published" },
-    orderBy: { publishedAt: "desc" },
   });
   return records.map(toCommunication);
 }
@@ -70,8 +106,22 @@ export async function listPublishedCommunications(
 export async function getCommunication(
   id: string,
 ): Promise<Communication | null> {
-  const record = await prisma.communication.findUnique({ where: { id } });
+  const record = await prisma.communication.findUnique({
+    where: { id },
+    include: { instances: { orderBy: { publishedAt: "desc" } } },
+  });
   return record ? toCommunication(record) : null;
+}
+
+// Mensajes publicados (instancias) visibles para los miembros del hub.
+export async function listPublishedInstances(
+  guildId: string,
+): Promise<CommunicationInstance[]> {
+  const records = await prisma.communicationInstance.findMany({
+    where: { guildId },
+    orderBy: { publishedAt: "desc" },
+  });
+  return records.map(toCommunicationInstance);
 }
 
 export async function createCommunication(input: {
@@ -89,6 +139,7 @@ export async function createCommunication(input: {
       guildId: input.guildId,
       title: input.title.trim(),
     },
+    include: { instances: { orderBy: { publishedAt: "desc" } } },
   });
   return toCommunication(record);
 }
@@ -97,7 +148,6 @@ export async function updateCommunication(input: {
   authorName?: string;
   channelId?: string;
   content?: string;
-  discordMessageIds?: string[];
   id: string;
   title?: string;
 }): Promise<Communication | null> {
@@ -111,11 +161,9 @@ export async function updateCommunication(input: {
         ? { channelId: input.channelId.trim() || null }
         : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
-      ...(input.discordMessageIds !== undefined
-        ? { discordMessageIds: input.discordMessageIds }
-        : {}),
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     },
+    include: { instances: { orderBy: { publishedAt: "desc" } } },
   });
   return toCommunication(record);
 }
@@ -129,18 +177,59 @@ export async function deleteCommunication(id: string): Promise<boolean> {
   }
 }
 
-export async function markPublished(
+// ── Instancias (mensajes publicados) ────────────────────────────────
+
+export async function createCommunicationInstance(input: {
+  authorName?: string;
+  channelId: string;
+  communicationId: string;
+  content: string;
+  discordMessageIds: string[];
+  guildId: string;
+  title: string;
+}): Promise<CommunicationInstance> {
+  const record = await prisma.communicationInstance.create({
+    data: {
+      authorName: input.authorName?.trim() || null,
+      channelId: input.channelId,
+      communicationId: input.communicationId,
+      content: input.content,
+      discordMessageIds: input.discordMessageIds,
+      guildId: input.guildId,
+      title: input.title.trim(),
+    },
+  });
+  return toCommunicationInstance(record);
+}
+
+export async function getCommunicationInstance(
   id: string,
-  discordMessageIds: string[],
+): Promise<CommunicationInstance | null> {
+  const record = await prisma.communicationInstance.findUnique({
+    where: { id },
+  });
+  return record ? toCommunicationInstance(record) : null;
+}
+
+export async function deleteCommunicationInstance(
+  id: string,
+): Promise<boolean> {
+  try {
+    await prisma.communicationInstance.delete({ where: { id } });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function markCommunicationPublished(
+  id: string,
 ): Promise<Communication | null> {
   try {
     const record = await prisma.communication.update({
       where: { id },
-      data: {
-        status: "published",
-        publishedAt: new Date(),
-        discordMessageIds,
-      },
+      data: { status: "published" },
+      include: { instances: { orderBy: { publishedAt: "desc" } } },
     });
     return toCommunication(record);
   } catch {
@@ -208,20 +297,6 @@ async function postMessage(
   return data.id ?? null;
 }
 
-async function patchMessage(
-  token: string,
-  channelId: string,
-  messageId: string,
-  content: string,
-): Promise<boolean> {
-  const response = await discordRequest(
-    token,
-    `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
-    { method: "PATCH", body: { content } },
-  );
-  return response.ok;
-}
-
 async function deleteMessage(
   token: string,
   channelId: string,
@@ -260,88 +335,4 @@ export async function deleteMessages(
   for (const id of messageIds) {
     await deleteMessage(token, channelId, id);
   }
-}
-
-// Edita en el lugar los mensajes existentes, publica los que faltan y
-// borra los sobrantes. Devuelve los IDs finales en orden.
-export async function syncMessages(
-  token: string,
-  channelId: string,
-  existingIds: string[],
-  chunks: string[],
-): Promise<string[]> {
-  const finalIds: string[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const oldId = existingIds[i];
-    if (oldId) {
-      const edited = await patchMessage(token, channelId, oldId, chunks[i]);
-      if (edited) {
-        finalIds.push(oldId);
-      } else {
-        // El mensaje pudo haber sido borrado: lo re-publicamos.
-        const newId = await postMessage(token, channelId, chunks[i]);
-        if (newId) {
-          finalIds.push(newId);
-        }
-      }
-    } else {
-      const newId = await postMessage(token, channelId, chunks[i]);
-      if (newId) {
-        finalIds.push(newId);
-      }
-    }
-  }
-  // Sobrantes (ahora hay menos mensajes que antes).
-  for (let i = chunks.length; i < existingIds.length; i++) {
-    await deleteMessage(token, channelId, existingIds[i]);
-  }
-  return finalIds;
-}
-
-// Tras editar un comunicado publicado, refleja el cambio en Discord.
-// Si se cambió de canal, borra los mensajes viejos y publica en el nuevo.
-export async function syncCommunicationAfterEdit(
-  existing: Communication,
-  updated: Communication,
-): Promise<Communication> {
-  const token = env.DISCORD_BOT_TOKEN;
-  const hadMessages = existing.discordMessageIds.length > 0;
-  if (!token || !hadMessages) {
-    return updated;
-  }
-
-  const oldChannel = existing.channelId;
-  const newChannel = updated.channelId;
-
-  if (!newChannel) {
-    // Se quitó el canal: borramos los mensajes publicados.
-    if (oldChannel) {
-      await deleteMessages(token, oldChannel, existing.discordMessageIds);
-    }
-    return (
-      (await updateCommunication({ id: updated.id, discordMessageIds: [] })) ??
-      updated
-    );
-  }
-
-  const chunks = splitForDiscord(updated.content);
-  let messageIds: string[];
-  if (newChannel !== oldChannel) {
-    if (oldChannel) {
-      await deleteMessages(token, oldChannel, existing.discordMessageIds);
-    }
-    messageIds = await postMessages(token, newChannel, chunks);
-  } else {
-    messageIds = await syncMessages(
-      token,
-      newChannel,
-      existing.discordMessageIds,
-      chunks,
-    );
-  }
-
-  return (
-    (await updateCommunication({ id: updated.id, discordMessageIds: messageIds })) ??
-    updated
-  );
 }

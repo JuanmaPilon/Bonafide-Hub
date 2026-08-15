@@ -4,6 +4,7 @@ import {
   createCommunication,
   createReactionRolePanel,
   deleteCommunication,
+  deleteCommunicationInstance,
   deleteReactionRoleJob,
   deleteReactionRolePanel,
   exportXpData,
@@ -37,6 +38,7 @@ import {
   type AuditLogEntry,
   type Communication,
   type CommunicationInput,
+  type CommunicationInstance,
   type GuildBooster,
   type GuildChannel,
   type GuildConfig,
@@ -508,7 +510,7 @@ function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
-  const [published, setPublished] = useState<Communication[]>([]);
+  const [published, setPublished] = useState<CommunicationInstance[]>([]);
   const [commEditor, setCommEditor] = useState<
     (CommunicationInput & { id: string | null }) | null
   >(null);
@@ -640,6 +642,18 @@ function App() {
     };
   }, [selectedGuildId]);
 
+  async function refreshCommunications(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    const [list, publishedList] = await Promise.all([
+      listCommunications(selectedGuildId),
+      listPublishedCommunications(selectedGuildId),
+    ]);
+    setCommunications(list);
+    setPublished(publishedList);
+  }
+
   async function handleSaveCommunication(): Promise<void> {
     if (!selectedGuildId || !commEditor) {
       return;
@@ -650,29 +664,18 @@ function App() {
     }
     try {
       if (commEditor.id) {
-        const updated = await updateCommunication(
-          selectedGuildId,
-          commEditor.id,
-          {
-            title: commEditor.title,
-            content: commEditor.content,
-            channelId: commEditor.channelId,
-          },
-        );
-        setCommunications((current) =>
-          current.map((item) => (item.id === updated.id ? updated : item)),
-        );
-        if (updated.status === "published") {
-          const list = await listPublishedCommunications(selectedGuildId);
-          setPublished(list);
-        }
-        pushToast("Comunicado actualizado.", "success");
+        await updateCommunication(selectedGuildId, commEditor.id, {
+          title: commEditor.title,
+          content: commEditor.content,
+          channelId: commEditor.channelId,
+        });
+        pushToast("Plantilla actualizada.", "success");
       } else {
-        const created = await createCommunication(selectedGuildId, commEditor);
-        setCommunications((current) => [created, ...current]);
-        pushToast("Comunicado guardado (borrador).", "success");
+        await createCommunication(selectedGuildId, commEditor);
+        pushToast("Plantilla creada.", "success");
       }
       setCommEditor(null);
+      await refreshCommunications();
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al guardar.",
@@ -686,13 +689,9 @@ function App() {
       return;
     }
     try {
-      const updated = await publishCommunication(selectedGuildId, id);
-      setCommunications((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
-      const list = await listPublishedCommunications(selectedGuildId);
-      setPublished(list);
-      pushToast("Comunicado publicado en Discord.", "success");
+      await publishCommunication(selectedGuildId, id);
+      pushToast("Publicado en Discord.", "success");
+      await refreshCommunications();
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al publicar.",
@@ -701,15 +700,65 @@ function App() {
     }
   }
 
+  function requestDeleteCommunication(comm: Communication): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Eliminar plantilla",
+      message: `¿Eliminar la plantilla "${comm.title}" y todos sus mensajes publicados? Esta acción no se puede deshacer.`,
+      onConfirm: () => {
+        void handleDeleteCommunication(comm.id);
+      },
+    });
+  }
+
   async function handleDeleteCommunication(id: string): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     try {
       await deleteCommunication(selectedGuildId, id);
-      setCommunications((current) => current.filter((item) => item.id !== id));
-      setPublished((current) => current.filter((item) => item.id !== id));
-      pushToast("Comunicado eliminado.", "success");
+      pushToast("Plantilla eliminada.", "success");
+      await refreshCommunications();
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al eliminar.",
+        "error",
+      );
+    }
+  }
+
+  function requestDeleteInstance(instance: CommunicationInstance): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Eliminar mensaje",
+      message: `¿Eliminar el mensaje "${instance.title}" de Discord? La plantilla se conserva.`,
+      onConfirm: () => {
+        void handleDeleteInstance(instance.communicationId, instance.id);
+      },
+    });
+  }
+
+  async function handleDeleteInstance(
+    communicationId: string,
+    instanceId: string,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteCommunicationInstance(
+        selectedGuildId,
+        communicationId,
+        instanceId,
+      );
+      pushToast("Mensaje eliminado de Discord.", "success");
+      await refreshCommunications();
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al eliminar.",
@@ -1858,63 +1907,97 @@ function App() {
                         }
                         type="button"
                       >
-                        Nuevo comunicado
+                        Nueva plantilla
                       </button>
                     </div>
                     <div className="admin-card-body">
                       {communications.length === 0 ? (
                         <div className="empty-state">
-                          No hay comunicados todavía. Creá el primero.
+                          No hay plantillas todavía. Creá la primera.
                         </div>
                       ) : (
                         communications.map((comm) => (
-                          <div className="comunicado-admin-row" key={comm.id}>
-                            <div className="comunicado-admin-info">
-                              <strong>{comm.title}</strong>
-                              <span
-                                className={`comunicado-status comunicado-status-${comm.status}`}
-                              >
-                                {comm.status === "published"
-                                  ? "Publicado"
-                                  : "Borrador"}
-                              </span>
+                          <div className="comunicado-admin-block" key={comm.id}>
+                            <div className="comunicado-admin-row">
+                              <div className="comunicado-admin-info">
+                                <strong>{comm.title}</strong>
+                                <span
+                                  className={`comunicado-status comunicado-status-${comm.instances.length > 0 ? "published" : "draft"}`}
+                                >
+                                  {comm.instances.length > 0
+                                    ? `Publicado (${comm.instances.length})`
+                                    : "Borrador"}
+                                </span>
+                              </div>
+                              <div className="comunicado-admin-actions">
+                                <button
+                                  className="ghost-button"
+                                  onClick={() =>
+                                    setCommEditor({
+                                      id: comm.id,
+                                      title: comm.title,
+                                      content: comm.content,
+                                      channelId: comm.channelId ?? "",
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  className="primary-button"
+                                  onClick={() =>
+                                    void handlePublishCommunication(comm.id)
+                                  }
+                                  type="button"
+                                >
+                                  {comm.instances.length > 0
+                                    ? "Republicar"
+                                    : "Publicar"}
+                                </button>
+                                <button
+                                  className="danger-button"
+                                  onClick={() =>
+                                    requestDeleteCommunication(comm)
+                                  }
+                                  type="button"
+                                >
+                                  Eliminar plantilla
+                                </button>
+                              </div>
                             </div>
-                            <div className="comunicado-admin-actions">
-                              <button
-                                className="ghost-button"
-                                onClick={() =>
-                                  setCommEditor({
-                                    id: comm.id,
-                                    title: comm.title,
-                                    content: comm.content,
-                                    channelId: comm.channelId ?? "",
-                                  })
-                                }
-                                type="button"
-                              >
-                                Editar
-                              </button>
-                              <button
-                                className="primary-button"
-                                onClick={() =>
-                                  void handlePublishCommunication(comm.id)
-                                }
-                                type="button"
-                              >
-                                {comm.status === "published"
-                                  ? "Republicar"
-                                  : "Publicar"}
-                              </button>
-                              <button
-                                className="danger-button"
-                                onClick={() =>
-                                  void handleDeleteCommunication(comm.id)
-                                }
-                                type="button"
-                              >
-                                Eliminar
-                              </button>
-                            </div>
+                            {comm.instances.length > 0 ? (
+                              <div className="comunicado-instances">
+                                {comm.instances.map((instance) => (
+                                  <div
+                                    className="comunicado-instance-row"
+                                    key={instance.id}
+                                  >
+                                    <span>
+                                      Mensaje ·{" "}
+                                      {new Date(
+                                        instance.publishedAt,
+                                      ).toLocaleDateString()}{" "}
+                                      {new Date(
+                                        instance.publishedAt,
+                                      ).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() =>
+                                        requestDeleteInstance(instance)
+                                      }
+                                      type="button"
+                                    >
+                                      Eliminar mensaje
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         ))
                       )}
@@ -2947,7 +3030,7 @@ function App() {
             role="dialog"
             aria-modal="true"
           >
-            <h4>{commEditor.id ? "Editar comunicado" : "Nuevo comunicado"}</h4>
+            <h4>{commEditor.id ? "Editar plantilla" : "Nueva plantilla"}</h4>
             <div className="comm-form">
               <label>
                 <span>Título</span>
@@ -2976,9 +3059,6 @@ function App() {
                         ? { ...current, content: event.target.value }
                         : current,
                     )
-                  }
-                  placeholder={
-                    "Escribí el comunicado. Se respetan los saltos de línea.\nLos mensajes largos se dividen automáticamente al publicar en Discord."
                   }
                 />
               </label>
@@ -3017,7 +3097,7 @@ function App() {
                 onClick={() => void handleSaveCommunication()}
                 type="button"
               >
-                {commEditor.id ? "Guardar cambios" : "Guardar borrador"}
+                Guardar
               </button>
             </div>
           </div>
