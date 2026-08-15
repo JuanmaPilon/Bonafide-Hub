@@ -623,6 +623,49 @@ async function playNext(guildId: string): Promise<void> {
   }
 }
 
+// Busca varios candidatos en SoundCloud. Si uno es DRM protected, la cola
+// tiene los siguientes y playNext los probará en orden.
+async function searchSoundCloud(query: string): Promise<Track[]> {
+  const youtubedl = await getYoutubeDl();
+  const flags = {
+    dumpSingleJson: true,
+    flatPlaylist: true,
+    quiet: true,
+    noWarnings: true,
+    noPlaylist: true,
+    noCheckCertificates: true,
+  } as Parameters<typeof youtubedl.exec>[1];
+
+  const raw = await youtubedl(`scsearch5:${query}`, flags);
+  const entries =
+    (raw as {
+      entries?: Array<{ title?: string; url?: string; webpage_url?: string }>;
+    }).entries ?? [];
+
+  const seen = new Set<string>();
+  const tracks: Track[] = [];
+  for (const entry of entries) {
+    if (tracks.length >= 5) {
+      break;
+    }
+    const candidate = entry.webpage_url || entry.url;
+    if (!candidate || !/^https?:\/\//.test(candidate)) {
+      continue;
+    }
+    if (seen.has(candidate)) {
+      continue;
+    }
+    seen.add(candidate);
+    tracks.push({
+      duration: undefined,
+      requestedBy: "",
+      title: entry.title ?? query,
+      url: candidate,
+    });
+  }
+  return tracks;
+}
+
 // Si un tema de YouTube no se puede transmitir (p. ej. IP de datacenter
 // bloqueada), reintentamos el mismo texto en SoundCloud automáticamente.
 async function handleStreamFailure(
@@ -638,15 +681,18 @@ async function handleStreamFailure(
     next.url,
   );
 
+  // Solo buscamos alternativas si el tema falló por YouTube (datacenter).
+  // Si falla un tema de SoundCloud (p. ej. DRM), la cola ya tiene más
+  // candidatos del fallback anterior y playNext los probará en orden.
   if (isYouTubeUrl && next.query) {
     try {
-      const fallback = await resolveTrack(next.query, "soundcloud");
-      if (fallback) {
-        state.queue.unshift(fallback);
+      const fallbacks = await searchSoundCloud(next.query);
+      if (fallbacks.length > 0) {
+        state.queue.unshift(...fallbacks);
         console.log("[music] YouTube falló — reintentando en SoundCloud", {
           guildId,
           query: next.query,
-          fallbackTitle: fallback.title,
+          candidates: fallbacks.map((track) => track.title),
         });
       }
     } catch (error) {
