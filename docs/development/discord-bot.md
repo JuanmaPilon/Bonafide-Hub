@@ -46,9 +46,9 @@ Guía técnica y funcional del bot de Discord.
 6. `/volume nivel:<0-200>`
 7. `/stop` — detiene y limpia cola
 8. `/leave` — sale del canal
-> Al reproducir se manda un **player embed con botones** (estilo Rythm) en el canal:
-> ⏯️ pausar/reanudar, ⏭️ saltar, ⏹️ detener, 👋 salir, 🔉/🔊 volumen, 📜 cola. Se actualiza solo.
-> Streaming con `yt-dlp` (vía `youtube-dl-exec`) + `@discordjs/voice`. El bot se desconecta solo cuando el canal queda sin oyentes (15s de gracia) o tras 60s de inactividad.
+   > Al reproducir se manda un **player embed con botones** (estilo Rythm) en el canal:
+   > ⏯️ pausar/reanudar, ⏭️ saltar, ⏹️ detener, 👋 salir, 🔉/🔊 volumen, 📜 cola. Se actualiza solo.
+   > Streaming con `yt-dlp` (vía `youtube-dl-exec`) + `@discordjs/voice`. El bot se desconecta solo cuando el canal queda sin oyentes (15s de gracia) o tras 60s de inactividad.
 
 ## 3. Eventos y automatizaciones
 
