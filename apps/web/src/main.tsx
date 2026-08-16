@@ -520,7 +520,6 @@ function App() {
   } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [auditExpanded, setAuditExpanded] = useState(false);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
@@ -2128,44 +2127,30 @@ function App() {
                       <div>
                         <h3>Plantillas</h3>
                       </div>
-                      <button
-                        className="primary-button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          setCommEditor({
-                            id: null,
-                            title: "",
-                            content: "",
-                            channelId: "",
-                          });
-                        }}
-                        type="button"
-                      >
-                        Nueva plantilla
-                      </button>
                       <span className="admin-acc-chevron" aria-hidden="true">
                         ▸
                       </span>
                     </summary>
                     <div className="admin-card-body">
+                      <div className="plantillas-actions">
+                        <button
+                          className="primary-button"
+                          onClick={() =>
+                            setCommEditor({
+                              id: null,
+                              title: "",
+                              content: "",
+                              channelId: "",
+                            })
+                          }
+                          type="button"
+                        >
+                          Nueva plantilla
+                        </button>
+                      </div>
                       {communications.length === 0 ? (
                         <div className="empty-state comunicados-empty">
                           <p>No existen plantillas.</p>
-                          <button
-                            className="primary-button"
-                            onClick={() =>
-                              setCommEditor({
-                                id: null,
-                                title: "",
-                                content: "",
-                                channelId: "",
-                              })
-                            }
-                            type="button"
-                          >
-                            Crear plantilla
-                          </button>
                         </div>
                       ) : (
                         communications.map((comm) => (
@@ -3018,8 +3003,8 @@ function App() {
                     </details>
                   ) : null}
 
-                  <div className="admin-card">
-                    <div className="admin-card-header">
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
                       <div>
                         <h3>Registro de cambios (auditoría)</h3>
                         <p>
@@ -3027,7 +3012,12 @@ function App() {
                           visible únicamente para el owner.
                         </p>
                       </div>
-                      <div className="audit-header-actions">
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
+                    <div className="admin-card-body">
+                      <div className="audit-body-actions">
                         <span className="audit-count">
                           {auditLogs.length} registro
                           {auditLogs.length === 1 ? "" : "s"}
@@ -3041,20 +3031,7 @@ function App() {
                         >
                           <RefreshIcon />
                         </button>
-                        <button
-                          className="ghost-button"
-                          onClick={() =>
-                            setAuditExpanded((current) => !current)
-                          }
-                          type="button"
-                          aria-expanded={auditExpanded}
-                        >
-                          {auditExpanded ? "Ocultar" : "Ver registro"}
-                        </button>
                       </div>
-                    </div>
-                    {auditExpanded ? (
-                      <div className="admin-card-body">
                         {selectedGuild?.owner ? (
                           auditLogs.length === 0 ? (
                             <div className="empty-state">
@@ -3091,8 +3068,7 @@ function App() {
                           </div>
                         )}
                       </div>
-                    ) : null}
-                  </div>
+                    </details>
                 </>
               ) : activeTab === "admin" ? (
                 <div className="empty-state">
