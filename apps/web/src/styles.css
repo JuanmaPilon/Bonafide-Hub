@@ -571,6 +571,29 @@ a:hover {
   background: rgba(8, 12, 22, 0.5);
 }
 
+/* Acordeón de cards del admin (estilo comunicados) */
+.admin-card-acc > .admin-acc-header {
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  padding: 18px 20px;
+}
+
+.admin-card-acc > .admin-acc-header::-webkit-details-marker {
+  display: none;
+}
+
+.admin-acc-chevron {
+  transition: transform 160ms ease;
+  color: var(--muted);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.admin-card-acc[open] .admin-acc-chevron {
+  transform: rotate(90deg);
+}
+
 .rr-panel-actions {
   display: flex;
   gap: 10px;

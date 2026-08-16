@@ -2004,8 +2004,8 @@ function App() {
 
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
                 <>
-                  <div className="admin-card">
-                    <div className="admin-card-header">
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
                       <div>
                         <h3>Configuración general del servidor</h3>
                         <p>
@@ -2013,7 +2013,10 @@ function App() {
                           servidor.
                         </p>
                       </div>
-                    </div>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
                     <div className="admin-card-body">
                       <div className="form-grid">
                         <label>
@@ -2118,28 +2121,33 @@ function App() {
                           : "Guardar cambios"}
                       </button>
                     </div>
-                  </div>
+                  </details>
 
-                  <div className="admin-card">
-                    <div className="admin-card-header">
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
                       <div>
                         <h3>Plantillas</h3>
                       </div>
                       <button
                         className="primary-button"
-                        onClick={() =>
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
                           setCommEditor({
                             id: null,
                             title: "",
                             content: "",
                             channelId: "",
-                          })
-                        }
+                          });
+                        }}
                         type="button"
                       >
                         Nueva plantilla
                       </button>
-                    </div>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
                     <div className="admin-card-body">
                       {communications.length === 0 ? (
                         <div className="empty-state comunicados-empty">
@@ -2246,10 +2254,10 @@ function App() {
                         ))
                       )}
                     </div>
-                  </div>
+                  </details>
 
-                  <div className="admin-card">
-                    <div className="admin-card-header">
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
                       <div>
                         <h3>Reaction Roles</h3>
                         <p>
@@ -2257,7 +2265,10 @@ function App() {
                           Discord.
                         </p>
                       </div>
-                    </div>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
                     <div className="admin-card-body">
                       <div className="form-grid">
                         <label>
@@ -2608,11 +2619,11 @@ function App() {
                             : "Guardar plantilla"}
                       </button>
                     </div>
-                  </div>
+                  </details>
 
                   {xpConfig ? (
-                    <div className="admin-card">
-                      <div className="admin-card-header">
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>Sistema de XP</h3>
                           <p>
@@ -2620,7 +2631,10 @@ function App() {
                             multiplicadores.
                           </p>
                         </div>
-                      </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
                       <div className="admin-card-body">
                         <div className="form-grid">
                           <label>
@@ -3001,7 +3015,7 @@ function App() {
                             : "Guardar configuración de XP"}
                         </button>
                       </div>
-                    </div>
+                    </details>
                   ) : null}
 
                   <div className="admin-card">
