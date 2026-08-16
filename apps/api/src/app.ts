@@ -2205,38 +2205,39 @@ export function buildApp() {
         return reply.code(404).send({ ok: false, error: "Not found" });
       }
 
-      if (!existing.channelId) {
-        return reply.code(400).send({
-          ok: false,
-          error: "El comunicado no tiene canal de publicación",
-        });
-      }
-
       const token = env.DISCORD_BOT_TOKEN;
-      if (!token) {
-        return reply.code(502).send({
-          ok: false,
-          error: "DISCORD_BOT_TOKEN no está configurado",
-        });
-      }
+      const channelId = existing.channelId?.trim();
 
-      const chunks = splitForDiscord(
-        await resolveMentions(existing.content, existing.guildId),
-      );
-      const messageIds = await postMessages(token, existing.channelId, chunks);
+      // Sin canal → publicación solo web: el comunicado aparece únicamente
+      // en el hub, sin mensaje en Discord.
+      let messageIds: string[] = [];
+      if (channelId) {
+        if (!token) {
+          return reply.code(502).send({
+            ok: false,
+            error: "DISCORD_BOT_TOKEN no está configurado",
+          });
+        }
 
-      if (messageIds.length === 0) {
-        return reply.code(502).send({
-          ok: false,
-          error: "No se pudo publicar el comunicado en Discord.",
-        });
+        const chunks = splitForDiscord(
+          await resolveMentions(existing.content, existing.guildId),
+        );
+        messageIds = await postMessages(token, channelId, chunks);
+
+        if (messageIds.length === 0) {
+          return reply.code(502).send({
+            ok: false,
+            error: "No se pudo publicar el comunicado en Discord.",
+          });
+        }
       }
 
       // Cada publicación crea una instancia nueva (un mensaje nuevo en
-      // Discord). Republicar NO edita lo anterior: genera otra instancia.
+      // Discord, o una entrada solo web si no hay canal). Republicar NO
+      // edita lo anterior: genera otra instancia.
       const instance = await createCommunicationInstance({
         authorName: existing.authorName,
-        channelId: existing.channelId,
+        channelId: channelId ?? "",
         communicationId: existing.id,
         content: existing.content,
         discordMessageIds: messageIds,

@@ -728,7 +728,13 @@ function App() {
     }
     try {
       await publishCommunication(selectedGuildId, id);
-      pushToast("Publicado en Discord.", "success");
+      const target = communications.find((comm) => comm.id === id);
+      pushToast(
+        target?.channelId
+          ? "Publicado en Discord."
+          : "Publicado solo en la web.",
+        "success",
+      );
       await refreshCommunications();
     } catch (error) {
       pushToast(
@@ -2291,7 +2297,10 @@ function App() {
                                     key={instance.id}
                                   >
                                     <span>
-                                      Mensaje ·{" "}
+                                      {instance.discordMessageIds.length > 0
+                                        ? "Mensaje"
+                                        : "Web"}{" "}
+                                      ·{" "}
                                       {new Date(
                                         instance.publishedAt,
                                       ).toLocaleDateString()}{" "}
