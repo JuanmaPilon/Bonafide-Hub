@@ -198,7 +198,7 @@ const guildMembersCache = new Map<
   string,
   { at: number; members: DiscordGuildMember[] }
 >();
-const GUILD_MEMBERS_TTL_MS = 5 * 60 * 1000;
+const GUILD_MEMBERS_TTL_MS = 4 * 60 * 1000;
 
 async function fetchAllGuildMembers(
   guildId: string,

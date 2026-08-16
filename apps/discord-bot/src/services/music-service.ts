@@ -624,6 +624,19 @@ async function playNext(guildId: string): Promise<void> {
   }
 }
 
+// Normaliza un título para detectar duplicados del mismo tema: una misma
+// canción aparece varias veces en SoundCloud ("Song", "Song (Official)",
+// "Song - Topic", etc.) y no queremos encolar copias del mismo tema.
+function normalizeTrackTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\[.*?\]/g, " ")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[-–—].*$/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 // Busca varios candidatos en SoundCloud. Si uno es DRM protected, la cola
 // tiene los siguientes y playNext los probará en orden.
 async function searchSoundCloud(query: string): Promise<Track[]> {
@@ -645,24 +658,31 @@ async function searchSoundCloud(query: string): Promise<Track[]> {
       }
     ).entries ?? [];
 
-  const seen = new Set<string>();
+  const seenUrls = new Set<string>();
+  const seenTitles = new Set<string>();
   const tracks: Track[] = [];
   for (const entry of entries) {
-    if (tracks.length >= 5) {
+    if (tracks.length >= 3) {
       break;
     }
     const candidate = entry.webpage_url || entry.url;
     if (!candidate || !/^https?:\/\//.test(candidate)) {
       continue;
     }
-    if (seen.has(candidate)) {
+    if (seenUrls.has(candidate)) {
       continue;
     }
-    seen.add(candidate);
+    seenUrls.add(candidate);
+    const title = entry.title ?? query;
+    const titleKey = normalizeTrackTitle(title);
+    if (seenTitles.has(titleKey)) {
+      continue;
+    }
+    seenTitles.add(titleKey);
     tracks.push({
       duration: undefined,
       requestedBy: "",
-      title: entry.title ?? query,
+      title,
       url: candidate,
     });
   }
@@ -992,12 +1012,32 @@ export async function handleMusicButton(
       break;
     }
     case "stop": {
+      if (!isInBotVoiceChannel(member, state)) {
+        await interaction
+          .followUp({
+            content:
+              "Para detener la música tenés que estar en el mismo canal de voz que el bot.",
+            ephemeral: true,
+          })
+          .catch(() => {});
+        return;
+      }
       state.queue = [];
       state.current = null;
       state.player.stop();
       break;
     }
     case "leave": {
+      if (!isInBotVoiceChannel(member, state)) {
+        await interaction
+          .followUp({
+            content:
+              "Para desconectar el bot tenés que estar en el mismo canal de voz que él.",
+            ephemeral: true,
+          })
+          .catch(() => {});
+        return;
+      }
       destroyState(guildId);
       return;
     }
@@ -1146,6 +1186,20 @@ async function canUseMusic(
   }
 
   return roleIds.some((roleId) => member.roles.cache.has(roleId));
+}
+
+// Para detener/desconectar el bot hay que estar en el MISMO canal de voz
+// que él: evita que alguien externo (aunque tenga rol DJ) corte la música
+// que se está reproduciendo.
+function isInBotVoiceChannel(
+  member: GuildMember | null,
+  state: GuildMusicState,
+): boolean {
+  const botChannelId = state.connection?.joinConfig.channelId;
+  if (!botChannelId) {
+    return true; // el bot no está en ningún canal: no hay nada que proteger
+  }
+  return member?.voice.channelId === botChannelId;
 }
 
 export async function handleMusicCommand(
@@ -1329,12 +1383,28 @@ export async function handleMusicCommand(
       }
 
       case "stop": {
+        const state = getState(guildId);
+        if (!isInBotVoiceChannel(member, state)) {
+          await replyError(
+            interaction,
+            "Para detener el bot tenés que estar en el mismo canal de voz que él.",
+          );
+          return;
+        }
         destroyState(guildId);
         await interaction.reply("⏹️ Música detenida y cola limpiada.");
         return;
       }
 
       case "leave": {
+        const state = getState(guildId);
+        if (!isInBotVoiceChannel(member, state)) {
+          await replyError(
+            interaction,
+            "Para desconectar el bot tenés que estar en el mismo canal de voz que él.",
+          );
+          return;
+        }
         destroyState(guildId);
         await interaction.reply("👋 Me fui del canal de voz.");
         return;
