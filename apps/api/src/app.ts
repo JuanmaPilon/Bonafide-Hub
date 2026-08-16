@@ -1767,7 +1767,9 @@ export function buildApp() {
             .filter((pair) => pair.emoji && pair.roleId)
         : [];
 
-      // Editar solo guarda la plantilla; no toca Discord hasta publicar.
+      // Editar guarda la plantilla. Si ya está publicada, encolamos además
+      // una actualización para que el bot edite el mensaje existente en
+      // Discord sin obligar a republicar manualmente.
       const panel = await updateReactionRoleTemplate({
         channelId: channelId || undefined,
         description: body.description?.trim() || undefined,
@@ -1785,8 +1787,37 @@ export function buildApp() {
         return reply.code(404).send({ ok: false, error: "Not found" });
       }
 
+      let jobId: string | null = null;
+      if (panel.status === "published") {
+        if (!panel.channelId) {
+          return reply.code(400).send({
+            ok: false,
+            error:
+              "Elegí un canal de texto para poder actualizar el mensaje en Discord",
+          });
+        }
+        if (panel.rules.length === 0) {
+          return reply.code(400).send({
+            ok: false,
+            error:
+              "Agregá al menos un par emoji + rol para actualizar el mensaje en Discord",
+          });
+        }
+        const job = await createReactionRoleJob({
+          action: "update",
+          channelId: panel.channelId,
+          description: panel.description,
+          guildId: params.guildId,
+          messageId: panel.messageId,
+          mode: panel.mode,
+          rules: panel.rules,
+          title: panel.title,
+        });
+        jobId = job.jobId;
+      }
+
       await logAdminAction(session, params.guildId, "reaction-panel:update", {
-        details: `Plantilla actualizada${body.title?.trim() ? `: "${body.title.trim()}"` : ""}.`,
+        details: `Plantilla actualizada${body.title?.trim() ? `: "${body.title.trim()}"` : ""}${jobId ? " (mensaje en Discord en actualización)" : ""}.`,
         targetId: params.messageId,
         targetType: "reaction-panel",
       });
@@ -1795,6 +1826,7 @@ export function buildApp() {
         ok: true,
         guildId: params.guildId,
         panel,
+        jobId,
       };
     },
   );

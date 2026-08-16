@@ -491,6 +491,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
@@ -615,6 +616,9 @@ a:hover {
   display: grid;
   gap: 10px;
   margin-top: 14px;
+  max-height: min(45vh, 420px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .rr-pair {

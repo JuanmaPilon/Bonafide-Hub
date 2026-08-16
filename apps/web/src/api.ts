@@ -549,8 +549,11 @@ export async function updateReactionRolePanel(
     pairs: ReactionRolePairInput[];
     title?: string;
   },
-): Promise<ReactionRolePanel> {
-  const data = await requestJson<{ panel: ReactionRolePanel }>(
+): Promise<{ panel: ReactionRolePanel; jobId: string | null }> {
+  const data = await requestJson<{
+    panel: ReactionRolePanel;
+    jobId: string | null;
+  }>(
     `/guilds/${guildId}/reaction-roles/panels/${encodeURIComponent(messageId)}`,
     {
       method: "PATCH",
@@ -558,7 +561,7 @@ export async function updateReactionRolePanel(
     },
   );
 
-  return data.panel;
+  return data;
 }
 
 export async function publishReactionRolePanel(

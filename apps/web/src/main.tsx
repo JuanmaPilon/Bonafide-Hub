@@ -74,6 +74,7 @@ type RrEditorState = {
   messageId: string;
   mode: "multiple" | "unique" | "additive";
   pairs: ReactionRolePairInput[];
+  status: "draft" | "published";
   title: string;
 };
 
@@ -1206,6 +1207,7 @@ function App() {
         emoji: reactionRuleEmojiToEditable(rule.emoji),
         roleId: rule.roleId,
       })),
+      status: panel.status,
       title: panel.title ?? "",
     });
   }
@@ -1309,16 +1311,27 @@ function App() {
 
     setSavingAction("panel");
     try {
-      await updateReactionRolePanel(selectedGuildId, rrEditor.messageId, {
-        channelId: rrEditor.channelId || undefined,
-        description: rrEditor.description.trim() || undefined,
-        mode: rrEditor.mode,
-        pairs: validPairs,
-        title: rrEditor.title.trim() || undefined,
-      });
-      pushToast("Plantilla guardada.", "success");
+      const result = await updateReactionRolePanel(
+        selectedGuildId,
+        rrEditor.messageId,
+        {
+          channelId: rrEditor.channelId || undefined,
+          description: rrEditor.description.trim() || undefined,
+          mode: rrEditor.mode,
+          pairs: validPairs,
+          title: rrEditor.title.trim() || undefined,
+        },
+      );
+      if (result.jobId) {
+        pushToast(
+          "Plantilla guardada. El mensaje en Discord se va a actualizar en unos segundos.",
+          "success",
+        );
+        void refreshRrJobs();
+      } else {
+        pushToast("Plantilla guardada.", "success");
+      }
       setRrEditor(null);
-      void refreshRrJobs();
       void refreshReactionPanels();
     } catch (error) {
       const message =
@@ -2192,7 +2205,7 @@ function App() {
                   <details className="admin-card admin-card-acc">
                     <summary className="admin-card-header admin-acc-header">
                       <div>
-                        <h3>Plantillas</h3>
+                        <h3>Comunicados</h3>
                       </div>
                       <span className="admin-acc-chevron" aria-hidden="true">
                         ▸
@@ -3087,43 +3100,41 @@ function App() {
                           <RefreshIcon />
                         </button>
                       </div>
-                        {selectedGuild?.owner ? (
-                          auditLogs.length === 0 ? (
-                            <div className="empty-state">
-                              Aún no hay cambios registrados. Las acciones del
-                              panel Admin quedan anotadas acá.
-                            </div>
-                          ) : (
-                            <div className="audit-list">
-                              {auditLogs.map((entry) => (
-                                <div className="audit-row" key={entry.id}>
-                                  <span className="audit-time">
-                                    {new Date(entry.createdAt).toLocaleString()}
-                                  </span>
-                                  <span className="audit-actor">
-                                    {entry.actorName ??
-                                      entry.actorUserId ??
-                                      "—"}
-                                  </span>
-                                  <span className="audit-action">
-                                    {entry.action}
-                                  </span>
-                                  {entry.details ? (
-                                    <span className="audit-detail">
-                                      {entry.details}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ))}
-                            </div>
-                          )
-                        ) : (
+                      {selectedGuild?.owner ? (
+                        auditLogs.length === 0 ? (
                           <div className="empty-state">
-                            Solo el owner de la guild puede ver este registro.
+                            Aún no hay cambios registrados. Las acciones del
+                            panel Admin quedan anotadas acá.
                           </div>
-                        )}
-                      </div>
-                    </details>
+                        ) : (
+                          <div className="audit-list">
+                            {auditLogs.map((entry) => (
+                              <div className="audit-row" key={entry.id}>
+                                <span className="audit-time">
+                                  {new Date(entry.createdAt).toLocaleString()}
+                                </span>
+                                <span className="audit-actor">
+                                  {entry.actorName ?? entry.actorUserId ?? "—"}
+                                </span>
+                                <span className="audit-action">
+                                  {entry.action}
+                                </span>
+                                {entry.details ? (
+                                  <span className="audit-detail">
+                                    {entry.details}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ) : (
+                        <div className="empty-state">
+                          Solo el owner de la guild puede ver este registro.
+                        </div>
+                      )}
+                    </div>
+                  </details>
                 </>
               ) : activeTab === "admin" ? (
                 <div className="empty-state">
@@ -3397,10 +3408,7 @@ function App() {
                   onChange={(event) =>
                     updateRrEditorField(
                       "mode",
-                      event.target.value as
-                        | "multiple"
-                        | "unique"
-                        | "additive",
+                      event.target.value as "multiple" | "unique" | "additive",
                     )
                   }
                 >
@@ -3463,6 +3471,13 @@ function App() {
               </button>
             </div>
 
+            {rrEditor.status === "published" ? (
+              <p className="meta-text">
+                Plantilla ya publicada: al guardar, el mensaje en Discord se
+                actualiza automáticamente.
+              </p>
+            ) : null}
+
             <div className="form-actions">
               <button
                 className="ghost-button"
@@ -3478,7 +3493,11 @@ function App() {
                 disabled={savingAction !== null}
                 type="button"
               >
-                {savingAction === "panel" ? "Guardando…" : "Guardar cambios"}
+                {savingAction === "panel"
+                  ? "Guardando…"
+                  : rrEditor.status === "published"
+                    ? "Guardar y actualizar"
+                    : "Guardar cambios"}
               </button>
             </div>
           </div>
