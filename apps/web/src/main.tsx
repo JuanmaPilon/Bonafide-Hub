@@ -68,6 +68,15 @@ function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(typeof html === "string" ? html : "");
 }
 
+type RrEditorState = {
+  channelId: string;
+  description: string;
+  messageId: string;
+  mode: "multiple" | "unique" | "additive";
+  pairs: ReactionRolePairInput[];
+  title: string;
+};
+
 type HubTab =
   | "home"
   | "dashboard"
@@ -506,9 +515,7 @@ function App() {
     { emoji: "", roleId: "" },
   ]);
   const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
-  const [editingPanel, setEditingPanel] = useState<ReactionRolePanel | null>(
-    null,
-  );
+  const [rrEditor, setRrEditor] = useState<RrEditorState | null>(null);
   const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
   const [rrJobs, setRrJobs] = useState<ReactionRoleJob[]>([]);
   const [savingAction, setSavingAction] = useState<
@@ -1186,32 +1193,24 @@ function App() {
     }
   }
 
-  function startEditReactionPanel(panel: ReactionRolePanel): void {
-    setEditingPanel(panel);
-    setRrChannelId(panel.channelId ?? "");
-    setRrTitle(panel.title ?? "");
-    setRrDescription(panel.description ?? "");
-    setRrMode(
-      panel.mode === "unique" || panel.mode === "additive"
+  // Abre el modal de edición con los datos de la plantilla.
+  function startEditReactionTemplate(panel: ReactionRolePanel): void {
+    setRrEditor({
+      channelId: panel.channelId ?? "",
+      description: panel.description ?? "",
+      messageId: panel.messageId,
+      mode: (panel.mode === "unique" || panel.mode === "additive"
         ? panel.mode
-        : "multiple",
-    );
-    setRrPairs(
-      panel.rules.map((rule) => ({
+        : "multiple") as "multiple" | "unique" | "additive",
+      pairs: panel.rules.map((rule) => ({
         emoji: reactionRuleEmojiToEditable(rule.emoji),
         roleId: rule.roleId,
       })),
-    );
+      title: panel.title ?? "",
+    });
   }
 
-  function cancelEditReactionPanel(): void {
-    setEditingPanel(null);
-    setRrChannelId("");
-    setRrTitle("");
-    setRrDescription("");
-    setRrPairs([{ emoji: "", roleId: "" }]);
-  }
-
+  // El formulario superior siempre crea una plantilla nueva (borrador).
   async function handleSaveReactionPanel(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -1234,23 +1233,91 @@ function App() {
 
     setSavingAction("panel");
     try {
-      if (editingPanel) {
-        await updateReactionRolePanel(
-          selectedGuildId,
-          editingPanel.messageId,
-          input,
-        );
-        pushToast("Plantilla guardada.", "success");
-      } else {
-        await createReactionRolePanel(selectedGuildId, input);
-        pushToast("Plantilla guardada (borrador).", "success");
-      }
+      await createReactionRolePanel(selectedGuildId, input);
+      pushToast("Plantilla guardada (borrador).", "success");
 
-      setEditingPanel(null);
       setRrChannelId("");
       setRrTitle("");
       setRrDescription("");
       setRrPairs([{ emoji: "", roleId: "" }]);
+      void refreshRrJobs();
+      void refreshReactionPanels();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Error desconocido";
+      pushToast(`No se pudo guardar la plantilla: ${message}`, "error");
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  // ── Edición en modal ──────────────────────────────────────────────
+  function updateRrEditorField<K extends keyof RrEditorState>(
+    field: K,
+    value: RrEditorState[K],
+  ): void {
+    setRrEditor((current) =>
+      current ? { ...current, [field]: value } : current,
+    );
+  }
+
+  function updateRrEditorPair(
+    index: number,
+    patch: Partial<ReactionRolePairInput>,
+  ): void {
+    setRrEditor((current) => {
+      if (!current) {
+        return current;
+      }
+      const pairs = current.pairs.map((pair, i) =>
+        i === index ? { ...pair, ...patch } : pair,
+      );
+      return { ...current, pairs };
+    });
+  }
+
+  function addRrEditorPair(): void {
+    setRrEditor((current) =>
+      current
+        ? { ...current, pairs: [...current.pairs, { emoji: "", roleId: "" }] }
+        : current,
+    );
+  }
+
+  function removeRrEditorPair(index: number): void {
+    setRrEditor((current) =>
+      current
+        ? {
+            ...current,
+            pairs: current.pairs.filter((_, i) => i !== index),
+          }
+        : current,
+    );
+  }
+
+  async function handleSaveRrEditor(): Promise<void> {
+    if (!selectedGuildId || !rrEditor) {
+      return;
+    }
+
+    const validPairs = rrEditor.pairs
+      .filter((pair) => pair.emoji.trim() && pair.roleId)
+      .map((pair) => ({
+        emoji: normalizeEmoji(pair.emoji),
+        roleId: pair.roleId,
+      }));
+
+    setSavingAction("panel");
+    try {
+      await updateReactionRolePanel(selectedGuildId, rrEditor.messageId, {
+        channelId: rrEditor.channelId || undefined,
+        description: rrEditor.description.trim() || undefined,
+        mode: rrEditor.mode,
+        pairs: validPairs,
+        title: rrEditor.title.trim() || undefined,
+      });
+      pushToast("Plantilla guardada.", "success");
+      setRrEditor(null);
       void refreshRrJobs();
       void refreshReactionPanels();
     } catch (error) {
@@ -2545,7 +2612,7 @@ function App() {
                                       <button
                                         className="ghost-button"
                                         onClick={() =>
-                                          startEditReactionPanel(panel)
+                                          startEditReactionTemplate(panel)
                                         }
                                         type="button"
                                       >
@@ -2581,16 +2648,6 @@ function App() {
                       ) : null}
                     </div>
                     <div className="admin-card-footer">
-                      {editingPanel ? (
-                        <button
-                          className="ghost-button"
-                          onClick={cancelEditReactionPanel}
-                          disabled={savingAction !== null}
-                          type="button"
-                        >
-                          Cancelar edición
-                        </button>
-                      ) : null}
                       <button
                         className="primary-button"
                         onClick={() => void handleSaveReactionPanel()}
@@ -2599,9 +2656,7 @@ function App() {
                       >
                         {savingAction === "panel"
                           ? "Guardando…"
-                          : editingPanel
-                            ? "Guardar cambios"
-                            : "Guardar plantilla"}
+                          : "Guardar plantilla"}
                       </button>
                     </div>
                   </details>
@@ -3279,6 +3334,151 @@ function App() {
                 type="button"
               >
                 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rrEditor != null ? (
+        <div className="modal-overlay" onClick={() => setRrEditor(null)}>
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h4>Editar plantilla de reaction roles</h4>
+            <div className="comm-form">
+              <label>
+                <span>Título</span>
+                <input
+                  type="text"
+                  value={rrEditor.title}
+                  onChange={(event) =>
+                    updateRrEditorField("title", event.target.value)
+                  }
+                  placeholder="Título"
+                />
+              </label>
+              <label>
+                <span>Descripción</span>
+                <input
+                  type="text"
+                  value={rrEditor.description}
+                  onChange={(event) =>
+                    updateRrEditorField("description", event.target.value)
+                  }
+                  placeholder="Descripción"
+                />
+              </label>
+              <label>
+                <span>Canal de texto</span>
+                <select
+                  className="select"
+                  value={rrEditor.channelId}
+                  onChange={(event) =>
+                    updateRrEditorField("channelId", event.target.value)
+                  }
+                >
+                  <option value="">Sin canal configurado</option>
+                  {textChannels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>
+                      {channel.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Modo</span>
+                <select
+                  className="select"
+                  value={rrEditor.mode}
+                  onChange={(event) =>
+                    updateRrEditorField(
+                      "mode",
+                      event.target.value as
+                        | "multiple"
+                        | "unique"
+                        | "additive",
+                    )
+                  }
+                >
+                  <option value="multiple">
+                    Multiple (se puede tener varios)
+                  </option>
+                  <option value="unique">Único (solo uno del panel)</option>
+                  <option value="additive">
+                    Aditivo (solo agrega, no quita)
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rr-pairs">
+              {rrEditor.pairs.map((pair, index) => (
+                <div className="rr-pair" key={index}>
+                  <input
+                    type="text"
+                    list="guild-emojis"
+                    value={pair.emoji}
+                    onChange={(event) =>
+                      updateRrEditorPair(index, {
+                        emoji: event.target.value,
+                      })
+                    }
+                    placeholder="Emoji del servidor"
+                  />
+                  <select
+                    className="select"
+                    value={pair.roleId}
+                    onChange={(event) =>
+                      updateRrEditorPair(index, {
+                        roleId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Adjuntar rol</option>
+                    {guildRoles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="ghost-button danger"
+                    onClick={() => removeRrEditorPair(index)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                className="ghost-button"
+                onClick={addRrEditorPair}
+                type="button"
+              >
+                + Agregar par emoji/rol
+              </button>
+            </div>
+
+            <div className="form-actions">
+              <button
+                className="ghost-button"
+                onClick={() => setRrEditor(null)}
+                disabled={savingAction !== null}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => void handleSaveRrEditor()}
+                disabled={savingAction !== null}
+                type="button"
+              >
+                {savingAction === "panel" ? "Guardando…" : "Guardar cambios"}
               </button>
             </div>
           </div>
