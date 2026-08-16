@@ -96,15 +96,47 @@ type DiscordGuildWidgetResponse = {
   presence_count?: number;
 };
 
+// Fetch a Discord con reintento ante rate limits (429). Discord manda el
+// header retry-after; si no viene, usamos un backoff simple. Así un 429
+// transitorio (común con IPs compartidas de Railway) no rompe el login ni
+// la resolución de nombres.
+async function fetchWithDiscordRetry(
+  url: string,
+  init: RequestInit,
+  maxRetries = 2,
+): Promise<Response> {
+  let response: Response | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    response = await fetch(url, init);
+    if (response.status !== 429) {
+      return response;
+    }
+
+    const retryAfterRaw = response.headers.get("retry-after");
+    const retryAfterMs = retryAfterRaw ? Number(retryAfterRaw) * 1000 : NaN;
+    const waitMs =
+      Number.isFinite(retryAfterMs) && retryAfterMs > 0
+        ? retryAfterMs
+        : 1000 * (attempt + 1);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+
+  return response as Response;
+}
+
 async function fetchDiscordJson<T>(
   path: string,
   accessToken: string,
 ): Promise<T> {
-  const response = await fetch(`https://discord.com/api/v10${path}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+  const response = await fetchWithDiscordRetry(
+    `https://discord.com/api/v10${path}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -159,11 +191,25 @@ function buildServerAvatarUrl(
   return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${avatarHash}.${extension}?size=128`;
 }
 
+// Caché corta de miembros: evita paginar TODA la guild en cada carga del
+// leaderboard, que es lo que termina disparando rate limits (429) de
+// Discord sobre la IP compartida de Railway.
+const guildMembersCache = new Map<
+  string,
+  { at: number; members: DiscordGuildMember[] }
+>();
+const GUILD_MEMBERS_TTL_MS = 5 * 60 * 1000;
+
 async function fetchAllGuildMembers(
   guildId: string,
 ): Promise<DiscordGuildMember[]> {
   if (!env.DISCORD_BOT_TOKEN) {
     return [];
+  }
+
+  const cached = guildMembersCache.get(guildId);
+  if (cached && Date.now() - cached.at < GUILD_MEMBERS_TTL_MS) {
+    return cached.members;
   }
 
   const members: DiscordGuildMember[] = [];
@@ -175,7 +221,7 @@ async function fetchAllGuildMembers(
       query.set("after", after);
     }
 
-    const response = await fetch(
+    const response = await fetchWithDiscordRetry(
       `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members?${query.toString()}`,
       {
         headers: {
@@ -185,6 +231,9 @@ async function fetchAllGuildMembers(
     );
 
     if (!response.ok) {
+      console.warn(
+        `[api] Discord members fetch failed for guild ${guildId} (${response.status})`,
+      );
       throw new Error(
         `Discord members fetch failed for guild ${guildId} (${response.status})`,
       );
@@ -202,6 +251,10 @@ async function fetchAllGuildMembers(
     if (!after) {
       break;
     }
+  }
+
+  if (members.length > 0) {
+    guildMembersCache.set(guildId, { at: Date.now(), members });
   }
 
   return members;
@@ -819,13 +872,16 @@ export function buildApp() {
       redirect_uri: consumedState.callbackUrl ?? env.DISCORD_REDIRECT_URI,
     });
 
-    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
-      body: tokenBody,
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+    const tokenResponse = await fetchWithDiscordRetry(
+      "https://discord.com/api/oauth2/token",
+      {
+        body: tokenBody,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        method: "POST",
       },
-      method: "POST",
-    });
+    );
 
     if (!tokenResponse.ok) {
       const raw = await tokenResponse.text().catch(() => "");
@@ -836,9 +892,14 @@ export function buildApp() {
         errorBody = raw.slice(0, 300);
       }
 
+      const message =
+        tokenResponse.status === 429
+          ? "Demasiados intentos de login (Discord está limitando). Esperá unos segundos y volvé a intentar."
+          : "Failed to exchange Discord code";
+
       return reply.code(400).send({
         ok: false,
-        error: "Failed to exchange Discord code",
+        error: message,
         details: {
           status: tokenResponse.status,
           body: errorBody,
@@ -1051,7 +1112,7 @@ export function buildApp() {
       });
     }
 
-    const channelsResponse = await fetch(
+    const channelsResponse = await fetchWithDiscordRetry(
       `https://discord.com/api/v10/guilds/${params.guildId}/channels`,
       {
         headers: {
@@ -1121,7 +1182,7 @@ export function buildApp() {
       });
     }
 
-    const emojisResponse = await fetch(
+    const emojisResponse = await fetchWithDiscordRetry(
       `https://discord.com/api/v10/guilds/${params.guildId}/emojis`,
       {
         headers: {
@@ -1178,7 +1239,7 @@ export function buildApp() {
       });
     }
 
-    const rolesResponse = await fetch(
+    const rolesResponse = await fetchWithDiscordRetry(
       `https://discord.com/api/v10/guilds/${params.guildId}/roles`,
       {
         headers: {
