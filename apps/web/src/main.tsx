@@ -3152,184 +3152,6 @@ function App() {
                     </div>
                   </details>
 
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Logs de Raid</h3>
-                        <p>Sincronización con Warcraft Logs.</p>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <label>
-                        <span>Canal de Discord para publicar logs</span>
-                        <select
-                          className="select"
-                          value={config.logsChannelId ?? ""}
-                          onChange={(event) =>
-                            setConfig((current) => ({
-                              ...current,
-                              logsChannelId: event.target.value || undefined,
-                            }))
-                          }
-                        >
-                          <option value="">Sin canal configurado</option>
-                          {textChannels.map((channel) => (
-                            <option key={channel.id} value={channel.id}>
-                              {channel.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        className="primary-button"
-                        onClick={() => void handleSaveLogsConfig()}
-                        disabled={savingAction !== null}
-                        type="button"
-                      >
-                        {savingAction === "config"
-                          ? "Guardando…"
-                          : "Guardar canal"}
-                      </button>
-
-                      <div className="daily-messages-editor">
-                        <div className="daily-messages-head">
-                          <div className="daily-messages-title">
-                            <strong>Vigilar perfil</strong>
-                            <label className="checkbox-row">
-                              <input
-                                type="checkbox"
-                                checked={config.logsWatchEnabled ?? false}
-                                onChange={(event) =>
-                                  setConfig((current) => ({
-                                    ...current,
-                                    logsWatchEnabled: event.target.checked,
-                                  }))
-                                }
-                              />
-                              <span>Vigilado activado</span>
-                            </label>
-                          </div>
-                        </div>
-                        <p className="muted-text">
-                          Publica automáticamente los logs de RAID nuevos de un
-                          personaje (excluye Mythic+).
-                        </p>
-                        <div className="form-grid">
-                          <label>
-                            <span>Personaje</span>
-                            <input
-                              value={config.logsWatchCharacter ?? ""}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchCharacter:
-                                    event.target.value || undefined,
-                                }))
-                              }
-                              placeholder="ej: Karpindomo"
-                            />
-                          </label>
-                          <label>
-                            <span>Servidor</span>
-                            <input
-                              value={config.logsWatchServer ?? ""}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchServer:
-                                    event.target.value || undefined,
-                                }))
-                              }
-                              placeholder="ej: Ragnaros"
-                            />
-                          </label>
-                          <label>
-                            <span>Región</span>
-                            <select
-                              className="select"
-                              value={config.logsWatchRegion ?? "EU"}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchRegion: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="EU">EU</option>
-                              <option value="US">US</option>
-                            </select>
-                          </label>
-                        </div>
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveLogsWatch()}
-                          disabled={savingAction !== null}
-                          type="button"
-                        >
-                          Guardar watcher
-                        </button>
-                      </div>
-
-                      <div className="daily-messages-editor">
-                        <div className="daily-messages-head">
-                          <strong>Agregar log</strong>
-                          <span className="muted-text">
-                            Link de warcraftlogs.com/reports/…
-                          </span>
-                        </div>
-                        <input
-                          value={raidLogUrl}
-                          onChange={(event) =>
-                            setRaidLogUrl(event.target.value)
-                          }
-                          placeholder="https://www.warcraftlogs.com/reports/XXXX"
-                        />
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleCreateRaidLog()}
-                          type="button"
-                        >
-                          + Agregar log de raid
-                        </button>
-
-                        {raidLogs.length === 0 ? (
-                          <div className="empty-state">
-                            <p>No hay logs todavía. ¡Agregá el primero!</p>
-                          </div>
-                        ) : (
-                          raidLogs.map((log) => (
-                            <div className="daily-message-row" key={log.id}>
-                              <div className="daily-message-content">
-                                <strong>{log.title || log.reportCode}</strong>
-                                <div className="muted-text">
-                                  ⚔️ {log.fightCount} fights · 💀 {log.kills}{" "}
-                                  kills ·{" "}
-                                  {log.status === "failed"
-                                    ? "sin datos"
-                                    : log.discordPosted
-                                      ? "publicado"
-                                      : "en espera"}
-                                </div>
-                              </div>
-                              <div className="daily-message-actions">
-                                <button
-                                  className="ghost-button danger"
-                                  onClick={() => void handleDeleteRaidLog(log)}
-                                  type="button"
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </details>
-
                   {xpConfig ? (
                     <details className="admin-card admin-card-acc">
                       <summary className="admin-card-header admin-acc-header">
@@ -3812,6 +3634,172 @@ function App() {
                       </span>
                     </summary>
                     <div className="raid-logs-acc-body">
+                      {selectedGuild?.owner ? (
+                        <div className="raid-logs-admin">
+                          <label>
+                            <span>Canal de Discord para publicar logs</span>
+                            <select
+                              className="select"
+                              value={config.logsChannelId ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  logsChannelId:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                            >
+                              <option value="">Sin canal configurado</option>
+                              {textChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveLogsConfig()}
+                            disabled={savingAction !== null}
+                            type="button"
+                          >
+                            {savingAction === "config"
+                              ? "Guardando…"
+                              : "Guardar canal"}
+                          </button>
+
+                          <div className="daily-messages-editor">
+                            <div className="daily-messages-head">
+                              <div className="daily-messages-title">
+                                <strong>Vigilar perfil</strong>
+                                <label className="checkbox-row">
+                                  <input
+                                    type="checkbox"
+                                    checked={config.logsWatchEnabled ?? false}
+                                    onChange={(event) =>
+                                      setConfig((current) => ({
+                                        ...current,
+                                        logsWatchEnabled: event.target.checked,
+                                      }))
+                                    }
+                                  />
+                                  <span>Vigilado activado</span>
+                                </label>
+                              </div>
+                            </div>
+                            <p className="muted-text">
+                              Publica automáticamente los logs de RAID nuevos de
+                              un personaje (excluye Mythic+).
+                            </p>
+                            <div className="form-grid">
+                              <label>
+                                <span>Personaje</span>
+                                <input
+                                  value={config.logsWatchCharacter ?? ""}
+                                  onChange={(event) =>
+                                    setConfig((current) => ({
+                                      ...current,
+                                      logsWatchCharacter:
+                                        event.target.value || undefined,
+                                    }))
+                                  }
+                                  placeholder="ej: Karpindomo"
+                                />
+                              </label>
+                              <label>
+                                <span>Servidor</span>
+                                <input
+                                  value={config.logsWatchServer ?? ""}
+                                  onChange={(event) =>
+                                    setConfig((current) => ({
+                                      ...current,
+                                      logsWatchServer:
+                                        event.target.value || undefined,
+                                    }))
+                                  }
+                                  placeholder="ej: Ragnaros"
+                                />
+                              </label>
+                              <label>
+                                <span>Región</span>
+                                <select
+                                  className="select"
+                                  value={config.logsWatchRegion ?? "EU"}
+                                  onChange={(event) =>
+                                    setConfig((current) => ({
+                                      ...current,
+                                      logsWatchRegion: event.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="EU">EU</option>
+                                  <option value="US">US</option>
+                                </select>
+                              </label>
+                            </div>
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleSaveLogsWatch()}
+                              disabled={savingAction !== null}
+                              type="button"
+                            >
+                              Guardar watcher
+                            </button>
+                          </div>
+
+                          <div className="daily-messages-editor">
+                            <div className="daily-messages-head">
+                              <strong>Agregar log</strong>
+                              <span className="muted-text">
+                                Link de warcraftlogs.com/reports/…
+                              </span>
+                            </div>
+                            <input
+                              value={raidLogUrl}
+                              onChange={(event) =>
+                                setRaidLogUrl(event.target.value)
+                              }
+                              placeholder="https://www.warcraftlogs.com/reports/XXXX"
+                            />
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleCreateRaidLog()}
+                              type="button"
+                            >
+                              + Agregar log de raid
+                            </button>
+                          </div>
+
+                          {raidLogs.length > 0 ? (
+                            <div className="daily-messages-editor">
+                              <div className="daily-messages-head">
+                                <strong>Eliminar logs</strong>
+                              </div>
+                              {raidLogs.map((log) => (
+                                <div className="daily-message-row" key={log.id}>
+                                  <div className="daily-message-content">
+                                    <strong>
+                                      {log.title || log.reportCode}
+                                    </strong>
+                                  </div>
+                                  <div className="daily-message-actions">
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() =>
+                                        void handleDeleteRaidLog(log)
+                                      }
+                                      type="button"
+                                    >
+                                      Eliminar
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+
                       {config.logsWatchEnabled && config.logsWatchCharacter ? (
                         <div className="raid-log-watcher">
                           <span className="raid-log-watcher-label">

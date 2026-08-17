@@ -831,6 +831,16 @@ a:hover {
   border-top: 1px solid var(--panel-border);
 }
 
+/* Gestión de logs (solo owner) dentro de la card de Raids */
+.raid-logs-admin {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(12, 19, 37, 0.4);
+  border: 1px solid rgba(134, 158, 214, 0.14);
+}
+
 .rr-panels-list {
   margin-top: 20px;
   display: grid;
