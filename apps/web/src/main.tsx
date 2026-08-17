@@ -135,6 +135,71 @@ function ToastViewport({ toasts }: { toasts: ToastItem[] }) {
   );
 }
 
+// Lista reutilizable de logs de raid (se usa en la tab Logs y en Raids).
+function RaidLogsList({ logs }: { logs: RaidLog[] }) {
+  if (logs.length === 0) {
+    return (
+      <div className="empty-state">
+        Todavía no hay logs de raid. Los logs se sincronizan desde Warcraft
+        Logs y aparecen acá y en Discord.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {logs.map((log) => (
+        <article className="comunicado-card comunicado-acc" key={log.id}>
+          <div className="comunicado-acc-header" role="button">
+            <span className="comunicado-acc-heading">
+              <strong>{log.title || "Log de Raid"}</strong>
+              {log.firstFightAt ? (
+                <span className="comunicado-date">
+                  {new Date(log.firstFightAt).toLocaleDateString()}
+                </span>
+              ) : null}
+            </span>
+            <span className={`raid-log-badge raid-log-${log.status}`}>
+              {log.status === "failed"
+                ? "Sin datos"
+                : log.discordPosted
+                  ? "Publicado"
+                  : "En espera"}
+            </span>
+          </div>
+          <div className="comunicado-acc-body">
+            <div className="raid-log-meta">
+              ⚔️ {log.fightCount} fight/s · 💀 {log.kills} kill/s
+            </div>
+            {log.summary && log.summary.fights.length > 0 ? (
+              <div className="raid-log-fights">
+                {log.summary.fights.map((fight, index) => (
+                  <span
+                    className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
+                    key={index}
+                  >
+                    {fight.name ?? "Fight"} {fight.kill ? "✅" : "❌"}
+                  </span>
+                ))}
+              </div>
+            ) : log.error ? (
+              <div className="meta-text">⚠️ {log.error}</div>
+            ) : null}
+            <a
+              className="raid-log-link"
+              href={log.reportUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Ver en Warcraft Logs ↗
+            </a>
+          </div>
+        </article>
+      ))}
+    </>
+  );
+}
+
 const LANDING_PREVIEW_USERS = [
   "Azzaio",
   "VoiceMaster",
@@ -3131,20 +3196,22 @@ function App() {
 
                       <div className="daily-messages-editor">
                         <div className="daily-messages-head">
-                          <strong>Vigilar perfil</strong>
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={config.logsWatchEnabled ?? false}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchEnabled: event.target.checked,
-                                }))
-                              }
-                            />
-                            <span>Vigilado activado</span>
-                          </label>
+                          <div className="daily-messages-title">
+                            <strong>Vigilar perfil</strong>
+                            <label className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={config.logsWatchEnabled ?? false}
+                                onChange={(event) =>
+                                  setConfig((current) => ({
+                                    ...current,
+                                    logsWatchEnabled: event.target.checked,
+                                  }))
+                                }
+                              />
+                              <span>Vigilado activado</span>
+                            </label>
+                          </div>
                         </div>
                         <p className="muted-text">
                           Publica automáticamente los logs de RAID nuevos de un
@@ -3733,69 +3800,31 @@ function App() {
                 </div>
               ) : activeTab === "logs" ? (
                 <div className="comunicados-stack">
-                  {raidLogs.length === 0 ? (
-                    <div className="empty-state">
-                      Todavía no hay logs de raid. Los logs se sincronizan desde
-                      Warcraft Logs y aparecen acá y en Discord.
+                  <RaidLogsList logs={raidLogs} />
+                </div>
+              ) : activeTab === "raids" ? (
+                <div className="dashboard-stack">
+                  <div className="raid-logs-panel">
+                    <div className="section-header">
+                      <div>
+                        <h3>Logs de Raid</h3>
+                      </div>
                     </div>
-                  ) : (
-                    raidLogs.map((log) => (
-                      <article
-                        className="comunicado-card comunicado-acc"
-                        key={log.id}
-                      >
-                        <div className="comunicado-acc-header" role="button">
-                          <span className="comunicado-acc-heading">
-                            <strong>{log.title || "Log de Raid"}</strong>
-                            {log.firstFightAt ? (
-                              <span className="comunicado-date">
-                                {new Date(
-                                  log.firstFightAt,
-                                ).toLocaleDateString()}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span
-                            className={`raid-log-badge raid-log-${log.status}`}
-                          >
-                            {log.status === "failed"
-                              ? "Sin datos"
-                              : log.discordPosted
-                                ? "Publicado"
-                                : "En espera"}
-                          </span>
-                        </div>
-                        <div className="comunicado-acc-body">
-                          <div className="raid-log-meta">
-                            ⚔️ {log.fightCount} fight/s · 💀 {log.kills} kill/s
-                          </div>
-                          {log.summary && log.summary.fights.length > 0 ? (
-                            <div className="raid-log-fights">
-                              {log.summary.fights.map((fight, index) => (
-                                <span
-                                  className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
-                                  key={index}
-                                >
-                                  {fight.name ?? "Fight"}{" "}
-                                  {fight.kill ? "✅" : "❌"}
-                                </span>
-                              ))}
-                            </div>
-                          ) : log.error ? (
-                            <div className="meta-text">⚠️ {log.error}</div>
-                          ) : null}
-                          <a
-                            className="raid-log-link"
-                            href={log.reportUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Ver en Warcraft Logs ↗
-                          </a>
-                        </div>
-                      </article>
-                    ))
-                  )}
+                    {config.logsWatchEnabled && config.logsWatchCharacter ? (
+                      <div className="raid-log-watcher">
+                        <span className="raid-log-watcher-label">
+                          Vigilando
+                        </span>
+                        <strong>{config.logsWatchCharacter}</strong>
+                        <span className="muted-text">
+                          {config.logsWatchServer} · {config.logsWatchRegion}
+                        </span>
+                      </div>
+                    ) : null}
+                    <div className="comunicados-stack">
+                      <RaidLogsList logs={raidLogs} />
+                    </div>
+                  </div>
                 </div>
               ) : activeTab === "comunicados" ? (
                 <div className="comunicados-stack">

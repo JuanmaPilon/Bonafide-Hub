@@ -763,6 +763,44 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Vigilar perfil: título + checkbox juntos */
+.daily-messages-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Card Logs de Raid en la tab Raids */
+.raid-logs-panel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.raid-log-watcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+  font-size: 0.9rem;
+}
+
+.raid-log-watcher-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
 .rr-panels-list {
   margin-top: 20px;
   display: grid;
