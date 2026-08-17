@@ -140,8 +140,8 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
   if (logs.length === 0) {
     return (
       <div className="empty-state">
-        Todavía no hay logs de raid. Los logs se sincronizan desde Warcraft
-        Logs y aparecen acá y en Discord.
+        Todavía no hay logs de raid. Los logs se sincronizan desde Warcraft Logs
+        y aparecen acá y en Discord.
       </div>
     );
   }
@@ -314,7 +314,7 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "raids") {
-    return "Roster, disponibilidad y composición por rol/spec.";
+    return "Información de raid.";
   }
 
   if (tab === "eventos") {
@@ -3804,27 +3804,30 @@ function App() {
                 </div>
               ) : activeTab === "raids" ? (
                 <div className="dashboard-stack">
-                  <div className="raid-logs-panel">
-                    <div className="section-header">
-                      <div>
-                        <h3>Logs de Raid</h3>
+                  <details className="raid-logs-panel raid-logs-acc" open>
+                    <summary className="raid-logs-acc-header">
+                      <h3>Logs de Raid</h3>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
+                    <div className="raid-logs-acc-body">
+                      {config.logsWatchEnabled && config.logsWatchCharacter ? (
+                        <div className="raid-log-watcher">
+                          <span className="raid-log-watcher-label">
+                            Vigilando
+                          </span>
+                          <strong>{config.logsWatchCharacter}</strong>
+                          <span className="muted-text">
+                            {config.logsWatchServer} · {config.logsWatchRegion}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="comunicados-stack">
+                        <RaidLogsList logs={raidLogs} />
                       </div>
                     </div>
-                    {config.logsWatchEnabled && config.logsWatchCharacter ? (
-                      <div className="raid-log-watcher">
-                        <span className="raid-log-watcher-label">
-                          Vigilando
-                        </span>
-                        <strong>{config.logsWatchCharacter}</strong>
-                        <span className="muted-text">
-                          {config.logsWatchServer} · {config.logsWatchRegion}
-                        </span>
-                      </div>
-                    ) : null}
-                    <div className="comunicados-stack">
-                      <RaidLogsList logs={raidLogs} />
-                    </div>
-                  </div>
+                  </details>
                 </div>
               ) : activeTab === "comunicados" ? (
                 <div className="comunicados-stack">

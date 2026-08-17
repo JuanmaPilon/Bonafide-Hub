@@ -801,6 +801,36 @@ a:hover {
   font-weight: 700;
 }
 
+/* Card Logs de Raid colapsable (acordeón) */
+.raid-logs-acc-header {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+
+.raid-logs-acc-header::-webkit-details-marker {
+  display: none;
+}
+
+.raid-logs-acc-header h3 {
+  margin: 0;
+}
+
+.raid-logs-acc[open] .admin-acc-chevron {
+  transform: rotate(90deg);
+}
+
+.raid-logs-acc-body {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+}
+
 .rr-panels-list {
   margin-top: 20px;
   display: grid;
