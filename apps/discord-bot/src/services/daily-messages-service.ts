@@ -66,6 +66,25 @@ function randomBetween(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function pickRandom<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+// Introducciones estilo "mayordomo de Karpindomo": se eligen al azar y la
+// frase del loro se publica debajo, en su propia línea.
+const BUTLER_OPENERS = [
+  "📢 Atención todos, frase del día:",
+  "🗞️ Frase del día:",
+  "🎩 La minuta del momento, señor:",
+  "☕ Un momento, señor. Frase del día:",
+  "📜 Proclama de Karpindomo:",
+  "🕰️ La hora del conocimiento ha llegado:",
+  "🧐 Disculpe la molestia, señor, pero:",
+  "🔔 Atención, atención:",
+  "🪄 Ejem, ejem... frase del día:",
+  "🍾 Un brindis y una reflexión, señor:",
+];
+
 // Publica una frase al azar en el canal configurado (si corresponde).
 async function postRandomMessage(guild: Guild): Promise<void> {
   try {
@@ -88,8 +107,9 @@ async function postRandomMessage(guild: Guild): Promise<void> {
       return;
     }
 
-    const picked = messages[Math.floor(Math.random() * messages.length)];
-    await channel.send(picked.content).catch((error) => {
+    const picked = pickRandom(messages);
+    const opener = pickRandom(BUTLER_OPENERS);
+    await channel.send(`${opener}\n${picked.content}`).catch((error) => {
       console.warn("[daily-messages] Failed to send", {
         guildId: guild.id,
         error: getErrorMessage(error),
