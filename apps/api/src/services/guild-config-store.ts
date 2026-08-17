@@ -19,6 +19,10 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   logsChannelId?: string;
+  logsWatchCharacter?: string;
+  logsWatchEnabled?: boolean;
+  logsWatchRegion?: string;
+  logsWatchServer?: string;
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
@@ -38,6 +42,10 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
     logsChannelId: string | null;
+    logsWatchCharacter: string | null;
+    logsWatchEnabled: boolean;
+    logsWatchRegion: string | null;
+    logsWatchServer: string | null;
     memberLogChannelId: string | null;
     musicEnabled: boolean;
     musicRoleIds: string[];
@@ -64,6 +72,10 @@ function toGuildConfig(
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
     logsChannelId: record.logsChannelId ?? undefined,
+    logsWatchCharacter: record.logsWatchCharacter ?? undefined,
+    logsWatchEnabled: record.logsWatchEnabled,
+    logsWatchRegion: record.logsWatchRegion ?? undefined,
+    logsWatchServer: record.logsWatchServer ?? undefined,
     memberLogChannelId: record.memberLogChannelId ?? undefined,
     musicEnabled: record.musicEnabled,
     musicRoleIds: record.musicRoleIds,
@@ -106,6 +118,10 @@ type NormalizedGuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
   logsChannelId?: string;
+  logsWatchCharacter?: string;
+  logsWatchEnabled: boolean;
+  logsWatchRegion?: string;
+  logsWatchServer?: string;
   memberLogChannelId?: string;
   musicEnabled: boolean;
   musicRoleIds: string[];
@@ -138,6 +154,10 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
     logsChannelId: config.logsChannelId,
+    logsWatchCharacter: config.logsWatchCharacter,
+    logsWatchEnabled: config.logsWatchEnabled ?? false,
+    logsWatchRegion: config.logsWatchRegion,
+    logsWatchServer: config.logsWatchServer,
     memberLogChannelId: config.memberLogChannelId,
     musicEnabled: config.musicEnabled ?? true,
     musicRoleIds: config.musicRoleIds ?? [],
@@ -186,6 +206,10 @@ export async function replaceGuildConfig(
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
         logsChannelId: normalized.logsChannelId,
+        logsWatchCharacter: normalized.logsWatchCharacter,
+        logsWatchEnabled: normalized.logsWatchEnabled,
+        logsWatchRegion: normalized.logsWatchRegion,
+        logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
@@ -202,6 +226,10 @@ export async function replaceGuildConfig(
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
         logsChannelId: normalized.logsChannelId,
+        logsWatchCharacter: normalized.logsWatchCharacter,
+        logsWatchEnabled: normalized.logsWatchEnabled,
+        logsWatchRegion: normalized.logsWatchRegion,
+        logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,

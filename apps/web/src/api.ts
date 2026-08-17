@@ -16,6 +16,10 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   logsChannelId?: string;
+  logsWatchCharacter?: string;
+  logsWatchEnabled?: boolean;
+  logsWatchRegion?: string;
+  logsWatchServer?: string;
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
@@ -51,7 +55,11 @@ export type RaidLog = {
   reportCode: string;
   reportUrl: string;
   status: string;
-  summary?: { fights: RaidFightSummary[]; title?: string; zone?: number | null };
+  summary?: {
+    fights: RaidFightSummary[];
+    title?: string;
+    zone?: number | null;
+  };
   title?: string;
   updatedAt: string;
   zone?: number | null;

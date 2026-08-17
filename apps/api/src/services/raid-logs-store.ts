@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma.js";
+import { env } from "../config/env.js";
 
 export type RaidFightSummary = {
   difficulty?: number;
@@ -20,7 +21,11 @@ export type RaidLog = {
   reportCode: string;
   reportUrl: string;
   status: string;
-  summary?: { fights: RaidFightSummary[]; title?: string; zone?: number | null };
+  summary?: {
+    fights: RaidFightSummary[];
+    title?: string;
+    zone?: number | null;
+  };
   title?: string;
   updatedAt: Date;
   zone?: number | null;
@@ -90,7 +95,11 @@ function toRaidLog(record: {
     reportUrl: record.reportUrl,
     status: record.status,
     summary: summary
-      ? { fights: summary.fights ?? [], title: summary.title, zone: summary.zone }
+      ? {
+          fights: summary.fights ?? [],
+          title: summary.title,
+          zone: summary.zone,
+        }
       : undefined,
     title: record.title ?? undefined,
     updatedAt: record.updatedAt,
@@ -233,7 +242,11 @@ export async function refreshRaidLog(id: string): Promise<{
         kills,
         lastSyncedAt: now,
         status: fightCount > 0 ? "synced" : "new",
-        summary: { fights: summary.fights, title: summary.title, zone: summary.zone },
+        summary: {
+          fights: summary.fights,
+          title: summary.title,
+          zone: summary.zone,
+        },
         title: summary.title ?? current.title,
         zone: summary.zone ?? current.zone,
       },
@@ -278,4 +291,142 @@ export function buildRaidLogMessage(log: RaidLog): string {
   );
   lines.push(log.reportUrl);
   return lines.join("\n");
+}
+
+// ── Vigilado de perfil (API v1 de Warcraft Logs) ───────────────────
+// Requiere WARCRAFT_LOGS_API_KEY (gratis). Filtra SOLO raids para no
+// meter logs personales (Mythic+, mazmorras, etc.).
+
+const WCL_V1_BASE = "https://www.warcraftlogs.com/v1";
+
+async function fetchV1Json(path: string): Promise<unknown> {
+  const apiKey = env.WARCRAFT_LOGS_API_KEY;
+  if (!apiKey) {
+    throw new Error("WARCRAFT_LOGS_API_KEY no está configurado");
+  }
+  const separator = path.includes("?") ? "&" : "?";
+  const response = await fetch(
+    `${WCL_V1_BASE}${path}${separator}api_key=${encodeURIComponent(apiKey)}`,
+    {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Bonafide-Hub/0.1",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Warcraft Logs v1 responded ${response.status}`);
+  }
+
+  return response.json();
+}
+
+type WclZone = { id: number; name: string; type: string };
+
+let zonesCache: Map<number, WclZone> | null = null;
+
+async function getZones(): Promise<Map<number, WclZone>> {
+  if (zonesCache) {
+    return zonesCache;
+  }
+  const data = (await fetchV1Json("/zones")) as WclZone[];
+  zonesCache = new Map(
+    (data ?? []).map((zone) => [Number(zone.id), zone]),
+  );
+  return zonesCache;
+}
+
+type WclCharacterReport = {
+  end?: number;
+  id: string;
+  owner?: string;
+  start?: number;
+  title?: string;
+  zone?: number;
+};
+
+async function fetchCharacterReports(
+  character: string,
+  server: string,
+  region: string,
+): Promise<WclCharacterReport[]> {
+  const data = (await fetchV1Json(
+    `/reports/character/${encodeURIComponent(character)}/${encodeURIComponent(server)}/${encodeURIComponent(region)}`,
+  )) as WclCharacterReport[];
+  return Array.isArray(data) ? data : [];
+}
+
+export type WatchResult = {
+  created: RaidLog[];
+  error?: string;
+};
+
+// Vigila el perfil: crea un RaidLog por cada report de RAID nuevo (filtra
+// Mythic+/mazmorras para no meter logs personales).
+export async function syncCharacterWatch(input: {
+  character: string;
+  guildId: string;
+  region: string;
+  server: string;
+}): Promise<WatchResult> {
+  try {
+    const [reports, zones] = await Promise.all([
+      fetchCharacterReports(input.character, input.server, input.region),
+      getZones(),
+    ]);
+
+    const existing = await prisma.raidLog.findMany({
+      where: { guildId: input.guildId },
+      select: { reportCode: true },
+    });
+    const existingCodes = new Set(existing.map((log) => log.reportCode));
+
+    const created: RaidLog[] = [];
+    for (const report of reports) {
+      const zoneInfo = zones.get(Number(report.zone ?? -1));
+      // Solo raids: excluye dungeons/Mythic+/etc. (logs personales).
+      if (!zoneInfo || zoneInfo.type !== "Raid") {
+        continue;
+      }
+      if (existingCodes.has(report.id)) {
+        continue;
+      }
+      const createdLog = await createRaidLog({
+        guildId: input.guildId,
+        reportCode: report.id,
+        reportUrl: `https://www.warcraftlogs.com/reports/${report.id}`,
+      });
+      existingCodes.add(report.id);
+      created.push(createdLog);
+    }
+
+    return { created };
+  } catch (error) {
+    return { created: [], error: getErrorMessage(error) };
+  }
+}
+
+// Guilds con vigilado configurado (para el scheduler del API).
+export async function listWatchGuildConfigs(): Promise<
+  Array<{ character: string; guildId: string; region: string; server: string }>
+> {
+  const records = await prisma.guildConfig.findMany({
+    where: { logsWatchCharacter: { not: null } },
+    select: {
+      guildId: true,
+      logsWatchCharacter: true,
+      logsWatchRegion: true,
+      logsWatchServer: true,
+    },
+  });
+
+  return records
+    .filter((record) => record.logsWatchCharacter && record.logsWatchServer)
+    .map((record) => ({
+      character: record.logsWatchCharacter as string,
+      guildId: record.guildId,
+      region: record.logsWatchRegion ?? "EU",
+      server: record.logsWatchServer as string,
+    }));
 }

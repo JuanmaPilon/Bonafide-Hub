@@ -24,6 +24,11 @@ model GuildConfig {
   dailyMessagesMinMinutes      Int      @default(15)
   dailyMessagesMaxMinutes      Int      @default(90)
   logsChannelId                String?
+  // Vigilado de perfil de Warcraft Logs: publica solo logs de RAID nuevos.
+  logsWatchEnabled             Boolean  @default(false)
+  logsWatchCharacter           String?
+  logsWatchServer              String?
+  logsWatchRegion              String?
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 

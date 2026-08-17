@@ -56,8 +56,10 @@ import {
   extractReportCode,
   listRaidLogs,
   listUnpostedRaidLogs,
+  listWatchGuildConfigs,
   markRaidLogPosted,
   refreshRaidLog,
+  syncCharacterWatch,
 } from "./services/raid-logs-store.js";
 import {
   getGuildConfig,
@@ -345,6 +347,7 @@ let raidLogSyncTimer: NodeJS.Timeout | null = null;
 
 async function runRaidLogSync(): Promise<void> {
   try {
+    // 1) Reports pegados manualmente que aún no se publicaron.
     const logs = await listUnpostedRaidLogs();
     for (const log of logs) {
       const config = await getGuildConfig(log.guildId);
@@ -359,6 +362,48 @@ async function runRaidLogSync(): Promise<void> {
         const ids = await postMessages(token, config.logsChannelId, chunks);
         if (ids.length > 0) {
           await markRaidLogPosted(log.id);
+        }
+      }
+    }
+
+    // 2) Vigilado de perfil: crea logs de RAID nuevos automáticamente.
+    const watched = await listWatchGuildConfigs();
+    for (const watch of watched) {
+      if (!watch.character || !watch.server) {
+        continue;
+      }
+      const config = await getGuildConfig(watch.guildId);
+      const token = env.DISCORD_BOT_TOKEN;
+      if (!config.logsWatchEnabled) {
+        continue;
+      }
+
+      const result = await syncCharacterWatch({
+        character: watch.character,
+        guildId: watch.guildId,
+        region: watch.region || "EU",
+        server: watch.server,
+      });
+
+      if (result.error) {
+        console.warn(
+          `[raid-logs] watch failed for ${watch.guildId}: ${result.error}`,
+        );
+        continue;
+      }
+
+      for (const created of result.created) {
+        const refreshed = await refreshRaidLog(created.id);
+        if (config.logsChannelId && token && refreshed.changed && refreshed.log) {
+          const chunks = splitForDiscord(buildRaidLogMessage(refreshed.log));
+          const ids = await postMessages(
+            token,
+            config.logsChannelId,
+            chunks,
+          );
+          if (ids.length > 0) {
+            await markRaidLogPosted(created.id);
+          }
         }
       }
     }
@@ -2233,41 +2278,38 @@ export function buildApp() {
     };
   });
 
-  app.delete(
-    "/guilds/:guildId/raid-logs/:logId",
-    async (request, reply) => {
-      const session = await requireSession(request);
-      if (!session) {
-        return reply.code(401).send({ ok: false, error: "Unauthorized" });
-      }
+  app.delete("/guilds/:guildId/raid-logs/:logId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
 
-      const params = request.params as {
-        guildId?: string;
-        logId?: string;
-      };
-      if (!params.guildId || !params.logId) {
-        return reply.code(400).send({ ok: false, error: "Missing params" });
-      }
+    const params = request.params as {
+      guildId?: string;
+      logId?: string;
+    };
+    if (!params.guildId || !params.logId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
 
-      if (!canManageGuild(session, params.guildId)) {
-        return reply.code(403).send({ ok: false, error: "Forbidden" });
-      }
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
 
-      const deleted = await deleteRaidLog(params.guildId, params.logId);
+    const deleted = await deleteRaidLog(params.guildId, params.logId);
 
-      await logAdminAction(session, params.guildId, "raid-log:delete", {
-        details: "Log de raid eliminado.",
-        targetType: "raid-log",
-        targetId: params.logId,
-      });
+    await logAdminAction(session, params.guildId, "raid-log:delete", {
+      details: "Log de raid eliminado.",
+      targetType: "raid-log",
+      targetId: params.logId,
+    });
 
-      return {
-        ok: true,
-        guildId: params.guildId,
-        deleted,
-      };
-    },
-  );
+    return {
+      ok: true,
+      guildId: params.guildId,
+      deleted,
+    };
+  });
 
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);
@@ -2335,6 +2377,22 @@ export function buildApp() {
 
     const body = request.body as Partial<GuildConfig>;
     const allowedBody: GuildConfig = {};
+
+    if (body.logsWatchCharacter !== undefined) {
+      allowedBody.logsWatchCharacter = body.logsWatchCharacter;
+    }
+
+    if (body.logsWatchEnabled !== undefined) {
+      allowedBody.logsWatchEnabled = body.logsWatchEnabled;
+    }
+
+    if (body.logsWatchRegion !== undefined) {
+      allowedBody.logsWatchRegion = body.logsWatchRegion;
+    }
+
+    if (body.logsWatchServer !== undefined) {
+      allowedBody.logsWatchServer = body.logsWatchServer;
+    }
 
     if (body.logsChannelId !== undefined) {
       allowedBody.logsChannelId = body.logsChannelId;

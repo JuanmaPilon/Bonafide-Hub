@@ -1041,6 +1041,29 @@ function App() {
     }
   }
 
+  async function handleSaveLogsWatch(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setSavingAction("config");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        logsWatchCharacter: config.logsWatchCharacter,
+        logsWatchEnabled: config.logsWatchEnabled,
+        logsWatchRegion: config.logsWatchRegion,
+        logsWatchServer: config.logsWatchServer,
+      });
+      setConfig(nextConfig);
+      pushToast("Vigilado de perfil guardado.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo guardar el vigilado de perfil.", "error");
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
   async function handleSaveXp(): Promise<void> {
     if (!selectedGuildId || !xpConfig) {
       return;
@@ -3111,6 +3134,83 @@ function App() {
 
                       <div className="daily-messages-editor">
                         <div className="daily-messages-head">
+                          <strong>Vigilar perfil</strong>
+                          <span className="muted-text">
+                            Publica automáticamente los logs de RAID nuevos de
+                            un personaje (excluye Mythic+/mazmorras).
+                          </span>
+                        </div>
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={config.logsWatchEnabled ?? false}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                logsWatchEnabled: event.target.checked,
+                              }))
+                            }
+                          />
+                          <span>Vigilado activado</span>
+                        </label>
+                        <div className="form-grid">
+                          <label>
+                            <span>Personaje</span>
+                            <input
+                              value={config.logsWatchCharacter ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  logsWatchCharacter:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                              placeholder="ej: Karpindomo"
+                            />
+                          </label>
+                          <label>
+                            <span>Servidor</span>
+                            <input
+                              value={config.logsWatchServer ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  logsWatchServer:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                              placeholder="ej: Ragnaros"
+                            />
+                          </label>
+                          <label>
+                            <span>Región</span>
+                            <select
+                              className="select"
+                              value={config.logsWatchRegion ?? "EU"}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  logsWatchRegion: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="EU">EU</option>
+                              <option value="US">US</option>
+                            </select>
+                          </label>
+                        </div>
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleSaveLogsWatch()}
+                          disabled={savingAction !== null}
+                          type="button"
+                        >
+                          Guardar vigilado
+                        </button>
+                      </div>
+
+                      <div className="daily-messages-editor">
+                        <div className="daily-messages-head">
                           <strong>Agregar log</strong>
                           <span className="muted-text">
                             Pegá el link de warcraftlogs.com/reports/…
@@ -3118,7 +3218,9 @@ function App() {
                         </div>
                         <input
                           value={raidLogUrl}
-                          onChange={(event) => setRaidLogUrl(event.target.value)}
+                          onChange={(event) =>
+                            setRaidLogUrl(event.target.value)
+                          }
                           placeholder="https://www.warcraftlogs.com/reports/XXXX"
                         />
                         <button

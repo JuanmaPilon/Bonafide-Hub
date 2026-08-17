@@ -17,6 +17,7 @@ const envSchema = z.object({
     .url("DATABASE_URL must be a valid PostgreSQL connection URL"),
   BOT_API_TOKEN: z.string().min(16).optional(),
   BONAFIDE_GUILD_ID: z.string().min(1).optional(),
+  WARCRAFT_LOGS_API_KEY: z.string().min(1).optional(),
   DISCORD_BOT_TOKEN: z.string().min(1).optional(),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
   COOKIE_SAME_SITE: z.enum(["Lax", "Strict", "None"]).default("Lax"),
