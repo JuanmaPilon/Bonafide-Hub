@@ -983,7 +983,7 @@ function App() {
     }
     const url = raidLogUrl.trim();
     if (!url) {
-      pushToast("Pegá el link de Warcraft Logs primero.", "error");
+      pushToast("Falta el link de Warcraft Logs.", "error");
       return;
     }
 
@@ -3091,10 +3091,7 @@ function App() {
                     <summary className="admin-card-header admin-acc-header">
                       <div>
                         <h3>Logs de Raid</h3>
-                        <p>
-                          Sincronizá logs de Warcraft Logs y publicá el resumen
-                          en Discord y en la sección Logs.
-                        </p>
+                        <p>Sincronización con Warcraft Logs.</p>
                       </div>
                       <span className="admin-acc-chevron" aria-hidden="true">
                         ▸
@@ -3135,24 +3132,24 @@ function App() {
                       <div className="daily-messages-editor">
                         <div className="daily-messages-head">
                           <strong>Vigilar perfil</strong>
-                          <span className="muted-text">
-                            Publica automáticamente los logs de RAID nuevos de
-                            un personaje (excluye Mythic+/mazmorras).
-                          </span>
+                          <label className="checkbox-row">
+                            <input
+                              type="checkbox"
+                              checked={config.logsWatchEnabled ?? false}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  logsWatchEnabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span>Vigilado activado</span>
+                          </label>
                         </div>
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={config.logsWatchEnabled ?? false}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                logsWatchEnabled: event.target.checked,
-                              }))
-                            }
-                          />
-                          <span>Vigilado activado</span>
-                        </label>
+                        <p className="muted-text">
+                          Publica automáticamente los logs de RAID nuevos de un
+                          personaje (excluye Mythic+).
+                        </p>
                         <div className="form-grid">
                           <label>
                             <span>Personaje</span>
@@ -3205,7 +3202,7 @@ function App() {
                           disabled={savingAction !== null}
                           type="button"
                         >
-                          Guardar vigilado
+                          Guardar watcher
                         </button>
                       </div>
 
@@ -3213,7 +3210,7 @@ function App() {
                         <div className="daily-messages-head">
                           <strong>Agregar log</strong>
                           <span className="muted-text">
-                            Pegá el link de warcraftlogs.com/reports/…
+                            Link de warcraftlogs.com/reports/…
                           </span>
                         </div>
                         <input
