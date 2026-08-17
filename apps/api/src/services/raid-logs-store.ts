@@ -331,9 +331,7 @@ async function getZones(): Promise<Map<number, WclZone>> {
     return zonesCache;
   }
   const data = (await fetchV1Json("/zones")) as WclZone[];
-  zonesCache = new Map(
-    (data ?? []).map((zone) => [Number(zone.id), zone]),
-  );
+  zonesCache = new Map((data ?? []).map((zone) => [Number(zone.id), zone]));
   return zonesCache;
 }
 
@@ -387,6 +385,13 @@ export async function syncCharacterWatch(input: {
       const zoneInfo = zones.get(Number(report.zone ?? -1));
       // Solo raids: excluye dungeons/Mythic+/etc. (logs personales).
       if (!zoneInfo || zoneInfo.type !== "Raid") {
+        continue;
+      }
+      // Capa extra de check: el título debe indicar que es raid
+      // (ej: "Raid Jueves Mítica"). Evita logs personales que por algún
+      // motivo tengan zone de raid.
+      const title = (report.title ?? "").toLowerCase();
+      if (!title.includes("raid")) {
         continue;
       }
       if (existingCodes.has(report.id)) {
