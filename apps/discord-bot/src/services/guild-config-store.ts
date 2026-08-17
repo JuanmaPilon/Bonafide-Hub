@@ -3,6 +3,10 @@ import path from "node:path";
 import { env } from "../config/env.js";
 
 type GuildConfig = {
+  dailyMessagesChannelId?: string;
+  dailyMessagesEnabled?: boolean;
+  dailyMessagesMaxMinutes?: number;
+  dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   memberLogChannelId?: string;
@@ -45,6 +49,10 @@ function isRemoteStoreEnabled(): boolean {
 
 function normalizeGuildConfig(input: GuildConfig): GuildConfig {
   return {
+    dailyMessagesChannelId: input.dailyMessagesChannelId,
+    dailyMessagesEnabled: input.dailyMessagesEnabled ?? false,
+    dailyMessagesMaxMinutes: input.dailyMessagesMaxMinutes ?? 90,
+    dailyMessagesMinMinutes: input.dailyMessagesMinMinutes ?? 15,
     defaultRoleId: input.defaultRoleId,
     dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
     memberLogChannelId: input.memberLogChannelId,
@@ -58,6 +66,7 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
 
 function hasAnyConfigData(config: GuildConfig): boolean {
   return Boolean(
+    config.dailyMessagesChannelId ||
     config.dynamicVoiceCreateChannelId ||
     config.memberLogChannelId ||
     (config.reactionRoles?.length ?? 0) > 0 ||

@@ -18,8 +18,13 @@ model GuildConfig {
   temporaryVoiceChannelIds    String[] @default([])
   musicEnabled                Boolean  @default(true)
   musicRoleIds                String[] @default([])
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  // "Loro de Karpindomo": mensajes aleatorios en un canal configurable.
+  dailyMessagesChannelId       String?
+  dailyMessagesEnabled         Boolean  @default(false)
+  dailyMessagesMinMinutes      Int      @default(15)
+  dailyMessagesMaxMinutes      Int      @default(90)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
 
   reactionRoleRules ReactionRoleRule[]
 
@@ -112,6 +117,20 @@ model ReactionRolePanel {
 
   @@id([guildId, messageId])
   @@map("reaction_role_panels")
+}
+
+// Frases del "Loro de Karpindomo": el bot publica una al azar a intervalos
+// aleatorios en el canal configurado de la guild.
+model DailyMessage {
+  id        String   @id @default(cuid())
+  guildId   String
+  content   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([guildId])
+  @@map("daily_messages")
 }
 
 model DiscordSession {

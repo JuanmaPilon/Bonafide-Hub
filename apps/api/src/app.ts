@@ -43,6 +43,13 @@ import {
 } from "./services/communications-store.js";
 import { resolveMentions } from "./services/mention-resolver.js";
 import {
+  createDailyMessage,
+  deleteDailyMessage,
+  listDailyMessages,
+  listEnabledDailyMessages,
+  updateDailyMessage,
+} from "./services/daily-messages-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -553,6 +560,36 @@ export function buildApp() {
       config,
     };
   });
+
+  app.get(
+    "/internal/guilds/:guildId/daily-messages",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      // Solo las habilitadas: el loro no debe usar frases pausadas.
+      const messages = await listEnabledDailyMessages(params.guildId);
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        messages,
+      };
+    },
+  );
 
   app.get(
     "/internal/guilds/:guildId/reaction-roles/jobs",
@@ -1892,6 +1929,168 @@ export function buildApp() {
     },
   );
 
+  app.get("/guilds/:guildId/daily-messages", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const messages = await listDailyMessages(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      messages,
+    };
+  });
+
+  app.post("/guilds/:guildId/daily-messages", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { content?: string };
+    const content = body.content?.trim();
+    if (!content) {
+      return reply.code(400).send({
+        ok: false,
+        error: "La frase no puede estar vacía",
+      });
+    }
+
+    const message = await createDailyMessage({
+      content,
+      guildId: params.guildId,
+    });
+
+    await logAdminAction(session, params.guildId, "daily-message:create", {
+      details: `Frase del loro creada: "${content.slice(0, 60)}"`,
+      targetType: "daily-message",
+      targetId: message.id,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      message,
+    };
+  });
+
+  app.patch(
+    "/guilds/:guildId/daily-messages/:messageId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        messageId?: string;
+      };
+      if (!params.guildId || !params.messageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const body = (request.body ?? {}) as {
+        content?: string;
+        enabled?: boolean;
+      };
+      const content = body.content?.trim();
+      if (content === "") {
+        return reply.code(400).send({
+          ok: false,
+          error: "La frase no puede estar vacía",
+        });
+      }
+
+      const message = await updateDailyMessage({
+        ...(content ? { content } : {}),
+        ...(typeof body.enabled === "boolean" ? { enabled: body.enabled } : {}),
+        guildId: params.guildId,
+        id: params.messageId,
+      });
+
+      if (!message) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      await logAdminAction(session, params.guildId, "daily-message:update", {
+        details: `Frase del loro actualizada${message.content ? `: "${message.content.slice(0, 60)}"` : ""}.`,
+        targetType: "daily-message",
+        targetId: message.id,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        message,
+      };
+    },
+  );
+
+  app.delete(
+    "/guilds/:guildId/daily-messages/:messageId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        messageId?: string;
+      };
+      if (!params.guildId || !params.messageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteDailyMessage(
+        params.guildId,
+        params.messageId,
+      );
+
+      await logAdminAction(session, params.guildId, "daily-message:delete", {
+        details: "Frase del loro eliminada.",
+        targetType: "daily-message",
+        targetId: params.messageId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        deleted,
+      };
+    },
+  );
+
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -1958,6 +2157,22 @@ export function buildApp() {
 
     const body = request.body as Partial<GuildConfig>;
     const allowedBody: GuildConfig = {};
+
+    if (body.dailyMessagesChannelId !== undefined) {
+      allowedBody.dailyMessagesChannelId = body.dailyMessagesChannelId;
+    }
+
+    if (body.dailyMessagesEnabled !== undefined) {
+      allowedBody.dailyMessagesEnabled = body.dailyMessagesEnabled;
+    }
+
+    if (body.dailyMessagesMinMinutes !== undefined) {
+      allowedBody.dailyMessagesMinMinutes = body.dailyMessagesMinMinutes;
+    }
+
+    if (body.dailyMessagesMaxMinutes !== undefined) {
+      allowedBody.dailyMessagesMaxMinutes = body.dailyMessagesMaxMinutes;
+    }
 
     if (body.memberLogChannelId !== undefined) {
       allowedBody.memberLogChannelId = body.memberLogChannelId;

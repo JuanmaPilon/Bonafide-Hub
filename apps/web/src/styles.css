@@ -628,6 +628,73 @@ a:hover {
   align-items: center;
 }
 
+/* Mensajes Diarios (loro de Karpindomo) */
+.daily-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.daily-messages-editor {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.daily-messages-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.daily-messages-head .muted-text {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.daily-message-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.daily-message-row .muted {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.daily-message-content {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.daily-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .rr-panels-list {
   margin-top: 20px;
   display: grid;

@@ -4,9 +4,11 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
   createCommunication,
+  createDailyMessage,
   createReactionRolePanel,
   deleteCommunication,
   deleteCommunicationInstance,
+  deleteDailyMessage,
   deleteReactionRoleJob,
   deleteReactionRolePanel,
   exportXpData,
@@ -25,6 +27,7 @@ import {
   getXpConfig,
   importXpData,
   listCommunications,
+  listDailyMessages,
   listPublishedCommunications,
   listReactionRoleJobs,
   listReactionRolePanels,
@@ -37,12 +40,14 @@ import {
   saveGuildConfig,
   saveXpConfig,
   updateCommunication,
+  updateDailyMessage,
   updateReactionRolePanel,
   type ApiGuild,
   type AuditLogEntry,
   type Communication,
   type CommunicationInput,
   type CommunicationInstance,
+  type DailyMessage,
   type GuildBooster,
   type GuildChannel,
   type GuildConfig,
@@ -519,8 +524,10 @@ function App() {
   const [rrEditor, setRrEditor] = useState<RrEditorState | null>(null);
   const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
   const [rrJobs, setRrJobs] = useState<ReactionRoleJob[]>([]);
+  const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
+  const [dailyMessageDraft, setDailyMessageDraft] = useState("");
   const [savingAction, setSavingAction] = useState<
-    "config" | "xp" | "panel" | null
+    "config" | "xp" | "panel" | "daily" | null
   >(null);
   const [roleModal, setRoleModal] = useState<{
     kind: "add" | "remove";
@@ -826,6 +833,100 @@ function App() {
       pushToast("No se pudo guardar la configuración.", "error");
     } finally {
       setSavingAction(null);
+    }
+  }
+
+  // ── Mensajes diarios (loro de Karpindomo) ────────────────────────
+  async function handleSaveDailyConfig(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setSavingAction("daily");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        dailyMessagesChannelId: config.dailyMessagesChannelId,
+        dailyMessagesEnabled: config.dailyMessagesEnabled,
+        dailyMessagesMaxMinutes: config.dailyMessagesMaxMinutes,
+        dailyMessagesMinMinutes: config.dailyMessagesMinMinutes,
+      });
+      setConfig(nextConfig);
+      pushToast("Configuración del loro guardada.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo guardar la configuración del loro.", "error");
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  async function handleCreateDailyMessage(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    const content = dailyMessageDraft.trim();
+    if (!content) {
+      pushToast("Escribí una frase primero.", "error");
+      return;
+    }
+
+    try {
+      const created = await createDailyMessage(selectedGuildId, content);
+      setDailyMessages((current) => [...current, created]);
+      setDailyMessageDraft("");
+      pushToast("Frase del loro guardada.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al guardar la frase.",
+        "error",
+      );
+    }
+  }
+
+  async function handleToggleDailyMessage(
+    message: DailyMessage,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const updated = await updateDailyMessage(selectedGuildId, message.id, {
+        enabled: !message.enabled,
+      });
+      setDailyMessages((current) =>
+        current.map((entry) => (entry.id === updated.id ? updated : entry)),
+      );
+      pushToast(
+        updated.enabled ? "Frase activada." : "Frase pausada.",
+        "success",
+      );
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "Error al actualizar la frase.",
+        "error",
+      );
+    }
+  }
+
+  async function handleDeleteDailyMessage(
+    message: DailyMessage,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteDailyMessage(selectedGuildId, message.id);
+      setDailyMessages((current) =>
+        current.filter((entry) => entry.id !== message.id),
+      );
+      pushToast("Frase eliminada.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al eliminar la frase.",
+        "error",
+      );
     }
   }
 
@@ -1625,6 +1726,7 @@ function App() {
       setReactionPanels([]);
       setGuildEmojis([]);
       setRrJobs([]);
+      setDailyMessages([]);
       setAuditLogs([]);
       return;
     }
@@ -1637,8 +1739,9 @@ function App() {
       listReactionRolePanels(selectedGuildId),
       getGuildEmojis(selectedGuildId),
       listReactionRoleJobs(selectedGuildId),
+      listDailyMessages(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, panels, emojis, jobs]) => {
+      .then(([channels, textCh, roles, panels, emojis, jobs, daily]) => {
         if (cancelled) {
           return;
         }
@@ -1649,6 +1752,7 @@ function App() {
         setReactionPanels(panels);
         setGuildEmojis(emojis);
         setRrJobs(jobs);
+        setDailyMessages(daily);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -1659,6 +1763,7 @@ function App() {
           setReactionPanels([]);
           setGuildEmojis([]);
           setRrJobs([]);
+          setDailyMessages([]);
           pushToast(
             "No se pudieron cargar los datos del panel Admin.",
             "error",
@@ -2680,6 +2785,170 @@ function App() {
                           ? "Guardando…"
                           : "Guardar plantilla"}
                       </button>
+                    </div>
+                  </details>
+
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
+                      <div>
+                        <h3>Mensajes Diarios</h3>
+                        <p>
+                          El loro de Karpindomo: frases que el bot publica al
+                          azar en un canal, a intervalos aleatorios.
+                        </p>
+                      </div>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
+                    <div className="admin-card-body">
+                      <div className="form-grid">
+                        <label>
+                          <span>Canal de publicación</span>
+                          <select
+                            className="select"
+                            value={config.dailyMessagesChannelId ?? ""}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                dailyMessagesChannelId:
+                                  event.target.value || undefined,
+                              }))
+                            }
+                          >
+                            <option value="">Sin canal configurado</option>
+                            {textChannels.map((channel) => (
+                              <option key={channel.id} value={channel.id}>
+                                {channel.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Intervalo mínimo (min)</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={config.dailyMessagesMinMinutes ?? 15}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                dailyMessagesMinMinutes:
+                                  Number(event.target.value) || 1,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Intervalo máximo (min)</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={config.dailyMessagesMaxMinutes ?? 90}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                dailyMessagesMaxMinutes:
+                                  Number(event.target.value) || 1,
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <div className="daily-actions-row">
+                        <label className="checkbox-row">
+                          <input
+                            type="checkbox"
+                            checked={config.dailyMessagesEnabled ?? false}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                dailyMessagesEnabled: event.target.checked,
+                              }))
+                            }
+                          />
+                          <span>Loro activado</span>
+                        </label>
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleSaveDailyConfig()}
+                          disabled={savingAction !== null}
+                          type="button"
+                        >
+                          {savingAction === "daily"
+                            ? "Guardando…"
+                            : "Guardar configuración"}
+                        </button>
+                      </div>
+
+                      <div className="daily-messages-editor">
+                        <div className="daily-messages-head">
+                          <strong>Frases del loro</strong>
+                          <span className="muted-text">
+                            {
+                              dailyMessages.filter((message) => message.enabled)
+                                .length
+                            }{" "}
+                            de {dailyMessages.length} activas
+                          </span>
+                        </div>
+                        <textarea
+                          className="textarea"
+                          rows={3}
+                          value={dailyMessageDraft}
+                          onChange={(event) =>
+                            setDailyMessageDraft(event.target.value)
+                          }
+                          placeholder='Escribí una frase de Karpindomo… ej: "OE, LO MATAS!"'
+                        />
+                        <button
+                          className="ghost-button"
+                          onClick={() => void handleCreateDailyMessage()}
+                          type="button"
+                        >
+                          + Agregar frase
+                        </button>
+
+                        {dailyMessages.length === 0 ? (
+                          <div className="empty-state">
+                            <p>
+                              No hay frases todavía. ¡Agregá la primera para que
+                              el loro empiece a hablar!
+                            </p>
+                          </div>
+                        ) : (
+                          dailyMessages.map((message) => (
+                            <div className="daily-message-row" key={message.id}>
+                              <span
+                                className={`daily-message-content${message.enabled ? "" : " muted"}`}
+                              >
+                                {message.content}
+                              </span>
+                              <div className="daily-message-actions">
+                                <button
+                                  className="ghost-button"
+                                  onClick={() =>
+                                    void handleToggleDailyMessage(message)
+                                  }
+                                  type="button"
+                                >
+                                  {message.enabled ? "Pausar" : "Activar"}
+                                </button>
+                                <button
+                                  className="ghost-button danger"
+                                  onClick={() =>
+                                    void handleDeleteDailyMessage(message)
+                                  }
+                                  type="button"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </details>
 

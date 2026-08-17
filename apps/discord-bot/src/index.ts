@@ -48,6 +48,7 @@ import {
   listCommunicationFiles,
   splitForDiscord,
 } from "./services/communications-store.js";
+import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
 import {
   addRemoteXp,
   computeXpMultiplier,
@@ -971,10 +972,7 @@ function buildReactionPanelText(input: {
   const roleRow = input.pairs
     .map((pair) => `${pair.emoji} <@&${pair.roleId}>`)
     .join("   ");
-  return [
-    input.description ? `**${input.description}**` : "",
-    roleRow,
-  ]
+  return [input.description ? `**${input.description}**` : "", roleRow]
     .filter((line) => Boolean(line))
     .join("\n");
 }
@@ -1276,6 +1274,7 @@ client.once(Events.ClientReady, (readyClient) => {
   startVoiceXpTracker();
   startXpSyncChecker();
   startReactionRoleJobProcessor();
+  startDailyMessagesProcessor(readyClient);
 });
 
 async function handleXpLevelCommand(

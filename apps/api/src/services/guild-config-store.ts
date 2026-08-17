@@ -11,6 +11,10 @@ export type ReactionRoleRule = {
 };
 
 export type GuildConfig = {
+  dailyMessagesChannelId?: string;
+  dailyMessagesEnabled?: boolean;
+  dailyMessagesMaxMinutes?: number;
+  dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
@@ -25,6 +29,10 @@ export type GuildConfig = {
 
 function toGuildConfig(
   record: {
+    dailyMessagesChannelId: string | null;
+    dailyMessagesEnabled: boolean;
+    dailyMessagesMaxMinutes: number;
+    dailyMessagesMinMinutes: number;
     defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
@@ -45,6 +53,10 @@ function toGuildConfig(
   }
 
   return {
+    dailyMessagesChannelId: record.dailyMessagesChannelId ?? undefined,
+    dailyMessagesEnabled: record.dailyMessagesEnabled,
+    dailyMessagesMaxMinutes: record.dailyMessagesMaxMinutes,
+    dailyMessagesMinMinutes: record.dailyMessagesMinMinutes,
     defaultRoleId: record.defaultRoleId ?? undefined,
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
@@ -83,6 +95,10 @@ function normalizeReactionRoleRule(
 }
 
 type NormalizedGuildConfig = {
+  dailyMessagesChannelId?: string;
+  dailyMessagesEnabled: boolean;
+  dailyMessagesMaxMinutes: number;
+  dailyMessagesMinMinutes: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
@@ -100,7 +116,20 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     .map((rule) => normalizeReactionRoleRule(rule))
     .filter((rule): rule is ReactionRoleRule => Boolean(rule));
 
+  const minMinutes = Math.max(
+    1,
+    Math.floor(config.dailyMessagesMinMinutes ?? 15),
+  );
+  const maxMinutes = Math.max(
+    minMinutes,
+    Math.floor(config.dailyMessagesMaxMinutes ?? 90),
+  );
+
   return {
+    dailyMessagesChannelId: config.dailyMessagesChannelId,
+    dailyMessagesEnabled: config.dailyMessagesEnabled ?? false,
+    dailyMessagesMaxMinutes: maxMinutes,
+    dailyMessagesMinMinutes: minMinutes,
     defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
@@ -147,6 +176,10 @@ export async function replaceGuildConfig(
       where: { guildId },
       create: {
         guildId,
+        dailyMessagesChannelId: normalized.dailyMessagesChannelId,
+        dailyMessagesEnabled: normalized.dailyMessagesEnabled,
+        dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
+        dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
@@ -158,6 +191,10 @@ export async function replaceGuildConfig(
         musicRoleIds: normalized.musicRoleIds,
       },
       update: {
+        dailyMessagesChannelId: normalized.dailyMessagesChannelId,
+        dailyMessagesEnabled: normalized.dailyMessagesEnabled,
+        dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
+        dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,

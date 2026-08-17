@@ -8,6 +8,10 @@ export type ApiGuild = {
 };
 
 export type GuildConfig = {
+  dailyMessagesChannelId?: string;
+  dailyMessagesEnabled?: boolean;
+  dailyMessagesMaxMinutes?: number;
+  dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
@@ -15,6 +19,15 @@ export type GuildConfig = {
   musicEnabled?: boolean;
   musicRoleIds?: string[];
   reactionRolesChannelId?: string;
+};
+
+export type DailyMessage = {
+  content: string;
+  createdAt: string;
+  enabled: boolean;
+  guildId: string;
+  id: string;
+  updatedAt: string;
 };
 
 export type CommunicationInstance = {
@@ -571,6 +584,55 @@ export async function publishReactionRolePanel(
   return requestJson<{ jobId: string }>(
     `/guilds/${guildId}/reaction-roles/panels/${encodeURIComponent(messageId)}/publish`,
     { method: "POST" },
+  );
+}
+
+export async function listDailyMessages(
+  guildId: string,
+): Promise<DailyMessage[]> {
+  const data = await requestJson<{ messages: DailyMessage[] }>(
+    `/guilds/${guildId}/daily-messages`,
+    { method: "GET" },
+  );
+  return data.messages;
+}
+
+export async function createDailyMessage(
+  guildId: string,
+  content: string,
+): Promise<DailyMessage> {
+  const data = await requestJson<{ message: DailyMessage }>(
+    `/guilds/${guildId}/daily-messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    },
+  );
+  return data.message;
+}
+
+export async function updateDailyMessage(
+  guildId: string,
+  messageId: string,
+  input: { content?: string; enabled?: boolean },
+): Promise<DailyMessage> {
+  const data = await requestJson<{ message: DailyMessage }>(
+    `/guilds/${guildId}/daily-messages/${encodeURIComponent(messageId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.message;
+}
+
+export async function deleteDailyMessage(
+  guildId: string,
+  messageId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/daily-messages/${encodeURIComponent(messageId)}`,
+    { method: "DELETE" },
   );
 }
 
