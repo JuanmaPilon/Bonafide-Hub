@@ -1,8 +1,4 @@
-import {
-  ChannelType,
-  ChatInputCommandInteraction,
-  SlashCommandBuilder,
-} from "discord.js";
+import { ChatInputCommandInteraction, SlashCommandBuilder } from "discord.js";
 
 type CommandHandler = (
   interaction: ChatInputCommandInteraction,
@@ -80,25 +76,6 @@ export const commandDefinitions = [
         .setName("repetir")
         .setDescription("Si es true, repite el timer automaticamente")
         .setRequired(false),
-    ),
-  new SlashCommandBuilder()
-    .setName("publicarcomunicado")
-    .setDescription("Publica un comunicado desde docs/comunicados")
-    .addStringOption((option) =>
-      option
-        .setName("archivo")
-        .setDescription(
-          "Ruta relativa dentro de docs/comunicados (ej: reclutamiento/raid-off.md)",
-        )
-        .setRequired(true)
-        .setAutocomplete(true),
-    )
-    .addChannelOption((option) =>
-      option
-        .setName("canal")
-        .setDescription("Canal de destino (opcional, por defecto canal actual)")
-        .setRequired(false)
-        .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
     ),
   new SlashCommandBuilder()
     .setName("addlvl")

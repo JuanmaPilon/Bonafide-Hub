@@ -27,16 +27,25 @@ Guia operativa para desplegar y mantener bot, API y DB en Railway.
 4. `DISCORD_REDIRECT_URI`
 5. `SESSION_SECRET`
 6. `BOT_API_TOKEN`
-7. `HOST`
-8. `PORT`
-9. `NODE_ENV`
+7. `DISCORD_BOT_TOKEN` (resolver datos del server + publicar comunicados/logs en Discord)
+8. `BONAFIDE_GUILD_ID`
+9. `WARCRAFT_LOGS_API_KEY` (vigilado de perfil de raid logs)
+10. `CORS_ORIGINS`
+11. `COOKIE_SAME_SITE`
+12. `FRONTEND_APP_URL`
+13. `HOST`
+14. `PORT`
+15. `NODE_ENV`
 
 ## 3. Comandos recomendados de deploy
+
+> **Orden de deploy:** primero API (corre `prisma db push` y crea las tablas nuevas), luego Web y Bot.
+> ⚠️ Cada servicio tiene sus propias Variables; el token del bot debe estar en el **Bot** y en el **API** por separado (y actualizarse en ambos si se rota).
 
 ### API
 
 1. Pre-deploy: `npx prisma db push`
-   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `reaction_role_panels`, `reaction_role_panel_jobs`).
+   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `reaction_role_panels`, `reaction_role_panel_jobs`, `communications`, `daily_messages`, `raid_logs`).
 2. Build: `npm ci --include=dev && npm run build`
 3. Start: `npm run start`
 

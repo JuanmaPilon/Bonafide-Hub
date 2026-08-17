@@ -22,10 +22,16 @@ Guía técnica y funcional del bot de Discord.
 3. `/canceltimer id:<id>` (requiere Manage Server)
 4. `/removetimer` — borra los timers propios
 
-### Comunicados markdown
+### Comunicados
 
-1. `/publicarcomunicado archivo:<ruta> [canal]` (requiere Manage Server)
-   - Fuente: `apps/discord-bot/docs/comunicados/**`
+1. Los comunicados se administran y publican desde la **web** (Admin → Comunicados): el API publica en Discord vía REST y en el hub.
+2. El comando `/publicarcomunicado` fue retirado del bot (ya no se usa).
+
+### Loro de Karpindomo (mensajes diarios)
+
+1. No es un comando: el bot publica frases aleatorias con **openers estilo mayordomo** a intervalos aleatorios (min/max minutos) en el canal configurado.
+2. Config desde la web (Admin → Mensajes Diarios): canal, activado, intervalo y frases.
+3. El scheduler relee la config cada ~2 min (aplica cambios sin reiniciar).
 
 ### XP (niveles)
 
@@ -49,6 +55,8 @@ Guía técnica y funcional del bot de Discord.
    > Al reproducir se manda un **player embed con botones** (estilo Rythm) en el canal:
    > ⏯️ pausar/reanudar, ⏭️ saltar, ⏹️ detener, 👋 salir, 🔉/🔊 volumen, 📜 cola. Se actualiza solo.
    > Streaming con `yt-dlp` (vía `youtube-dl-exec`) + `@discordjs/voice`. El bot se desconecta solo cuando el canal queda sin oyentes (15s de gracia) o tras 60s de inactividad.
+   > **Permisos DJ**: para detener/desconectar (`/stop`, `/leave` y botones ⏹️/👋) hay que estar en el **mismo canal de voz** que el bot (además del rol DJ configurado).
+   > El fallback a SoundCloud **deduplica por título** para no encolar copias del mismo tema.
 
 ## 3. Eventos y automatizaciones
 
@@ -60,6 +68,7 @@ Guía técnica y funcional del bot de Discord.
 6. Polling de jobs de reaction roles (~20s) → crea/edita/borra paneles pedidos desde la web
 7. Polling de `xpSyncRequested` → re-sincroniza roles/nicknames por nivel
 8. Scheduler de timers → avisa por DM al vencer (con opción de repetir)
+9. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
 
 ## 4. Sistema de XP
 

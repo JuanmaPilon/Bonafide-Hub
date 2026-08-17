@@ -9,6 +9,7 @@ Este documento resume cómo se conectan bot, API, web y base de datos.
 - Runtime de Discord (discord.js)
 - Eventos, comandos slash, XP, voz dinámica, timers
 - Ejecuta los jobs de reaction roles encolados por la web
+- Scheduler del loro: publica frases aleatorias a intervalos aleatorios
 
 2. `apps/api`
 
@@ -17,6 +18,8 @@ Este documento resume cómo se conectan bot, API, web y base de datos.
 - Persistencia en PostgreSQL via Prisma
 - Endpoint interno para config del bot
 - Registro de auditoría de cambios del Hub
+- Comunicados: publica en Discord vía REST + los muestra en el hub
+- Logs de raid: sincroniza con Warcraft Logs y publica en Discord/web
 
 3. `apps/web`
 
@@ -125,7 +128,7 @@ Endpoints:
 
 Tablas:
 
-1. `guild_configs` — config por guild (canales, rol de entrada, `xpSyncRequested`, salas temporales)
+1. `guild_configs` — config por guild (canales, rol de entrada, `xpSyncRequested`, salas temporales, loro, logs)
 2. `reaction_role_rules` — reglas por `guildId + messageId + emojiKey`
 3. `reaction_role_panels` — metadata de paneles (título, descripción, modo, canal)
 4. `reaction_role_panel_jobs` — jobs encolados (create/update/delete)
@@ -133,6 +136,9 @@ Tablas:
 6. `xp_profiles` — XP/nivel/contadores por usuario
 7. `audit_log_entries` — registro de auditoría
 8. `discord_sessions` / `oauth_states` — OAuth
+9. `communications` / `communication_instances` — comunicados y sus publicaciones
+10. `daily_messages` — frases del loro de Karpindomo
+11. `raid_logs` — logs de raid sincronizados con Warcraft Logs
 
 ## 9. Decisiones operativas
 
@@ -140,3 +146,30 @@ Tablas:
 2. Permitir fallback local para resiliencia en planes con sleep.
 3. Sincronizar local -> remoto cuando remoto vuelve y está vacío.
 4. Log de auditoría: solo escritura, lectura solo para owner.
+
+## 10. Flujo de comunicados (web -> Discord)
+
+```text
+Web (Admin → Comunicados) -> API guarda la plantilla
+   -> Publicar -> API crea una instancia (snapshot) y publica en Discord vía REST
+   -> El hub muestra las instancias publicadas (tab Comunicados)
+```
+
+## 11. Flujo del loro de Karpindomo (mensajes diarios)
+
+```text
+Admin (web) configura canal/intervalo/frases -> API guarda en DB
+Bot (cada ~2 min) -> lee config + frases habilitadas -> programa un timer aleatorio
+   -> publica opener aleatorio + frase aleatoria en el canal
+```
+
+## 12. Flujo de Logs de Raid (Warcraft Logs)
+
+```text
+Admin pega un link (o activa el vigilado de perfil) -> API guarda un RaidLog
+   -> API consulta Warcraft Logs (endpoint público o API v1 con key)
+   -> guarda resumen (fights/kills) y publica en el canal configurado de Discord
+Scheduler (cada 5 min) -> observa reports sin publicar / perfiles vigilados
+   -> solo RAID (zone tipo Raid + título contiene "raid") -> publica cuando hay fights
+Web -> tab Raids muestra los logs (acordeón colapsable)
+```

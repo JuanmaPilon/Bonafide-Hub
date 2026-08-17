@@ -17,10 +17,11 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 5. Anuncios de nivel (rank up) y sincronización de roles por nivel
 6. Rol de entrada automático al unirse
 7. Timers (`/settimer`) con aviso por DM + gestión (`/listtimers`, `/canceltimer`, `/removetimer`)
-8. Comunicados desde markdown (`/publicarcomunicado`)
+8. Música (`/play`, `/pause`, `/resume`, `/skip`, `/queue`, `/nowplaying`, `/volume`, `/stop`, `/leave`) con player de botones
 9. Estadísticas de miembros/roles (`/memberstats`, `/rolstats`)
 10. Comandos de gestión de XP (`/addlvl`, `/removelvl`, `/setlvl`, `/resetlvl`)
 11. Ejecutor de paneles de reaction roles creados desde la web (job polling ~20s)
+12. Loro de Karpindomo: publica frases aleatorias a intervalos aleatorios
 
 ### API (`apps/api`)
 
@@ -32,13 +33,19 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 6. **Registro de auditoría** de cambios del Hub (solo lectura, visible para el owner)
 7. Widget del servidor (conectados, totales, boosts de Nitro)
 8. Boosters de Nitro (lista de quienes boostean)
+9. Comunicados: plantillas + publicación en Discord y en el hub (opción solo web)
+10. Mensajes diarios del loro de Karpindomo (CRUD + config)
+11. Logs de raid con Warcraft Logs: links manuales + vigilado de perfil (solo raids)
+12. Leaderboard público (`/public/leaderboard`) para la landing
 
 ### Web hub (`apps/web`)
 
-1. Home de bienvenida con podio top 5 y boosters de Nitro
+1. Home de bienvenida con podio top 5, carrusel de boosters y login centrado
 2. Dashboard con stats del servidor, leaderboard, neón por rango y badge de booster
-3. Panel Admin: configuración general, reaction roles, sistema de XP (niveles, colores, multiplicadores, import/export) y registro de auditoría
-4. Navegación por hash (`/#/home`, `/#/dashboard`, `/#/admin`, ...)
+3. Tab Comunicados (publicados desde el admin)
+4. Tab Raids con card colapsable de Logs de Raid (sincronizados con Warcraft Logs)
+5. Panel Admin: configuración general, comunicados, reaction roles, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
+6. Navegación por hash (`/#/home`, `/#/dashboard`, `/#/admin`, ...)
 
 ## Estructura del repo
 
@@ -122,7 +129,7 @@ cd apps/web && npm run build
 ## Base de datos
 
 - Schema: `apps/api/prisma/schema.prisma`
-- Tablas: `guild_configs`, `reaction_role_rules`, `reaction_role_panels`, `reaction_role_panel_jobs`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`
+- Tablas: `guild_configs`, `reaction_role_rules`, `reaction_role_panels`, `reaction_role_panel_jobs`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`, `communications`, `communication_instances`, `daily_messages`, `raid_logs`
 - Al agregar tablas al schema: `cd apps/api && npx prisma db push --skip-generate` (pre-deploy en Railway)
 
 ## Documentación técnica

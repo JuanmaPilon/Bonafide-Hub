@@ -19,12 +19,15 @@ Archivo ejemplo: `apps/api/.env.example`
 4. `SESSION_SECRET`
 5. `DATABASE_URL`
 6. `BOT_API_TOKEN` (para el endpoint interno del bot)
-7. `DISCORD_BOT_TOKEN` (para consultar datos del servidor: preview, emojis, miembros, boosters)
-8. `FRONTEND_APP_URL`
-9. `CORS_ORIGINS`
-10. `HOST`
-11. `PORT`
-12. `NODE_ENV`
+7. `DISCORD_BOT_TOKEN` (para consultar datos del servidor: preview, emojis, miembros, boosters, y publicar en Discord)
+8. `BONAFIDE_GUILD_ID` (exclusividad: solo funciona para este servidor)
+9. `WARCRAFT_LOGS_API_KEY` (API v1 gratuita para el vigilado de perfil de raid logs)
+10. `CORS_ORIGINS`
+11. `COOKIE_SAME_SITE`
+12. `FRONTEND_APP_URL`
+13. `HOST`
+14. `PORT`
+15. `NODE_ENV`
 
 ## 3. Endpoints públicos
 
@@ -37,6 +40,25 @@ Sesión: `GET /me`, `GET /guilds`, `POST /auth/logout`
 Widget del servidor: `GET /guilds/:guildId/widget` (conectados, totales, boosts)
 
 Config guild: `GET/PATCH /guilds/:guildId/config`
+
+Comunicados:
+
+1. `GET/POST /guilds/:guildId/communications` (plantillas)
+2. `PATCH/DELETE /guilds/:guildId/communications/:communicationId`
+3. `POST /guilds/:guildId/communications/:communicationId/publish`
+4. `DELETE /guilds/:guildId/communications/instances/:instanceId`
+5. `GET /guilds/:guildId/communications/published` (instancias para el hub)
+
+Mensajes diarios (loro de Karpindomo):
+
+1. `GET/POST /guilds/:guildId/daily-messages`
+2. `PATCH/DELETE /guilds/:guildId/daily-messages/:messageId`
+
+Logs de raid (Warcraft Logs):
+
+1. `GET/POST /guilds/:guildId/raid-logs`
+2. `DELETE /guilds/:guildId/raid-logs/:logId`
+3. `GET /public/leaderboard` (top 30 público para la landing)
 
 XP:
 
@@ -75,8 +97,7 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 4. `POST /internal/guilds/:guildId/xp/level`
 5. `GET /internal/guilds/:guildId/xp/profiles`
 6. `GET /internal/guilds/:guildId/reaction-roles/jobs`
-7. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
-
+7. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`9. `GET /internal/guilds/:guildId/daily-messages` (solo frases habilitadas)
 ## 5. Auditoría
 
 1. Cada mutación del Hub queda registrada (config, XP, panels).
@@ -99,6 +120,10 @@ Tablas:
 7. `audit_log_entries`
 8. `discord_sessions`
 9. `oauth_states`
+10. `communications` — plantillas de comunicados
+11. `communication_instances` — publicaciones concretas (snapshot)
+12. `daily_messages` — frases del loro de Karpindomo
+13. `raid_logs` — logs de raid sincronizados con Warcraft Logs
 
 Scripts (`apps/api/package.json`):
 
