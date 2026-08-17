@@ -469,7 +469,7 @@ function HomeView({
     <div className="home-view">
       <section className="home-hero">
         <div className="home-hero-art" aria-hidden="true" />
-        <h1>Bienvenido a Bonafide</h1>
+        <h1 className="brand-gradient">Bienvenido a Bonafide</h1>
         <p>
           Hola <strong className="user-name">{username}</strong>, este es el hub
           de la comunidad.
@@ -2090,7 +2090,7 @@ function App() {
               aria-label="Banner de Bonafide"
             />
 
-            <h1>Bienvenido a Bonafide</h1>
+            <h1 className="brand-gradient">Bienvenido a Bonafide</h1>
 
             <a className="primary-button landing-login" href={loginUrl()}>
               <svg
@@ -2230,7 +2230,7 @@ function App() {
         ) : (
           <>
             <section className="page-hero">
-              <h1>Bienvenido a Bonafide</h1>
+              <h1 className="brand-gradient">Bienvenido a Bonafide</h1>
               <p>
                 Bienvenido <strong className="user-name">{username}</strong>
               </p>

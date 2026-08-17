@@ -298,6 +298,43 @@ a:hover {
   letter-spacing: -0.03em;
 }
 
+/* "Bienvenido a Bonafide": neón degradado con onda de color.
+   Gradiente azul → naranja (paleta del sitio) que se desplaza
+   como si el color tuviera vida, con un glow neón alrededor. */
+.brand-gradient {
+  background: linear-gradient(
+    90deg,
+    #6aa8ff 0%,
+    #ffb36b 25%,
+    #ff8a5c 50%,
+    #6aa8ff 75%,
+    #ffb36b 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: brand-gradient-wave 7s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(106, 168, 255, 0.45))
+    drop-shadow(0 0 24px rgba(255, 138, 92, 0.32));
+}
+
+@keyframes brand-gradient-wave {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-gradient {
+    animation: none;
+  }
+}
+
 .page-hero p {
   color: var(--muted);
   margin: 0;
