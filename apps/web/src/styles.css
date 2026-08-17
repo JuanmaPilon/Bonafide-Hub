@@ -695,6 +695,74 @@ a:hover {
   flex-shrink: 0;
 }
 
+/* Logs de Raid (Warcraft Logs) */
+.raid-log-badge {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  background: rgba(12, 19, 37, 0.55);
+}
+
+.raid-log-synced {
+  color: #7ce38b;
+  border-color: rgba(124, 227, 139, 0.35);
+  background: rgba(124, 227, 139, 0.08);
+}
+
+.raid-log-failed {
+  color: #ff8a8a;
+  border-color: rgba(255, 138, 138, 0.35);
+  background: rgba(255, 138, 138, 0.08);
+}
+
+.raid-log-meta {
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.raid-log-fights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.raid-log-fight {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid var(--panel-border);
+  background: rgba(12, 19, 37, 0.55);
+}
+
+.raid-log-fight.kill {
+  color: #7ce38b;
+  border-color: rgba(124, 227, 139, 0.3);
+}
+
+.raid-log-fight.wipe {
+  color: #ff8a8a;
+  border-color: rgba(255, 138, 138, 0.3);
+}
+
+.raid-log-link {
+  display: inline-block;
+  color: #6aa8ff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.raid-log-link:hover {
+  text-decoration: underline;
+}
+
 .rr-panels-list {
   margin-top: 20px;
   display: grid;

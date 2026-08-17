@@ -18,6 +18,7 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  logsChannelId?: string;
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
@@ -36,6 +37,7 @@ function toGuildConfig(
     defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
+    logsChannelId: string | null;
     memberLogChannelId: string | null;
     musicEnabled: boolean;
     musicRoleIds: string[];
@@ -61,6 +63,7 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
+    logsChannelId: record.logsChannelId ?? undefined,
     memberLogChannelId: record.memberLogChannelId ?? undefined,
     musicEnabled: record.musicEnabled,
     musicRoleIds: record.musicRoleIds,
@@ -102,6 +105,7 @@ type NormalizedGuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
+  logsChannelId?: string;
   memberLogChannelId?: string;
   musicEnabled: boolean;
   musicRoleIds: string[];
@@ -133,6 +137,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
+    logsChannelId: config.logsChannelId,
     memberLogChannelId: config.memberLogChannelId,
     musicEnabled: config.musicEnabled ?? true,
     musicRoleIds: config.musicRoleIds ?? [],
@@ -180,6 +185,7 @@ export async function replaceGuildConfig(
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
+        logsChannelId: normalized.logsChannelId,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,
@@ -195,6 +201,7 @@ export async function replaceGuildConfig(
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
+        logsChannelId: normalized.logsChannelId,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
         reactionRolesChannelId: normalized.reactionRolesChannelId,

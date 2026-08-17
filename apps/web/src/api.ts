@@ -15,6 +15,7 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  logsChannelId?: string;
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
@@ -28,6 +29,32 @@ export type DailyMessage = {
   guildId: string;
   id: string;
   updatedAt: string;
+};
+
+export type RaidFightSummary = {
+  difficulty?: number;
+  fightPercentage?: number;
+  kill?: boolean;
+  name?: string;
+};
+
+export type RaidLog = {
+  createdAt: string;
+  discordPosted: boolean;
+  error?: string;
+  fightCount: number;
+  firstFightAt?: string;
+  guildId: string;
+  id: string;
+  kills: number;
+  lastSyncedAt?: string;
+  reportCode: string;
+  reportUrl: string;
+  status: string;
+  summary?: { fights: RaidFightSummary[]; title?: string; zone?: number | null };
+  title?: string;
+  updatedAt: string;
+  zone?: number | null;
 };
 
 export type CommunicationInstance = {
@@ -632,6 +659,37 @@ export async function deleteDailyMessage(
 ): Promise<{ deleted: boolean }> {
   return requestJson<{ deleted: boolean }>(
     `/guilds/${guildId}/daily-messages/${encodeURIComponent(messageId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
+  const data = await requestJson<{ logs: RaidLog[] }>(
+    `/guilds/${guildId}/raid-logs`,
+    { method: "GET" },
+  );
+  return data.logs;
+}
+
+export async function createRaidLog(
+  guildId: string,
+  url: string,
+): Promise<{ log: RaidLog; posted?: boolean; error?: string }> {
+  return requestJson<{ log: RaidLog; posted?: boolean; error?: string }>(
+    `/guilds/${guildId}/raid-logs`,
+    {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    },
+  );
+}
+
+export async function deleteRaidLog(
+  guildId: string,
+  logId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}`,
     { method: "DELETE" },
   );
 }

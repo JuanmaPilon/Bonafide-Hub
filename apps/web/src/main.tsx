@@ -5,10 +5,12 @@ import DOMPurify from "dompurify";
 import {
   createCommunication,
   createDailyMessage,
+  createRaidLog,
   createReactionRolePanel,
   deleteCommunication,
   deleteCommunicationInstance,
   deleteDailyMessage,
+  deleteRaidLog,
   deleteReactionRoleJob,
   deleteReactionRolePanel,
   exportXpData,
@@ -29,6 +31,7 @@ import {
   listCommunications,
   listDailyMessages,
   listPublishedCommunications,
+  listRaidLogs,
   listReactionRoleJobs,
   listReactionRolePanels,
   loginUrl,
@@ -56,6 +59,7 @@ import {
   type GuildWidgetStatus,
   type LeaderboardEntry,
   type PublicLeaderboardEntry,
+  type RaidLog,
   type ReactionRoleJob,
   type ReactionRolePairInput,
   type ReactionRolePanel,
@@ -87,6 +91,7 @@ type HubTab =
   | "home"
   | "dashboard"
   | "comunicados"
+  | "logs"
   | "raids"
   | "eventos"
   | "memes"
@@ -97,6 +102,7 @@ const VALID_TABS: HubTab[] = [
   "home",
   "dashboard",
   "comunicados",
+  "logs",
   "raids",
   "eventos",
   "memes",
@@ -202,6 +208,10 @@ function panelTitle(tab: HubTab): string {
     return "Comunicados";
   }
 
+  if (tab === "logs") {
+    return "Logs de Raid";
+  }
+
   if (tab === "raids") {
     return "Raids";
   }
@@ -232,6 +242,10 @@ function panelDescription(tab: HubTab): string {
 
   if (tab === "comunicados") {
     return "Anuncios y comunicados de la guild.";
+  }
+
+  if (tab === "logs") {
+    return "Logs de raid sincronizados con Warcraft Logs.";
   }
 
   if (tab === "raids") {
@@ -526,6 +540,8 @@ function App() {
   const [rrJobs, setRrJobs] = useState<ReactionRoleJob[]>([]);
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
   const [dailyMessageDraft, setDailyMessageDraft] = useState("");
+  const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
+  const [raidLogUrl, setRaidLogUrl] = useState("");
   const [savingAction, setSavingAction] = useState<
     "config" | "xp" | "panel" | "daily" | null
   >(null);
@@ -667,6 +683,24 @@ function App() {
       .then((list) => {
         if (!cancelled) {
           setPublished(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGuildId]);
+
+  useEffect(() => {
+    if (!selectedGuildId) {
+      setRaidLogs([]);
+      return;
+    }
+    let cancelled = false;
+    listRaidLogs(selectedGuildId)
+      .then((logs) => {
+        if (!cancelled) {
+          setRaidLogs(logs);
         }
       })
       .catch(() => {});
@@ -927,6 +961,83 @@ function App() {
         error instanceof Error ? error.message : "Error al eliminar la frase.",
         "error",
       );
+    }
+  }
+
+  // ── Logs de Raid (Warcraft Logs) ─────────────────────────────────
+  async function refreshRaidLogs(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const logs = await listRaidLogs(selectedGuildId);
+      setRaidLogs(logs);
+    } catch {
+      // silencioso: se muestra vacío si falla
+    }
+  }
+
+  async function handleCreateRaidLog(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    const url = raidLogUrl.trim();
+    if (!url) {
+      pushToast("Pegá el link de Warcraft Logs primero.", "error");
+      return;
+    }
+
+    try {
+      const result = await createRaidLog(selectedGuildId, url);
+      setRaidLogUrl("");
+      pushToast(
+        result.posted
+          ? "Log de raid agregado y publicado en Discord."
+          : "Log de raid agregado. Se publicará cuando tenga datos.",
+        "success",
+      );
+      await refreshRaidLogs();
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al agregar el log.",
+        "error",
+      );
+    }
+  }
+
+  async function handleDeleteRaidLog(log: RaidLog): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteRaidLog(selectedGuildId, log.id);
+      setRaidLogs((current) => current.filter((entry) => entry.id !== log.id));
+      pushToast("Log de raid eliminado.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al eliminar el log.",
+        "error",
+      );
+    }
+  }
+
+  async function handleSaveLogsConfig(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setSavingAction("config");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        logsChannelId: config.logsChannelId,
+      });
+      setConfig(nextConfig);
+      pushToast("Canal de logs guardado.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo guardar el canal de logs.", "error");
+    } finally {
+      setSavingAction(null);
     }
   }
 
@@ -1687,6 +1798,7 @@ function App() {
     "home",
     "dashboard",
     "comunicados",
+    "logs",
     "raids",
     "eventos",
     "memes",
@@ -2952,6 +3064,106 @@ function App() {
                     </div>
                   </details>
 
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
+                      <div>
+                        <h3>Logs de Raid</h3>
+                        <p>
+                          Sincronizá logs de Warcraft Logs y publicá el resumen
+                          en Discord y en la sección Logs.
+                        </p>
+                      </div>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
+                    <div className="admin-card-body">
+                      <label>
+                        <span>Canal de Discord para publicar logs</span>
+                        <select
+                          className="select"
+                          value={config.logsChannelId ?? ""}
+                          onChange={(event) =>
+                            setConfig((current) => ({
+                              ...current,
+                              logsChannelId: event.target.value || undefined,
+                            }))
+                          }
+                        >
+                          <option value="">Sin canal configurado</option>
+                          {textChannels.map((channel) => (
+                            <option key={channel.id} value={channel.id}>
+                              {channel.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="primary-button"
+                        onClick={() => void handleSaveLogsConfig()}
+                        disabled={savingAction !== null}
+                        type="button"
+                      >
+                        {savingAction === "config"
+                          ? "Guardando…"
+                          : "Guardar canal"}
+                      </button>
+
+                      <div className="daily-messages-editor">
+                        <div className="daily-messages-head">
+                          <strong>Agregar log</strong>
+                          <span className="muted-text">
+                            Pegá el link de warcraftlogs.com/reports/…
+                          </span>
+                        </div>
+                        <input
+                          value={raidLogUrl}
+                          onChange={(event) => setRaidLogUrl(event.target.value)}
+                          placeholder="https://www.warcraftlogs.com/reports/XXXX"
+                        />
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleCreateRaidLog()}
+                          type="button"
+                        >
+                          + Agregar log de raid
+                        </button>
+
+                        {raidLogs.length === 0 ? (
+                          <div className="empty-state">
+                            <p>No hay logs todavía. ¡Agregá el primero!</p>
+                          </div>
+                        ) : (
+                          raidLogs.map((log) => (
+                            <div className="daily-message-row" key={log.id}>
+                              <div className="daily-message-content">
+                                <strong>{log.title || log.reportCode}</strong>
+                                <div className="muted-text">
+                                  ⚔️ {log.fightCount} fights · 💀 {log.kills}{" "}
+                                  kills ·{" "}
+                                  {log.status === "failed"
+                                    ? "sin datos"
+                                    : log.discordPosted
+                                      ? "publicado"
+                                      : "en espera"}
+                                </div>
+                              </div>
+                              <div className="daily-message-actions">
+                                <button
+                                  className="ghost-button danger"
+                                  onClick={() => void handleDeleteRaidLog(log)}
+                                  type="button"
+                                >
+                                  Eliminar
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </details>
+
                   {xpConfig ? (
                     <details className="admin-card admin-card-acc">
                       <summary className="admin-card-header admin-acc-header">
@@ -3419,6 +3631,72 @@ function App() {
                   {selectedGuild
                     ? "No tienes permisos para ver el panel Admin en esta guild."
                     : "No hay guild seleccionada o no tenes permisos para ver una."}
+                </div>
+              ) : activeTab === "logs" ? (
+                <div className="comunicados-stack">
+                  {raidLogs.length === 0 ? (
+                    <div className="empty-state">
+                      Todavía no hay logs de raid. Los logs se sincronizan desde
+                      Warcraft Logs y aparecen acá y en Discord.
+                    </div>
+                  ) : (
+                    raidLogs.map((log) => (
+                      <article
+                        className="comunicado-card comunicado-acc"
+                        key={log.id}
+                      >
+                        <div className="comunicado-acc-header" role="button">
+                          <span className="comunicado-acc-heading">
+                            <strong>{log.title || "Log de Raid"}</strong>
+                            {log.firstFightAt ? (
+                              <span className="comunicado-date">
+                                {new Date(
+                                  log.firstFightAt,
+                                ).toLocaleDateString()}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span
+                            className={`raid-log-badge raid-log-${log.status}`}
+                          >
+                            {log.status === "failed"
+                              ? "Sin datos"
+                              : log.discordPosted
+                                ? "Publicado"
+                                : "En espera"}
+                          </span>
+                        </div>
+                        <div className="comunicado-acc-body">
+                          <div className="raid-log-meta">
+                            ⚔️ {log.fightCount} fight/s · 💀 {log.kills} kill/s
+                          </div>
+                          {log.summary && log.summary.fights.length > 0 ? (
+                            <div className="raid-log-fights">
+                              {log.summary.fights.map((fight, index) => (
+                                <span
+                                  className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
+                                  key={index}
+                                >
+                                  {fight.name ?? "Fight"}{" "}
+                                  {fight.kill ? "✅" : "❌"}
+                                </span>
+                              ))}
+                            </div>
+                          ) : log.error ? (
+                            <div className="meta-text">⚠️ {log.error}</div>
+                          ) : null}
+                          <a
+                            className="raid-log-link"
+                            href={log.reportUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Ver en Warcraft Logs ↗
+                          </a>
+                        </div>
+                      </article>
+                    ))
+                  )}
                 </div>
               ) : activeTab === "comunicados" ? (
                 <div className="comunicados-stack">

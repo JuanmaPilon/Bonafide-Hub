@@ -50,6 +50,16 @@ import {
   updateDailyMessage,
 } from "./services/daily-messages-store.js";
 import {
+  buildRaidLogMessage,
+  createRaidLog,
+  deleteRaidLog,
+  extractReportCode,
+  listRaidLogs,
+  listUnpostedRaidLogs,
+  markRaidLogPosted,
+  refreshRaidLog,
+} from "./services/raid-logs-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -323,6 +333,48 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
       };
     })
     .filter((booster) => booster.userId);
+}
+
+// ── Scheduler de Logs de Raid ───────────────────────────────────────
+// "Observa" los reports que todavía no se publicaron en Discord: si ya
+// tienen fights, publica el resumen en el canal configurado. Así un link
+// pegado antes de que el report esté completo se publica apenas aparezcan
+// los fights, sin spamear.
+const RAID_LOG_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+let raidLogSyncTimer: NodeJS.Timeout | null = null;
+
+async function runRaidLogSync(): Promise<void> {
+  try {
+    const logs = await listUnpostedRaidLogs();
+    for (const log of logs) {
+      const config = await getGuildConfig(log.guildId);
+      const token = env.DISCORD_BOT_TOKEN;
+      if (!config.logsChannelId || !token) {
+        continue; // sin canal configurado: no hay dónde publicar
+      }
+
+      const result = await refreshRaidLog(log.id);
+      if (result.changed && result.log) {
+        const chunks = splitForDiscord(buildRaidLogMessage(result.log));
+        const ids = await postMessages(token, config.logsChannelId, chunks);
+        if (ids.length > 0) {
+          await markRaidLogPosted(log.id);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[raid-logs] sync failed", error);
+  }
+}
+
+function startRaidLogSync(): void {
+  if (raidLogSyncTimer) {
+    return;
+  }
+  void runRaidLogSync();
+  raidLogSyncTimer = setInterval(() => {
+    void runRaidLogSync();
+  }, RAID_LOG_SYNC_INTERVAL_MS);
 }
 
 export function buildApp() {
@@ -2091,6 +2143,132 @@ export function buildApp() {
     },
   );
 
+  app.post("/guilds/:guildId/raid-logs", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!canManageGuild(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { url?: string };
+    const code = extractReportCode(body.url ?? "");
+    if (!code) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          "El link no parece ser de Warcraft Logs (falta el código del report)",
+      });
+    }
+
+    const rawUrl = body.url?.trim() ?? "";
+    const reportUrl = /^https?:\/\//.test(rawUrl)
+      ? rawUrl
+      : `https://www.warcraftlogs.com/reports/${code}`;
+
+    const created = await createRaidLog({
+      guildId: params.guildId,
+      reportCode: code,
+      reportUrl,
+    });
+
+    const result = await refreshRaidLog(created.id);
+    let posted = false;
+    if (result.changed && result.log) {
+      const config = await getGuildConfig(params.guildId);
+      const token = env.DISCORD_BOT_TOKEN;
+      if (config.logsChannelId && token) {
+        const chunks = splitForDiscord(buildRaidLogMessage(result.log));
+        const ids = await postMessages(token, config.logsChannelId, chunks);
+        if (ids.length > 0) {
+          await markRaidLogPosted(created.id);
+          posted = true;
+        }
+      }
+    }
+
+    await logAdminAction(session, params.guildId, "raid-log:create", {
+      details: `Log de raid agregado: ${code}${posted ? " (publicado en Discord)" : ""}`,
+      targetType: "raid-log",
+      targetId: created.id,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      log: result.log ?? created,
+      error: result.error,
+      posted,
+    };
+  });
+
+  app.get("/guilds/:guildId/raid-logs", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const logs = await listRaidLogs(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      logs,
+    };
+  });
+
+  app.delete(
+    "/guilds/:guildId/raid-logs/:logId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        logId?: string;
+      };
+      if (!params.guildId || !params.logId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!canManageGuild(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteRaidLog(params.guildId, params.logId);
+
+      await logAdminAction(session, params.guildId, "raid-log:delete", {
+        details: "Log de raid eliminado.",
+        targetType: "raid-log",
+        targetId: params.logId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        deleted,
+      };
+    },
+  );
+
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -2157,6 +2335,10 @@ export function buildApp() {
 
     const body = request.body as Partial<GuildConfig>;
     const allowedBody: GuildConfig = {};
+
+    if (body.logsChannelId !== undefined) {
+      allowedBody.logsChannelId = body.logsChannelId;
+    }
 
     if (body.dailyMessagesChannelId !== undefined) {
       allowedBody.dailyMessagesChannelId = body.dailyMessagesChannelId;
@@ -2671,6 +2853,8 @@ export function buildApp() {
 
     return { ok: true };
   });
+
+  startRaidLogSync();
 
   return app;
 }
