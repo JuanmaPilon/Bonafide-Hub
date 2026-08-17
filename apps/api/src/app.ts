@@ -342,7 +342,7 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
 // tienen fights, publica el resumen en el canal configurado. Así un link
 // pegado antes de que el report esté completo se publica apenas aparezcan
 // los fights, sin spamear.
-const RAID_LOG_SYNC_INTERVAL_MS = 10 * 60 * 1000;
+const RAID_LOG_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 let raidLogSyncTimer: NodeJS.Timeout | null = null;
 
 async function runRaidLogSync(): Promise<void> {
@@ -394,13 +394,14 @@ async function runRaidLogSync(): Promise<void> {
 
       for (const created of result.created) {
         const refreshed = await refreshRaidLog(created.id);
-        if (config.logsChannelId && token && refreshed.changed && refreshed.log) {
+        if (
+          config.logsChannelId &&
+          token &&
+          refreshed.changed &&
+          refreshed.log
+        ) {
           const chunks = splitForDiscord(buildRaidLogMessage(refreshed.log));
-          const ids = await postMessages(
-            token,
-            config.logsChannelId,
-            chunks,
-          );
+          const ids = await postMessages(token, config.logsChannelId, chunks);
           if (ids.length > 0) {
             await markRaidLogPosted(created.id);
           }
