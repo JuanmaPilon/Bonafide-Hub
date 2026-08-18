@@ -156,12 +156,6 @@ guild-platform/
 │   ├── web/
 │   └── api/
 │
-├── packages/
-│   ├── database/
-│   ├── shared/
-│   ├── config/
-│   └── services/
-│
 ├── infrastructure/
 │   ├── docker/
 │   └── deployment/
@@ -180,7 +174,9 @@ guild-platform/
 └── .env.example
 ```
 
-Esto permitiría compartir:
+> Nota: `packages/` (código compartido) se agregará solo cuando surja una necesidad real de compartir tipos/servicios entre apps. Hasta entonces cada app es independiente, evitando sobreingeniería.
+
+Esto permitiría compartir (cuando exista un paquete compartido):
 
 - Tipos.
 - Modelos.
@@ -968,7 +964,6 @@ Responsabilidades:
 Arquitectura
 Estructura del repo
 Configuración
-Shared packages
 Database
 CI/CD
 Docker

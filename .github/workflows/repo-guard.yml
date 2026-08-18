@@ -34,5 +34,4 @@ jobs:
       - name: Validate minimal structure
         run: |
           test -d apps
-          test -d packages
           test -f README.md

@@ -55,14 +55,9 @@ apps/
   discord-bot/  discord.js + comandos slash + eventos
   web/          React/Vite (Guild Hub)
 
-packages/
-  shared/       Placeholder de código compartido (actualmente sin uso)
-
 docs/
   development/  Documentación técnica y operativa
 ```
-
-> Nota: `packages/shared` no se usa todavía. Es un placeholder pensado para el futuro código compartido entre apps (tipos/servicios).
 
 ## Arquitectura resumida
 

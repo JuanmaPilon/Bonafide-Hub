@@ -73,7 +73,8 @@ Expected high-level structure:
 - apps/discord-bot
 - apps/api
 - apps/web
-- packages/shared
+
+If shared code between apps becomes necessary, add a `packages/shared` workspace later (avoid overengineering).
 
 If the Discord bot moves to another repository later, keep contracts and boundaries explicit (API/events/types).
 

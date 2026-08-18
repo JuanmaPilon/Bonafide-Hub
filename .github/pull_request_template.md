@@ -4,7 +4,7 @@ Describe brevemente que cambia este PR y por que.
 
 ## Scope
 
-- Area: BOT / API / WEB / SHARED / INFRA / DOCS
+- Area: BOT / API / WEB / INFRA / DOCS
 - Tipo: feat / fix / chore / docs / refactor / test
 
 ## Changes

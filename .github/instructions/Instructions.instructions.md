@@ -382,7 +382,6 @@ Usar uno de estos prefijos:
 - API
 - DB
 - INFRA
-- SHARED
 - DEVOPS
 
 ## Título
