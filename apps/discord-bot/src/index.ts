@@ -3,6 +3,7 @@ import {
   ChannelType,
   ChatInputCommandInteraction,
   Client,
+  EmbedBuilder,
   Events,
   GatewayIntentBits,
   Partials,
@@ -1300,6 +1301,113 @@ async function handleXpLevelCommand(
   }
 }
 
+// /profile: muestra el perfil del miembro (el propio por defecto) como
+// embed en el canal donde se usa.
+async function handleProfileCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    await interaction.reply({
+      content: "Este comando solo se puede usar dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const targetUser = interaction.options.getUser("usuario") ?? interaction.user;
+  const member = await interaction.guild.members
+    .fetch(targetUser.id)
+    .catch(() => null);
+  if (!member) {
+    await interaction.reply({
+      content: "No se pudo obtener ese miembro.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const avatarUrl = member.displayAvatarURL({ size: 256 });
+  const bannerUrl = member.user.bannerURL({ size: 1024 }) ?? null;
+
+  let xpInfo: {
+    level: number;
+    messageCount: number;
+    userId: string;
+    voiceMinutes: number;
+    xp: number;
+  } | null = null;
+  try {
+    const profiles = await fetchRemoteXpProfiles(interaction.guildId);
+    xpInfo = profiles.find((profile) => profile.userId === targetUser.id) ?? null;
+  } catch {
+    xpInfo = null;
+  }
+
+  const highestRoleColor = member.roles.highest?.color ?? 0;
+  const embedColor =
+    highestRoleColor !== 0
+      ? highestRoleColor
+      : (member.user.accentColor ?? 0x6aa8ff);
+
+  const embed = new EmbedBuilder()
+    .setAuthor({ name: member.displayName, iconURL: avatarUrl })
+    .setColor(embedColor)
+    .setThumbnail(avatarUrl);
+
+  if (bannerUrl) {
+    embed.setImage(bannerUrl);
+  }
+
+  const fields: Array<{ inline: boolean; name: string; value: string }> = [];
+  fields.push({
+    inline: true,
+    name: "Usuario",
+    value: `@${member.user.username}`,
+  });
+  if (member.premiumSince) {
+    fields.push({ inline: true, name: "Booster", value: "💎 Sí" });
+  }
+  if (member.joinedAt) {
+    fields.push({
+      inline: true,
+      name: "Desde",
+      value: member.joinedAt.toLocaleDateString("es-AR"),
+    });
+  }
+  if (xpInfo) {
+    fields.push({ inline: true, name: "Nivel", value: String(xpInfo.level) });
+    fields.push({ inline: true, name: "XP", value: String(xpInfo.xp) });
+    fields.push({
+      inline: true,
+      name: "Mensajes",
+      value: String(xpInfo.messageCount),
+    });
+    const hours = Math.floor(xpInfo.voiceMinutes / 60);
+    const minutes = xpInfo.voiceMinutes % 60;
+    fields.push({
+      inline: true,
+      name: "Voz",
+      value: hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`,
+    });
+  }
+  const roles = member.roles.cache
+    .filter((role) => role.id !== interaction.guildId)
+    .sort((left, right) => right.position - left.position);
+  if (roles.size > 0) {
+    fields.push({
+      inline: false,
+      name: "Roles",
+      value: roles
+        .map((role) => `<@&${role.id}>`)
+        .join(" ")
+        .slice(0, 1000),
+    });
+  }
+  embed.setFields(fields);
+
+  await interaction.reply({ embeds: [embed] });
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     // Botones del player de música (estilo Rythm).
@@ -1565,6 +1673,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
             ? "set"
             : "reset";
     await handleXpLevelCommand(interaction, action);
+    return;
+  }
+
+  if (interaction.commandName === "profile") {
+    await handleProfileCommand(interaction);
     return;
   }
 

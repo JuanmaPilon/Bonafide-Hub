@@ -138,6 +138,15 @@ export const commandDefinitions = [
         .setRequired(true),
     ),
   new SlashCommandBuilder()
+    .setName("profile")
+    .setDescription("Muestra el perfil de un miembro en este canal")
+    .addUserOption((option) =>
+      option
+        .setName("usuario")
+        .setDescription("Usuario a consultar (por defecto: vos)")
+        .setRequired(false),
+    ),
+  new SlashCommandBuilder()
     .setName("play")
     .setDescription("Reproduce una canción o URL (YouTube / SoundCloud)")
     .addStringOption((option) =>

@@ -940,8 +940,10 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       profiles: profiles.map((profile) => ({
+        messageCount: profile.messageCount,
         userId: profile.userId,
         level: profile.level,
+        voiceMinutes: profile.voiceMinutes,
         xp: profile.xp,
       })),
     };
@@ -1424,128 +1426,121 @@ export function buildApp() {
 
   // Perfil de un miembro de la guild: datos públicos del user (avatar,
   // banner, acento) + membrecía (nick, roles, booster, fecha de ingreso).
-  app.get(
-    "/guilds/:guildId/members/:userId",
-    async (request, reply) => {
-      const session = await requireSession(request);
-      if (!session) {
-        return reply.code(401).send({ ok: false, error: "Unauthorized" });
-      }
+  app.get("/guilds/:guildId/members/:userId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
 
-      const params = request.params as {
-        guildId?: string;
-        userId?: string;
-      };
-      if (!params.guildId || !params.userId) {
-        return reply.code(400).send({ ok: false, error: "Missing params" });
-      }
+    const params = request.params as {
+      guildId?: string;
+      userId?: string;
+    };
+    if (!params.guildId || !params.userId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
 
-      if (!isGuildMember(session, params.guildId)) {
-        return reply.code(403).send({ ok: false, error: "Forbidden" });
-      }
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
 
-      if (!env.DISCORD_BOT_TOKEN) {
-        return reply.code(503).send({
-          ok: false,
-          error: "DISCORD_BOT_TOKEN is not configured",
-        });
-      }
+    if (!env.DISCORD_BOT_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "DISCORD_BOT_TOKEN is not configured",
+      });
+    }
 
-      const [memberResponse, rolesResponse] = await Promise.all([
-        fetchWithDiscordRetry(
-          `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/members/${encodeURIComponent(params.userId)}`,
-          {
-            headers: {
-              Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-            },
+    const [memberResponse, rolesResponse] = await Promise.all([
+      fetchWithDiscordRetry(
+        `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/members/${encodeURIComponent(params.userId)}`,
+        {
+          headers: {
+            Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
           },
-        ),
-        fetchWithDiscordRetry(
-          `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/roles`,
-          {
-            headers: {
-              Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-            },
-          },
-        ),
-      ]);
-
-      if (!memberResponse.ok) {
-        return reply.code(404).send({ ok: false, error: "Member not found" });
-      }
-
-      const roles = rolesResponse.ok
-        ? ((await rolesResponse.json()) as Array<{
-            color: number;
-            id: string;
-            name: string;
-            position: number;
-          }>)
-        : [];
-
-      const member = (await memberResponse.json()) as {
-        avatar?: string | null;
-        joined_at?: string | null;
-        nick?: string | null;
-        premium_since?: string | null;
-        roles?: string[];
-        user?: {
-          accent_color?: number | null;
-          avatar?: string | null;
-          banner?: string | null;
-          global_name?: string | null;
-          id?: string;
-          username?: string;
-        } | null;
-      };
-
-      const user = member.user ?? {};
-      const userId = user.id ?? params.userId;
-      const avatarUrl = user.avatar
-        ? buildAvatarUrl(userId, user.avatar)
-        : null;
-      const serverAvatarUrl = member.avatar
-        ? buildServerAvatarUrl(params.guildId, userId, member.avatar)
-        : null;
-      const bannerUrl = user.banner
-        ? buildUserBannerUrl(userId, user.banner)
-        : null;
-      const accentColor =
-        typeof user.accent_color === "number" ? user.accent_color : null;
-
-      const memberRoleIds = member.roles ?? [];
-      const memberRoles = roles
-        .filter(
-          (role) =>
-            memberRoleIds.includes(role.id) && role.id !== params.guildId,
-        )
-        .sort((left, right) => right.position - left.position)
-        .map((role) => ({
-          color: role.color,
-          id: role.id,
-          name: role.name,
-        }));
-
-      return {
-        ok: true,
-        guildId: params.guildId,
-        profile: {
-          accentColor,
-          avatarUrl,
-          bannerUrl,
-          displayName:
-            member.nick ?? user.global_name ?? user.username ?? "—",
-          globalName: user.global_name ?? null,
-          isBooster: Boolean(member.premium_since),
-          joinedAt: member.joined_at ?? null,
-          roles: memberRoles,
-          serverAvatarUrl,
-          userId,
-          username: user.username ?? "—",
         },
-      };
-    },
-  );
+      ),
+      fetchWithDiscordRetry(
+        `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/roles`,
+        {
+          headers: {
+            Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+          },
+        },
+      ),
+    ]);
+
+    if (!memberResponse.ok) {
+      return reply.code(404).send({ ok: false, error: "Member not found" });
+    }
+
+    const roles = rolesResponse.ok
+      ? ((await rolesResponse.json()) as Array<{
+          color: number;
+          id: string;
+          name: string;
+          position: number;
+        }>)
+      : [];
+
+    const member = (await memberResponse.json()) as {
+      avatar?: string | null;
+      joined_at?: string | null;
+      nick?: string | null;
+      premium_since?: string | null;
+      roles?: string[];
+      user?: {
+        accent_color?: number | null;
+        avatar?: string | null;
+        banner?: string | null;
+        global_name?: string | null;
+        id?: string;
+        username?: string;
+      } | null;
+    };
+
+    const user = member.user ?? {};
+    const userId = user.id ?? params.userId;
+    const avatarUrl = user.avatar ? buildAvatarUrl(userId, user.avatar) : null;
+    const serverAvatarUrl = member.avatar
+      ? buildServerAvatarUrl(params.guildId, userId, member.avatar)
+      : null;
+    const bannerUrl = user.banner
+      ? buildUserBannerUrl(userId, user.banner)
+      : null;
+    const accentColor =
+      typeof user.accent_color === "number" ? user.accent_color : null;
+
+    const memberRoleIds = member.roles ?? [];
+    const memberRoles = roles
+      .filter(
+        (role) => memberRoleIds.includes(role.id) && role.id !== params.guildId,
+      )
+      .sort((left, right) => right.position - left.position)
+      .map((role) => ({
+        color: role.color,
+        id: role.id,
+        name: role.name,
+      }));
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      profile: {
+        accentColor,
+        avatarUrl,
+        bannerUrl,
+        displayName: member.nick ?? user.global_name ?? user.username ?? "—",
+        globalName: user.global_name ?? null,
+        isBooster: Boolean(member.premium_since),
+        joinedAt: member.joined_at ?? null,
+        roles: memberRoles,
+        serverAvatarUrl,
+        userId,
+        username: user.username ?? "—",
+      },
+    };
+  });
 
   app.get("/guilds/:guildId/xp-config", async (request, reply) => {
     const session = await requireSession(request);

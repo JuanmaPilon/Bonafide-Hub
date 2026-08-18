@@ -332,7 +332,7 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "perfil") {
-    return "Tu perfil en la guild.";
+    return "Tu perfil en la comunidad.";
   }
 
   return "";
@@ -3895,9 +3895,7 @@ function App() {
                         <img
                           className="profile-avatar"
                           src={
-                            profile.avatarUrl ??
-                            profile.serverAvatarUrl ??
-                            ""
+                            profile.avatarUrl ?? profile.serverAvatarUrl ?? ""
                           }
                           alt={profile.displayName}
                         />
@@ -3916,16 +3914,13 @@ function App() {
                           {profile.joinedAt ? (
                             <span className="profile-badge">
                               📅 Desde{" "}
-                              {new Date(
-                                profile.joinedAt,
-                              ).toLocaleDateString()}
+                              {new Date(profile.joinedAt).toLocaleDateString()}
                             </span>
                           ) : null}
                         </div>
                         {(() => {
                           const entry = leaderboard.find(
-                            (candidate) =>
-                              candidate.userId === profile.userId,
+                            (candidate) => candidate.userId === profile.userId,
                           );
                           if (!entry) {
                             return null;
