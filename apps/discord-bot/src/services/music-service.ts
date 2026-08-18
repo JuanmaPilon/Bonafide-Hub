@@ -334,6 +334,7 @@ void ensurePython();
 
 export type Track = {
   duration?: string;
+  durationSeconds?: number;
   query?: string;
   requestedBy: string;
   title: string;
@@ -624,21 +625,8 @@ async function playNext(guildId: string): Promise<void> {
   }
 }
 
-// Normaliza un título para detectar duplicados del mismo tema: una misma
-// canción aparece varias veces en SoundCloud ("Song", "Song (Official)",
-// "Song - Topic", etc.) y no queremos encolar copias del mismo tema.
-function normalizeTrackTitle(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/\[.*?\]/g, " ")
-    .replace(/\(.*?\)/g, " ")
-    .replace(/[-–—].*$/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-// Busca varios candidatos en SoundCloud. Si uno es DRM protected, la cola
-// tiene los siguientes y playNext los probará en orden.
+// Busca el PRIMER candidato en SoundCloud. Limitamos a 1 para que el
+// fallback no encolé varios temas seguidos (el user quiere solo uno).
 async function searchSoundCloud(query: string): Promise<Track[]> {
   const youtubedl = await getYoutubeDl();
   const flags = {
@@ -658,31 +646,19 @@ async function searchSoundCloud(query: string): Promise<Track[]> {
       }
     ).entries ?? [];
 
-  const seenUrls = new Set<string>();
-  const seenTitles = new Set<string>();
   const tracks: Track[] = [];
   for (const entry of entries) {
-    if (tracks.length >= 3) {
+    if (tracks.length >= 1) {
       break;
     }
     const candidate = entry.webpage_url || entry.url;
     if (!candidate || !/^https?:\/\//.test(candidate)) {
       continue;
     }
-    if (seenUrls.has(candidate)) {
-      continue;
-    }
-    seenUrls.add(candidate);
-    const title = entry.title ?? query;
-    const titleKey = normalizeTrackTitle(title);
-    if (seenTitles.has(titleKey)) {
-      continue;
-    }
-    seenTitles.add(titleKey);
     tracks.push({
       duration: undefined,
       requestedBy: "",
-      title,
+      title: entry.title ?? query,
       url: candidate,
     });
   }
@@ -798,6 +774,24 @@ function formatDuration(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
+// Barra de progreso del tema actual: ▰▰▰▱▱▱ 3:45 / 5:12
+function buildProgressBar(
+  elapsedMs: number,
+  totalSeconds?: number,
+): string | null {
+  if (!totalSeconds || totalSeconds <= 0) {
+    return null;
+  }
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  const clamped = Math.min(elapsedSeconds, totalSeconds);
+  const ratio = clamped / totalSeconds;
+  const barTotal = 12;
+  const filled = Math.round(ratio * barTotal);
+  const bar =
+    "▰".repeat(filled) + "▱".repeat(Math.max(0, barTotal - filled));
+  return `${bar} ${formatDuration(clamped)} / ${formatDuration(totalSeconds)}`;
+}
+
 // ── Player embed con botones (estilo Rythm) ─────────────────────────
 function applyVolume(state: GuildMusicState): void {
   const playerState = state.player.state as {
@@ -827,6 +821,17 @@ function buildNowPlayingEmbed(state: GuildMusicState): EmbedBuilder {
   const lines: string[] = [];
   if (state.current.requestedBy) {
     lines.push(`Pedida por: **${state.current.requestedBy}**`);
+  }
+  const playerState = state.player.state as {
+    resource?: { playbackDuration?: number };
+  };
+  const elapsedMs =
+    typeof playerState.resource?.playbackDuration === "number"
+      ? playerState.resource.playbackDuration
+      : 0;
+  const progress = buildProgressBar(elapsedMs, state.current.durationSeconds);
+  if (progress) {
+    lines.push(progress);
   }
   if (state.current.duration) {
     lines.push(`Duración: ${state.current.duration}`);
@@ -962,6 +967,21 @@ async function updateNowPlaying(guildId: string): Promise<void> {
     state.nowPlayingMessageId = sent.id;
   }
 }
+
+// Refresca el embed cada 5s mientras suena, para que la barra de
+// progreso avance en vivo.
+const NOW_PLAYING_REFRESH_MS = 5000;
+setInterval(() => {
+  for (const [guildId, state] of musicStates) {
+    if (
+      state.connection &&
+      state.current &&
+      state.player.state.status === AudioPlayerStatus.Playing
+    ) {
+      void updateNowPlaying(guildId);
+    }
+  }
+}, NOW_PLAYING_REFRESH_MS);
 
 // Maneja los botones del player (estilo Rythm).
 export async function handleMusicButton(
@@ -1134,13 +1154,18 @@ async function resolveTrack(
   }
 
   const title = info.title || trimmed;
-  const duration =
+  const durationSeconds =
     typeof info.duration === "number" && info.duration > 0
-      ? formatDuration(info.duration)
+      ? info.duration
+      : undefined;
+  const duration =
+    typeof durationSeconds === "number"
+      ? formatDuration(durationSeconds)
       : undefined;
 
   return {
     duration,
+    durationSeconds,
     requestedBy: "",
     title,
     url,
