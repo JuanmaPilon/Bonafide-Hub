@@ -230,6 +230,18 @@ function guildIconUrl(guild: ApiGuild | null): string | null {
   return `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=512`;
 }
 
+// URL del avatar de Discord del usuario logueado (gif si es animado).
+function userAvatarUrl(user: {
+  avatar: string | null;
+  id: string;
+}): string | undefined {
+  if (!user.avatar) {
+    return undefined;
+  }
+  const extension = user.avatar.startsWith("a_") ? "gif" : "png";
+  return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${extension}?size=128`;
+}
+
 function tabLabel(tab: HubTab): string {
   if (tab === "home") {
     return "Inicio";
@@ -586,6 +598,7 @@ function HomeView({
 function App() {
   const [username, setUsername] = useState<string | null>(null);
   const [me, setMe] = useState<{
+    avatar: string | null;
     global_name: string | null;
     id: string;
     username: string;
@@ -1927,7 +1940,6 @@ function App() {
     "eventos",
     "memes",
     "muro",
-    "perfil",
   ];
   const visibleTabs = adminEnabled ? ([...tabs, "admin"] as HubTab[]) : tabs;
 
@@ -2259,6 +2271,13 @@ function App() {
               type="button"
               title="Ver mi perfil"
             >
+              {me?.avatar ? (
+                <img
+                  className="user-chip-avatar"
+                  src={userAvatarUrl(me)}
+                  alt=""
+                />
+              ) : null}
               {username}
             </button>
             <button

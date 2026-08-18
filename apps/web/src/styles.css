@@ -282,21 +282,44 @@ a:hover {
   font-size: 0.9rem;
 }
 
-/* Chip de usuario como botón hacia el perfil: color distintivo */
+/* Chip de usuario como botón hacia el perfil: destacado con el gradiente
+   de la marca (azul → naranja) para diferenciarlo de una tab activa. */
 .user-chip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: inherit;
-  background: rgba(106, 168, 255, 0.12);
-  border-color: rgba(106, 168, 255, 0.45);
-  color: #9cc1ff;
+  background: linear-gradient(
+    160deg,
+    rgba(106, 168, 255, 0.22),
+    rgba(255, 138, 92, 0.16)
+  );
+  border: 1px solid rgba(255, 138, 92, 0.55);
+  color: #ffe3cf;
   cursor: pointer;
   transition:
     filter 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-shadow:
+    0 0 12px rgba(255, 138, 92, 0.22),
+    inset 0 0 0 1px rgba(106, 168, 255, 0.12);
+}
+
+.user-chip-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 138, 92, 0.75);
 }
 
 .user-chip-link:hover {
-  filter: brightness(1.2);
-  border-color: rgba(106, 168, 255, 0.75);
+  filter: brightness(1.15);
+  border-color: rgba(255, 138, 92, 0.85);
+  box-shadow:
+    0 0 16px rgba(255, 138, 92, 0.4),
+    inset 0 0 0 1px rgba(106, 168, 255, 0.2);
 }
 
 /* Botón Salir: rojo con texto blanco (indica salida) */
