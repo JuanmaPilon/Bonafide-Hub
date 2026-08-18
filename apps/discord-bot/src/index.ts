@@ -1327,7 +1327,22 @@ async function handleProfileCommand(
   }
 
   const avatarUrl = member.displayAvatarURL({ size: 256 });
-  const bannerUrl = member.user.bannerURL({ size: 1024 }) ?? null;
+
+  // El banner a veces no viene en el objeto del miembro que devuelve
+  // Discord. Buscamos el user fresco (GET /users/:id) que incluye el
+  // banner público si el usuario lo tiene habilitado.
+  let bannerUser = member.user;
+  try {
+    const freshUser = await interaction.client.users.fetch(targetUser.id, {
+      force: true,
+    });
+    if (freshUser.banner) {
+      bannerUser = freshUser;
+    }
+  } catch {
+    // Si falla, seguimos con el user que trae el miembro.
+  }
+  const bannerUrl = bannerUser.bannerURL({ size: 1024 }) ?? null;
 
   let xpInfo: {
     level: number;
@@ -1338,7 +1353,8 @@ async function handleProfileCommand(
   } | null = null;
   try {
     const profiles = await fetchRemoteXpProfiles(interaction.guildId);
-    xpInfo = profiles.find((profile) => profile.userId === targetUser.id) ?? null;
+    xpInfo =
+      profiles.find((profile) => profile.userId === targetUser.id) ?? null;
   } catch {
     xpInfo = null;
   }
@@ -1347,7 +1363,7 @@ async function handleProfileCommand(
   const embedColor =
     highestRoleColor !== 0
       ? highestRoleColor
-      : (member.user.accentColor ?? 0x6aa8ff);
+      : (bannerUser.accentColor ?? 0x6aa8ff);
 
   const embed = new EmbedBuilder()
     .setAuthor({ name: member.displayName, iconURL: avatarUrl })
