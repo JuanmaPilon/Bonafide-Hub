@@ -344,6 +344,7 @@ export type Track = {
 type GuildMusicState = {
   connection: VoiceConnection | null;
   current: Track | null;
+  fallbackAttempts: number;
   player: ReturnType<typeof createAudioPlayer>;
   queue: Track[];
   volume: number;
@@ -375,6 +376,7 @@ function getState(guildId: string): GuildMusicState {
     state = {
       connection: null,
       current: null,
+      fallbackAttempts: 0,
       player,
       queue: [],
       volume: 0.5,
@@ -609,6 +611,7 @@ async function playNext(guildId: string): Promise<void> {
 
     // Confirma que el reproductor realmente está consumiendo audio.
     state.player.once(AudioPlayerStatus.Playing, () => {
+      state.fallbackAttempts = 0;
       console.log("[music] player reproduciendo (audio fluyendo)", {
         guildId,
         title: next.title,
@@ -625,8 +628,21 @@ async function playNext(guildId: string): Promise<void> {
   }
 }
 
-// Busca el PRIMER candidato en SoundCloud. Limitamos a 1 para que el
-// fallback no encolé varios temas seguidos (el user quiere solo uno).
+// Normaliza un título para detectar duplicados del mismo tema: una misma
+// canción aparece varias veces en SoundCloud ("Song", "Song (Official)",
+// "Song - Topic", etc.).
+function normalizeTrackTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\[.*?\]/g, " ")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[-–—].*$/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Busca candidatos en SoundCloud (hasta 5 distintos por título). El
+// fallback encola SOLO 1 a la vez y busca el siguiente si ese falla.
 async function searchSoundCloud(query: string): Promise<Track[]> {
   const youtubedl = await getYoutubeDl();
   const flags = {
@@ -646,27 +662,42 @@ async function searchSoundCloud(query: string): Promise<Track[]> {
       }
     ).entries ?? [];
 
+  const seenUrls = new Set<string>();
+  const seenTitles = new Set<string>();
   const tracks: Track[] = [];
   for (const entry of entries) {
-    if (tracks.length >= 1) {
+    if (tracks.length >= 5) {
       break;
     }
     const candidate = entry.webpage_url || entry.url;
     if (!candidate || !/^https?:\/\//.test(candidate)) {
       continue;
     }
+    if (seenUrls.has(candidate)) {
+      continue;
+    }
+    seenUrls.add(candidate);
+    const title = entry.title ?? query;
+    const titleKey = normalizeTrackTitle(title);
+    if (seenTitles.has(titleKey)) {
+      continue;
+    }
+    seenTitles.add(titleKey);
     tracks.push({
       duration: undefined,
+      query,
       requestedBy: "",
-      title: entry.title ?? query,
+      title,
       url: candidate,
     });
   }
   return tracks;
 }
 
-// Si un tema de YouTube no se puede transmitir (p. ej. IP de datacenter
-// bloqueada), reintentamos el mismo texto en SoundCloud automáticamente.
+// Si un tema no se puede transmitir (YouTube bloqueado en IPs de
+// datacenter, o SoundCloud con DRM), reintentamos el mismo texto en
+// SoundCloud. Solo encolamos UN candidato a la vez; si falla, buscamos
+// el siguiente (hasta 3 intentos) para no spamear la cola.
 async function handleStreamFailure(
   guildId: string,
   next: Track,
@@ -679,20 +710,36 @@ async function handleStreamFailure(
   const isYouTubeUrl = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(
     next.url,
   );
+  const isSoundCloudUrl =
+    /^https?:\/\/(www\.)?soundcloud\.com\//.test(next.url);
 
-  // Solo buscamos alternativas si el tema falló por YouTube (datacenter).
-  // Si falla un tema de SoundCloud (p. ej. DRM), la cola ya tiene más
-  // candidatos del fallback anterior y playNext los probará en orden.
-  if (isYouTubeUrl && next.query) {
+  if (next.query) {
     try {
-      const fallbacks = await searchSoundCloud(next.query);
-      if (fallbacks.length > 0) {
-        state.queue.unshift(...fallbacks);
+      const candidates = await searchSoundCloud(next.query);
+
+      if (isYouTubeUrl && candidates.length > 0) {
+        // YouTube falló: probamos el primer candidato de SoundCloud.
+        state.fallbackAttempts = 0;
+        state.queue.unshift(candidates[0]);
         console.log("[music] YouTube falló — reintentando en SoundCloud", {
           guildId,
           query: next.query,
-          candidates: fallbacks.map((track) => track.title),
+          title: candidates[0].title,
         });
+      } else if (isSoundCloudUrl && state.fallbackAttempts < 3) {
+        // SoundCloud falló (DRM): probamos el siguiente candidato distinto.
+        const nextCandidate = candidates.find(
+          (candidate) => candidate.url !== next.url,
+        );
+        if (nextCandidate) {
+          state.fallbackAttempts += 1;
+          state.queue.unshift(nextCandidate);
+          console.log("[music] SoundCloud falló — probando siguiente", {
+            guildId,
+            query: next.query,
+            title: nextCandidate.title,
+          });
+        }
       }
     } catch (error) {
       console.error("[music] fallback a SoundCloud falló", {
