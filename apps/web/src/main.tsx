@@ -25,6 +25,7 @@ import {
   getGuildWidgetStatus,
   getLeaderboard,
   getMe,
+  getMemberProfile,
   getPublicLeaderboard,
   getXpConfig,
   importXpData,
@@ -58,6 +59,7 @@ import {
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
+  type MemberProfile,
   type PublicLeaderboardEntry,
   type RaidLog,
   type ReactionRoleJob,
@@ -95,6 +97,7 @@ type HubTab =
   | "eventos"
   | "memes"
   | "muro"
+  | "perfil"
   | "admin";
 
 const VALID_TABS: HubTab[] = [
@@ -105,6 +108,7 @@ const VALID_TABS: HubTab[] = [
   "eventos",
   "memes",
   "muro",
+  "perfil",
   "admin",
 ];
 
@@ -255,6 +259,10 @@ function tabLabel(tab: HubTab): string {
     return "Muro";
   }
 
+  if (tab === "perfil") {
+    return "Perfil";
+  }
+
   return "Admin";
 }
 
@@ -287,6 +295,10 @@ function panelTitle(tab: HubTab): string {
     return "Muro de la Comunidad";
   }
 
+  if (tab === "perfil") {
+    return "Perfil";
+  }
+
   return "Panel de Admin";
 }
 
@@ -317,6 +329,10 @@ function panelDescription(tab: HubTab): string {
 
   if (tab === "muro") {
     return "Perfiles destacados, hall of fame y contribuciones clave.";
+  }
+
+  if (tab === "perfil") {
+    return "Tu perfil en la guild.";
   }
 
   return "";
@@ -569,6 +585,13 @@ function HomeView({
 
 function App() {
   const [username, setUsername] = useState<string | null>(null);
+  const [me, setMe] = useState<{
+    global_name: string | null;
+    id: string;
+    username: string;
+  } | null>(null);
+  const [profile, setProfile] = useState<MemberProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [guilds, setGuilds] = useState<ApiGuild[]>([]);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [config, setConfig] = useState<GuildConfig>({});
@@ -657,6 +680,7 @@ function App() {
       }
 
       const nextGuilds = await getGuilds();
+      setMe(me);
       setUsername(me.global_name ?? me.username);
       setGuilds(nextGuilds);
       setSelectedGuildId((current) => current ?? nextGuilds[0]?.id ?? null);
@@ -763,6 +787,29 @@ function App() {
       cancelled = true;
     };
   }, [selectedGuildId]);
+
+  useEffect(() => {
+    if (activeTab !== "perfil" || !selectedGuildId || !me) {
+      return;
+    }
+    let cancelled = false;
+    setProfileLoading(true);
+    getMemberProfile(selectedGuildId, me.id)
+      .then((nextProfile) => {
+        if (!cancelled) {
+          setProfile(nextProfile);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setProfileLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId, me]);
 
   async function refreshCommunications(): Promise<void> {
     if (!selectedGuildId) {
@@ -1880,6 +1927,7 @@ function App() {
     "eventos",
     "memes",
     "muro",
+    "perfil",
   ];
   const visibleTabs = adminEnabled ? ([...tabs, "admin"] as HubTab[]) : tabs;
 
@@ -2205,11 +2253,19 @@ function App() {
                 ))}
               </select>
             ) : null}
-            <span className="user-chip">{username}</span>
             <button
-              className="ghost-button"
+              className="user-chip user-chip-link"
+              onClick={() => setActiveTab("perfil")}
+              type="button"
+              title="Ver mi perfil"
+            >
+              {username}
+            </button>
+            <button
+              className="logout-button"
               onClick={handleLogout}
               disabled={loading}
+              type="button"
             >
               Salir
             </button>
@@ -3813,6 +3869,118 @@ function App() {
                       </div>
                     </div>
                   </details>
+                </div>
+              ) : activeTab === "perfil" ? (
+                <div className="profile-view">
+                  {profileLoading ? (
+                    <div className="empty-state">Cargando perfil...</div>
+                  ) : !profile ? (
+                    <div className="empty-state">
+                      No se pudo cargar el perfil.
+                    </div>
+                  ) : (
+                    <div className="profile-card">
+                      <div
+                        className="profile-banner"
+                        style={
+                          profile.bannerUrl
+                            ? { backgroundImage: `url(${profile.bannerUrl})` }
+                            : profile.accentColor
+                              ? {
+                                  backgroundColor: `#${profile.accentColor.toString(16).padStart(6, "0")}`,
+                                }
+                              : undefined
+                        }
+                      >
+                        <img
+                          className="profile-avatar"
+                          src={
+                            profile.avatarUrl ??
+                            profile.serverAvatarUrl ??
+                            ""
+                          }
+                          alt={profile.displayName}
+                        />
+                      </div>
+                      <div className="profile-body">
+                        <h3>{profile.displayName}</h3>
+                        <span className="profile-username">
+                          @{profile.username}
+                        </span>
+                        <div className="profile-badges">
+                          {profile.isBooster ? (
+                            <span className="profile-badge booster">
+                              💎 Booster
+                            </span>
+                          ) : null}
+                          {profile.joinedAt ? (
+                            <span className="profile-badge">
+                              📅 Desde{" "}
+                              {new Date(
+                                profile.joinedAt,
+                              ).toLocaleDateString()}
+                            </span>
+                          ) : null}
+                        </div>
+                        {(() => {
+                          const entry = leaderboard.find(
+                            (candidate) =>
+                              candidate.userId === profile.userId,
+                          );
+                          if (!entry) {
+                            return null;
+                          }
+                          const voiceMinutes = entry.voiceMinutes;
+                          const hours = Math.floor(voiceMinutes / 60);
+                          const minutes = voiceMinutes % 60;
+                          return (
+                            <div className="profile-stats">
+                              <div className="profile-stat">
+                                <strong>{entry.level}</strong>
+                                <span>Nivel</span>
+                              </div>
+                              <div className="profile-stat">
+                                <strong>{entry.xp}</strong>
+                                <span>XP</span>
+                              </div>
+                              <div className="profile-stat">
+                                <strong>{entry.messageCount}</strong>
+                                <span>Mensajes</span>
+                              </div>
+                              <div className="profile-stat">
+                                <strong>
+                                  {hours > 0
+                                    ? `${hours}h ${minutes}m`
+                                    : `${minutes}m`}
+                                </strong>
+                                <span>Voz</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        {profile.roles.length > 0 ? (
+                          <div className="profile-roles">
+                            {profile.roles.map((role) => (
+                              <span
+                                className="profile-role"
+                                key={role.id}
+                                style={
+                                  role.color
+                                    ? {
+                                        borderColor: `#${role.color.toString(16).padStart(6, "0")}`,
+                                        color: `#${role.color.toString(16).padStart(6, "0")}`,
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {role.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : activeTab === "comunicados" ? (
                 <div className="comunicados-stack">

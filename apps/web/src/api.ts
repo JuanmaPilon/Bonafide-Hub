@@ -174,6 +174,31 @@ export type SessionResponse = {
   };
 };
 
+export type MemberProfile = {
+  accentColor: number | null;
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+  displayName: string;
+  globalName: string | null;
+  isBooster: boolean;
+  joinedAt: string | null;
+  roles: Array<{ color: number; id: string; name: string }>;
+  serverAvatarUrl: string | null;
+  userId: string;
+  username: string;
+};
+
+export async function getMemberProfile(
+  guildId: string,
+  userId: string,
+): Promise<MemberProfile | null> {
+  const data = await requestJson<{ profile: MemberProfile }>(
+    `/guilds/${guildId}/members/${encodeURIComponent(userId)}`,
+    { method: "GET" },
+  );
+  return data.profile;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
