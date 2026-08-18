@@ -618,6 +618,21 @@ async function playNext(guildId: string): Promise<void> {
       });
     });
     void updateNowPlaying(guildId);
+
+    // Si la pista llegó sin duración conocida (fallback de SoundCloud o
+    // resultado "flat" de búsqueda), la obtenemos en segundo plano para
+    // poder pintar la barra de progreso en vivo.
+    if (!next.durationSeconds) {
+      void (async () => {
+        const duration = await fetchTrackDuration(next.url);
+        const stateNow = musicStates.get(guildId);
+        if (stateNow && stateNow.current?.url === next.url && duration) {
+          stateNow.current.duration = duration.duration;
+          stateNow.current.durationSeconds = duration.durationSeconds;
+          void updateNowPlaying(guildId);
+        }
+      })();
+    }
   } catch (error) {
     console.error("[music] failed to stream", {
       error,
@@ -694,6 +709,44 @@ async function searchSoundCloud(query: string): Promise<Track[]> {
   return tracks;
 }
 
+// Obtiene la duración real de una pista consultando metadata a yt-dlp.
+// Se usa cuando una pista (p. ej. del fallback de SoundCloud) no trae
+// duración desde la búsqueda, para poder pintar la barra de progreso.
+async function fetchTrackDuration(
+  url: string,
+): Promise<{ duration?: string; durationSeconds?: number } | null> {
+  try {
+    const youtubedl = await getYoutubeDl();
+    const flags = {
+      dumpSingleJson: true,
+      quiet: true,
+      noWarnings: true,
+      noPlaylist: true,
+      noCheckCertificates: true,
+    } as Parameters<typeof youtubedl.exec>[1];
+
+    const raw = await youtubedl(url, flags);
+    const info = raw as { duration?: number };
+    const durationSeconds =
+      typeof info.duration === "number" && info.duration > 0
+        ? info.duration
+        : undefined;
+    if (!durationSeconds) {
+      return null;
+    }
+    return {
+      duration: formatDuration(durationSeconds),
+      durationSeconds,
+    };
+  } catch (error) {
+    console.warn("[music] no se pudo obtener duración de la pista", {
+      url,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
 // Si un tema no se puede transmitir (YouTube bloqueado en IPs de
 // datacenter, o SoundCloud con DRM), reintentamos el mismo texto en
 // SoundCloud. Solo encolamos UN candidato a la vez; si falla, buscamos
@@ -710,8 +763,9 @@ async function handleStreamFailure(
   const isYouTubeUrl = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(
     next.url,
   );
-  const isSoundCloudUrl =
-    /^https?:\/\/(www\.)?soundcloud\.com\//.test(next.url);
+  const isSoundCloudUrl = /^https?:\/\/(www\.)?soundcloud\.com\//.test(
+    next.url,
+  );
 
   if (next.query) {
     try {
@@ -834,8 +888,7 @@ function buildProgressBar(
   const ratio = clamped / totalSeconds;
   const barTotal = 12;
   const filled = Math.round(ratio * barTotal);
-  const bar =
-    "▰".repeat(filled) + "▱".repeat(Math.max(0, barTotal - filled));
+  const bar = "▰".repeat(filled) + "▱".repeat(Math.max(0, barTotal - filled));
   return `${bar} ${formatDuration(clamped)} / ${formatDuration(totalSeconds)}`;
 }
 
