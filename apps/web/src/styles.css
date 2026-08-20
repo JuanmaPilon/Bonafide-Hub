@@ -367,11 +367,12 @@ a:hover {
 .brand-gradient {
   background: linear-gradient(
     90deg,
-    #6aa8ff 0%,
-    #ffb36b 25%,
-    #ff8a5c 50%,
-    #6aa8ff 75%,
-    #ffb36b 100%
+    #7db4ff 0%,
+    #ffd08f 22%,
+    #ffb36b 45%,
+    #ffa067 55%,
+    #7db4ff 78%,
+    #ffd08f 100%
   );
   background-size: 300% 100%;
   -webkit-background-clip: text;
@@ -379,8 +380,8 @@ a:hover {
   -webkit-text-fill-color: transparent;
   color: transparent;
   animation: brand-gradient-wave 7s linear infinite;
-  filter: drop-shadow(0 0 10px rgba(106, 168, 255, 0.45))
-    drop-shadow(0 0 24px rgba(255, 138, 92, 0.32));
+  filter: drop-shadow(0 0 12px rgba(106, 168, 255, 0.7))
+    drop-shadow(0 0 30px rgba(255, 176, 107, 0.55));
 }
 
 @keyframes brand-gradient-wave {

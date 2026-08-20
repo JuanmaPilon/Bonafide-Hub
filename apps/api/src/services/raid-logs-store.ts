@@ -381,17 +381,15 @@ export async function syncCharacterWatch(input: {
     const existingCodes = new Set(existing.map((log) => log.reportCode));
 
     const created: RaidLog[] = [];
+    let skippedByZone = 0;
     for (const report of reports) {
-      const zoneInfo = zones.get(Number(report.zone ?? -1));
+      // Number(undefined) da NaN, y NaN ?? -1 sigue siendo NaN: forzamos -1.
+      const zoneId =
+        typeof report.zone === "number" ? Number(report.zone) : -1;
+      const zoneInfo = zones.get(zoneId);
       // Solo raids: excluye dungeons/Mythic+/etc. (logs personales).
       if (!zoneInfo || zoneInfo.type !== "Raid") {
-        continue;
-      }
-      // Capa extra de check: el título debe indicar que es raid
-      // (ej: "Raid Jueves Mítica"). Evita logs personales que por algún
-      // motivo tengan zone de raid.
-      const title = (report.title ?? "").toLowerCase();
-      if (!title.includes("raid")) {
+        skippedByZone += 1;
         continue;
       }
       if (existingCodes.has(report.id)) {
@@ -404,6 +402,14 @@ export async function syncCharacterWatch(input: {
       });
       existingCodes.add(report.id);
       created.push(createdLog);
+    }
+
+    if (reports.length > 0) {
+      console.log(
+        `[raid-logs] watch ${input.character}@${input.server}: ${reports.length} report/s, ` +
+          `${created.length} nuevo/s, ${skippedByZone} fuera de zona raid, ` +
+          `${reports.length - created.length - skippedByZone} ya existían`,
+      );
     }
 
     return { created };
