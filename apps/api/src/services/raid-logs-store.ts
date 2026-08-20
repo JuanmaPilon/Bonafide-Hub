@@ -134,6 +134,11 @@ async function fetchWclReport(code: string): Promise<WclReport> {
   );
 
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(
+        `El report ${code} no es público o no existe (404). Hacelo público en Warcraft Logs (Edit → Privacy → Public) para que el bot pueda leerlo.`,
+      );
+    }
     throw new Error(`Warcraft Logs responded ${response.status}`);
   }
 
@@ -384,8 +389,7 @@ export async function syncCharacterWatch(input: {
     let skippedByZone = 0;
     for (const report of reports) {
       // Number(undefined) da NaN, y NaN ?? -1 sigue siendo NaN: forzamos -1.
-      const zoneId =
-        typeof report.zone === "number" ? Number(report.zone) : -1;
+      const zoneId = typeof report.zone === "number" ? Number(report.zone) : -1;
       const zoneInfo = zones.get(zoneId);
       // Solo raids: excluye dungeons/Mythic+/etc. (logs personales).
       if (!zoneInfo || zoneInfo.type !== "Raid") {
