@@ -808,6 +808,22 @@ a:hover {
   background: rgba(12, 19, 37, 0.55);
 }
 
+/* Lado derecho del header del acordeón: badge + chevron juntos */
+.comunicado-acc-heading-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Resumen compacto en el header (fights/kills) */
+.raid-log-meta-inline {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .raid-log-synced {
   color: #7ce38b;
   border-color: rgba(124, 227, 139, 0.35);

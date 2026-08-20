@@ -138,7 +138,22 @@ function ToastViewport({ toasts }: { toasts: ToastItem[] }) {
 }
 
 // Lista reutilizable de logs de raid (se usa en la tab Logs y en Raids).
+// Cada log es un acordeón: el detalle se expande solo al hacer click.
 function RaidLogsList({ logs }: { logs: RaidLog[] }) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleLog = (logId: string): void => {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
+  };
+
   if (logs.length === 0) {
     return (
       <div className="empty-state">
@@ -150,54 +165,75 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
 
   return (
     <>
-      {logs.map((log) => (
-        <article className="comunicado-card comunicado-acc" key={log.id}>
-          <div className="comunicado-acc-header" role="button">
-            <span className="comunicado-acc-heading">
-              <strong>{log.title || "Log de Raid"}</strong>
-              {log.firstFightAt ? (
-                <span className="comunicado-date">
-                  {new Date(log.firstFightAt).toLocaleDateString()}
-                </span>
-              ) : null}
-            </span>
-            <span className={`raid-log-badge raid-log-${log.status}`}>
-              {log.status === "failed"
-                ? "Sin datos"
-                : log.discordPosted
-                  ? "Publicado"
-                  : "En espera"}
-            </span>
-          </div>
-          <div className="comunicado-acc-body">
-            <div className="raid-log-meta">
-              ⚔️ {log.fightCount} fight/s · 💀 {log.kills} kill/s
-            </div>
-            {log.summary && log.summary.fights.length > 0 ? (
-              <div className="raid-log-fights">
-                {log.summary.fights.map((fight, index) => (
-                  <span
-                    className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
-                    key={index}
-                  >
-                    {fight.name ?? "Fight"} {fight.kill ? "✅" : "❌"}
-                  </span>
-                ))}
-              </div>
-            ) : log.error ? (
-              <div className="meta-text">⚠️ {log.error}</div>
-            ) : null}
-            <a
-              className="raid-log-link"
-              href={log.reportUrl}
-              target="_blank"
-              rel="noreferrer"
+      {logs.map((log) => {
+        const expanded = expandedIds.has(log.id);
+        return (
+          <article className="comunicado-card comunicado-acc" key={log.id}>
+            <button
+              className="comunicado-acc-header"
+              onClick={() => toggleLog(log.id)}
+              type="button"
+              aria-expanded={expanded}
             >
-              Ver en Warcraft Logs ↗
-            </a>
-          </div>
-        </article>
-      ))}
+              <span className="comunicado-acc-heading">
+                <strong>{log.title || "Log de Raid"}</strong>
+                {log.firstFightAt ? (
+                  <span className="comunicado-date">
+                    {new Date(log.firstFightAt).toLocaleDateString()}
+                  </span>
+                ) : null}
+                <span className="raid-log-meta-inline">
+                  ⚔️ {log.fightCount} · 💀 {log.kills}
+                </span>
+              </span>
+              <span className="comunicado-acc-heading-right">
+                <span className={`raid-log-badge raid-log-${log.status}`}>
+                  {log.status === "failed"
+                    ? "Sin datos"
+                    : log.discordPosted
+                      ? "Publicado"
+                      : "En espera"}
+                </span>
+                <span
+                  className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+              </span>
+            </button>
+            {expanded ? (
+              <div className="comunicado-acc-body">
+                <div className="raid-log-meta">
+                  ⚔️ {log.fightCount} fight/s · 💀 {log.kills} kill/s
+                </div>
+                {log.summary && log.summary.fights.length > 0 ? (
+                  <div className="raid-log-fights">
+                    {log.summary.fights.map((fight, index) => (
+                      <span
+                        className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
+                        key={index}
+                      >
+                        {fight.name ?? "Fight"} {fight.kill ? "✅" : "❌"}
+                      </span>
+                    ))}
+                  </div>
+                ) : log.error ? (
+                  <div className="meta-text">⚠️ {log.error}</div>
+                ) : null}
+                <a
+                  className="raid-log-link"
+                  href={log.reportUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Ver en Warcraft Logs ↗
+                </a>
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
     </>
   );
 }
