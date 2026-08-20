@@ -120,29 +120,21 @@ export function extractReportCode(input: string): string | null {
   return null;
 }
 
-// Consulta el endpoint JSON público de Warcraft Logs (sin API key) para
-// reports públicos: https://www.warcraftlogs.com/report/fights/{code}
+// Consulta los fights de un report usando la API v1 oficial de Warcraft
+// Logs (con API key). Usamos la v1 en lugar del endpoint público de la
+// página (/report/fights/{code}) porque ese endpoint pasa por el challenge
+// anti-bot de Cloudflare, que bloquea las requests desde IPs de datacenter
+// (Railway) con 404 aunque el report sea público.
 async function fetchWclReport(code: string): Promise<WclReport> {
-  const response = await fetch(
-    `https://www.warcraftlogs.com/report/fights/${encodeURIComponent(code)}`,
-    {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Bonafide-Hub/0.1",
-      },
-    },
-  );
+  const data = (await fetchV1Json(
+    `/report/fights/${encodeURIComponent(code)}`,
+  )) as WclReport;
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error(
-        `El report ${code} no es público o no existe (404). Hacelo público en Warcraft Logs (Edit → Privacy → Public) para que el bot pueda leerlo.`,
-      );
-    }
-    throw new Error(`Warcraft Logs responded ${response.status}`);
+  if (!data || typeof data !== "object") {
+    throw new Error(`El report ${code} no devolvió datos de Warcraft Logs.`);
   }
 
-  return (await response.json()) as WclReport;
+  return data;
 }
 
 // Reduce el report a lo que nos interesa: fights de boss, kills, título.
