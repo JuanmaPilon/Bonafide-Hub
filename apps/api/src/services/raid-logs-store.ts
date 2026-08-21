@@ -143,8 +143,10 @@ function summarize(report: WclReport): {
   title?: string;
   zone?: number | null;
 } {
+  // Solo fights de boss reales (boss > 0). Trash con nombre (p. ej.
+  // "Radian Spellower", "Venomfang Juggernaut") tiene boss=0 y se excluye.
   const fights = (report.fights ?? [])
-    .filter((fight) => (fight.boss ?? 0) > 0 || Boolean(fight.name))
+    .filter((fight) => (fight.boss ?? 0) > 0)
     .map((fight) => ({
       difficulty: fight.difficulty,
       fightPercentage: fight.fightPercentage,
@@ -383,8 +385,15 @@ export async function syncCharacterWatch(input: {
       // Number(undefined) da NaN, y NaN ?? -1 sigue siendo NaN: forzamos -1.
       const zoneId = typeof report.zone === "number" ? Number(report.zone) : -1;
       const zoneInfo = zones.get(zoneId);
-      // Solo raids: excluye dungeons/Mythic+/etc. (logs personales).
-      if (!zoneInfo || zoneInfo.type !== "Raid") {
+      const isRaidZone = zoneInfo?.type === "Raid";
+      const titleHasRaid = (report.title ?? "")
+        .toLowerCase()
+        .includes("raid");
+
+      // Aceptamos raids aunque la zona no esté bien clasificada en WCL:
+      // zona raid, O título que diga "raid" (p. ej. "Raid N 20/08/2026").
+      // Así un report mixto/no-clasificado igual se guarda y se publica.
+      if (!isRaidZone && !titleHasRaid) {
         skippedByZone += 1;
         continue;
       }
