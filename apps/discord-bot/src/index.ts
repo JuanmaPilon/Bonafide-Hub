@@ -1424,20 +1424,21 @@ async function handleProfileCommand(
   await interaction.reply({ embeds: [embed] });
 }
 
-// Mensajes del mayordomo de Karpindomo al vetar/desvetar una sala de voz.
+// Mensajes del mayordomo de Karpindomo al desperuanizar/reperuanizar una
+// sala de voz. {user} se reemplaza con la mención de quien ejecutó el comando.
 const BAN_CHANNEL_BUTLER_MESSAGES = [
-  "🎩 Acabo de desperuanizar la sala, es segura. Nadie no deseado entrará.",
-  "🗝️ La sala fue blindada, señor. Los vetados no podrán verla.",
-  "🕯️ Puertas cerradas, señor. Esta sala queda reservada.",
-  "🪄 Listo: la sala ya no es visible para los roles vetados.",
-  "🚪 Desperuanizada. Aquí solo entra quien debe entrar.",
+  "🎩 Acabo de desperuanizar la sala, {user}. Es segura, nadie no deseado entrará.",
+  "🗝️ {user} desperuanizó la sala. Los roles desperuanizados ya no podrán verla.",
+  "🕯️ Puertas cerradas, señor. {user} dejó esta sala reservada.",
+  "🪄 Listo: {user} desperuanizó la sala, ya no es visible para los roles desperuanizados.",
+  "🚪 Desperuanizada por {user}. Aquí solo entra quien debe entrar.",
 ];
 
 const UNBAN_CHANNEL_BUTLER_MESSAGES = [
-  "🎩 Acabo de reperuanizar la sala. Todos pueden volver a verla.",
-  "🔓 Puertas abiertas de nuevo, señor. La sala es visible para todos.",
-  "🪄 Reperuanizada: los roles vetados ya pueden ver esta sala.",
-  "🗝️ Listo, la sala vuelve a estar disponible para todos.",
+  "🎩 {user} reperuanizó la sala. Todos pueden volver a verla.",
+  "🔓 Puertas abiertas de nuevo, señor. {user} la volvió a abrir.",
+  "🪄 Reperuanizada por {user}: los roles desperuanizados ya pueden ver esta sala.",
+  "🗝️ Listo, {user} reperuanizó la sala, vuelve a estar disponible para todos.",
 ];
 
 // /desperuanizar y /reperuanizar: ocultan o revelan una sala de voz
@@ -1534,8 +1535,9 @@ async function handleVoiceBanCommand(
   const messages = ban
     ? BAN_CHANNEL_BUTLER_MESSAGES
     : UNBAN_CHANNEL_BUTLER_MESSAGES;
+  const template = pickRandom(messages);
   await interaction.reply({
-    content: pickRandom(messages),
+    content: template.replace("{user}", interaction.user.toString()),
   });
 }
 

@@ -267,51 +267,53 @@ function RoleMultiSelect({
   };
 
   return (
-    <details className="role-multiselect">
-      <summary className="role-multiselect-summary">
-        <span className="role-multiselect-label">{label}</span>
-        <span className="role-multiselect-value">
-          {selectedNames.length > 0
-            ? selectedNames.join(", ")
-            : emptyText}
-        </span>
-        <span className="comunicado-acc-chevron" aria-hidden="true">
-          ▸
-        </span>
-      </summary>
-      <div className="role-multiselect-options">
-        {roles.length === 0 ? (
-          <div className="muted-text">No hay roles disponibles.</div>
-        ) : (
-          roles.map((role) => {
-            const checked = value.includes(role.id);
-            return (
-              <label className="role-multiselect-option" key={role.id}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggle(role.id)}
-                />
-                <span
-                  className="role-multiselect-option-name"
-                  style={
-                    role.color
-                      ? {
-                          borderColor: `#${role.color.toString(16).padStart(6, "0")}`,
-                          color: `#${role.color.toString(16).padStart(6, "0")}`,
-                        }
-                      : undefined
-                  }
-                >
-                  {role.name}
-                </span>
-              </label>
-            );
-          })
-        )}
-      </div>
-      {hint ? <div className="muted-text role-multiselect-hint">{hint}</div> : null}
-    </details>
+    <label className="role-multiselect-field">
+      <span>{label}</span>
+      <details className="role-multiselect">
+        <summary className="role-multiselect-summary">
+          <span className="role-multiselect-value">
+            {selectedNames.length > 0 ? selectedNames.join(", ") : emptyText}
+          </span>
+          <span className="comunicado-acc-chevron" aria-hidden="true">
+            ▸
+          </span>
+        </summary>
+        <div className="role-multiselect-options">
+          {roles.length === 0 ? (
+            <div className="muted-text">No hay roles disponibles.</div>
+          ) : (
+            roles.map((role) => {
+              const checked = value.includes(role.id);
+              return (
+                <label className="role-multiselect-option" key={role.id}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(role.id)}
+                  />
+                  <span
+                    className="role-multiselect-option-name"
+                    style={
+                      role.color
+                        ? {
+                            borderColor: `#${role.color.toString(16).padStart(6, "0")}`,
+                            color: `#${role.color.toString(16).padStart(6, "0")}`,
+                          }
+                        : undefined
+                    }
+                  >
+                    {role.name}
+                  </span>
+                </label>
+              );
+            })
+          )}
+        </div>
+        {hint ? (
+          <div className="muted-text role-multiselect-hint">{hint}</div>
+        ) : null}
+      </details>
+    </label>
   );
 }
 
@@ -2653,7 +2655,7 @@ function App() {
                         </label>
 
                         <RoleMultiSelect
-                          label="Roles vetados (no ven las salas de voz dinámicas)"
+                          label="Roles desperuanizados (no ven las salas de voz dinámicas)"
                           roles={guildRoles}
                           value={config.bannedVoiceRoleIds ?? []}
                           onChange={(next) =>
@@ -2662,7 +2664,7 @@ function App() {
                               bannedVoiceRoleIds: next,
                             }))
                           }
-                          emptyText="Ningún rol vetado"
+                          emptyText="Ningún rol desperuanizado"
                           hint="Quienes tengan estos roles no podrán ver una sala dinámica cuando uses /desperuanizar."
                         />
 

@@ -2046,6 +2046,17 @@ input {
   max-width: 100%;
 }
 
+/* Campo multi-select de roles: título arriba + dropdown debajo (como el resto) */
+.role-multiselect-field {
+  display: grid;
+  gap: 8px;
+}
+
+.role-multiselect-field > span {
+  color: #bdd8d2;
+  font-size: 0.84rem;
+}
+
 /* Dropdown multi-select de roles (estilo acordeón) */
 .role-multiselect {
   border: 1px solid rgba(133, 156, 212, 0.24);
@@ -2066,12 +2077,6 @@ input {
 
 .role-multiselect-summary::-webkit-details-marker {
   display: none;
-}
-
-.role-multiselect-label {
-  color: var(--muted);
-  font-size: 0.84rem;
-  flex-shrink: 0;
 }
 
 .role-multiselect-value {
