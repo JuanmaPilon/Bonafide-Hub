@@ -2577,6 +2577,38 @@ function App() {
 
                         <label>
                           <span>
+                            Roles vetados (no ven las salas de voz dinámicas)
+                          </span>
+                          <select
+                            className="select"
+                            multiple
+                            size={5}
+                            value={config.bannedVoiceRoleIds ?? []}
+                            onChange={(event) => {
+                              const selected = Array.from(
+                                event.target.selectedOptions,
+                              ).map((option) => option.value);
+                              setConfig((current) => ({
+                                ...current,
+                                bannedVoiceRoleIds: selected,
+                              }));
+                            }}
+                          >
+                            {guildRoles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="muted-text">
+                            Mantené Ctrl (o Cmd) para elegir varios. Quienes
+                            tengan estos roles no podrán ver una sala dinámica
+                            cuando uses /desperuanizar.
+                          </span>
+                        </label>
+
+                        <label>
+                          <span>
                             Canal para creación dinámica de salas (voz)
                           </span>
                           <select

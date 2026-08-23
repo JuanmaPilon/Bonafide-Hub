@@ -11,6 +11,7 @@ export type ReactionRoleRule = {
 };
 
 export type GuildConfig = {
+  bannedVoiceRoleIds?: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
   dailyMessagesMaxMinutes?: number;
@@ -34,6 +35,7 @@ export type GuildConfig = {
 
 function toGuildConfig(
   record: {
+    bannedVoiceRoleIds: string[];
     dailyMessagesChannelId: string | null;
     dailyMessagesEnabled: boolean;
     dailyMessagesMaxMinutes: number;
@@ -63,6 +65,7 @@ function toGuildConfig(
   }
 
   return {
+    bannedVoiceRoleIds: record.bannedVoiceRoleIds,
     dailyMessagesChannelId: record.dailyMessagesChannelId ?? undefined,
     dailyMessagesEnabled: record.dailyMessagesEnabled,
     dailyMessagesMaxMinutes: record.dailyMessagesMaxMinutes,
@@ -110,6 +113,7 @@ function normalizeReactionRoleRule(
 }
 
 type NormalizedGuildConfig = {
+  bannedVoiceRoleIds: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled: boolean;
   dailyMessagesMaxMinutes: number;
@@ -146,6 +150,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
   );
 
   return {
+    bannedVoiceRoleIds: config.bannedVoiceRoleIds ?? [],
     dailyMessagesChannelId: config.dailyMessagesChannelId,
     dailyMessagesEnabled: config.dailyMessagesEnabled ?? false,
     dailyMessagesMaxMinutes: maxMinutes,
@@ -201,6 +206,7 @@ export async function replaceGuildConfig(
       where: { guildId },
       create: {
         guildId,
+        bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
@@ -221,6 +227,7 @@ export async function replaceGuildConfig(
         musicRoleIds: normalized.musicRoleIds,
       },
       update: {
+        bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,

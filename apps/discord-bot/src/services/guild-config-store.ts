@@ -3,6 +3,7 @@ import path from "node:path";
 import { env } from "../config/env.js";
 
 type GuildConfig = {
+  bannedVoiceRoleIds?: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
   dailyMessagesMaxMinutes?: number;
@@ -49,6 +50,7 @@ function isRemoteStoreEnabled(): boolean {
 
 function normalizeGuildConfig(input: GuildConfig): GuildConfig {
   return {
+    bannedVoiceRoleIds: input.bannedVoiceRoleIds ?? [],
     dailyMessagesChannelId: input.dailyMessagesChannelId,
     dailyMessagesEnabled: input.dailyMessagesEnabled ?? false,
     dailyMessagesMaxMinutes: input.dailyMessagesMaxMinutes ?? 90,

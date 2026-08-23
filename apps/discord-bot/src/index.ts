@@ -1424,6 +1424,121 @@ async function handleProfileCommand(
   await interaction.reply({ embeds: [embed] });
 }
 
+// Mensajes del mayordomo de Karpindomo al vetar/desvetar una sala de voz.
+const BAN_CHANNEL_BUTLER_MESSAGES = [
+  "🎩 Acabo de desperuanizar la sala, es segura. Nadie no deseado entrará.",
+  "🗝️ La sala fue blindada, señor. Los vetados no podrán verla.",
+  "🕯️ Puertas cerradas, señor. Esta sala queda reservada.",
+  "🪄 Listo: la sala ya no es visible para los roles vetados.",
+  "🚪 Desperuanizada. Aquí solo entra quien debe entrar.",
+];
+
+const UNBAN_CHANNEL_BUTLER_MESSAGES = [
+  "🎩 Acabo de reperuanizar la sala. Todos pueden volver a verla.",
+  "🔓 Puertas abiertas de nuevo, señor. La sala es visible para todos.",
+  "🪄 Reperuanizada: los roles vetados ya pueden ver esta sala.",
+  "🗝️ Listo, la sala vuelve a estar disponible para todos.",
+];
+
+// /desperuanizar y /reperuanizar: ocultan o revelan una sala de voz
+// dinámica a los roles vetados configurados en el panel de admin.
+async function handleVoiceBanCommand(
+  interaction: ChatInputCommandInteraction,
+  ban: boolean,
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    await interaction.reply({
+      content: "Este comando solo se puede usar dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const member = await interaction.guild.members
+    .fetch(interaction.user.id)
+    .catch(() => null);
+  if (!member) {
+    await interaction.reply({
+      content: "No pude obtener tu perfil de miembro.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const voiceChannelId = member.voice.channelId ?? null;
+  if (!voiceChannelId) {
+    await interaction.reply({
+      content: "Tenés que estar en una sala de voz para usar este comando.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const isTemporary = await isTemporaryVoiceChannel(
+    interaction.guildId,
+    voiceChannelId,
+  );
+  if (!isTemporary) {
+    await interaction.reply({
+      content:
+        "Este comando solo funciona en salas de voz dinámicas creadas por Karpindomo.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const config = await getGuildConfig(interaction.guildId);
+  const bannedRoleIds = config.bannedVoiceRoleIds ?? [];
+  if (bannedRoleIds.length === 0) {
+    await interaction.reply({
+      content:
+        "No hay roles vetados configurados. Agregalos en el panel de Admin → Configuración.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const channel = await interaction.guild.channels
+    .fetch(voiceChannelId)
+    .catch(() => null);
+  if (!channel?.isVoiceBased()) {
+    await interaction.reply({
+      content: "No pude acceder al canal de voz.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  try {
+    await Promise.all(
+      bannedRoleIds.map((roleId) =>
+        channel.permissionOverwrites.edit(roleId, {
+          ViewChannel: ban ? false : null,
+        }),
+      ),
+    );
+  } catch (error) {
+    console.error("[discord-bot] Failed to update channel permissions", {
+      guildId: interaction.guildId,
+      channelId: voiceChannelId,
+      error,
+    });
+    await interaction.reply({
+      content:
+        "No pude actualizar los permisos del canal. Revisá que el bot tenga permiso de Gestionar Canales.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const messages = ban
+    ? BAN_CHANNEL_BUTLER_MESSAGES
+    : UNBAN_CHANNEL_BUTLER_MESSAGES;
+  await interaction.reply({
+    content: pickRandom(messages),
+  });
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     // Botones del player de música (estilo Rythm).
@@ -1694,6 +1809,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.commandName === "profile") {
     await handleProfileCommand(interaction);
+    return;
+  }
+
+  if (interaction.commandName === "desperuanizar") {
+    await handleVoiceBanCommand(interaction, true);
+    return;
+  }
+
+  if (interaction.commandName === "reperuanizar") {
+    await handleVoiceBanCommand(interaction, false);
     return;
   }
 

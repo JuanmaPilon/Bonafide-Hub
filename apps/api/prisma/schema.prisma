@@ -18,6 +18,8 @@ model GuildConfig {
   temporaryVoiceChannelIds    String[] @default([])
   musicEnabled                Boolean  @default(true)
   musicRoleIds                String[] @default([])
+  // Roles vetados: no ven los canales de voz dinámicos de Karpindomo.
+  bannedVoiceRoleIds          String[] @default([])
   // "Loro de Karpindomo": mensajes aleatorios en un canal configurable.
   dailyMessagesChannelId       String?
   dailyMessagesEnabled         Boolean  @default(false)

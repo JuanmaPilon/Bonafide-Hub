@@ -2570,6 +2570,10 @@ export function buildApp() {
       allowedBody.musicRoleIds = body.musicRoleIds;
     }
 
+    if (body.bannedVoiceRoleIds !== undefined) {
+      allowedBody.bannedVoiceRoleIds = body.bannedVoiceRoleIds;
+    }
+
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
     await logAdminAction(session, params.guildId, "update:guild-config", {

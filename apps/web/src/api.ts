@@ -8,6 +8,7 @@ export type ApiGuild = {
 };
 
 export type GuildConfig = {
+  bannedVoiceRoleIds?: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
   dailyMessagesMaxMinutes?: number;

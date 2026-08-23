@@ -196,6 +196,16 @@ export const commandDefinitions = [
   new SlashCommandBuilder()
     .setName("leave")
     .setDescription("Saca al bot del canal de voz"),
+  new SlashCommandBuilder()
+    .setName("desperuanizar")
+    .setDescription(
+      "Oculta tu sala de voz dinámica a los roles vetados (solo salas de Karpindomo)",
+    ),
+  new SlashCommandBuilder()
+    .setName("reperuanizar")
+    .setDescription(
+      "Vuelve a hacer visible tu sala de voz dinámica a los roles vetados",
+    ),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {};
