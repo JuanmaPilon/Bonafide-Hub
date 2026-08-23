@@ -2039,6 +2039,93 @@ input {
   font-size: 0.84rem;
 }
 
+/* Selects dentro de una fila del form: ancho natural, sin estirarse */
+.select-inline {
+  width: auto;
+  min-width: 220px;
+  max-width: 100%;
+}
+
+/* Dropdown multi-select de roles (estilo acordeón) */
+.role-multiselect {
+  border: 1px solid rgba(133, 156, 212, 0.24);
+  border-radius: 14px;
+  background: rgba(10, 16, 31, 0.88);
+  color: var(--text);
+}
+
+.role-multiselect-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.role-multiselect-summary::-webkit-details-marker {
+  display: none;
+}
+
+.role-multiselect-label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  flex-shrink: 0;
+}
+
+.role-multiselect-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.role-multiselect-options {
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(133, 156, 212, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.role-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.role-multiselect-option:hover {
+  background: rgba(133, 156, 212, 0.1);
+}
+
+.role-multiselect-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.role-multiselect-option-name {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+}
+
+.role-multiselect-hint {
+  padding: 0 14px 12px;
+  font-size: 0.8rem;
+}
+
 .empty-state {
   border-radius: 16px;
   border: 1px dashed rgba(136, 159, 216, 0.3);

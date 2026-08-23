@@ -238,6 +238,83 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
   );
 }
 
+// Dropdown multi-select de roles (estilo acordeón) para elegir varios.
+function RoleMultiSelect({
+  label,
+  roles,
+  value,
+  onChange,
+  emptyText,
+  hint,
+}: {
+  label: string;
+  roles: GuildRole[];
+  value: string[];
+  onChange: (next: string[]) => void;
+  emptyText: string;
+  hint?: string;
+}) {
+  const selectedNames = value
+    .map((id) => roles.find((role) => role.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+
+  const toggle = (roleId: string): void => {
+    onChange(
+      value.includes(roleId)
+        ? value.filter((id) => id !== roleId)
+        : [...value, roleId],
+    );
+  };
+
+  return (
+    <details className="role-multiselect">
+      <summary className="role-multiselect-summary">
+        <span className="role-multiselect-label">{label}</span>
+        <span className="role-multiselect-value">
+          {selectedNames.length > 0
+            ? selectedNames.join(", ")
+            : emptyText}
+        </span>
+        <span className="comunicado-acc-chevron" aria-hidden="true">
+          ▸
+        </span>
+      </summary>
+      <div className="role-multiselect-options">
+        {roles.length === 0 ? (
+          <div className="muted-text">No hay roles disponibles.</div>
+        ) : (
+          roles.map((role) => {
+            const checked = value.includes(role.id);
+            return (
+              <label className="role-multiselect-option" key={role.id}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(role.id)}
+                />
+                <span
+                  className="role-multiselect-option-name"
+                  style={
+                    role.color
+                      ? {
+                          borderColor: `#${role.color.toString(16).padStart(6, "0")}`,
+                          color: `#${role.color.toString(16).padStart(6, "0")}`,
+                        }
+                      : undefined
+                  }
+                >
+                  {role.name}
+                </span>
+              </label>
+            );
+          })
+        )}
+      </div>
+      {hint ? <div className="muted-text role-multiselect-hint">{hint}</div> : null}
+    </details>
+  );
+}
+
 const LANDING_PREVIEW_USERS = [
   "Azzaio",
   "VoiceMaster",
@@ -2555,7 +2632,7 @@ function App() {
                         <label>
                           <span>Rol DJ</span>
                           <select
-                            className="select"
+                            className="select select-inline"
                             value={(config.musicRoleIds ?? [])[0] ?? ""}
                             onChange={(event) =>
                               setConfig((current) => ({
@@ -2575,44 +2652,26 @@ function App() {
                           </select>
                         </label>
 
-                        <label>
-                          <span>
-                            Roles vetados (no ven las salas de voz dinámicas)
-                          </span>
-                          <select
-                            className="select"
-                            multiple
-                            size={5}
-                            value={config.bannedVoiceRoleIds ?? []}
-                            onChange={(event) => {
-                              const selected = Array.from(
-                                event.target.selectedOptions,
-                              ).map((option) => option.value);
-                              setConfig((current) => ({
-                                ...current,
-                                bannedVoiceRoleIds: selected,
-                              }));
-                            }}
-                          >
-                            {guildRoles.map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
-                          <span className="muted-text">
-                            Mantené Ctrl (o Cmd) para elegir varios. Quienes
-                            tengan estos roles no podrán ver una sala dinámica
-                            cuando uses /desperuanizar.
-                          </span>
-                        </label>
+                        <RoleMultiSelect
+                          label="Roles vetados (no ven las salas de voz dinámicas)"
+                          roles={guildRoles}
+                          value={config.bannedVoiceRoleIds ?? []}
+                          onChange={(next) =>
+                            setConfig((current) => ({
+                              ...current,
+                              bannedVoiceRoleIds: next,
+                            }))
+                          }
+                          emptyText="Ningún rol vetado"
+                          hint="Quienes tengan estos roles no podrán ver una sala dinámica cuando uses /desperuanizar."
+                        />
 
                         <label>
                           <span>
                             Canal para creación dinámica de salas (voz)
                           </span>
                           <select
-                            className="select"
+                            className="select select-inline"
                             value={config.dynamicVoiceCreateChannelId ?? ""}
                             onChange={(event) =>
                               setConfig((current) => ({
