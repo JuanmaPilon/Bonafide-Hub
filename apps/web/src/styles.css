@@ -2027,6 +2027,9 @@ input {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  /* No estirar los campos vecinos cuando uno crece (p. ej. al abrir el
+     dropdown de roles desperuanizados, el Rol DJ no debe deformarse). */
+  align-items: start;
 }
 
 .form-grid label {
