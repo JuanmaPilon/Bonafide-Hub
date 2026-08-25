@@ -1514,13 +1514,27 @@ async function handleVoiceBanCommand(
   }
 
   try {
-    await Promise.all(
-      bannedRoleIds.map((roleId) =>
-        channel.permissionOverwrites.edit(roleId, {
-          ViewChannel: ban ? false : null,
+    if (ban) {
+      // Desperuanizar: ocultar el canal a los roles vetados.
+      await Promise.all(
+        bannedRoleIds.map((roleId) =>
+          channel.permissionOverwrites.edit(roleId, { ViewChannel: false }),
+        ),
+      );
+    } else {
+      // Reperuanizar: ELIMINAR el overwrite restrictivo para que el canal
+      // vuelva a heredar los permisos del padre (estado original). Editar
+      // con ViewChannel:null no siempre revierte bien y dejaba el canal
+      // inconsistente.
+      await Promise.all(
+        bannedRoleIds.map(async (roleId) => {
+          const overwrite = channel.permissionOverwrites.cache.get(roleId);
+          if (overwrite) {
+            await channel.permissionOverwrites.delete(roleId);
+          }
         }),
-      ),
-    );
+      );
+    }
   } catch (error) {
     console.error("[discord-bot] Failed to update channel permissions", {
       guildId: interaction.guildId,
