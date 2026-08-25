@@ -1441,6 +1441,9 @@ const UNBAN_CHANNEL_BUTLER_MESSAGES = [
   "🗝️ Listo, {user} reperuanizó la sala, vuelve a estar disponible para todos.",
 ];
 
+// Sufijo que se agrega/quita al nombre de la sala al desperuanizar.
+const PERU_FLAG_SUFFIX = " 🚫🇵🇪";
+
 // /desperuanizar y /reperuanizar: ocultan o revelan una sala de voz
 // dinámica a los roles vetados configurados en el panel de admin.
 async function handleVoiceBanCommand(
@@ -1530,6 +1533,26 @@ async function handleVoiceBanCommand(
       ephemeral: true,
     });
     return;
+  }
+
+  // Marca la sala en el nombre: agregamos/quítamos el sufijo de la bandera.
+  try {
+    const currentName = channel.name;
+    if (ban) {
+      if (!currentName.endsWith(PERU_FLAG_SUFFIX)) {
+        await channel.setName(`${currentName}${PERU_FLAG_SUFFIX}`);
+      }
+    } else if (currentName.endsWith(PERU_FLAG_SUFFIX)) {
+      await channel.setName(
+        currentName.slice(0, -PERU_FLAG_SUFFIX.length),
+      );
+    }
+  } catch (error) {
+    console.error("[discord-bot] Failed to rename channel", {
+      guildId: interaction.guildId,
+      channelId: voiceChannelId,
+      error,
+    });
   }
 
   const messages = ban
