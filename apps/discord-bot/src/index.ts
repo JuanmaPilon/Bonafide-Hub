@@ -1465,65 +1465,70 @@ async function handleVoiceBanCommand(
   // Diferimos la respuesta para evitar el timeout de 3s de Discord: la
   // actualización de permisos + rename puede tardar (rate limits del canal)
   // y sin defer la interacción expira con "La aplicación no respondió".
+  // Importante: TODO el cuerpo va dentro de try/catch para que SIEMPRE
+  // terminemos respondiendo (editReply). Si algo lanza un error sin capturar,
+  // la interacción quedaría "pensando…" para siempre.
   await interaction.deferReply();
 
-  const member = await interaction.guild.members
-    .fetch(interaction.user.id)
-    .catch(() => null);
-  if (!member) {
-    await interaction.editReply({
-      content: "No pude obtener tu perfil de miembro.",
-    });
-    return;
-  }
-
-  const voiceChannelId = member.voice.channelId ?? null;
-  if (!voiceChannelId) {
-    await interaction.editReply({
-      content: "Tenés que estar en una sala de voz para usar este comando.",
-    });
-    return;
-  }
-
-  const isTemporary = await isTemporaryVoiceChannel(
-    interaction.guildId,
-    voiceChannelId,
-  );
-  if (!isTemporary) {
-    await interaction.editReply({
-      content:
-        "Este comando solo funciona en salas de voz dinámicas creadas por Karpindomo.",
-    });
-    return;
-  }
-
-  const config = await getGuildConfig(interaction.guildId);
-  const bannedRoleIds = config.bannedVoiceRoleIds ?? [];
-  if (bannedRoleIds.length === 0) {
-    await interaction.editReply({
-      content:
-        "No hay roles vetados configurados. Agregalos en el panel de Admin → Configuración.",
-    });
-    return;
-  }
-
-  const channel = await interaction.guild.channels
-    .fetch(voiceChannelId)
-    .catch(() => null);
-  if (!channel?.isVoiceBased()) {
-    await interaction.editReply({
-      content: "No pude acceder al canal de voz.",
-    });
-    return;
-  }
-
   try {
+    const member = await interaction.guild.members
+      .fetch(interaction.user.id)
+      .catch(() => null);
+    if (!member) {
+      await interaction.editReply({
+        content: "No pude obtener tu perfil de miembro.",
+      });
+      return;
+    }
+
+    const voiceChannelId = member.voice.channelId ?? null;
+    if (!voiceChannelId) {
+      await interaction.editReply({
+        content: "Tenés que estar en una sala de voz para usar este comando.",
+      });
+      return;
+    }
+
+    const isTemporary = await isTemporaryVoiceChannel(
+      interaction.guildId,
+      voiceChannelId,
+    );
+    if (!isTemporary) {
+      await interaction.editReply({
+        content:
+          "Este comando solo funciona en salas de voz dinámicas creadas por Karpindomo.",
+      });
+      return;
+    }
+
+    const config = await getGuildConfig(interaction.guildId);
+    const bannedRoleIds = config.bannedVoiceRoleIds ?? [];
+    if (bannedRoleIds.length === 0) {
+      await interaction.editReply({
+        content:
+          "No hay roles vetados configurados. Agregalos en el panel de Admin → Configuración.",
+      });
+      return;
+    }
+
+    const channel = await interaction.guild.channels
+      .fetch(voiceChannelId)
+      .catch(() => null);
+    if (!channel?.isVoiceBased()) {
+      await interaction.editReply({
+        content: "No pude acceder al canal de voz.",
+      });
+      return;
+    }
+
     if (ban) {
       // Desperuanizar: ocultar el canal a los roles vetados. Serializamos y
       // esperamos entre edits para no disparar rate limits de Discord por
       // canal (limite de overwrites por segundo).
       for (const roleId of bannedRoleIds) {
-        await channel.permissionOverwrites.edit(roleId, { ViewChannel: false });
+        await channel.permissionOverwrites.edit(roleId, {
+          ViewChannel: false,
+        });
         await sleep(350);
       }
     } else {
@@ -1539,46 +1544,49 @@ async function handleVoiceBanCommand(
         }
       }
     }
-  } catch (error) {
-    console.error("[discord-bot] Failed to update channel permissions", {
-      guildId: interaction.guildId,
-      channelId: voiceChannelId,
-      error,
-    });
-    await interaction.editReply({
-      content:
-        "No pude actualizar los permisos del canal. Revisá que el bot tenga permiso de Gestionar Canales.",
-    });
-    return;
-  }
 
-  // Marca la sala en el nombre: agregamos/quítamos el sufijo de la bandera.
-  try {
-    const currentName = channel.name;
-    if (ban) {
-      if (!currentName.endsWith(PERU_FLAG_SUFFIX)) {
-        await channel.setName(`${currentName}${PERU_FLAG_SUFFIX}`);
+    // Marca la sala en el nombre: agregamos/quítamos el sufijo de la bandera.
+    try {
+      const currentName = channel.name;
+      if (ban) {
+        if (!currentName.endsWith(PERU_FLAG_SUFFIX)) {
+          await channel.setName(`${currentName}${PERU_FLAG_SUFFIX}`);
+        }
+      } else if (currentName.endsWith(PERU_FLAG_SUFFIX)) {
+        await channel.setName(currentName.slice(0, -PERU_FLAG_SUFFIX.length));
       }
-    } else if (currentName.endsWith(PERU_FLAG_SUFFIX)) {
-      await channel.setName(
-        currentName.slice(0, -PERU_FLAG_SUFFIX.length),
-      );
+    } catch (error) {
+      console.error("[discord-bot] Failed to rename channel", {
+        guildId: interaction.guildId,
+        channelId: voiceChannelId,
+        error,
+      });
     }
-  } catch (error) {
-    console.error("[discord-bot] Failed to rename channel", {
-      guildId: interaction.guildId,
-      channelId: voiceChannelId,
-      error,
-    });
-  }
 
-  const messages = ban
-    ? BAN_CHANNEL_BUTLER_MESSAGES
-    : UNBAN_CHANNEL_BUTLER_MESSAGES;
-  const template = pickRandom(messages);
-  await interaction.editReply({
-    content: template.replace("{user}", interaction.user.toString()),
-  });
+    const messages = ban
+      ? BAN_CHANNEL_BUTLER_MESSAGES
+      : UNBAN_CHANNEL_BUTLER_MESSAGES;
+    const template = pickRandom(messages);
+    await interaction.editReply({
+      content: template.replace("{user}", interaction.user.toString()),
+    });
+  } catch (error) {
+    console.error(
+      "[discord-bot] handleVoiceBanCommand failed (respondiendo de todos modos)",
+      {
+        guildId: interaction.guildId,
+        error,
+      },
+    );
+    await interaction
+      .editReply({
+        content:
+          "Ocurrió un error al actualizar la sala. Revisá que el bot tenga permiso de Gestionar Canales y volvé a intentar.",
+      })
+      .catch(() => {
+        // Si ni siquiera podemos editar la respuesta, no queda nada por hacer.
+      });
+  }
 }
 
 client.on(Events.InteractionCreate, async (interaction) => {
