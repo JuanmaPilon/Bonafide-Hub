@@ -352,8 +352,9 @@ const RAID_LOG_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 let raidLogSyncTimer: NodeJS.Timeout | null = null;
 
 async function runRaidLogSync(): Promise<void> {
+  // 1) Reports pegados manualmente que aún no se publicaron.
+  //    try/catch independiente: un error acá no debe bloquear el watch (parte 2).
   try {
-    // 1) Reports pegados manualmente que aún no se publicaron.
     const logs = await listUnpostedRaidLogs();
     for (const log of logs) {
       const config = await getGuildConfig(log.guildId);
@@ -371,16 +372,32 @@ async function runRaidLogSync(): Promise<void> {
         }
       }
     }
+  } catch (error) {
+    console.error("[raid-logs] manual publish sync failed", error);
+  }
 
-    // 2) Vigilado de perfil: crea logs de RAID nuevos automáticamente.
+  // 2) Vigilado de perfil: crea logs de RAID nuevos automáticamente.
+  try {
     const watched = await listWatchGuildConfigs();
+    if (watched.length > 0) {
+      console.log(
+        `[raid-logs] watch: ${watched.length} guild/s con vigilado configurado`,
+      );
+    }
+
     for (const watch of watched) {
       if (!watch.character || !watch.server) {
         continue;
       }
       const config = await getGuildConfig(watch.guildId);
       const token = env.DISCORD_BOT_TOKEN;
+
       if (!config.logsWatchEnabled) {
+        // Log claro: si el toggle está apagado, el watch NO corre. Esto
+        // ayuda a diagnosticar "no detecta logs".
+        console.warn(
+          `[raid-logs] watch ${watch.character}@${watch.server}: logsWatchEnabled está APAGADO para guild ${watch.guildId}. Activá "Vigilado activado" en el panel Admin.`,
+        );
         continue;
       }
 
@@ -415,7 +432,7 @@ async function runRaidLogSync(): Promise<void> {
       }
     }
   } catch (error) {
-    console.error("[raid-logs] sync failed", error);
+    console.error("[raid-logs] watch sync failed", error);
   }
 }
 

@@ -409,13 +409,14 @@ export async function syncCharacterWatch(input: {
       created.push(createdLog);
     }
 
-    if (reports.length > 0) {
-      console.log(
-        `[raid-logs] watch ${input.character}@${input.server}: ${reports.length} report/s, ` +
-          `${created.length} nuevo/s, ${skippedByZone} fuera de zona raid, ` +
-          `${reports.length - created.length - skippedByZone} ya existían`,
-      );
-    }
+    // Logueamos SIEMPRE (incluso con 0 reports) para diagnosticar: si el
+    // personaje/servidor configurado no devuelve nada en WCL, lo vemos acá.
+    console.log(
+      `[raid-logs] watch ${input.character}@${input.server} (${input.region}): ` +
+        `${reports.length} report/s, ${created.length} nuevo/s, ` +
+        `${skippedByZone} fuera de zona raid, ` +
+        `${reports.length - created.length - skippedByZone} ya existían`,
+    );
 
     return { created };
   } catch (error) {
