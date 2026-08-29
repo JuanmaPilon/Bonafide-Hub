@@ -1492,7 +1492,9 @@ async function handleProfileCommand(
   await interaction.reply({ embeds: [embed] });
 }
 
-// /ranking: muestra el top 10 del ranking de XP como tabla en Discord.
+// /ranking: muestra el top 20 del ranking de XP en Discord. El podio (top 3)
+// va en embeds individuales con el avatar/gif del usuario; el resto va como
+// tabla compacta (Discord limita a 1 thumbnail por embed).
 async function handleRankingCommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1529,48 +1531,85 @@ async function handleRankingCommand(
     return;
   }
 
-  // Resolvemos los miembros de una vez para tener nick + avatar.
-  const members = await interaction.guild.members
-    .fetch()
-    .catch(() => null);
+  // Resolvemos los miembros de una vez para tener nick + avatar (gif si es animado).
+  const members = await interaction.guild.members.fetch().catch(() => null);
 
   const top = [...profiles]
     .sort((left, right) => right.xp - left.xp)
-    .slice(0, 10);
+    .slice(0, 20);
 
   const medals = ["🥇", "🥈", "🥉"];
-  const lines = top.map((entry, index) => {
+
+  // Avatar: png para estáticos, gif si el avatar es animado (a_).
+  function avatarUrlFor(userId: string): string | null {
+    const member = members?.get(userId);
+    const hash = member?.user.avatar;
+    if (!hash) {
+      return null;
+    }
+    const extension = hash.startsWith("a_") ? "gif" : "png";
+    return member.displayAvatarURL({ extension, size: 128 });
+  }
+
+  // Podio: un embed por jugador con su avatar como thumbnail.
+  const podiumEmbeds = top.slice(0, 3).map((entry, index) => {
     const rank = index + 1;
     const member = members?.get(entry.userId);
     const name = member?.displayName || entry.userId;
-    const medal = medals[index] ?? `${rank}.`;
-    return `${medal} **${name}** · Nv ${entry.level} · ${entry.xp} XP`;
+    const avatarUrl = avatarUrlFor(entry.userId);
+
+    const podium = new EmbedBuilder()
+      .setColor(0x6aa8ff)
+      .setTitle(`${medals[index]} #${rank} · ${name}`)
+      .addFields(
+        { name: "Nivel", value: String(entry.level), inline: true },
+        { name: "XP", value: String(entry.xp), inline: true },
+        {
+          name: "Mensajes",
+          value: String(entry.messageCount),
+          inline: true,
+        },
+      );
+    if (avatarUrl) {
+      podium.setThumbnail(avatarUrl);
+    }
+    return podium;
   });
 
-  const embed = new EmbedBuilder()
-    .setColor(0x6aa8ff)
-    .setTitle("🏆 Ranking de XP — Top 10")
-    .setDescription(lines.join("\n"));
+  // Resto (4-20): tabla compacta en un solo embed.
+  const restLines = top.slice(3).map((entry, index) => {
+    const rank = index + 4;
+    const member = members?.get(entry.userId);
+    const name = member?.displayName || entry.userId;
+    return `${rank}. **${name}** · Nv ${entry.level} · ${entry.xp} XP`;
+  });
 
-  const caller = interaction.member;
+  const embeds: EmbedBuilder[] = [...podiumEmbeds];
+  if (restLines.length > 0) {
+    const restEmbed = new EmbedBuilder()
+      .setColor(0x6aa8ff)
+      .setTitle("🏆 Ranking de XP — Resto del top 20")
+      .setDescription(restLines.join("\n"));
+    embeds.push(restEmbed);
+  }
+
+  // Footer con la posición del que ejecutó el comando.
   const callerProfile = profiles.find(
     (profile) => profile.userId === interaction.user.id,
   );
-  if (callerProfile) {
+  if (callerProfile && embeds.length > 0) {
     const callerRank =
-      [...profiles].sort((left, right) => right.xp - left.xp).findIndex(
-        (entry) => entry.userId === interaction.user.id,
-      ) + 1;
-    const callerName =
-      typeof caller === "object" && caller && "displayName" in caller
-        ? (caller as { displayName: string }).displayName
-        : interaction.user.username;
-    embed.setFooter({
+      [...profiles]
+        .sort((left, right) => right.xp - left.xp)
+        .findIndex((entry) => entry.userId === interaction.user.id) + 1;
+    const callerMember = members?.get(interaction.user.id);
+    const callerName = callerMember?.displayName || interaction.user.username;
+    embeds[embeds.length - 1].setFooter({
       text: `Tu posición: #${callerRank} · ${callerName} · Nv ${callerProfile.level} · ${callerProfile.xp} XP`,
     });
   }
 
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds });
 }
 
 // Mensajes del mayordomo de Karpindomo al desperuanizar/reperuanizar una
