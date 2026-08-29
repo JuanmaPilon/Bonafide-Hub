@@ -17,8 +17,8 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   logsChannelId?: string;
-  logsWatchCharacter?: string;
   logsWatchEnabled?: boolean;
+  logsWatchGuild?: string;
   logsWatchRegion?: string;
   logsWatchServer?: string;
   memberLogChannelId?: string;

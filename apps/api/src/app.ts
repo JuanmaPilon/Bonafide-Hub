@@ -59,7 +59,7 @@ import {
   listWatchGuildConfigs,
   markRaidLogPosted,
   refreshRaidLog,
-  syncCharacterWatch,
+  syncGuildWatch,
 } from "./services/raid-logs-store.js";
 import {
   getGuildConfig,
@@ -386,7 +386,7 @@ async function runRaidLogSync(): Promise<void> {
     }
 
     for (const watch of watched) {
-      if (!watch.character || !watch.server) {
+      if (!watch.guild || !watch.server) {
         continue;
       }
       const config = await getGuildConfig(watch.guildId);
@@ -396,13 +396,13 @@ async function runRaidLogSync(): Promise<void> {
         // Log claro: si el toggle está apagado, el watch NO corre. Esto
         // ayuda a diagnosticar "no detecta logs".
         console.warn(
-          `[raid-logs] watch ${watch.character}@${watch.server}: logsWatchEnabled está APAGADO para guild ${watch.guildId}. Activá "Vigilado activado" en el panel Admin.`,
+          `[raid-logs] watch ${watch.guild}@${watch.server}: logsWatchEnabled está APAGADO para guild ${watch.guildId}. Activá "Vigilado activado" en el panel Admin.`,
         );
         continue;
       }
 
-      const result = await syncCharacterWatch({
-        character: watch.character,
+      const result = await syncGuildWatch({
+        guild: watch.guild,
         guildId: watch.guildId,
         region: watch.region || "EU",
         server: watch.server,
@@ -2522,8 +2522,8 @@ export function buildApp() {
     const body = request.body as Partial<GuildConfig>;
     const allowedBody: GuildConfig = {};
 
-    if (body.logsWatchCharacter !== undefined) {
-      allowedBody.logsWatchCharacter = body.logsWatchCharacter;
+    if (body.logsWatchGuild !== undefined) {
+      allowedBody.logsWatchGuild = body.logsWatchGuild;
     }
 
     if (body.logsWatchEnabled !== undefined) {

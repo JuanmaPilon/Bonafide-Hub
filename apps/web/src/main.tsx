@@ -1279,16 +1279,16 @@ function App() {
     setSavingAction("config");
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
-        logsWatchCharacter: config.logsWatchCharacter,
         logsWatchEnabled: config.logsWatchEnabled,
+        logsWatchGuild: config.logsWatchGuild,
         logsWatchRegion: config.logsWatchRegion,
         logsWatchServer: config.logsWatchServer,
       });
       setConfig(nextConfig);
-      pushToast("Vigilado de perfil guardado.", "success");
+      pushToast("Vigilado de gremio guardado.", "success");
     } catch (error) {
       void error;
-      pushToast("No se pudo guardar el vigilado de perfil.", "error");
+      pushToast("No se pudo guardar el vigilado de gremio.", "error");
     } finally {
       setSavingAction(null);
     }
@@ -3390,7 +3390,7 @@ function App() {
                       <div className="daily-messages-editor">
                         <div className="daily-messages-head">
                           <div className="daily-messages-title">
-                            <strong>Vigilar perfil</strong>
+                            <strong>Vigilar gremio</strong>
                             <label className="checkbox-row">
                               <input
                                 type="checkbox"
@@ -3407,22 +3407,22 @@ function App() {
                           </div>
                         </div>
                         <p className="muted-text">
-                          Publica automáticamente los logs de RAID nuevos de un
-                          personaje (excluye Mythic+).
+                          Publica automáticamente los logs de RAID nuevos del
+                          gremio en Warcraft Logs (excluye Mythic+).
                         </p>
                         <div className="form-grid">
                           <label>
-                            <span>Personaje</span>
+                            <span>Gremio (nombre en Warcraft Logs)</span>
                             <input
-                              value={config.logsWatchCharacter ?? ""}
+                              value={config.logsWatchGuild ?? ""}
                               onChange={(event) =>
                                 setConfig((current) => ({
                                   ...current,
-                                  logsWatchCharacter:
+                                  logsWatchGuild:
                                     event.target.value || undefined,
                                 }))
                               }
-                              placeholder="ej: Karpindomo"
+                              placeholder="ej: Bonafide"
                             />
                           </label>
                           <label>
@@ -4001,12 +4001,12 @@ function App() {
                       </span>
                     </summary>
                     <div className="raid-logs-acc-body">
-                      {config.logsWatchEnabled && config.logsWatchCharacter ? (
+                      {config.logsWatchEnabled && config.logsWatchGuild ? (
                         <div className="raid-log-watcher">
                           <span className="raid-log-watcher-label">
                             Vigilando
                           </span>
-                          <strong>{config.logsWatchCharacter}</strong>
+                          <strong>{config.logsWatchGuild}</strong>
                           <span className="muted-text">
                             {config.logsWatchServer} · {config.logsWatchRegion}
                           </span>

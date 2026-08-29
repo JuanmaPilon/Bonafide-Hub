@@ -343,13 +343,15 @@ type WclCharacterReport = {
   zone?: number;
 };
 
-async function fetchCharacterReports(
-  character: string,
+async function fetchGuildReports(
+  guild: string,
   server: string,
   region: string,
 ): Promise<WclCharacterReport[]> {
+  // La API v1 NO tiene /reports/character (devuelve 404). El endpoint real
+  // para listar reports es /reports/guild/{guild}/{server}/{region}.
   const data = (await fetchV1Json(
-    `/reports/character/${encodeURIComponent(character)}/${encodeURIComponent(server)}/${encodeURIComponent(region)}`,
+    `/reports/guild/${encodeURIComponent(guild)}/${encodeURIComponent(server)}/${encodeURIComponent(region)}`,
   )) as WclCharacterReport[];
   return Array.isArray(data) ? data : [];
 }
@@ -359,17 +361,17 @@ export type WatchResult = {
   error?: string;
 };
 
-// Vigila el perfil: crea un RaidLog por cada report de RAID nuevo (filtra
+// Vigila el gremio: crea un RaidLog por cada report de RAID nuevo (filtra
 // Mythic+/mazmorras para no meter logs personales).
-export async function syncCharacterWatch(input: {
-  character: string;
+export async function syncGuildWatch(input: {
+  guild: string;
   guildId: string;
   region: string;
   server: string;
 }): Promise<WatchResult> {
   try {
     const [reports, zones] = await Promise.all([
-      fetchCharacterReports(input.character, input.server, input.region),
+      fetchGuildReports(input.guild, input.server, input.region),
       getZones(),
     ]);
 
@@ -410,9 +412,9 @@ export async function syncCharacterWatch(input: {
     }
 
     // Logueamos SIEMPRE (incluso con 0 reports) para diagnosticar: si el
-    // personaje/servidor configurado no devuelve nada en WCL, lo vemos acá.
+    // gremio/servidor configurado no devuelve nada en WCL, lo vemos acá.
     console.log(
-      `[raid-logs] watch ${input.character}@${input.server} (${input.region}): ` +
+      `[raid-logs] watch ${input.guild}@${input.server} (${input.region}): ` +
         `${reports.length} report/s, ${created.length} nuevo/s, ` +
         `${skippedByZone} fuera de zona raid, ` +
         `${reports.length - created.length - skippedByZone} ya existían`,
@@ -426,22 +428,22 @@ export async function syncCharacterWatch(input: {
 
 // Guilds con vigilado configurado (para el scheduler del API).
 export async function listWatchGuildConfigs(): Promise<
-  Array<{ character: string; guildId: string; region: string; server: string }>
+  Array<{ guild: string; guildId: string; region: string; server: string }>
 > {
   const records = await prisma.guildConfig.findMany({
-    where: { logsWatchCharacter: { not: null } },
+    where: { logsWatchGuild: { not: null } },
     select: {
       guildId: true,
-      logsWatchCharacter: true,
+      logsWatchGuild: true,
       logsWatchRegion: true,
       logsWatchServer: true,
     },
   });
 
   return records
-    .filter((record) => record.logsWatchCharacter && record.logsWatchServer)
+    .filter((record) => record.logsWatchGuild && record.logsWatchServer)
     .map((record) => ({
-      character: record.logsWatchCharacter as string,
+      guild: record.logsWatchGuild as string,
       guildId: record.guildId,
       region: record.logsWatchRegion ?? "EU",
       server: record.logsWatchServer as string,

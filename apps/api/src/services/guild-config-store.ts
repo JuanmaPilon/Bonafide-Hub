@@ -20,8 +20,8 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   logsChannelId?: string;
-  logsWatchCharacter?: string;
   logsWatchEnabled?: boolean;
+  logsWatchGuild?: string;
   logsWatchRegion?: string;
   logsWatchServer?: string;
   memberLogChannelId?: string;
@@ -44,8 +44,8 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
     logsChannelId: string | null;
-    logsWatchCharacter: string | null;
     logsWatchEnabled: boolean;
+    logsWatchGuild: string | null;
     logsWatchRegion: string | null;
     logsWatchServer: string | null;
     memberLogChannelId: string | null;
@@ -75,8 +75,8 @@ function toGuildConfig(
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
     logsChannelId: record.logsChannelId ?? undefined,
-    logsWatchCharacter: record.logsWatchCharacter ?? undefined,
     logsWatchEnabled: record.logsWatchEnabled,
+    logsWatchGuild: record.logsWatchGuild ?? undefined,
     logsWatchRegion: record.logsWatchRegion ?? undefined,
     logsWatchServer: record.logsWatchServer ?? undefined,
     memberLogChannelId: record.memberLogChannelId ?? undefined,
@@ -122,8 +122,8 @@ type NormalizedGuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
   logsChannelId?: string;
-  logsWatchCharacter?: string;
   logsWatchEnabled: boolean;
+  logsWatchGuild?: string;
   logsWatchRegion?: string;
   logsWatchServer?: string;
   memberLogChannelId?: string;
@@ -159,8 +159,8 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
     logsChannelId: config.logsChannelId,
-    logsWatchCharacter: config.logsWatchCharacter,
     logsWatchEnabled: config.logsWatchEnabled ?? false,
+    logsWatchGuild: config.logsWatchGuild,
     logsWatchRegion: config.logsWatchRegion,
     logsWatchServer: config.logsWatchServer,
     memberLogChannelId: config.memberLogChannelId,
@@ -212,8 +212,8 @@ export async function replaceGuildConfig(
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
         logsChannelId: normalized.logsChannelId,
-        logsWatchCharacter: normalized.logsWatchCharacter,
         logsWatchEnabled: normalized.logsWatchEnabled,
+        logsWatchGuild: normalized.logsWatchGuild,
         logsWatchRegion: normalized.logsWatchRegion,
         logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
@@ -233,8 +233,8 @@ export async function replaceGuildConfig(
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: normalized.dailyMessagesMinMinutes,
         logsChannelId: normalized.logsChannelId,
-        logsWatchCharacter: normalized.logsWatchCharacter,
         logsWatchEnabled: normalized.logsWatchEnabled,
+        logsWatchGuild: normalized.logsWatchGuild,
         logsWatchRegion: normalized.logsWatchRegion,
         logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
