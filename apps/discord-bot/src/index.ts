@@ -10,7 +10,12 @@ import {
   Partials,
   PermissionFlagsBits,
 } from "discord.js";
-import { createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
+import {
+  createCanvas,
+  GlobalFonts,
+  loadImage,
+  type SKRSContext2D,
+} from "@napi-rs/canvas";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
 import {
@@ -1504,8 +1509,7 @@ async function fetchAvatarBuffer(member: {
   }) => string;
 }): Promise<Buffer | null> {
   try {
-    const hash = (member as { user?: { avatar?: string | null } }).user
-      ?.avatar;
+    const hash = (member as { user?: { avatar?: string | null } }).user?.avatar;
     const isAnimated = Boolean(hash?.startsWith("a_"));
     const url = member.displayAvatarURL({
       extension: isAnimated ? "gif" : "png",
@@ -1525,6 +1529,40 @@ async function fetchAvatarBuffer(member: {
   }
 }
 
+// Registra las fuentes (emoji + texto) en el canvas. En el contenedor
+// Linux las rutas típicas son /usr/share/fonts/...; si no existen, canvas
+// usa el fallback del sistema (funciona en Windows/macOS).
+let fontsRegistered = false;
+function registerBannerFonts(): void {
+  if (fontsRegistered) {
+    return;
+  }
+  fontsRegistered = true;
+
+  const candidates: Array<{ path: string; name: string }> = [
+    {
+      path: "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+      name: "Noto Color Emoji",
+    },
+    {
+      path: "/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf",
+      name: "Noto Emoji",
+    },
+    {
+      path: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      name: "DejaVu Sans",
+    },
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      GlobalFonts.registerFromPath(candidate.path, candidate.name);
+    } catch {
+      // Ruta no disponible: el fallback del sistema la cubre.
+    }
+  }
+}
+
 // Construye un banner PNG con el podio (top 3): avatares + nombre + nivel + XP.
 // Usa @napi-rs/canvas (renderiza emojis de color, ej. ⭐ en los nicknames).
 async function buildPodiumBanner(
@@ -1536,6 +1574,8 @@ async function buildPodiumBanner(
   if (podium.length === 0) {
     return null;
   }
+
+  registerBannerFonts();
 
   const medals = ["🥇", "🥈", "🥉"];
   const width = 900;
@@ -1627,15 +1667,25 @@ async function buildPodiumBanner(
       }
 
       // Nombre (soporta emojis de color gracias a @napi-rs/canvas).
-      const name = item.member?.displayName || String(item.entry.xp).slice(0, 8);
-      ctx.font = 'bold 22px "DejaVu Sans", sans-serif';
+      const name =
+        item.member?.displayName || String(item.entry.xp).slice(0, 8);
+      ctx.font =
+        'bold 22px "DejaVu Sans", "Noto Color Emoji", "Noto Emoji", sans-serif';
       ctx.fillStyle = "#edf2ff";
-      ctx.fillText(truncateText(ctx, name, cardWidth - 40), cx, avatarY + avatarRadius + 34);
+      ctx.fillText(
+        truncateText(ctx, name, cardWidth - 40),
+        cx,
+        avatarY + avatarRadius + 34,
+      );
 
       // Nivel y XP.
       ctx.font = "16px sans-serif";
       ctx.fillStyle = "#b2bdd8";
-      ctx.fillText(`Nivel ${item.entry.level}`, cx, avatarY + avatarRadius + 62);
+      ctx.fillText(
+        `Nivel ${item.entry.level}`,
+        cx,
+        avatarY + avatarRadius + 62,
+      );
       ctx.fillStyle = "#ffb454";
       ctx.fillText(`${item.entry.xp} XP`, cx, avatarY + avatarRadius + 86);
     }

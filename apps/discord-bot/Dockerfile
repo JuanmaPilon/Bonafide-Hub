@@ -5,7 +5,12 @@
 FROM node:20-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg python3 libfontconfig1 \
+  && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    python3 \
+    libfontconfig1 \
+    fonts-noto-color-emoji \
+    fonts-dejavu-core \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
