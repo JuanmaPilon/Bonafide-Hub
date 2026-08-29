@@ -28,6 +28,10 @@ model GuildConfig {
   logsChannelId                String?
   // Vigilado de Warcraft Logs: publica solo logs de RAID nuevos del gremio.
   logsWatchEnabled             Boolean  @default(false)
+  // LEGACY: era el watch por personaje (endpoint /reports/character que no
+  // existe en WCL v1). Se mantiene la columna para que prisma db push no
+  // intente dropearla con datos; ya no se usa (ver logsWatchGuild).
+  logsWatchCharacter           String?
   logsWatchGuild               String?
   logsWatchServer              String?
   logsWatchRegion              String?
