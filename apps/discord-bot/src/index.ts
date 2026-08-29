@@ -1564,12 +1564,15 @@ function registerBannerFonts(): void {
 }
 
 // Construye un banner PNG con el podio (top 3): avatares + nombre + nivel + XP.
-// Usa @napi-rs/canvas (renderiza emojis de color, ej. ⭐ en los nicknames).
+// Estilo inspirado en la web (glow por nivel, barra de progreso, anillos).
 async function buildPodiumBanner(
   podium: Array<{
     entry: { level: number; messageCount: number; xp: number };
     member: { displayName: string } | null;
+    roleColor: number | null;
   }>,
+  levelBaseXp: number,
+  maxLevel: number,
 ): Promise<Buffer | null> {
   if (podium.length === 0) {
     return null;
@@ -1578,21 +1581,46 @@ async function buildPodiumBanner(
   registerBannerFonts();
 
   const medals = ["🥇", "🥈", "🥉"];
+  // Anillos de posición: oro / plata / bronce.
+  const ringColors = ["#ffd34d", "#c8d6e5", "#e08a5c"];
   const width = 900;
   const cardWidth = width / 3;
-  const cardHeight = 260;
+  const cardHeight = 300;
 
   try {
     const canvas = createCanvas(width, cardHeight);
     const ctx = canvas.getContext("2d");
 
-    // Fondo degradado.
-    const gradient = ctx.createLinearGradient(0, 0, width, cardHeight);
-    gradient.addColorStop(0, "#0b1224");
-    gradient.addColorStop(1, "#1c1626");
-    ctx.fillStyle = gradient;
+    // Fondo: degradado con toques de neón (azul → violeta, estilo web).
+    const bg = ctx.createLinearGradient(0, 0, width, cardHeight);
+    bg.addColorStop(0, "#070d1d");
+    bg.addColorStop(0.5, "#0f1330");
+    bg.addColorStop(1, "#1a1030");
+    ctx.fillStyle = bg;
     roundRect(ctx, 0, 0, width, cardHeight, 20);
     ctx.fill();
+
+    // Glows radiales decorativos en el fondo.
+    const glow1 = ctx.createRadialGradient(width * 0.2, 40, 0, width * 0.2, 40, 260);
+    glow1.addColorStop(0, "rgba(106,168,255,0.18)");
+    glow1.addColorStop(1, "rgba(106,168,255,0)");
+    ctx.fillStyle = glow1;
+    ctx.fillRect(0, 0, width, cardHeight);
+    const glow2 = ctx.createRadialGradient(width * 0.85, 40, 0, width * 0.85, 40, 260);
+    glow2.addColorStop(0, "rgba(255,138,92,0.16)");
+    glow2.addColorStop(1, "rgba(255,138,92,0)");
+    ctx.fillStyle = glow2;
+    ctx.fillRect(0, 0, width, cardHeight);
+
+    // Título.
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = 'bold 26px "DejaVu Sans", "Noto Color Emoji", sans-serif';
+    ctx.fillStyle = "#edf2ff";
+    ctx.shadowColor = "rgba(106,168,255,0.7)";
+    ctx.shadowBlur = 16;
+    ctx.fillText("🏆 Ranking de XP", width / 2, 26);
+    ctx.shadowBlur = 0;
 
     // Descargamos los avatares en paralelo.
     const avatarBuffers = await Promise.all(
@@ -1611,37 +1639,44 @@ async function buildPodiumBanner(
     for (let index = 0; index < podium.length; index += 1) {
       const item = podium[index];
       const cx = cardWidth * index + cardWidth / 2;
-      const avatarY = 62;
-      const avatarRadius = 44;
+      const avatarY = 78;
+      const avatarRadius = 42;
 
       // Tarjeta.
-      ctx.fillStyle = "#1b2133";
+      ctx.fillStyle = "rgba(20,26,44,0.85)";
       roundRect(
         ctx,
         cardWidth * index + 12,
-        14,
+        44,
         cardWidth - 24,
-        cardHeight - 28,
+        cardHeight - 58,
         18,
       );
       ctx.fill();
-      ctx.strokeStyle = "#2f3a58";
+      ctx.strokeStyle = "rgba(133,156,212,0.25)";
       ctx.lineWidth = 1;
       roundRect(
         ctx,
         cardWidth * index + 12,
-        14,
+        44,
         cardWidth - 24,
-        cardHeight - 28,
+        cardHeight - 58,
         18,
       );
       ctx.stroke();
 
       // Medalla.
-      ctx.font = "34px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(medals[index] ?? "", cx, 42);
+      ctx.font = "28px sans-serif";
+      ctx.fillText(medals[index] ?? "", cx, 62);
+
+      // Anillo de posición alrededor del avatar.
+      ctx.beginPath();
+      ctx.arc(cx, avatarY, avatarRadius + 6, 0, Math.PI * 2);
+      ctx.fillStyle = ringColors[index] ?? "#6aa8ff";
+      ctx.shadowColor = ringColors[index] ?? "#6aa8ff";
+      ctx.shadowBlur = 18;
+      ctx.fill();
+      ctx.shadowBlur = 0;
 
       // Avatar (recortado en círculo).
       const avatarImage = avatarImages[index];
@@ -1666,28 +1701,47 @@ async function buildPodiumBanner(
         ctx.fill();
       }
 
-      // Nombre (soporta emojis de color gracias a @napi-rs/canvas).
+      // Nombre con el color del rol (glow estilo web) si hay color.
       const name =
         item.member?.displayName || String(item.entry.xp).slice(0, 8);
       ctx.font =
-        'bold 22px "DejaVu Sans", "Noto Color Emoji", "Noto Emoji", sans-serif';
-      ctx.fillStyle = "#edf2ff";
+        'bold 21px "DejaVu Sans", "Noto Color Emoji", "Noto Emoji", sans-serif';
+      if (item.roleColor && item.roleColor !== 0) {
+        const hex = `#${item.roleColor.toString(16).padStart(6, "0")}`;
+        ctx.fillStyle = hex;
+        ctx.shadowColor = hex;
+        ctx.shadowBlur = 10;
+      } else {
+        ctx.fillStyle = "#edf2ff";
+        ctx.shadowBlur = 0;
+      }
       ctx.fillText(
-        truncateText(ctx, name, cardWidth - 40),
+        truncateText(ctx, name, cardWidth - 36),
         cx,
-        avatarY + avatarRadius + 34,
+        avatarY + avatarRadius + 30,
       );
+      ctx.shadowBlur = 0;
 
       // Nivel y XP.
-      ctx.font = "16px sans-serif";
+      ctx.font = "15px sans-serif";
       ctx.fillStyle = "#b2bdd8";
       ctx.fillText(
-        `Nivel ${item.entry.level}`,
+        `Nivel ${item.entry.level}  ·  ${item.entry.xp} XP`,
         cx,
-        avatarY + avatarRadius + 62,
+        avatarY + avatarRadius + 56,
       );
-      ctx.fillStyle = "#ffb454";
-      ctx.fillText(`${item.entry.xp} XP`, cx, avatarY + avatarRadius + 86);
+
+      // Barra de progreso hacia el siguiente nivel.
+      drawXpBar(
+        ctx,
+        item.entry.xp,
+        item.entry.level,
+        levelBaseXp,
+        maxLevel,
+        cx - 80,
+        avatarY + avatarRadius + 78,
+        160,
+      );
     }
 
     return canvas.toBuffer("image/png");
@@ -1697,6 +1751,52 @@ async function buildPodiumBanner(
     });
     return null;
   }
+}
+
+// Dibuja una barra de progreso de XP (hacia el siguiente nivel) en el canvas.
+function drawXpBar(
+  ctx: SKRSContext2D,
+  xp: number,
+  level: number,
+  levelBaseXp: number,
+  maxLevel: number,
+  x: number,
+  y: number,
+  width: number,
+): void {
+  const height = 8;
+  const radius = height / 2;
+
+  // Fondo de la barra.
+  ctx.fillStyle = "rgba(133,156,212,0.18)";
+  roundRect(ctx, x, y, width, height, radius);
+  ctx.fill();
+
+  if (xp <= 0 || levelBaseXp <= 0) {
+    return;
+  }
+
+  const isMax = maxLevel > 0 && level >= maxLevel;
+  let ratio = 1;
+  if (!isMax) {
+    const currentLevelXp = xpRequiredForLevel(level, levelBaseXp);
+    const nextLevelXp = xpRequiredForLevel(level + 1, levelBaseXp);
+    const span = nextLevelXp - currentLevelXp;
+    if (span > 0) {
+      ratio = Math.min(1, Math.max(0, (xp - currentLevelXp) / span));
+    }
+  }
+
+  const fillWidth = Math.max(height, Math.round(width * ratio));
+  const fillGradient = ctx.createLinearGradient(x, 0, x + width, 0);
+  fillGradient.addColorStop(0, "#6aa8ff");
+  fillGradient.addColorStop(1, "#ff8a5c");
+  ctx.fillStyle = fillGradient;
+  ctx.shadowColor = "rgba(106,168,255,0.6)";
+  ctx.shadowBlur = 8;
+  roundRect(ctx, x, y, fillWidth, height, radius);
+  ctx.fill();
+  ctx.shadowBlur = 0;
 }
 
 // Dibuja un rectángulo redondeado en el canvas (ruta, sin rellenar).
@@ -1776,15 +1876,34 @@ async function handleRankingCommand(
   // Resolvemos los miembros de una vez para tener nick + avatar.
   const members = await interaction.guild.members.fetch().catch(() => null);
 
+  // Config de XP (para la barra de progreso y el color por nivel).
+  let xpConfig: XpConfig | null = null;
+  try {
+    xpConfig = await fetchRemoteXpConfig(interaction.guildId);
+  } catch {
+    xpConfig = null;
+  }
+
   const sorted = [...profiles].sort((left, right) => right.xp - left.xp);
   const top = sorted.slice(0, 20);
 
   // Banner del podio (top 3 con avatares) en una sola imagen.
   const podiumPng = await buildPodiumBanner(
-    top.slice(0, 3).map((entry) => ({
-      entry,
-      member: members?.get(entry.userId) ?? null,
-    })),
+    top.slice(0, 3).map((entry) => {
+      const member = members?.get(entry.userId) ?? null;
+      return {
+        entry,
+        member,
+        // Color del rol más alto (para el glow del nombre, estilo web).
+        roleColor:
+          member && typeof (member as { roles?: unknown }).roles === "object"
+            ? ((member as { roles: { highest?: { color?: number } } }).roles
+                .highest?.color ?? null)
+            : null,
+      };
+    }),
+    xpConfig?.levelBaseXp ?? 100,
+    xpConfig?.maxLevel ?? 0,
   );
 
   const embeds: EmbedBuilder[] = [];
