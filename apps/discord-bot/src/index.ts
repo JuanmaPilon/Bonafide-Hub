@@ -1305,6 +1305,47 @@ async function handleXpLevelCommand(
   }
 }
 
+// Fórmula de XP del API: XP total requerida para alcanzar un nivel.
+function xpRequiredForLevel(level: number, levelBaseXp: number): number {
+  const n = Math.max(1, Math.floor(level));
+  return (levelBaseXp * (n * (n + 1))) / 2;
+}
+
+// Barra de progreso de XP hacia el siguiente nivel: ▰▰▱▱ 30%
+// Devuelve null si no hay datos suficientes. Si está en el nivel máximo,
+// la barra queda llena.
+function buildXpProgressBar(
+  xp: number,
+  level: number,
+  levelBaseXp: number,
+  maxLevel: number,
+): string | null {
+  if (xp <= 0 || levelBaseXp <= 0) {
+    return null;
+  }
+
+  const isMax = maxLevel > 0 && level >= maxLevel;
+  if (isMax) {
+    return "▰▰▰▰▰▰▰▰▰▰ **Nivel máximo**";
+  }
+
+  const currentLevelXp = xpRequiredForLevel(level, levelBaseXp);
+  const nextLevelXp = xpRequiredForLevel(level + 1, levelBaseXp);
+  const span = nextLevelXp - currentLevelXp;
+  if (span <= 0) {
+    return null;
+  }
+
+  const intoLevel = Math.max(0, xp - currentLevelXp);
+  const ratio = Math.min(1, intoLevel / span);
+  const barTotal = 10;
+  const filled = Math.round(ratio * barTotal);
+  const bar = "▰".repeat(filled) + "▱".repeat(barTotal - filled);
+  const percent = Math.floor(ratio * 100);
+
+  return `${bar} **${percent}%** · ${xp - currentLevelXp} / ${span} XP`;
+}
+
 // /profile: muestra el perfil del miembro (el propio por defecto) como
 // embed en el canal donde se usa.
 async function handleProfileCommand(
@@ -1355,12 +1396,18 @@ async function handleProfileCommand(
     voiceMinutes: number;
     xp: number;
   } | null = null;
+  let xpConfig: XpConfig | null = null;
   try {
     const profiles = await fetchRemoteXpProfiles(interaction.guildId);
     xpInfo =
       profiles.find((profile) => profile.userId === targetUser.id) ?? null;
   } catch {
     xpInfo = null;
+  }
+  try {
+    xpConfig = await fetchRemoteXpConfig(interaction.guildId);
+  } catch {
+    xpConfig = null;
   }
 
   const highestRoleColor = member.roles.highest?.color ?? 0;
@@ -1409,6 +1456,23 @@ async function handleProfileCommand(
       name: "Voz",
       value: hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`,
     });
+
+    const maxLevel = xpConfig?.maxLevel ?? 0;
+    const nextLevelTarget =
+      maxLevel > 0 ? Math.min(xpInfo.level + 1, maxLevel) : xpInfo.level + 1;
+    const progress = buildXpProgressBar(
+      xpInfo.xp,
+      xpInfo.level,
+      xpConfig?.levelBaseXp ?? 100,
+      maxLevel,
+    );
+    if (progress) {
+      fields.push({
+        inline: false,
+        name: `Progreso al nivel ${nextLevelTarget}`,
+        value: progress,
+      });
+    }
   }
   const roles = member.roles.cache
     .filter((role) => role.id !== interaction.guildId)
@@ -1424,6 +1488,87 @@ async function handleProfileCommand(
     });
   }
   embed.setFields(fields);
+
+  await interaction.reply({ embeds: [embed] });
+}
+
+// /ranking: muestra el top 10 del ranking de XP como tabla en Discord.
+async function handleRankingCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    await interaction.reply({
+      content: "Este comando solo se puede usar dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  let profiles: Array<{
+    level: number;
+    messageCount: number;
+    userId: string;
+    voiceMinutes: number;
+    xp: number;
+  }> = [];
+  try {
+    profiles = await fetchRemoteXpProfiles(interaction.guildId);
+  } catch (error) {
+    await interaction.reply({
+      content: `No se pudo obtener el ranking: ${getErrorMessage(error)}`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (profiles.length === 0) {
+    await interaction.reply({
+      content: "Todavía no hay XP registrado en este servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Resolvemos los miembros de una vez para tener nick + avatar.
+  const members = await interaction.guild.members
+    .fetch()
+    .catch(() => null);
+
+  const top = [...profiles]
+    .sort((left, right) => right.xp - left.xp)
+    .slice(0, 10);
+
+  const medals = ["🥇", "🥈", "🥉"];
+  const lines = top.map((entry, index) => {
+    const rank = index + 1;
+    const member = members?.get(entry.userId);
+    const name = member?.displayName || entry.userId;
+    const medal = medals[index] ?? `${rank}.`;
+    return `${medal} **${name}** · Nv ${entry.level} · ${entry.xp} XP`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x6aa8ff)
+    .setTitle("🏆 Ranking de XP — Top 10")
+    .setDescription(lines.join("\n"));
+
+  const caller = interaction.member;
+  const callerProfile = profiles.find(
+    (profile) => profile.userId === interaction.user.id,
+  );
+  if (callerProfile) {
+    const callerRank =
+      [...profiles].sort((left, right) => right.xp - left.xp).findIndex(
+        (entry) => entry.userId === interaction.user.id,
+      ) + 1;
+    const callerName =
+      typeof caller === "object" && caller && "displayName" in caller
+        ? (caller as { displayName: string }).displayName
+        : interaction.user.username;
+    embed.setFooter({
+      text: `Tu posición: #${callerRank} · ${callerName} · Nv ${callerProfile.level} · ${callerProfile.xp} XP`,
+    });
+  }
 
   await interaction.reply({ embeds: [embed] });
 }
@@ -1859,6 +2004,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.commandName === "profile") {
     await handleProfileCommand(interaction);
+    return;
+  }
+
+  if (interaction.commandName === "ranking") {
+    await handleRankingCommand(interaction);
     return;
   }
 

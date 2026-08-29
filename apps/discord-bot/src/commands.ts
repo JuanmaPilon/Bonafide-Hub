@@ -206,6 +206,11 @@ export const commandDefinitions = [
     .setDescription(
       "Vuelve a hacer visible tu sala de voz dinámica a los roles vetados",
     ),
+  new SlashCommandBuilder()
+    .setName("ranking")
+    .setDescription(
+      "Muestra el top 10 del ranking de XP del servidor",
+    ),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {};
