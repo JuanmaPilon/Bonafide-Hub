@@ -1,5 +1,6 @@
 import {
   AuditLogEvent,
+  AttachmentBuilder,
   ChannelType,
   ChatInputCommandInteraction,
   Client,
@@ -9,6 +10,7 @@ import {
   Partials,
   PermissionFlagsBits,
 } from "discord.js";
+import sharp from "sharp";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
 import {
@@ -1492,9 +1494,112 @@ async function handleProfileCommand(
   await interaction.reply({ embeds: [embed] });
 }
 
+// Descarga un avatar de Discord y lo devuelve como data URI (o null si falla).
+async function avatarDataUri(member: {
+  displayAvatarURL: (options: {
+    extension: "png" | "gif";
+    forceStatic?: boolean;
+    size: number;
+  }) => string;
+}): Promise<string | null> {
+  try {
+    const hash = (member as { user?: { avatar?: string | null } }).user
+      ?.avatar;
+    const isAnimated = Boolean(hash?.startsWith("a_"));
+    const url = member.displayAvatarURL({
+      extension: isAnimated ? "gif" : "png",
+      forceStatic: false,
+      size: 128,
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!response.ok) {
+      return null;
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const base64 = buffer.toString("base64");
+    return `data:image/${isAnimated ? "gif" : "png"};base64,${base64}`;
+  } catch {
+    return null;
+  }
+}
+
+// Construye un banner PNG con el podio (top 3): avatares + nombre + nivel + XP.
+async function buildPodiumBanner(
+  podium: Array<{
+    entry: { level: number; messageCount: number; xp: number };
+    member: { displayName: string } | null;
+  }>,
+): Promise<Buffer | null> {
+  if (podium.length === 0) {
+    return null;
+  }
+
+  const medals = ["🥇", "🥈", "🥉"];
+  const width = 900;
+  const cardWidth = width / 3;
+  const cardHeight = 260;
+
+  // Descargamos los avatares en paralelo.
+  const avatars = await Promise.all(
+    podium.map((item) =>
+      item.member
+        ? avatarDataUri(item.member as never).catch(() => null)
+        : Promise.resolve(null),
+    ),
+  );
+
+  const cards = podium
+    .map((item, index) => {
+      const name =
+        item.member?.displayName || item.entry.xp.toString().slice(0, 8);
+      const escapedName = name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const avatar = avatars[index];
+      const cx = cardWidth * index + cardWidth / 2;
+      const avatarY = 62;
+      const avatarRadius = 44;
+      const avatarImg = avatar
+        ? `<clipPath id="clip${index}"><circle cx="${cx}" cy="${avatarY}" r="${avatarRadius}"/></clipPath>
+           <image href="${avatar}" x="${cx - avatarRadius}" y="${avatarY - avatarRadius}" width="${avatarRadius * 2}" height="${avatarRadius * 2}" clip-path="url(#clip${index})"/>`
+        : `<circle cx="${cx}" cy="${avatarY}" r="${avatarRadius}" fill="#2a2f42"/>`;
+
+      return `
+      <g>
+        <rect x="${cardWidth * index + 12}" y="14" width="${cardWidth - 24}" height="${cardHeight - 28}" rx="18" fill="#1b2133" stroke="#2f3a58" stroke-width="1"/>
+        <text x="${cx}" y="42" text-anchor="middle" font-size="34">${medals[index] ?? ""}</text>
+        ${avatarImg}
+        <text x="${cx}" y="${avatarY + avatarRadius + 34}" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="22" fill="#edf2ff">${escapedName}</text>
+        <text x="${cx}" y="${avatarY + avatarRadius + 62}" text-anchor="middle" font-family="DejaVu Sans" font-size="16" fill="#b2bdd8">Nivel ${item.entry.level}</text>
+        <text x="${cx}" y="${avatarY + avatarRadius + 86}" text-anchor="middle" font-family="DejaVu Sans" font-size="16" fill="#ffb454">${item.entry.xp} XP</text>
+      </g>`;
+    })
+    .join("");
+
+  const svg = `<svg width="${width}" height="${cardHeight}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#0b1224"/>
+        <stop offset="1" stop-color="#1c1626"/>
+      </linearGradient>
+    </defs>
+    <rect width="${width}" height="${cardHeight}" fill="url(#bg)" rx="20"/>
+    ${cards}
+  </svg>`;
+
+  try {
+    const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
+    return buffer;
+  } catch (error) {
+    console.error("[discord-bot] Failed to build podium banner", {
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
 // /ranking: muestra el top 20 del ranking de XP en Discord. El podio (top 3)
-// va en embeds individuales con el avatar/gif del usuario; el resto va como
-// tabla compacta (Discord limita a 1 thumbnail por embed).
 async function handleRankingCommand(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -1531,66 +1636,53 @@ async function handleRankingCommand(
     return;
   }
 
-  // Resolvemos los miembros de una vez para tener nick + avatar (gif si es animado).
+  // Resolvemos los miembros de una vez para tener nick + avatar.
   const members = await interaction.guild.members.fetch().catch(() => null);
 
-  const top = [...profiles]
-    .sort((left, right) => right.xp - left.xp)
-    .slice(0, 20);
+  const sorted = [...profiles].sort((left, right) => right.xp - left.xp);
+  const top = sorted.slice(0, 20);
 
-  const medals = ["🥇", "🥈", "🥉"];
+  // Banner del podio (top 3 con avatares) en una sola imagen.
+  const podiumPng = await buildPodiumBanner(
+    top.slice(0, 3).map((entry) => ({
+      entry,
+      member: members?.get(entry.userId) ?? null,
+    })),
+  );
 
-  // Avatar: png para estáticos, gif si el avatar es animado (a_).
-  function avatarUrlFor(userId: string): string | null {
-    const member = members?.get(userId);
-    const hash = member?.user.avatar;
-    if (!hash) {
-      return null;
-    }
-    const extension = hash.startsWith("a_") ? "gif" : "png";
-    return member.displayAvatarURL({ extension, size: 128 });
+  const embeds: EmbedBuilder[] = [];
+  const bannerEmbed = new EmbedBuilder()
+    .setColor(0x6aa8ff)
+    .setTitle("🏆 Ranking de XP — Top 20");
+  if (podiumPng) {
+    bannerEmbed.setImage("attachment://podium.png");
+    embeds.push(bannerEmbed);
+  } else {
+    // Fallback: si no se pudo generar el banner, mostramos el podio en texto.
+    const medals = ["🥇", "🥈", "🥉"];
+    const podiumLines = top.slice(0, 3).map((entry, index) => {
+      const member = members?.get(entry.userId);
+      const name = member?.displayName || entry.userId;
+      return `${medals[index]} **${name}** · Nv ${entry.level} · ${entry.xp} XP`;
+    });
+    bannerEmbed.setDescription(podiumLines.join("\n"));
+    embeds.push(bannerEmbed);
   }
 
-  // Podio: un embed por jugador con su avatar como thumbnail.
-  const podiumEmbeds = top.slice(0, 3).map((entry, index) => {
-    const rank = index + 1;
-    const member = members?.get(entry.userId);
-    const name = member?.displayName || entry.userId;
-    const avatarUrl = avatarUrlFor(entry.userId);
-
-    const podium = new EmbedBuilder()
-      .setColor(0x6aa8ff)
-      .setTitle(`${medals[index]} #${rank} · ${name}`)
-      .addFields(
-        { name: "Nivel", value: String(entry.level), inline: true },
-        { name: "XP", value: String(entry.xp), inline: true },
-        {
-          name: "Mensajes",
-          value: String(entry.messageCount),
-          inline: true,
-        },
-      );
-    if (avatarUrl) {
-      podium.setThumbnail(avatarUrl);
-    }
-    return podium;
-  });
-
-  // Resto (4-20): tabla compacta en un solo embed.
+  // Resto (4-20): tabla compacta.
   const restLines = top.slice(3).map((entry, index) => {
     const rank = index + 4;
     const member = members?.get(entry.userId);
     const name = member?.displayName || entry.userId;
     return `${rank}. **${name}** · Nv ${entry.level} · ${entry.xp} XP`;
   });
-
-  const embeds: EmbedBuilder[] = [...podiumEmbeds];
   if (restLines.length > 0) {
-    const restEmbed = new EmbedBuilder()
-      .setColor(0x6aa8ff)
-      .setTitle("🏆 Ranking de XP — Resto del top 20")
-      .setDescription(restLines.join("\n"));
-    embeds.push(restEmbed);
+    embeds.push(
+      new EmbedBuilder()
+        .setColor(0x6aa8ff)
+        .setTitle("Resto del top 20")
+        .setDescription(restLines.join("\n")),
+    );
   }
 
   // Footer con la posición del que ejecutó el comando.
@@ -1599,9 +1691,7 @@ async function handleRankingCommand(
   );
   if (callerProfile && embeds.length > 0) {
     const callerRank =
-      [...profiles]
-        .sort((left, right) => right.xp - left.xp)
-        .findIndex((entry) => entry.userId === interaction.user.id) + 1;
+      sorted.findIndex((entry) => entry.userId === interaction.user.id) + 1;
     const callerMember = members?.get(interaction.user.id);
     const callerName = callerMember?.displayName || interaction.user.username;
     embeds[embeds.length - 1].setFooter({
@@ -1609,7 +1699,11 @@ async function handleRankingCommand(
     });
   }
 
-  await interaction.reply({ embeds });
+  const files =
+    podiumPng && embeds[0]
+      ? [new AttachmentBuilder(podiumPng, { name: "podium.png" })]
+      : [];
+  await interaction.reply({ embeds, files });
 }
 
 // Mensajes del mayordomo de Karpindomo al desperuanizar/reperuanizar una
