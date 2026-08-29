@@ -10,7 +10,7 @@ import {
   Partials,
   PermissionFlagsBits,
 } from "discord.js";
-import sharp from "sharp";
+import { createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
 import {
@@ -1494,14 +1494,15 @@ async function handleProfileCommand(
   await interaction.reply({ embeds: [embed] });
 }
 
-// Descarga un avatar de Discord y lo devuelve como data URI (o null si falla).
-async function avatarDataUri(member: {
+// Descarga un avatar de Discord y lo devuelve como Buffer (o null si falla).
+// Se usa el primer frame del GIF si el avatar es animado (loadImage soporta gif).
+async function fetchAvatarBuffer(member: {
   displayAvatarURL: (options: {
     extension: "png" | "gif";
     forceStatic?: boolean;
     size: number;
   }) => string;
-}): Promise<string | null> {
+}): Promise<Buffer | null> {
   try {
     const hash = (member as { user?: { avatar?: string | null } }).user
       ?.avatar;
@@ -1518,15 +1519,14 @@ async function avatarDataUri(member: {
     if (!response.ok) {
       return null;
     }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const base64 = buffer.toString("base64");
-    return `data:image/${isAnimated ? "gif" : "png"};base64,${base64}`;
+    return Buffer.from(await response.arrayBuffer());
   } catch {
     return null;
   }
 }
 
 // Construye un banner PNG con el podio (top 3): avatares + nombre + nivel + XP.
+// Usa @napi-rs/canvas (renderiza emojis de color, ej. ⭐ en los nicknames).
 async function buildPodiumBanner(
   podium: Array<{
     entry: { level: number; messageCount: number; xp: number };
@@ -1542,61 +1542,148 @@ async function buildPodiumBanner(
   const cardWidth = width / 3;
   const cardHeight = 260;
 
-  // Descargamos los avatares en paralelo.
-  const avatars = await Promise.all(
-    podium.map((item) =>
-      item.member
-        ? avatarDataUri(item.member as never).catch(() => null)
-        : Promise.resolve(null),
-    ),
-  );
+  try {
+    const canvas = createCanvas(width, cardHeight);
+    const ctx = canvas.getContext("2d");
 
-  const cards = podium
-    .map((item, index) => {
-      const name =
-        item.member?.displayName || item.entry.xp.toString().slice(0, 8);
-      const escapedName = name.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-      const avatar = avatars[index];
+    // Fondo degradado.
+    const gradient = ctx.createLinearGradient(0, 0, width, cardHeight);
+    gradient.addColorStop(0, "#0b1224");
+    gradient.addColorStop(1, "#1c1626");
+    ctx.fillStyle = gradient;
+    roundRect(ctx, 0, 0, width, cardHeight, 20);
+    ctx.fill();
+
+    // Descargamos los avatares en paralelo.
+    const avatarBuffers = await Promise.all(
+      podium.map((item) =>
+        item.member
+          ? fetchAvatarBuffer(item.member as never).catch(() => null)
+          : Promise.resolve(null),
+      ),
+    );
+    const avatarImages = await Promise.all(
+      avatarBuffers.map((buffer) =>
+        buffer ? loadImage(buffer).catch(() => null) : Promise.resolve(null),
+      ),
+    );
+
+    for (let index = 0; index < podium.length; index += 1) {
+      const item = podium[index];
       const cx = cardWidth * index + cardWidth / 2;
       const avatarY = 62;
       const avatarRadius = 44;
-      const avatarImg = avatar
-        ? `<clipPath id="clip${index}"><circle cx="${cx}" cy="${avatarY}" r="${avatarRadius}"/></clipPath>
-           <image href="${avatar}" x="${cx - avatarRadius}" y="${avatarY - avatarRadius}" width="${avatarRadius * 2}" height="${avatarRadius * 2}" clip-path="url(#clip${index})"/>`
-        : `<circle cx="${cx}" cy="${avatarY}" r="${avatarRadius}" fill="#2a2f42"/>`;
 
-      return `
-      <g>
-        <rect x="${cardWidth * index + 12}" y="14" width="${cardWidth - 24}" height="${cardHeight - 28}" rx="18" fill="#1b2133" stroke="#2f3a58" stroke-width="1"/>
-        <text x="${cx}" y="42" text-anchor="middle" font-size="34">${medals[index] ?? ""}</text>
-        ${avatarImg}
-        <text x="${cx}" y="${avatarY + avatarRadius + 34}" text-anchor="middle" font-family="DejaVu Sans" font-weight="bold" font-size="22" fill="#edf2ff">${escapedName}</text>
-        <text x="${cx}" y="${avatarY + avatarRadius + 62}" text-anchor="middle" font-family="DejaVu Sans" font-size="16" fill="#b2bdd8">Nivel ${item.entry.level}</text>
-        <text x="${cx}" y="${avatarY + avatarRadius + 86}" text-anchor="middle" font-family="DejaVu Sans" font-size="16" fill="#ffb454">${item.entry.xp} XP</text>
-      </g>`;
-    })
-    .join("");
+      // Tarjeta.
+      ctx.fillStyle = "#1b2133";
+      roundRect(
+        ctx,
+        cardWidth * index + 12,
+        14,
+        cardWidth - 24,
+        cardHeight - 28,
+        18,
+      );
+      ctx.fill();
+      ctx.strokeStyle = "#2f3a58";
+      ctx.lineWidth = 1;
+      roundRect(
+        ctx,
+        cardWidth * index + 12,
+        14,
+        cardWidth - 24,
+        cardHeight - 28,
+        18,
+      );
+      ctx.stroke();
 
-  const svg = `<svg width="${width}" height="${cardHeight}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#0b1224"/>
-        <stop offset="1" stop-color="#1c1626"/>
-      </linearGradient>
-    </defs>
-    <rect width="${width}" height="${cardHeight}" fill="url(#bg)" rx="20"/>
-    ${cards}
-  </svg>`;
+      // Medalla.
+      ctx.font = "34px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(medals[index] ?? "", cx, 42);
 
-  try {
-    const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
-    return buffer;
+      // Avatar (recortado en círculo).
+      const avatarImage = avatarImages[index];
+      if (avatarImage) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, avatarY, avatarRadius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(
+          avatarImage,
+          cx - avatarRadius,
+          avatarY - avatarRadius,
+          avatarRadius * 2,
+          avatarRadius * 2,
+        );
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(cx, avatarY, avatarRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "#2a2f42";
+        ctx.fill();
+      }
+
+      // Nombre (soporta emojis de color gracias a @napi-rs/canvas).
+      const name = item.member?.displayName || String(item.entry.xp).slice(0, 8);
+      ctx.font = 'bold 22px "DejaVu Sans", sans-serif';
+      ctx.fillStyle = "#edf2ff";
+      ctx.fillText(truncateText(ctx, name, cardWidth - 40), cx, avatarY + avatarRadius + 34);
+
+      // Nivel y XP.
+      ctx.font = "16px sans-serif";
+      ctx.fillStyle = "#b2bdd8";
+      ctx.fillText(`Nivel ${item.entry.level}`, cx, avatarY + avatarRadius + 62);
+      ctx.fillStyle = "#ffb454";
+      ctx.fillText(`${item.entry.xp} XP`, cx, avatarY + avatarRadius + 86);
+    }
+
+    return canvas.toBuffer("image/png");
   } catch (error) {
     console.error("[discord-bot] Failed to build podium banner", {
       error: getErrorMessage(error),
     });
     return null;
   }
+}
+
+// Dibuja un rectángulo redondeado en el canvas (ruta, sin rellenar).
+function roundRect(
+  ctx: SKRSContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Trunca un texto con "…" para que entre en el ancho disponible.
+function truncateText(
+  ctx: SKRSContext2D,
+  text: string,
+  maxWidth: number,
+): string {
+  if (ctx.measureText(text).width <= maxWidth) {
+    return text;
+  }
+  let truncated = text;
+  while (
+    truncated.length > 1 &&
+    ctx.measureText(`${truncated}…`).width > maxWidth
+  ) {
+    truncated = truncated.slice(0, -1);
+  }
+  return `${truncated}…`;
 }
 
 // /ranking: muestra el top 20 del ranking de XP en Discord. El podio (top 3)
