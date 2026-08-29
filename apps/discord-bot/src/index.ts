@@ -1564,12 +1564,11 @@ function registerBannerFonts(): void {
 }
 
 // Construye un banner PNG con el podio (top 3): avatares + nombre + nivel + XP.
-// Estilo inspirado en la web (glow por nivel, barra de progreso, anillos).
+// Estilo inspirado en la web (barra de progreso, anillos y nombres por posición).
 async function buildPodiumBanner(
   podium: Array<{
     entry: { level: number; messageCount: number; xp: number };
     member: { displayName: string } | null;
-    roleColor: number | null;
   }>,
   levelBaseXp: number,
   maxLevel: number,
@@ -1581,11 +1580,11 @@ async function buildPodiumBanner(
   registerBannerFonts();
 
   const medals = ["🥇", "🥈", "🥉"];
-  // Anillos de posición: oro / plata / bronce.
+  // Colores por posición: oro / plata / bronce (anillos y nombre).
   const ringColors = ["#ffd34d", "#c8d6e5", "#e08a5c"];
   const width = 900;
   const cardWidth = width / 3;
-  const cardHeight = 300;
+  const cardHeight = 330;
 
   try {
     const canvas = createCanvas(width, cardHeight);
@@ -1612,14 +1611,14 @@ async function buildPodiumBanner(
     ctx.fillStyle = glow2;
     ctx.fillRect(0, 0, width, cardHeight);
 
-    // Título.
+    // Título (con banda propia arriba, fuera del alcance de los anillos).
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = 'bold 26px "DejaVu Sans", "Noto Color Emoji", sans-serif';
     ctx.fillStyle = "#edf2ff";
     ctx.shadowColor = "rgba(106,168,255,0.7)";
     ctx.shadowBlur = 16;
-    ctx.fillText("🏆 Ranking de XP", width / 2, 26);
+    ctx.fillText("TOP 3 ranks comunidad", width / 2, 26);
     ctx.shadowBlur = 0;
 
     // Descargamos los avatares en paralelo.
@@ -1639,7 +1638,7 @@ async function buildPodiumBanner(
     for (let index = 0; index < podium.length; index += 1) {
       const item = podium[index];
       const cx = cardWidth * index + cardWidth / 2;
-      const avatarY = 78;
+      const avatarY = 100;
       const avatarRadius = 42;
 
       // Tarjeta.
@@ -1647,9 +1646,9 @@ async function buildPodiumBanner(
       roundRect(
         ctx,
         cardWidth * index + 12,
-        44,
+        60,
         cardWidth - 24,
-        cardHeight - 58,
+        cardHeight - 70,
         18,
       );
       ctx.fill();
@@ -1658,16 +1657,16 @@ async function buildPodiumBanner(
       roundRect(
         ctx,
         cardWidth * index + 12,
-        44,
+        60,
         cardWidth - 24,
-        cardHeight - 58,
+        cardHeight - 70,
         18,
       );
       ctx.stroke();
 
       // Medalla.
       ctx.font = "28px sans-serif";
-      ctx.fillText(medals[index] ?? "", cx, 62);
+      ctx.fillText(medals[index] ?? "", cx, 74);
 
       // Anillo de posición alrededor del avatar.
       ctx.beginPath();
@@ -1701,20 +1700,15 @@ async function buildPodiumBanner(
         ctx.fill();
       }
 
-      // Nombre con el color del rol (glow estilo web) si hay color.
+      // Nombre con el color de la posición (oro / plata / bronce) + glow.
       const name =
         item.member?.displayName || String(item.entry.xp).slice(0, 8);
+      const positionColor = ringColors[index] ?? "#edf2ff";
       ctx.font =
         'bold 21px "DejaVu Sans", "Noto Color Emoji", "Noto Emoji", sans-serif';
-      if (item.roleColor && item.roleColor !== 0) {
-        const hex = `#${item.roleColor.toString(16).padStart(6, "0")}`;
-        ctx.fillStyle = hex;
-        ctx.shadowColor = hex;
-        ctx.shadowBlur = 10;
-      } else {
-        ctx.fillStyle = "#edf2ff";
-        ctx.shadowBlur = 0;
-      }
+      ctx.fillStyle = positionColor;
+      ctx.shadowColor = positionColor;
+      ctx.shadowBlur = 10;
       ctx.fillText(
         truncateText(ctx, name, cardWidth - 36),
         cx,
@@ -1889,19 +1883,10 @@ async function handleRankingCommand(
 
   // Banner del podio (top 3 con avatares) en una sola imagen.
   const podiumPng = await buildPodiumBanner(
-    top.slice(0, 3).map((entry) => {
-      const member = members?.get(entry.userId) ?? null;
-      return {
-        entry,
-        member,
-        // Color del rol más alto (para el glow del nombre, estilo web).
-        roleColor:
-          member && typeof (member as { roles?: unknown }).roles === "object"
-            ? ((member as { roles: { highest?: { color?: number } } }).roles
-                .highest?.color ?? null)
-            : null,
-      };
-    }),
+    top.slice(0, 3).map((entry) => ({
+      entry,
+      member: members?.get(entry.userId) ?? null,
+    })),
     xpConfig?.levelBaseXp ?? 100,
     xpConfig?.maxLevel ?? 0,
   );
