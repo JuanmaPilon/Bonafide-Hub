@@ -163,16 +163,40 @@ const HUB_MODULES: Array<{
   },
 ];
 
-// Módulos del panel Admin que el owner puede otorgar a roles de staff.
-// Auditoría, Módulos y Permisos quedan siempre owner-only.
-const STAFF_MODULES: Array<{ key: string; label: string }> = [
-  { key: "config", label: "Configuración" },
-  { key: "comunicados", label: "Comunicados" },
-  { key: "raids", label: "Raids / Logs" },
-  { key: "daily", label: "Mensajes diarios" },
-  { key: "reaction", label: "Reaction roles" },
-  { key: "xp", label: "Configuración de XP" },
-];
+// Rangos de staff: cada rango tiene un set de módulos fijo definido acá
+// (desde el código). El owner solo elige qué rango darle a cada rol.
+type StaffTier = "admin" | "officer";
+
+const STAFF_TIERS: Record<
+  StaffTier,
+  { label: string; description: string; modules: string[] }
+> = {
+  admin: {
+    label: "Admin",
+    description:
+      "Casi todo: configuración, comunicados, raids, loro, reaction roles y XP.",
+    modules: ["config", "comunicados", "raids", "daily", "reaction", "xp"],
+  },
+  officer: {
+    label: "Officer",
+    description:
+      "Operativo: comunicados, raids/logs, reaction roles y mensajes diarios.",
+    modules: ["comunicados", "raids", "daily", "reaction"],
+  },
+};
+
+// Devuelve el rango de un rol según sus módulos guardados (para el selector).
+// Si no coincide con un rango exacto, devuelve null.
+function tierForModules(modules: string[]): StaffTier | null {
+  const sortKey = (list: string[]): string => [...list].sort().join(",");
+  if (sortKey(modules) === sortKey(STAFF_TIERS.admin.modules)) {
+    return "admin";
+  }
+  if (sortKey(modules) === sortKey(STAFF_TIERS.officer.modules)) {
+    return "officer";
+  }
+  return null;
+}
 
 // El perfil NO es un módulo activable: se accede desde el chip de usuario
 // (arriba a la derecha) y nunca se oculta ni aparece en la navegación.
@@ -2988,9 +3012,10 @@ function App() {
                         <div>
                           <h3>Permisos de staff</h3>
                           <p>
-                            Elegí qué módulos del Admin puede usar cada rol de
-                            Discord. Quienes tengan esos roles verán solo esas
-                            secciones; vos (owner) siempre tenés acceso total.
+                            Elegí el rango de cada rol: Admin (casi todo) u
+                            Officer (operativo). Vos (owner) siempre tenés
+                            acceso total; Auditoría, Módulos y Permisos quedan
+                            solo para el owner.
                           </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
@@ -2998,12 +3023,25 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
+                        <div className="staff-tier-legend">
+                          {(["admin", "officer"] as StaffTier[]).map(
+                            (tier) => (
+                              <div
+                                className="staff-tier-legend-item"
+                                key={tier}
+                              >
+                                <strong>{STAFF_TIERS[tier].label}</strong>
+                                <span>{STAFF_TIERS[tier].description}</span>
+                              </div>
+                            ),
+                          )}
+                        </div>
                         <div className="staff-permissions-list">
                           {guildRoles.map((role) => {
                             const rule = (config.adminRoleModules ?? []).find(
                               (entry) => entry.roleId === role.id,
                             );
-                            const selected = new Set(rule?.modules ?? []);
+                            const tier = tierForModules(rule?.modules ?? []);
                             return (
                               <div
                                 className="staff-permission-row"
@@ -3012,70 +3050,49 @@ function App() {
                                 <div className="staff-permission-role">
                                   <strong>{role.name}</strong>
                                   <small>
-                                    {selected.size > 0
-                                      ? `${selected.size} módulo(s)`
-                                      : "Sin acceso"}
+                                    {tier
+                                      ? STAFF_TIERS[tier].label
+                                      : (rule?.modules.length ?? 0) > 0
+                                        ? "Personalizado"
+                                        : "Sin acceso"}
                                   </small>
                                 </div>
-                                <div className="staff-permission-modules">
-                                  {STAFF_MODULES.map((mod) => {
-                                    const checked = selected.has(mod.key);
-                                    return (
-                                      <label
-                                        className={`staff-module-chip${checked ? " checked" : ""}`}
-                                        key={mod.key}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={checked}
-                                          onChange={() => {
-                                            setConfig((current) => {
-                                              const rules = [
-                                                ...(current.adminRoleModules ??
-                                                  []),
-                                              ];
-                                              const index = rules.findIndex(
-                                                (entry) =>
-                                                  entry.roleId === role.id,
-                                              );
-                                              const modules = new Set(
-                                                index >= 0
-                                                  ? rules[index].modules
-                                                  : [],
-                                              );
-                                              if (checked) {
-                                                modules.delete(mod.key);
-                                              } else {
-                                                modules.add(mod.key);
-                                              }
-                                              const next = [...modules];
-                                              if (index >= 0) {
-                                                if (next.length === 0) {
-                                                  rules.splice(index, 1);
-                                                } else {
-                                                  rules[index] = {
-                                                    modules: next,
-                                                    roleId: role.id,
-                                                  };
-                                                }
-                                              } else if (next.length > 0) {
-                                                rules.push({
-                                                  modules: next,
-                                                  roleId: role.id,
-                                                });
-                                              }
-                                              return {
-                                                ...current,
-                                                adminRoleModules: rules,
-                                              };
-                                            });
-                                          }}
-                                        />
-                                        <span>{mod.label}</span>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
+                                <select
+                                  className="select staff-tier-select"
+                                  value={tier ?? ""}
+                                  onChange={(event) => {
+                                    const nextTier = event.target.value as
+                                      | StaffTier
+                                      | "";
+                                    setConfig((current) => {
+                                      const rules = [
+                                        ...(current.adminRoleModules ?? []),
+                                      ];
+                                      const index = rules.findIndex(
+                                        (entry) => entry.roleId === role.id,
+                                      );
+                                      if (index >= 0) {
+                                        rules.splice(index, 1);
+                                      }
+                                      if (nextTier) {
+                                        rules.push({
+                                          modules: [
+                                            ...STAFF_TIERS[nextTier].modules,
+                                          ],
+                                          roleId: role.id,
+                                        });
+                                      }
+                                      return {
+                                        ...current,
+                                        adminRoleModules: rules,
+                                      };
+                                    });
+                                  }}
+                                >
+                                  <option value="">Sin acceso</option>
+                                  <option value="admin">Admin</option>
+                                  <option value="officer">Officer</option>
+                                </select>
                               </div>
                             );
                           })}

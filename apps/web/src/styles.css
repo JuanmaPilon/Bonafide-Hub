@@ -2653,45 +2653,46 @@ input {
   font-size: 0.78rem;
 }
 
-.staff-permission-modules {
-  display: flex;
-  flex-wrap: wrap;
+/* Leyenda de rangos (Admin / Officer) */
+.staff-tier-legend {
+  display: grid;
   gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(10, 16, 31, 0.5);
+  border: 1px dashed rgba(133, 156, 212, 0.22);
 }
 
-.staff-module-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(133, 156, 212, 0.28);
-  background: rgba(12, 19, 37, 0.6);
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.82rem;
-  transition:
-    border-color 160ms ease,
-    color 160ms ease,
-    background-color 160ms ease;
+.staff-tier-legend-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.staff-module-chip input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-  margin: 0;
+.staff-tier-legend-item strong {
+  color: var(--accent, #6aa8ff);
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 
-.staff-module-chip.checked {
-  border-color: rgba(106, 168, 255, 0.55);
-  background: rgba(106, 168, 255, 0.1);
-  color: var(--text);
+.staff-tier-legend-item span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.staff-tier-select {
+  width: auto;
+  min-width: 150px;
+  justify-self: end;
 }
 
 @media (max-width: 760px) {
   .staff-permission-row {
     grid-template-columns: 1fr;
+  }
+
+  .staff-tier-select {
+    justify-self: stretch;
   }
 }
