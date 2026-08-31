@@ -100,42 +100,11 @@ a:hover {
   text-align: center;
 }
 
-.landing-banner {
-  width: 100%;
-  max-width: 780px;
-  min-height: 220px;
-  margin-bottom: 28px;
-  border-radius: 18px;
-  border: 1px solid rgba(156, 195, 190, 0.2);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  background:
-    radial-gradient(
-      circle at 50% 72%,
-      rgba(255, 138, 80, 0.42),
-      rgba(255, 111, 71, 0.1) 40%
-    ),
-    linear-gradient(145deg, rgba(54, 89, 185, 0.46), rgba(223, 90, 61, 0.32));
-}
-
-.banner-placeholder-brand {
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
-  font-weight: 700;
-  letter-spacing: 0.35em;
-  padding-left: 0.35em; /* compensa el letter-spacing para que quede centrado */
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 0 18px rgba(106, 168, 255, 0.55);
-}
-
-.banner-placeholder-note {
-  font-size: 0.95rem;
-  letter-spacing: 0.12em;
-  padding-left: 0.12em;
-  color: rgba(237, 242, 255, 0.82);
+.landing-tagline {
+  margin: 0 0 20px;
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 
 .landing-login {

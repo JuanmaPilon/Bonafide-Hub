@@ -2259,18 +2259,9 @@ function App() {
       <div className="shell landing-shell">
         <main className="landing-main">
           <section className="panel landing-hero landing-hero-center">
-            <div
-              className="landing-banner"
-              role="img"
-              aria-label="Banner de Bonafide"
-            >
-              <span className="banner-placeholder-brand">BONAFIDE</span>
-              <span className="banner-placeholder-note">
-                Aquí irá el banner oficial · Próximamente
-              </span>
-            </div>
+            <h1 className="brand-gradient">BONAFIDE</h1>
 
-            <h1 className="brand-gradient">Bienvenido a Bonafide</h1>
+            <p className="landing-tagline">Bienvenido a Bonafide</p>
 
             <a className="primary-button landing-login" href={loginUrl()}>
               <svg
