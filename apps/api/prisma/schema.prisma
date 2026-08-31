@@ -35,6 +35,8 @@ model GuildConfig {
   logsWatchGuild               String?
   logsWatchServer              String?
   logsWatchRegion              String?
+  // Destinatario de las sugerencias del hub (DM). Vacío => dueño del server.
+  suggestionsDmUserId          String?
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 

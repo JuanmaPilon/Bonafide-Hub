@@ -25,6 +25,7 @@ export type GuildConfig = {
   musicEnabled?: boolean;
   musicRoleIds?: string[];
   reactionRolesChannelId?: string;
+  suggestionsDmUserId?: string;
 };
 
 export type DailyMessage = {
@@ -741,6 +742,20 @@ export async function saveGuildConfig(
   );
 
   return data.config;
+}
+
+export async function submitSuggestion(
+  guildId: string,
+  title: string,
+  text: string,
+): Promise<void> {
+  await requestJson<{ ok: boolean; sent: boolean }>(
+    `/guilds/${guildId}/suggestions`,
+    {
+      body: JSON.stringify({ title, text }),
+      method: "POST",
+    },
+  );
 }
 
 export async function listCommunications(

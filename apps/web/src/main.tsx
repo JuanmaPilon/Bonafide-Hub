@@ -43,6 +43,7 @@ import {
   resetAllXp,
   saveGuildConfig,
   saveXpConfig,
+  submitSuggestion,
   updateCommunication,
   updateDailyMessage,
   updateReactionRolePanel,
@@ -98,6 +99,7 @@ type HubTab =
   | "memes"
   | "muro"
   | "perfil"
+  | "sugerencias"
   | "admin";
 
 const VALID_TABS: HubTab[] = [
@@ -109,8 +111,70 @@ const VALID_TABS: HubTab[] = [
   "memes",
   "muro",
   "perfil",
+  "sugerencias",
   "admin",
 ];
+
+// Módulos que el admin puede activar/desactivar desde el panel. Inicio y
+// Admin siempre están visibles (no son módulos desactivables).
+type HubModule = Exclude<HubTab, "home" | "admin">;
+
+const HUB_MODULES: Array<{
+  key: HubModule;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    description: "Resumen con el podio, actividad y estado del servidor.",
+  },
+  {
+    key: "comunicados",
+    label: "Comunicados",
+    description: "Anuncios publicados por el bot y la web.",
+  },
+  {
+    key: "raids",
+    label: "Raids",
+    description: "Logs de raids y próximas incursiones.",
+  },
+  {
+    key: "eventos",
+    label: "Eventos",
+    description: "Calendario y organización de eventos.",
+  },
+  {
+    key: "memes",
+    label: "Memes",
+    description: "Highlights, clips y contenido destacado.",
+  },
+  {
+    key: "muro",
+    label: "Muro",
+    description: "Publicaciones y mensajes destacados del muro.",
+  },
+  {
+    key: "perfil",
+    label: "Perfil",
+    description: "Tu perfil, nivel y progreso de XP.",
+  },
+  {
+    key: "sugerencias",
+    label: "Sugerencias",
+    description: "Envía sugerencias directo al staff por Discord.",
+  },
+];
+
+// Si enabledModules está vacío/ausente, todos los módulos quedan activos
+// (comportamiento por defecto, evita romper guilds ya configuradas).
+function isModuleEnabled(config: GuildConfig, moduleKey: string): boolean {
+  const enabled = config.enabledModules;
+  if (!enabled || enabled.length === 0) {
+    return true;
+  }
+  return enabled.includes(moduleKey);
+}
 
 function tabFromHash(): HubTab {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
@@ -390,6 +454,10 @@ function tabLabel(tab: HubTab): string {
     return "Perfil";
   }
 
+  if (tab === "sugerencias") {
+    return "Sugerencias";
+  }
+
   return "Admin";
 }
 
@@ -426,6 +494,10 @@ function panelTitle(tab: HubTab): string {
     return "Perfil";
   }
 
+  if (tab === "sugerencias") {
+    return "Sugerencias";
+  }
+
   return "Panel de Admin";
 }
 
@@ -460,6 +532,10 @@ function panelDescription(tab: HubTab): string {
 
   if (tab === "perfil") {
     return "Tu perfil en la comunidad.";
+  }
+
+  if (tab === "sugerencias") {
+    return "Tu idea llega como DM directo al staff del servidor.";
   }
 
   return "";
@@ -749,8 +825,11 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [savingAction, setSavingAction] = useState<
-    "config" | "xp" | "panel" | "daily" | null
+    "config" | "xp" | "panel" | "daily" | "modules" | null
   >(null);
+  const [sendingSuggestion, setSendingSuggestion] = useState(false);
+  const [suggestionTitle, setSuggestionTitle] = useState("");
+  const [suggestionText, setSuggestionText] = useState("");
   const [roleModal, setRoleModal] = useState<{
     kind: "add" | "remove";
     level: number;
@@ -1097,6 +1176,66 @@ function App() {
       pushToast("No se pudo guardar la configuración.", "error");
     } finally {
       setSavingAction(null);
+    }
+  }
+
+  // ── Módulos activos (toggles del panel Admin) ────────────────────
+  function toggleModule(key: string): void {
+    setConfig((current) => {
+      const enabled = new Set(
+        current.enabledModules && current.enabledModules.length > 0
+          ? current.enabledModules
+          : HUB_MODULES.map((mod) => mod.key),
+      );
+      if (enabled.has(key)) {
+        enabled.delete(key);
+      } else {
+        enabled.add(key);
+      }
+      return { ...current, enabledModules: [...enabled] };
+    });
+  }
+
+  async function handleSaveModules(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setSavingAction("modules");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        enabledModules: config.enabledModules ?? [],
+      });
+      setConfig(nextConfig);
+      pushToast("Módulos actualizados.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo guardar los módulos.", "error");
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  async function handleSendSuggestion(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    const title = suggestionTitle.trim();
+    const text = suggestionText.trim();
+    if (!title || !text) {
+      pushToast("Completá el título y el texto.", "error");
+      return;
+    }
+    setSendingSuggestion(true);
+    try {
+      await submitSuggestion(selectedGuildId, title, text);
+      setSuggestionTitle("");
+      setSuggestionText("");
+      pushToast("Sugerencia enviada al staff.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo enviar la sugerencia.", "error");
+    } finally {
+      setSendingSuggestion(false);
     }
   }
 
@@ -2047,22 +2186,29 @@ function App() {
     }
   }
 
-  const tabs: HubTab[] = [
+  // La navegación = Inicio (siempre) + módulos activos + Admin (con permisos).
+  const visibleTabs: HubTab[] = [
     "home",
-    "dashboard",
-    "comunicados",
-    "raids",
-    "eventos",
-    "memes",
-    "muro",
+    ...HUB_MODULES.filter((mod) => isModuleEnabled(config, mod.key)).map(
+      (mod) => mod.key,
+    ),
+    ...(adminEnabled ? (["admin"] as HubTab[]) : []),
   ];
-  const visibleTabs = adminEnabled ? ([...tabs, "admin"] as HubTab[]) : tabs;
 
   useEffect(() => {
     if (activeTab === "admin" && !adminEnabled) {
       setActiveTab("dashboard");
+      return;
     }
-  }, [activeTab, adminEnabled]);
+    // Si el tab activo corresponde a un módulo desactivado, redirigimos.
+    if (
+      activeTab !== "home" &&
+      activeTab !== "admin" &&
+      !isModuleEnabled(config, activeTab)
+    ) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, adminEnabled, config.enabledModules]);
 
   useEffect(() => {
     const onHashChange = (): void => {
@@ -2687,6 +2833,23 @@ function App() {
                             ))}
                           </select>
                         </label>
+
+                        <label>
+                          <span>ID que recibe las sugerencias (opcional)</span>
+                          <input
+                            className="input"
+                            value={config.suggestionsDmUserId ?? ""}
+                            onChange={(event) =>
+                              setConfig((current) => ({
+                                ...current,
+                                suggestionsDmUserId:
+                                  event.target.value.trim() || undefined,
+                              }))
+                            }
+                            placeholder="Vacío = dueño del servidor"
+                            maxLength={32}
+                          />
+                        </label>
                       </div>
                     </div>
                     <div className="admin-card-footer">
@@ -2698,6 +2861,64 @@ function App() {
                         {savingAction === "config"
                           ? "Guardando…"
                           : "Guardar cambios"}
+                      </button>
+                    </div>
+                  </details>
+
+                  <details className="admin-card admin-card-acc">
+                    <summary className="admin-card-header admin-acc-header">
+                      <div>
+                        <h3>Módulos</h3>
+                        <p>
+                          Activa o desactiva qué secciones aparecen en la
+                          navegación. Lo que desactives queda oculto para todos.
+                          Inicio y Admin siempre están visibles.
+                        </p>
+                      </div>
+                      <span className="admin-acc-chevron" aria-hidden="true">
+                        ▸
+                      </span>
+                    </summary>
+                    <div className="admin-card-body">
+                      <div className="modules-grid">
+                        {HUB_MODULES.map((mod) => {
+                          const checked = isModuleEnabled(config, mod.key);
+                          return (
+                            <label
+                              className={`module-toggle${checked ? " checked" : ""}`}
+                              key={mod.key}
+                            >
+                              <span className="module-toggle-text">
+                                <strong>{mod.label}</strong>
+                                <small>{mod.description}</small>
+                              </span>
+                              <span className="module-switch">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleModule(mod.key)}
+                                />
+                                <span
+                                  className="module-switch-track"
+                                  aria-hidden="true"
+                                >
+                                  <span className="module-switch-thumb" />
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="admin-card-footer">
+                      <button
+                        className="primary-button"
+                        onClick={() => void handleSaveModules()}
+                        disabled={savingAction !== null}
+                      >
+                        {savingAction === "modules"
+                          ? "Guardando…"
+                          : "Guardar módulos"}
                       </button>
                     </div>
                   </details>
@@ -4177,6 +4398,43 @@ function App() {
                       );
                     })
                   )}
+                </div>
+              ) : activeTab === "sugerencias" ? (
+                <div className="suggestions-view">
+                  <label className="suggestions-field">
+                    <span>Título</span>
+                    <input
+                      className="input"
+                      value={suggestionTitle}
+                      onChange={(event) =>
+                        setSuggestionTitle(event.target.value)
+                      }
+                      placeholder="Título corto de tu sugerencia"
+                      maxLength={120}
+                    />
+                  </label>
+                  <label className="suggestions-field">
+                    <span>Texto</span>
+                    <textarea
+                      className="textarea"
+                      rows={6}
+                      value={suggestionText}
+                      onChange={(event) =>
+                        setSuggestionText(event.target.value)
+                      }
+                      placeholder="Contanos tu idea..."
+                      maxLength={2000}
+                    />
+                  </label>
+                  <div className="suggestions-actions">
+                    <button
+                      className="primary-button"
+                      onClick={() => void handleSendSuggestion()}
+                      disabled={sendingSuggestion}
+                    >
+                      {sendingSuggestion ? "Enviando…" : "Enviar sugerencia"}
+                    </button>
+                  </div>
                 </div>
               ) : activeTab === "dashboard" ? null : (
                 <div className="empty-state">

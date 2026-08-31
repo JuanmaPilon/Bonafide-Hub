@@ -2591,6 +2591,10 @@ export function buildApp() {
       allowedBody.bannedVoiceRoleIds = body.bannedVoiceRoleIds;
     }
 
+    if (body.suggestionsDmUserId !== undefined) {
+      allowedBody.suggestionsDmUserId = body.suggestionsDmUserId;
+    }
+
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
     await logAdminAction(session, params.guildId, "update:guild-config", {
@@ -2601,6 +2605,130 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       config,
+    };
+  });
+
+  // Sugerencias del hub: llegan como DM al staff (dueño del server o un ID
+  // configurado en suggestionsDmUserId).
+  app.post("/guilds/:guildId/suggestions", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { text?: unknown; title?: unknown };
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    if (!title || !text) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Título y texto son obligatorios.",
+      });
+    }
+    if (title.length > 120 || text.length > 2000) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          "El título no puede pasar de 120 caracteres ni el texto de 2000.",
+      });
+    }
+
+    if (!env.DISCORD_BOT_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "DISCORD_BOT_TOKEN is not configured",
+      });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    let recipientId = config.suggestionsDmUserId?.trim();
+
+    if (!recipientId) {
+      const guildResponse = await fetch(
+        `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}`,
+        {
+          headers: {
+            Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+          },
+        },
+      ).catch(() => null);
+      const guildData = guildResponse?.ok
+        ? ((await guildResponse.json()) as { owner_id?: string })
+        : null;
+      recipientId = guildData?.owner_id?.trim();
+    }
+
+    if (!recipientId) {
+      return reply.code(502).send({
+        ok: false,
+        error: "No se pudo resolver el destinatario de la sugerencia.",
+      });
+    }
+
+    // Abrir un canal DM con el destinatario.
+    const dmChannelResponse = await fetchWithDiscordRetry(
+      "https://discord.com/api/v10/users/@me/channels",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ recipient_id: recipientId }),
+      },
+    );
+    if (!dmChannelResponse.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: `No se pudo abrir el DM con el destinatario (${dmChannelResponse.status}).`,
+      });
+    }
+    const dmChannel = (await dmChannelResponse.json()) as { id: string };
+
+    const senderName = session.user.username || "Alguien";
+    const embed = {
+      color: 0x6aa8ff,
+      author: {
+        name: `💡 Sugerencia de ${senderName}`,
+        url: `https://discord.com/users/${session.user.id}`,
+      },
+      title,
+      description: text,
+      timestamp: new Date().toISOString(),
+      footer: { text: "Bonafide Hub · Sugerencias" },
+    };
+
+    const messageResponse = await fetchWithDiscordRetry(
+      `https://discord.com/api/v10/channels/${dmChannel.id}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ embeds: [embed] }),
+      },
+    );
+    if (!messageResponse.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: `No se pudo enviar el DM (${messageResponse.status}).`,
+      });
+    }
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      sent: true,
     };
   });
 
