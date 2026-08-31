@@ -2620,37 +2620,42 @@ input {
 
 /* ---------- Permisos de staff (owner) ---------- */
 
-.staff-permissions-list {
+.staff-role-picker {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.staff-permission-row {
+.staff-role-picker > span {
+  color: #bdd8d2;
+  font-size: 0.84rem;
+}
+
+.staff-role-editor {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 2fr;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 14px 16px;
   border-radius: 14px;
   background: rgba(10, 16, 31, 0.6);
   border: 1px solid rgba(133, 156, 212, 0.18);
 }
 
-.staff-permission-role {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
+.staff-role-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.staff-permission-role strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.staff-role-editor-head strong {
+  font-size: 1rem;
 }
 
-.staff-permission-role small {
+.staff-role-editor-note {
+  margin: 0;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 /* Leyenda de rangos (Admin / Officer) */
@@ -2684,15 +2689,10 @@ input {
 .staff-tier-select {
   width: auto;
   min-width: 150px;
-  justify-self: end;
 }
 
 @media (max-width: 760px) {
-  .staff-permission-row {
-    grid-template-columns: 1fr;
-  }
-
   .staff-tier-select {
-    justify-self: stretch;
+    width: 100%;
   }
 }
