@@ -155,16 +155,14 @@ const HUB_MODULES: Array<{
     description: "Publicaciones y mensajes destacados del muro.",
   },
   {
-    key: "perfil",
-    label: "Perfil",
-    description: "Tu perfil, nivel y progreso de XP.",
-  },
-  {
     key: "sugerencias",
     label: "Sugerencias",
     description: "Envía sugerencias directo al staff por Discord.",
   },
 ];
+
+// El perfil NO es un módulo activable: se accede desde el chip de usuario
+// (arriba a la derecha) y nunca se oculta ni aparece en la navegación.
 
 // Si enabledModules está vacío/ausente, todos los módulos quedan activos
 // (comportamiento por defecto, evita romper guilds ya configuradas).
@@ -2200,10 +2198,10 @@ function App() {
       setActiveTab("dashboard");
       return;
     }
-    // Si el tab activo corresponde a un módulo desactivado, redirigimos.
+    // Solo los módulos activables pueden redirigir. Los tabs personales
+    // (perfil) o de estructura (home) nunca se ocultan por la config.
     if (
-      activeTab !== "home" &&
-      activeTab !== "admin" &&
+      HUB_MODULES.some((mod) => mod.key === activeTab) &&
       !isModuleEnabled(config, activeTab)
     ) {
       setActiveTab("dashboard");
