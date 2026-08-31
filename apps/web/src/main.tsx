@@ -134,7 +134,7 @@ const HUB_MODULES: Array<{
   {
     key: "comunicados",
     label: "Comunicados",
-    description: "Anuncios publicados por el bot y la web.",
+    description: "Anuncios y comunicados de la comunidad.",
   },
   {
     key: "raids",
@@ -159,7 +159,7 @@ const HUB_MODULES: Array<{
   {
     key: "sugerencias",
     label: "Sugerencias",
-    description: "Envía sugerencias directo al staff por Discord.",
+    description: "Sugerencias para el staff.",
   },
 ];
 
@@ -546,7 +546,7 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "comunicados") {
-    return "Anuncios y comunicados de la guild.";
+    return "Anuncios y comunicados de la comunidad.";
   }
 
   if (tab === "raids") {
@@ -566,11 +566,11 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "perfil") {
-    return "Tu perfil en la comunidad.";
+    return "Perfil y progreso en la comunidad.";
   }
 
   if (tab === "sugerencias") {
-    return "Tu idea llega como DM directo al staff del servidor.";
+    return "La idea llega como DM directo al staff del servidor.";
   }
 
   return "";
@@ -917,6 +917,21 @@ function App() {
   // ¿Puede usar un módulo puntual del Admin?
   const canAccess = (module: string): boolean =>
     isAdminOwner || adminAccessModules.includes(module);
+
+  // Roles asignados a cada rango, para la vista por jerarquía.
+  const staffByTier: Record<"admin" | "officer", string[]> = {
+    admin: [],
+    officer: [],
+  };
+  for (const role of guildRoles) {
+    const rule = (config.adminRoleModules ?? []).find(
+      (entry) => entry.roleId === role.id,
+    );
+    const tier = tierForModules(rule?.modules ?? []);
+    if (tier) {
+      staffByTier[tier].push(role.name);
+    }
+  }
 
   async function refreshSession(): Promise<void> {
     setLoadingSession(true);
@@ -3014,10 +3029,8 @@ function App() {
                         <div>
                           <h3>Permisos de staff</h3>
                           <p>
-                            Solo para el owner. Elegí un rol y asignale su
-                            rango: Admin (casi todo) u Officer (operativo).
-                            Auditoría, Módulos y Permisos quedan solo para el
-                            owner.
+                            Rangos de acceso del staff. Solo el owner puede
+                            editarlos: Admin (casi todo) u Officer (operativo).
                           </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
@@ -3025,18 +3038,68 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="staff-tier-legend">
-                          {(["admin", "officer"] as StaffTier[]).map(
-                            (tier) => (
-                              <div
-                                className="staff-tier-legend-item"
-                                key={tier}
-                              >
-                                <strong>{STAFF_TIERS[tier].label}</strong>
-                                <span>{STAFF_TIERS[tier].description}</span>
-                              </div>
-                            ),
-                          )}
+                        <div className="staff-hierarchy">
+                          <div className="staff-hierarchy-tier owner">
+                            <span
+                              className="staff-hierarchy-icon"
+                              aria-hidden="true"
+                            >
+                              👑
+                            </span>
+                            <div className="staff-hierarchy-info">
+                              <strong>Owner / Super Admin</strong>
+                              <small>
+                                Todas las secciones, incluida auditoría y
+                                permisos.
+                              </small>
+                            </div>
+                          </div>
+                          <div className="staff-hierarchy-tier admin">
+                            <span
+                              className="staff-hierarchy-icon"
+                              aria-hidden="true"
+                            >
+                              🟠
+                            </span>
+                            <div className="staff-hierarchy-info">
+                              <strong>Admin</strong>
+                              <small>{STAFF_TIERS.admin.description}</small>
+                              <span className="staff-hierarchy-roles">
+                                {staffByTier.admin.length > 0
+                                  ? `Roles: ${staffByTier.admin.join(", ")}`
+                                  : "Sin roles asignados"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="staff-hierarchy-tier officer">
+                            <span
+                              className="staff-hierarchy-icon"
+                              aria-hidden="true"
+                            >
+                              🟢
+                            </span>
+                            <div className="staff-hierarchy-info">
+                              <strong>Officer</strong>
+                              <small>{STAFF_TIERS.officer.description}</small>
+                              <span className="staff-hierarchy-roles">
+                                {staffByTier.officer.length > 0
+                                  ? `Roles: ${staffByTier.officer.join(", ")}`
+                                  : "Sin roles asignados"}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="staff-hierarchy-tier none">
+                            <span
+                              className="staff-hierarchy-icon"
+                              aria-hidden="true"
+                            >
+                              ⚪
+                            </span>
+                            <div className="staff-hierarchy-info">
+                              <strong>Sin acceso</strong>
+                              <small>El hub normal, sin panel Admin.</small>
+                            </div>
+                          </div>
                         </div>
                         <label className="staff-role-picker">
                           <span>Rol de staff</span>
@@ -3047,7 +3110,7 @@ function App() {
                               setStaffRoleId(event.target.value)
                             }
                           >
-                            <option value="">Elegí un rol…</option>
+                            <option value="">Seleccionar un rol</option>
                             {guildRoles.map((role) => (
                               <option key={role.id} value={role.id}>
                                 {role.name}
@@ -3056,71 +3119,71 @@ function App() {
                           </select>
                         </label>
 
-                        {staffRoleId ? (
-                          (() => {
-                            const role = guildRoles.find(
-                              (item) => item.id === staffRoleId,
-                            );
-                            const rule = (config.adminRoleModules ?? []).find(
-                              (entry) => entry.roleId === staffRoleId,
-                            );
-                            const tier = tierForModules(rule?.modules ?? []);
-                            const custom =
-                              !tier && (rule?.modules.length ?? 0) > 0;
-                            return (
-                              <div className="staff-role-editor">
-                                <div className="staff-role-editor-head">
-                                  <strong>{role?.name ?? "Rol"}</strong>
-                                  <select
-                                    className="select staff-tier-select"
-                                    value={tier ?? ""}
-                                    onChange={(event) => {
-                                      const nextTier = event.target.value as
-                                        | StaffTier
-                                        | "";
-                                      setConfig((current) => {
-                                        const rules = [
-                                          ...(current.adminRoleModules ??
-                                            []),
-                                        ];
-                                        const index = rules.findIndex(
-                                          (entry) =>
-                                            entry.roleId === staffRoleId,
-                                        );
-                                        if (index >= 0) {
-                                          rules.splice(index, 1);
-                                        }
-                                        if (nextTier) {
-                                          rules.push({
-                                            modules: [
-                                              ...STAFF_TIERS[nextTier].modules,
-                                            ],
-                                            roleId: staffRoleId,
-                                          });
-                                        }
-                                        return {
-                                          ...current,
-                                          adminRoleModules: rules,
-                                        };
-                                      });
-                                    }}
-                                  >
-                                    <option value="">Sin acceso</option>
-                                    <option value="admin">Admin</option>
-                                    <option value="officer">Officer</option>
-                                  </select>
+                        {staffRoleId
+                          ? (() => {
+                              const role = guildRoles.find(
+                                (item) => item.id === staffRoleId,
+                              );
+                              const rule = (config.adminRoleModules ?? []).find(
+                                (entry) => entry.roleId === staffRoleId,
+                              );
+                              const tier = tierForModules(rule?.modules ?? []);
+                              const custom =
+                                !tier && (rule?.modules.length ?? 0) > 0;
+                              return (
+                                <div className="staff-role-editor">
+                                  <div className="staff-role-editor-head">
+                                    <strong>{role?.name ?? "Rol"}</strong>
+                                    <select
+                                      className="select staff-tier-select"
+                                      value={tier ?? ""}
+                                      onChange={(event) => {
+                                        const nextTier = event.target.value as
+                                          | StaffTier
+                                          | "";
+                                        setConfig((current) => {
+                                          const rules = [
+                                            ...(current.adminRoleModules ?? []),
+                                          ];
+                                          const index = rules.findIndex(
+                                            (entry) =>
+                                              entry.roleId === staffRoleId,
+                                          );
+                                          if (index >= 0) {
+                                            rules.splice(index, 1);
+                                          }
+                                          if (nextTier) {
+                                            rules.push({
+                                              modules: [
+                                                ...STAFF_TIERS[nextTier]
+                                                  .modules,
+                                              ],
+                                              roleId: staffRoleId,
+                                            });
+                                          }
+                                          return {
+                                            ...current,
+                                            adminRoleModules: rules,
+                                          };
+                                        });
+                                      }}
+                                    >
+                                      <option value="">Sin acceso</option>
+                                      <option value="admin">Admin</option>
+                                      <option value="officer">Officer</option>
+                                    </select>
+                                  </div>
+                                  <p className="staff-role-editor-note">
+                                    {tier
+                                      ? `Acceso ${STAFF_TIERS[tier].label}: ${STAFF_TIERS[tier].description}`
+                                      : custom
+                                        ? "Rango personalizado de una configuración anterior."
+                                        : "Este rol no tiene acceso al panel Admin."}
+                                  </p>
                                 </div>
-                                <p className="staff-role-editor-note">
-                                  {tier
-                                    ? `Acceso ${STAFF_TIERS[tier].label}: ${STAFF_TIERS[tier].description}`
-                                    : custom
-                                      ? "Rango personalizado (módulos sueltos de una config anterior). Elegí un rango para normalizarlo."
-                                      : "Este rol no tiene acceso al panel Admin."}
-                                </p>
-                              </div>
-                            );
-                          })()
-                        ) : null}
+                              );
+                            })()
+                          : null}
                       </div>
                       <div className="admin-card-footer">
                         <button
@@ -4435,7 +4498,7 @@ function App() {
                           )
                         ) : (
                           <div className="empty-state">
-                            Solo el owner de la guild puede ver este registro.
+                            Solo el owner puede ver este registro.
                           </div>
                         )}
                       </div>
@@ -4649,7 +4712,7 @@ function App() {
                       onChange={(event) =>
                         setSuggestionTitle(event.target.value)
                       }
-                      placeholder="Título corto de tu sugerencia"
+                      placeholder="Título de la sugerencia"
                       maxLength={120}
                     />
                   </label>
@@ -4662,7 +4725,7 @@ function App() {
                       onChange={(event) =>
                         setSuggestionText(event.target.value)
                       }
-                      placeholder="Contanos tu idea..."
+                      placeholder="Detalle de la sugerencia"
                       maxLength={2000}
                     />
                   </label>

@@ -2658,32 +2658,79 @@ input {
   line-height: 1.5;
 }
 
-/* Leyenda de rangos (Admin / Officer) */
-.staff-tier-legend {
+/* Jerarquía de rangos (Owner → Admin → Officer → Sin acceso) */
+.staff-hierarchy {
   display: grid;
-  gap: 8px;
+  gap: 10px;
+}
+
+.staff-hierarchy-tier {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   padding: 12px 14px;
   border-radius: 14px;
+  border: 1px solid rgba(133, 156, 212, 0.18);
   background: rgba(10, 16, 31, 0.5);
-  border: 1px dashed rgba(133, 156, 212, 0.22);
 }
 
-.staff-tier-legend-item {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
+.staff-hierarchy-tier.owner {
+  border-color: rgba(255, 215, 0, 0.5);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 215, 0, 0.14),
+    rgba(10, 16, 31, 0.5)
+  );
 }
 
-.staff-tier-legend-item strong {
-  color: var(--accent, #6aa8ff);
-  font-size: 0.9rem;
+.staff-hierarchy-tier.admin {
+  border-color: rgba(255, 138, 92, 0.45);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 138, 92, 0.1),
+    rgba(10, 16, 31, 0.5)
+  );
+}
+
+.staff-hierarchy-tier.officer {
+  border-color: rgba(124, 227, 139, 0.4);
+  background: linear-gradient(
+    160deg,
+    rgba(124, 227, 139, 0.08),
+    rgba(10, 16, 31, 0.5)
+  );
+}
+
+.staff-hierarchy-tier.none {
+  border-color: rgba(133, 156, 212, 0.15);
+  opacity: 0.75;
+}
+
+.staff-hierarchy-icon {
+  font-size: 1.2rem;
+  line-height: 1;
   flex-shrink: 0;
 }
 
-.staff-tier-legend-item span {
+.staff-hierarchy-info {
+  display: grid;
+  gap: 3px;
+}
+
+.staff-hierarchy-info strong {
+  color: var(--text);
+}
+
+.staff-hierarchy-info small {
   color: var(--muted);
   font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.staff-hierarchy-roles {
+  color: var(--accent, #6aa8ff);
+  font-size: 0.78rem;
+  margin-top: 2px;
 }
 
 .staff-tier-select {
