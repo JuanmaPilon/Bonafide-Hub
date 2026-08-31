@@ -10,7 +10,15 @@ export type ReactionRoleRule = {
   roleId: string;
 };
 
+// Permiso de staff: un rol de Discord tiene acceso a ciertos módulos del
+// panel Admin. Claves: config, comunicados, raids, daily, reaction, xp.
+export type AdminRoleRule = {
+  roleId: string;
+  modules: string[];
+};
+
 export type GuildConfig = {
+  adminRoleModules?: AdminRoleRule[];
   bannedVoiceRoleIds?: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
@@ -58,15 +66,18 @@ function toGuildConfig(
     xpSyncRequested: boolean;
   } | null,
   reactionRoles: ReactionRoleRule[],
+  adminRoleModules: AdminRoleRule[],
 ): GuildConfig {
   if (!record) {
     return {
+      adminRoleModules,
       reactionRoles,
       temporaryVoiceChannelIds: [],
     };
   }
 
   return {
+    adminRoleModules,
     bannedVoiceRoleIds: record.bannedVoiceRoleIds,
     dailyMessagesChannelId: record.dailyMessagesChannelId ?? undefined,
     dailyMessagesEnabled: record.dailyMessagesEnabled,
@@ -116,6 +127,7 @@ function normalizeReactionRoleRule(
 }
 
 type NormalizedGuildConfig = {
+  adminRoleModules: AdminRoleRule[];
   bannedVoiceRoleIds: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled: boolean;
@@ -154,6 +166,10 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
   );
 
   return {
+    adminRoleModules: (config.adminRoleModules ?? []).map((rule) => ({
+      modules: rule.modules ?? [],
+      roleId: rule.roleId,
+    })),
     bannedVoiceRoleIds: config.bannedVoiceRoleIds ?? [],
     dailyMessagesChannelId: config.dailyMessagesChannelId,
     dailyMessagesEnabled: config.dailyMessagesEnabled ?? false,
@@ -179,13 +195,17 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
 }
 
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
-  const [record, reactionRoleRecords] = await Promise.all([
+  const [record, reactionRoleRecords, adminRoleRecords] = await Promise.all([
     prisma.guildConfig.findUnique({
       where: { guildId },
     }),
     prisma.reactionRoleRule.findMany({
       where: { guildId },
       orderBy: [{ messageId: "asc" }, { emojiKey: "asc" }],
+    }),
+    prisma.adminRoleModule.findMany({
+      where: { guildId },
+      orderBy: { createdAt: "asc" },
     }),
   ]);
 
@@ -197,7 +217,12 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
     roleId: rule.roleId,
   }));
 
-  return toGuildConfig(record, reactionRoles);
+  const adminRoleModules: AdminRoleRule[] = adminRoleRecords.map((rule) => ({
+    modules: rule.modules,
+    roleId: rule.roleId,
+  }));
+
+  return toGuildConfig(record, reactionRoles, adminRoleModules);
 }
 
 export async function replaceGuildConfig(
@@ -259,6 +284,20 @@ export async function replaceGuildConfig(
     await tx.reactionRoleRule.deleteMany({
       where: { guildId },
     });
+
+    await tx.adminRoleModule.deleteMany({
+      where: { guildId },
+    });
+
+    if (normalized.adminRoleModules.length > 0) {
+      await tx.adminRoleModule.createMany({
+        data: normalized.adminRoleModules.map((rule) => ({
+          guildId,
+          modules: rule.modules,
+          roleId: rule.roleId,
+        })),
+      });
+    }
 
     if (normalized.reactionRoles.length > 0) {
       await tx.reactionRoleRule.createMany({

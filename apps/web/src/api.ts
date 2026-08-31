@@ -7,7 +7,13 @@ export type ApiGuild = {
   permissions: string;
 };
 
+export type AdminRoleRule = {
+  modules: string[];
+  roleId: string;
+};
+
 export type GuildConfig = {
+  adminRoleModules?: AdminRoleRule[];
   bannedVoiceRoleIds?: string[];
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
@@ -756,6 +762,21 @@ export async function submitSuggestion(
       method: "POST",
     },
   );
+}
+
+export type AdminAccess = {
+  modules: string[];
+  owner: boolean;
+};
+
+export async function getAdminAccess(guildId: string): Promise<AdminAccess> {
+  const data = await requestJson<{ modules: string[]; owner: boolean }>(
+    `/guilds/${guildId}/admin-access`,
+  );
+  return {
+    modules: data.modules ?? [],
+    owner: data.owner ?? false,
+  };
 }
 
 export async function listCommunications(

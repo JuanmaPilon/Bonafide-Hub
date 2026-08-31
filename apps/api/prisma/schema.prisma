@@ -41,8 +41,25 @@ model GuildConfig {
   updatedAt                    DateTime @updatedAt
 
   reactionRoleRules ReactionRoleRule[]
+  adminRoleModules  AdminRoleModule[]
 
   @@map("guild_configs")
+}
+
+// Permisos de staff: qué módulos del panel Admin ve cada rol de Discord.
+// Solo el owner puede configurarlo. El owner siempre tiene acceso total.
+model AdminRoleModule {
+  id        String   @id @default(cuid())
+  guildId   String
+  roleId    String
+  modules   String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guild GuildConfig @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+
+  @@unique([guildId, roleId])
+  @@map("admin_role_modules")
 }
 
 model ReactionRoleRule {

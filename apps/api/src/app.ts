@@ -598,6 +598,88 @@ export function buildApp() {
     return token === env.BOT_API_TOKEN;
   }
 
+  // ── Permisos de staff (rol de Discord → módulos del panel Admin) ──
+  const memberRolesCache = new Map<
+    string,
+    { at: number; roles: string[] | null }
+  >();
+  const MEMBER_ROLES_TTL_MS = 60_000;
+
+  // Roles de un miembro en la guild (null si no se pudieron resolver).
+  // Se cachean en memoria 60s para no golpear la API de Discord en cada
+  // request del panel Admin.
+  async function fetchMemberRoles(
+    guildId: string,
+    userId: string,
+  ): Promise<string[] | null> {
+    const key = `${guildId}:${userId}`;
+    const cached = memberRolesCache.get(key);
+    if (cached && Date.now() - cached.at < MEMBER_ROLES_TTL_MS) {
+      return cached.roles;
+    }
+    if (!env.DISCORD_BOT_TOKEN) {
+      return null;
+    }
+    const response = await fetch(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    ).catch(() => null);
+    const roles = response?.ok
+      ? (((await response.json()) as { roles?: string[] }).roles ?? [])
+      : null;
+    memberRolesCache.set(key, { at: Date.now(), roles });
+    return roles;
+  }
+
+  // Un staff puede manejar un módulo del panel Admin si es owner o si
+  // alguno de sus roles tiene ese módulo en adminRoleModules.
+  async function canManageModule(
+    session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
+    guildId: string,
+    module: string,
+  ): Promise<boolean> {
+    if (canManageGuild(session, guildId)) {
+      return true;
+    }
+    if (env.BONAFIDE_GUILD_ID && guildId !== env.BONAFIDE_GUILD_ID) {
+      return false;
+    }
+    const roles = await fetchMemberRoles(guildId, session.user.id);
+    if (!roles) {
+      return false;
+    }
+    const config = await getGuildConfig(guildId);
+    return (config.adminRoleModules ?? []).some(
+      (rule) => roles.includes(rule.roleId) && rule.modules.includes(module),
+    );
+  }
+
+  // ¿Tiene acceso a algún módulo del panel Admin? Se usa para recursos
+  // compartidos (roles, canales, emojis) que usan varias secciones.
+  async function hasAnyStaffAccess(
+    session: NonNullable<Awaited<ReturnType<typeof getSessionFromRequest>>>,
+    guildId: string,
+  ): Promise<boolean> {
+    if (canManageGuild(session, guildId)) {
+      return true;
+    }
+    if (env.BONAFIDE_GUILD_ID && guildId !== env.BONAFIDE_GUILD_ID) {
+      return false;
+    }
+    const roles = await fetchMemberRoles(guildId, session.user.id);
+    if (!roles) {
+      return false;
+    }
+    const config = await getGuildConfig(guildId);
+    return (config.adminRoleModules ?? []).some(
+      (rule) => roles.includes(rule.roleId) && rule.modules.length > 0,
+    );
+  }
+
   app.get("/health", async () => ({
     ok: true,
     service: "api",
@@ -1261,7 +1343,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await hasAnyStaffAccess(session, params.guildId))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1331,7 +1413,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await hasAnyStaffAccess(session, params.guildId))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1388,7 +1470,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await hasAnyStaffAccess(session, params.guildId))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1594,7 +1676,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "xp"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1699,7 +1781,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "xp"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1730,7 +1812,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "xp"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1770,7 +1852,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "xp"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1798,7 +1880,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "xp"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1827,7 +1909,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "reaction"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1884,7 +1966,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "reaction"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1908,7 +1990,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "reaction"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -1934,7 +2016,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "reaction"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -1963,7 +2045,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "reaction"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2018,7 +2100,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "reaction"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2085,7 +2167,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "reaction"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2205,7 +2287,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "daily"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2309,7 +2391,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "daily"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2343,7 +2425,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2436,7 +2518,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing params" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2479,6 +2561,60 @@ export function buildApp() {
     };
   });
 
+  // Qué módulos del panel Admin puede usar el usuario logueado: el owner
+  // tiene acceso total; el staff solo los módulos de sus roles.
+  app.get("/guilds/:guildId/admin-access", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (canManageGuild(session, params.guildId)) {
+      return {
+        ok: true,
+        guildId: params.guildId,
+        owner: true,
+        modules: [],
+      };
+    }
+
+    const roles = await fetchMemberRoles(params.guildId, session.user.id);
+    if (!roles) {
+      return {
+        ok: true,
+        guildId: params.guildId,
+        owner: false,
+        modules: [],
+      };
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    const modules = new Set<string>();
+    for (const rule of config.adminRoleModules ?? []) {
+      if (roles.includes(rule.roleId)) {
+        for (const module of rule.modules) {
+          modules.add(module);
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      owner: false,
+      modules: [...modules],
+    };
+  });
+
   app.get("/guilds/:guildId/audit-logs", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -2515,10 +2651,13 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "config"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
+    // Campos reservados al owner: el staff no puede tocar módulos,
+    // destinatario de sugerencias ni los permisos de staff.
+    const isOwner = isGuildOwner(session, params.guildId);
     const body = request.body as Partial<GuildConfig>;
     const allowedBody: GuildConfig = {};
 
@@ -2575,7 +2714,7 @@ export function buildApp() {
       allowedBody.defaultRoleId = body.defaultRoleId;
     }
 
-    if (body.enabledModules !== undefined) {
+    if (isOwner && body.enabledModules !== undefined) {
       allowedBody.enabledModules = body.enabledModules;
     }
 
@@ -2591,8 +2730,12 @@ export function buildApp() {
       allowedBody.bannedVoiceRoleIds = body.bannedVoiceRoleIds;
     }
 
-    if (body.suggestionsDmUserId !== undefined) {
+    if (isOwner && body.suggestionsDmUserId !== undefined) {
       allowedBody.suggestionsDmUserId = body.suggestionsDmUserId;
+    }
+
+    if (isOwner && body.adminRoleModules !== undefined) {
+      allowedBody.adminRoleModules = body.adminRoleModules;
     }
 
     const config = await upsertGuildConfig(params.guildId, allowedBody);
@@ -2770,7 +2913,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "comunicados"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2794,7 +2937,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!canManageGuild(session, params.guildId)) {
+    if (!(await canManageModule(session, params.guildId, "comunicados"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2846,7 +2989,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "comunicados"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2898,7 +3041,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "comunicados"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2942,7 +3085,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "comunicados"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -2988,7 +3131,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!canManageGuild(session, params.guildId)) {
+      if (!(await canManageModule(session, params.guildId, "comunicados"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 

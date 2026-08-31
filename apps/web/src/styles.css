@@ -2617,3 +2617,81 @@ input {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ---------- Permisos de staff (owner) ---------- */
+
+.staff-permissions-list {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-permission-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 2fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(10, 16, 31, 0.6);
+  border: 1px solid rgba(133, 156, 212, 0.18);
+}
+
+.staff-permission-role {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.staff-permission-role strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-permission-role small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.staff-permission-modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-module-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(133, 156, 212, 0.28);
+  background: rgba(12, 19, 37, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.staff-module-chip input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.staff-module-chip.checked {
+  border-color: rgba(106, 168, 255, 0.55);
+  background: rgba(106, 168, 255, 0.1);
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .staff-permission-row {
+    grid-template-columns: 1fr;
+  }
+}

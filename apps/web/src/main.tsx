@@ -37,6 +37,7 @@ import {
   listReactionRolePanels,
   loginUrl,
   logout,
+  getAdminAccess,
   publishCommunication,
   publishReactionRolePanel,
   requestXpSync,
@@ -48,6 +49,7 @@ import {
   updateDailyMessage,
   updateReactionRolePanel,
   type ApiGuild,
+  type AdminAccess,
   type AuditLogEntry,
   type Communication,
   type CommunicationInput,
@@ -159,6 +161,17 @@ const HUB_MODULES: Array<{
     label: "Sugerencias",
     description: "Envía sugerencias directo al staff por Discord.",
   },
+];
+
+// Módulos del panel Admin que el owner puede otorgar a roles de staff.
+// Auditoría, Módulos y Permisos quedan siempre owner-only.
+const STAFF_MODULES: Array<{ key: string; label: string }> = [
+  { key: "config", label: "Configuración" },
+  { key: "comunicados", label: "Comunicados" },
+  { key: "raids", label: "Raids / Logs" },
+  { key: "daily", label: "Mensajes diarios" },
+  { key: "reaction", label: "Reaction roles" },
+  { key: "xp", label: "Configuración de XP" },
 ];
 
 // El perfil NO es un módulo activable: se accede desde el chip de usuario
@@ -797,6 +810,7 @@ function App() {
   const [guilds, setGuilds] = useState<ApiGuild[]>([]);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [config, setConfig] = useState<GuildConfig>({});
+  const [adminAccess, setAdminAccess] = useState<AdminAccess | null>(null);
   const [widgetStatus, setWidgetStatus] = useState<GuildWidgetStatus | null>(
     null,
   );
@@ -823,7 +837,7 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [savingAction, setSavingAction] = useState<
-    "config" | "xp" | "panel" | "daily" | "modules" | null
+    "config" | "xp" | "panel" | "daily" | "modules" | "permissions" | null
   >(null);
   const [sendingSuggestion, setSendingSuggestion] = useState(false);
   const [suggestionTitle, setSuggestionTitle] = useState("");
@@ -869,7 +883,14 @@ function App() {
     [guilds, selectedGuildId],
   );
   const selectedGuildIcon = guildIconUrl(selectedGuild);
-  const adminEnabled = canAccessAdmin(selectedGuild);
+  const isAdminOwner = canAccessAdmin(selectedGuild);
+  const adminAccessModules = adminAccess?.modules ?? [];
+  // ¿Puede entrar al panel Admin? El owner siempre; el staff solo si tiene
+  // algún módulo otorgado por rol (adminRoleModules).
+  const adminEnabled = isAdminOwner || adminAccessModules.length > 0;
+  // ¿Puede usar un módulo puntual del Admin?
+  const canAccess = (module: string): boolean =>
+    isAdminOwner || adminAccessModules.includes(module);
 
   async function refreshSession(): Promise<void> {
     setLoadingSession(true);
@@ -931,6 +952,20 @@ function App() {
       .finally(() => {
         if (!cancelled) {
           setLoadingGuildData(false);
+        }
+      });
+
+    // Permisos de admin: se cargan por separado para que un fallo acá no
+    // rompa el resto de los datos de la guild.
+    getAdminAccess(selectedGuildId)
+      .then((next) => {
+        if (!cancelled) {
+          setAdminAccess(next);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAdminAccess({ modules: [], owner: false });
         }
       });
 
@@ -1208,6 +1243,25 @@ function App() {
     } catch (error) {
       void error;
       pushToast("No se pudo guardar los módulos.", "error");
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  async function handleSaveStaffPermissions(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setSavingAction("permissions");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        adminRoleModules: config.adminRoleModules ?? [],
+      });
+      setConfig(nextConfig);
+      pushToast("Permisos de staff actualizados.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo guardar los permisos.", "error");
     } finally {
       setSavingAction(null);
     }
@@ -2713,714 +2767,1013 @@ function App() {
 
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
                 <>
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Configuración general del servidor</h3>
-                        <p>
-                          Canales y roles base del servidor. Se guardan por
-                          servidor.
-                        </p>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <div className="form-grid">
-                        <label>
-                          <span>Canal principal de Karpindomo</span>
-                          <select
-                            className="select"
-                            value={config.memberLogChannelId ?? ""}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                memberLogChannelId:
-                                  event.target.value || undefined,
-                              }))
-                            }
-                          >
-                            <option value="">Sin canal configurado</option>
-                            {textChannels.map((channel) => (
-                              <option key={channel.id} value={channel.id}>
-                                {channel.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label>
-                          <span>Rol de entrada del servidor</span>
-                          <select
-                            className="select"
-                            value={config.defaultRoleId ?? ""}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                defaultRoleId: event.target.value || undefined,
-                              }))
-                            }
-                          >
-                            <option value="">Sin rol de entrada</option>
-                            {guildRoles.map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label>
-                          <span>Rol DJ</span>
-                          <select
-                            className="select select-inline"
-                            value={(config.musicRoleIds ?? [])[0] ?? ""}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                musicRoleIds: event.target.value
-                                  ? [event.target.value]
-                                  : [],
-                              }))
-                            }
-                          >
-                            <option value="">Sin restricción</option>
-                            {guildRoles.map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <RoleMultiSelect
-                          label="Roles desperuanizados (no ven las salas de voz dinámicas)"
-                          roles={guildRoles}
-                          value={config.bannedVoiceRoleIds ?? []}
-                          onChange={(next) =>
-                            setConfig((current) => ({
-                              ...current,
-                              bannedVoiceRoleIds: next,
-                            }))
-                          }
-                          emptyText="Ningún rol desperuanizado"
-                          hint="Quienes tengan estos roles no podrán ver una sala dinámica cuando uses /desperuanizar."
-                        />
-
-                        <label>
-                          <span>
-                            Canal para creación dinámica de salas (voz)
-                          </span>
-                          <select
-                            className="select select-inline"
-                            value={config.dynamicVoiceCreateChannelId ?? ""}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                dynamicVoiceCreateChannelId:
-                                  event.target.value || undefined,
-                              }))
-                            }
-                          >
-                            <option value="">Sin canal configurado</option>
-                            {voiceChannels.map((channel) => (
-                              <option key={channel.id} value={channel.id}>
-                                {channel.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label>
-                          <span>ID que recibe las sugerencias (opcional)</span>
-                          <input
-                            className="input"
-                            value={config.suggestionsDmUserId ?? ""}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                suggestionsDmUserId:
-                                  event.target.value.trim() || undefined,
-                              }))
-                            }
-                            placeholder="Vacío = dueño del servidor"
-                            maxLength={32}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <div className="admin-card-footer">
-                      <button
-                        className="primary-button"
-                        onClick={() => void handleSave()}
-                        disabled={savingAction !== null}
-                      >
-                        {savingAction === "config"
-                          ? "Guardando…"
-                          : "Guardar cambios"}
-                      </button>
-                    </div>
-                  </details>
-
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Módulos</h3>
-                        <p>
-                          Activa o desactiva qué secciones aparecen en la
-                          navegación. Lo que desactives queda oculto para todos.
-                          Inicio y Admin siempre están visibles.
-                        </p>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <div className="modules-grid">
-                        {HUB_MODULES.map((mod) => {
-                          const checked = isModuleEnabled(config, mod.key);
-                          return (
-                            <label
-                              className={`module-toggle${checked ? " checked" : ""}`}
-                              key={mod.key}
-                            >
-                              <span className="module-toggle-text">
-                                <strong>{mod.label}</strong>
-                                <small>{mod.description}</small>
-                              </span>
-                              <span className="module-switch">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => toggleModule(mod.key)}
-                                />
-                                <span
-                                  className="module-switch-track"
-                                  aria-hidden="true"
-                                >
-                                  <span className="module-switch-thumb" />
-                                </span>
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="admin-card-footer">
-                      <button
-                        className="primary-button"
-                        onClick={() => void handleSaveModules()}
-                        disabled={savingAction !== null}
-                      >
-                        {savingAction === "modules"
-                          ? "Guardando…"
-                          : "Guardar módulos"}
-                      </button>
-                    </div>
-                  </details>
-
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Comunicados</h3>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <div className="plantillas-actions">
-                        <button
-                          className="primary-button"
-                          onClick={() =>
-                            setCommEditor({
-                              id: null,
-                              title: "",
-                              content: "",
-                              channelId: "",
-                            })
-                          }
-                          type="button"
-                        >
-                          Nueva plantilla
-                        </button>
-                      </div>
-                      {communications.length === 0 ? (
-                        <div className="empty-state comunicados-empty">
-                          <p>No existen plantillas.</p>
+                  {canAccess("config") ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Configuración general del servidor</h3>
+                          <p>
+                            Canales y roles base del servidor. Se guardan por
+                            servidor.
+                          </p>
                         </div>
-                      ) : (
-                        communications.map((comm) => (
-                          <div className="comunicado-admin-block" key={comm.id}>
-                            <div className="comunicado-admin-row">
-                              <div className="comunicado-admin-info">
-                                <strong>{comm.title}</strong>
-                                <span
-                                  className={`comunicado-status comunicado-status-${comm.instances.length > 0 ? "published" : "draft"}`}
-                                >
-                                  {comm.instances.length > 0
-                                    ? `Publicado (${comm.instances.length})`
-                                    : "Borrador"}
-                                </span>
-                              </div>
-                              <div className="comunicado-admin-actions">
-                                <button
-                                  className="ghost-button"
-                                  onClick={() =>
-                                    setCommEditor({
-                                      id: comm.id,
-                                      title: comm.title,
-                                      content: comm.content,
-                                      channelId: comm.channelId ?? "",
-                                    })
-                                  }
-                                  type="button"
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  className="primary-button"
-                                  onClick={() =>
-                                    void handlePublishCommunication(comm.id)
-                                  }
-                                  type="button"
-                                >
-                                  {comm.instances.length > 0
-                                    ? "Republicar"
-                                    : "Publicar"}
-                                </button>
-                                <button
-                                  className="danger-button"
-                                  onClick={() =>
-                                    requestDeleteCommunication(comm)
-                                  }
-                                  type="button"
-                                >
-                                  Eliminar plantilla
-                                </button>
-                              </div>
-                            </div>
-                            {comm.instances.length > 0 ? (
-                              <div className="comunicado-instances">
-                                {comm.instances.map((instance) => (
-                                  <div
-                                    className="comunicado-instance-row"
-                                    key={instance.id}
-                                  >
-                                    <span>
-                                      {instance.discordMessageIds.length > 0
-                                        ? "Mensaje"
-                                        : "Web"}{" "}
-                                      ·{" "}
-                                      {new Date(
-                                        instance.publishedAt,
-                                      ).toLocaleDateString()}{" "}
-                                      {new Date(
-                                        instance.publishedAt,
-                                      ).toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </span>
-                                    <button
-                                      className="ghost-button danger"
-                                      onClick={() =>
-                                        requestDeleteInstance(instance)
-                                      }
-                                      type="button"
-                                    >
-                                      Eliminar mensaje
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </details>
-
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Reaction Roles</h3>
-                        <p>
-                          Paneles de roles por reacción que el bot publica en
-                          Discord.
-                        </p>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <div className="form-grid">
-                        <label>
-                          <span>Canal de texto</span>
-                          <select
-                            className="select"
-                            value={rrChannelId}
-                            onChange={(event) =>
-                              setRrChannelId(event.target.value)
-                            }
-                          >
-                            <option value="">Sin canal configurado</option>
-                            {textChannels.map((channel) => (
-                              <option key={channel.id} value={channel.id}>
-                                {channel.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          <span>Título del panel</span>
-                          <input
-                            value={rrTitle}
-                            onChange={(event) => setRrTitle(event.target.value)}
-                            placeholder="Título"
-                          />
-                        </label>
-                        <label>
-                          <span>Descripción</span>
-                          <input
-                            value={rrDescription}
-                            onChange={(event) =>
-                              setRrDescription(event.target.value)
-                            }
-                            placeholder="Descripción"
-                          />
-                        </label>
-                        <label>
-                          <span>Modo</span>
-                          <select
-                            className="select"
-                            value={rrMode}
-                            onChange={(event) =>
-                              setRrMode(
-                                event.target.value as
-                                  | "multiple"
-                                  | "unique"
-                                  | "additive",
-                              )
-                            }
-                          >
-                            <option value="multiple">
-                              Multiple (se puede tener varios)
-                            </option>
-                            <option value="unique">
-                              Único (solo uno del panel)
-                            </option>
-                            <option value="additive">
-                              Aditivo (solo agrega, no quita)
-                            </option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <div className="rr-pairs">
-                        {rrPairs.map((pair, index) => (
-                          <div className="rr-pair" key={index}>
-                            <input
-                              type="text"
-                              list="guild-emojis"
-                              value={pair.emoji}
-                              onChange={(event) =>
-                                updateRrPair(index, {
-                                  emoji: event.target.value,
-                                })
-                              }
-                              placeholder="Emoji del servidor"
-                            />
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="form-grid">
+                          <label>
+                            <span>Canal principal de Karpindomo</span>
                             <select
                               className="select"
-                              value={pair.roleId}
+                              value={config.memberLogChannelId ?? ""}
                               onChange={(event) =>
-                                updateRrPair(index, {
-                                  roleId: event.target.value,
-                                })
+                                setConfig((current) => ({
+                                  ...current,
+                                  memberLogChannelId:
+                                    event.target.value || undefined,
+                                }))
                               }
                             >
-                              <option value="">Adjuntar rol</option>
+                              <option value="">Sin canal configurado</option>
+                              {textChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label>
+                            <span>Rol de entrada del servidor</span>
+                            <select
+                              className="select"
+                              value={config.defaultRoleId ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  defaultRoleId:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                            >
+                              <option value="">Sin rol de entrada</option>
                               {guildRoles.map((role) => (
                                 <option key={role.id} value={role.id}>
                                   {role.name}
                                 </option>
                               ))}
                             </select>
-                            <button
-                              className="ghost-button danger"
-                              onClick={() => removeRrPair(index)}
-                              type="button"
+                          </label>
+
+                          <label>
+                            <span>Rol DJ</span>
+                            <select
+                              className="select select-inline"
+                              value={(config.musicRoleIds ?? [])[0] ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  musicRoleIds: event.target.value
+                                    ? [event.target.value]
+                                    : [],
+                                }))
+                              }
                             >
-                              ×
-                            </button>
-                          </div>
-                        ))}
+                              <option value="">Sin restricción</option>
+                              {guildRoles.map((role) => (
+                                <option key={role.id} value={role.id}>
+                                  {role.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <RoleMultiSelect
+                            label="Roles desperuanizados (no ven las salas de voz dinámicas)"
+                            roles={guildRoles}
+                            value={config.bannedVoiceRoleIds ?? []}
+                            onChange={(next) =>
+                              setConfig((current) => ({
+                                ...current,
+                                bannedVoiceRoleIds: next,
+                              }))
+                            }
+                            emptyText="Ningún rol desperuanizado"
+                            hint="Quienes tengan estos roles no podrán ver una sala dinámica cuando uses /desperuanizar."
+                          />
+
+                          <label>
+                            <span>
+                              Canal para creación dinámica de salas (voz)
+                            </span>
+                            <select
+                              className="select select-inline"
+                              value={config.dynamicVoiceCreateChannelId ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  dynamicVoiceCreateChannelId:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                            >
+                              <option value="">Sin canal configurado</option>
+                              {voiceChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label>
+                            <span>
+                              ID que recibe las sugerencias (opcional)
+                            </span>
+                            <input
+                              className="input"
+                              value={config.suggestionsDmUserId ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  suggestionsDmUserId:
+                                    event.target.value.trim() || undefined,
+                                }))
+                              }
+                              placeholder="Vacío = dueño del servidor"
+                              maxLength={32}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <div className="admin-card-footer">
                         <button
-                          className="ghost-button"
-                          onClick={addRrPair}
-                          type="button"
+                          className="primary-button"
+                          onClick={() => void handleSave()}
+                          disabled={savingAction !== null}
                         >
-                          + Agregar par emoji/rol
+                          {savingAction === "config"
+                            ? "Guardando…"
+                            : "Guardar cambios"}
                         </button>
                       </div>
+                    </details>
+                  ) : null}
 
-                      <datalist id="guild-emojis">
-                        {guildEmojis.map((emoji) => (
-                          <option
-                            key={emoji.id}
-                            value={
-                              emoji.animated
-                                ? `<a:${emoji.name}:${emoji.id}>`
-                                : `<:${emoji.name}:${emoji.id}>`
-                            }
-                          >
-                            {emoji.name}
-                          </option>
-                        ))}
-                      </datalist>
-
-                      <div className="rr-preview">
-                        <div className="rr-preview-label">
-                          Vista previa del mensaje
+                  {isAdminOwner ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Módulos</h3>
+                          <p>
+                            Activa o desactiva qué secciones aparecen en la
+                            navegación. Lo que desactives queda oculto para
+                            todos. Inicio y Admin siempre están visibles.
+                          </p>
                         </div>
-                        {rrPreviewLines().length > 0 ? (
-                          rrPreviewLines().map((line, index) =>
-                            line.startsWith("**") && line.endsWith("**") ? (
-                              <div className="rr-preview-title" key={index}>
-                                {line.slice(2, -2)}
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="modules-grid">
+                          {HUB_MODULES.map((mod) => {
+                            const checked = isModuleEnabled(config, mod.key);
+                            return (
+                              <label
+                                className={`module-toggle${checked ? " checked" : ""}`}
+                                key={mod.key}
+                              >
+                                <span className="module-toggle-text">
+                                  <strong>{mod.label}</strong>
+                                  <small>{mod.description}</small>
+                                </span>
+                                <span className="module-switch">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleModule(mod.key)}
+                                  />
+                                  <span
+                                    className="module-switch-track"
+                                    aria-hidden="true"
+                                  >
+                                    <span className="module-switch-thumb" />
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="admin-card-footer">
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleSaveModules()}
+                          disabled={savingAction !== null}
+                        >
+                          {savingAction === "modules"
+                            ? "Guardando…"
+                            : "Guardar módulos"}
+                        </button>
+                      </div>
+                    </details>
+                  ) : null}
+
+                  {isAdminOwner ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Permisos de staff</h3>
+                          <p>
+                            Elegí qué módulos del Admin puede usar cada rol de
+                            Discord. Quienes tengan esos roles verán solo esas
+                            secciones; vos (owner) siempre tenés acceso total.
+                          </p>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="staff-permissions-list">
+                          {guildRoles.map((role) => {
+                            const rule = (config.adminRoleModules ?? []).find(
+                              (entry) => entry.roleId === role.id,
+                            );
+                            const selected = new Set(rule?.modules ?? []);
+                            return (
+                              <div
+                                className="staff-permission-row"
+                                key={role.id}
+                              >
+                                <div className="staff-permission-role">
+                                  <strong>{role.name}</strong>
+                                  <small>
+                                    {selected.size > 0
+                                      ? `${selected.size} módulo(s)`
+                                      : "Sin acceso"}
+                                  </small>
+                                </div>
+                                <div className="staff-permission-modules">
+                                  {STAFF_MODULES.map((mod) => {
+                                    const checked = selected.has(mod.key);
+                                    return (
+                                      <label
+                                        className={`staff-module-chip${checked ? " checked" : ""}`}
+                                        key={mod.key}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => {
+                                            setConfig((current) => {
+                                              const rules = [
+                                                ...(current.adminRoleModules ??
+                                                  []),
+                                              ];
+                                              const index = rules.findIndex(
+                                                (entry) =>
+                                                  entry.roleId === role.id,
+                                              );
+                                              const modules = new Set(
+                                                index >= 0
+                                                  ? rules[index].modules
+                                                  : [],
+                                              );
+                                              if (checked) {
+                                                modules.delete(mod.key);
+                                              } else {
+                                                modules.add(mod.key);
+                                              }
+                                              const next = [...modules];
+                                              if (index >= 0) {
+                                                if (next.length === 0) {
+                                                  rules.splice(index, 1);
+                                                } else {
+                                                  rules[index] = {
+                                                    modules: next,
+                                                    roleId: role.id,
+                                                  };
+                                                }
+                                              } else if (next.length > 0) {
+                                                rules.push({
+                                                  modules: next,
+                                                  roleId: role.id,
+                                                });
+                                              }
+                                              return {
+                                                ...current,
+                                                adminRoleModules: rules,
+                                              };
+                                            });
+                                          }}
+                                        />
+                                        <span>{mod.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            ) : (
-                              <div className="rr-preview-line" key={index}>
-                                {line}
-                              </div>
-                            ),
-                          )
-                        ) : (
-                          <div className="rr-preview-line muted">
-                            Sin contenido para previsualizar.
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="admin-card-footer">
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleSaveStaffPermissions()}
+                          disabled={savingAction !== null}
+                        >
+                          {savingAction === "permissions"
+                            ? "Guardando…"
+                            : "Guardar permisos"}
+                        </button>
+                      </div>
+                    </details>
+                  ) : null}
+
+                  {canAccess("comunicados") ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Comunicados</h3>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="plantillas-actions">
+                          <button
+                            className="primary-button"
+                            onClick={() =>
+                              setCommEditor({
+                                id: null,
+                                title: "",
+                                content: "",
+                                channelId: "",
+                              })
+                            }
+                            type="button"
+                          >
+                            Nueva plantilla
+                          </button>
+                        </div>
+                        {communications.length === 0 ? (
+                          <div className="empty-state comunicados-empty">
+                            <p>No existen plantillas.</p>
                           </div>
+                        ) : (
+                          communications.map((comm) => (
+                            <div
+                              className="comunicado-admin-block"
+                              key={comm.id}
+                            >
+                              <div className="comunicado-admin-row">
+                                <div className="comunicado-admin-info">
+                                  <strong>{comm.title}</strong>
+                                  <span
+                                    className={`comunicado-status comunicado-status-${comm.instances.length > 0 ? "published" : "draft"}`}
+                                  >
+                                    {comm.instances.length > 0
+                                      ? `Publicado (${comm.instances.length})`
+                                      : "Borrador"}
+                                  </span>
+                                </div>
+                                <div className="comunicado-admin-actions">
+                                  <button
+                                    className="ghost-button"
+                                    onClick={() =>
+                                      setCommEditor({
+                                        id: comm.id,
+                                        title: comm.title,
+                                        content: comm.content,
+                                        channelId: comm.channelId ?? "",
+                                      })
+                                    }
+                                    type="button"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className="primary-button"
+                                    onClick={() =>
+                                      void handlePublishCommunication(comm.id)
+                                    }
+                                    type="button"
+                                  >
+                                    {comm.instances.length > 0
+                                      ? "Republicar"
+                                      : "Publicar"}
+                                  </button>
+                                  <button
+                                    className="danger-button"
+                                    onClick={() =>
+                                      requestDeleteCommunication(comm)
+                                    }
+                                    type="button"
+                                  >
+                                    Eliminar plantilla
+                                  </button>
+                                </div>
+                              </div>
+                              {comm.instances.length > 0 ? (
+                                <div className="comunicado-instances">
+                                  {comm.instances.map((instance) => (
+                                    <div
+                                      className="comunicado-instance-row"
+                                      key={instance.id}
+                                    >
+                                      <span>
+                                        {instance.discordMessageIds.length > 0
+                                          ? "Mensaje"
+                                          : "Web"}{" "}
+                                        ·{" "}
+                                        {new Date(
+                                          instance.publishedAt,
+                                        ).toLocaleDateString()}{" "}
+                                        {new Date(
+                                          instance.publishedAt,
+                                        ).toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </span>
+                                      <button
+                                        className="ghost-button danger"
+                                        onClick={() =>
+                                          requestDeleteInstance(instance)
+                                        }
+                                        type="button"
+                                      >
+                                        Eliminar mensaje
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))
                         )}
                       </div>
+                    </details>
+                  ) : null}
 
-                      <div className="rr-jobs">
-                        {rrJobs.length > 0 ? (
-                          <>
-                            <div className="rr-jobs-head">
-                              <strong>Estado de publicación</strong>
+                  {canAccess("reaction") ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Reaction Roles</h3>
+                          <p>
+                            Paneles de roles por reacción que el bot publica en
+                            Discord.
+                          </p>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="form-grid">
+                          <label>
+                            <span>Canal de texto</span>
+                            <select
+                              className="select"
+                              value={rrChannelId}
+                              onChange={(event) =>
+                                setRrChannelId(event.target.value)
+                              }
+                            >
+                              <option value="">Sin canal configurado</option>
+                              {textChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Título del panel</span>
+                            <input
+                              value={rrTitle}
+                              onChange={(event) =>
+                                setRrTitle(event.target.value)
+                              }
+                              placeholder="Título"
+                            />
+                          </label>
+                          <label>
+                            <span>Descripción</span>
+                            <input
+                              value={rrDescription}
+                              onChange={(event) =>
+                                setRrDescription(event.target.value)
+                              }
+                              placeholder="Descripción"
+                            />
+                          </label>
+                          <label>
+                            <span>Modo</span>
+                            <select
+                              className="select"
+                              value={rrMode}
+                              onChange={(event) =>
+                                setRrMode(
+                                  event.target.value as
+                                    | "multiple"
+                                    | "unique"
+                                    | "additive",
+                                )
+                              }
+                            >
+                              <option value="multiple">
+                                Multiple (se puede tener varios)
+                              </option>
+                              <option value="unique">
+                                Único (solo uno del panel)
+                              </option>
+                              <option value="additive">
+                                Aditivo (solo agrega, no quita)
+                              </option>
+                            </select>
+                          </label>
+                        </div>
+
+                        <div className="rr-pairs">
+                          {rrPairs.map((pair, index) => (
+                            <div className="rr-pair" key={index}>
+                              <input
+                                type="text"
+                                list="guild-emojis"
+                                value={pair.emoji}
+                                onChange={(event) =>
+                                  updateRrPair(index, {
+                                    emoji: event.target.value,
+                                  })
+                                }
+                                placeholder="Emoji del servidor"
+                              />
+                              <select
+                                className="select"
+                                value={pair.roleId}
+                                onChange={(event) =>
+                                  updateRrPair(index, {
+                                    roleId: event.target.value,
+                                  })
+                                }
+                              >
+                                <option value="">Adjuntar rol</option>
+                                {guildRoles.map((role) => (
+                                  <option key={role.id} value={role.id}>
+                                    {role.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                className="ghost-button danger"
+                                onClick={() => removeRrPair(index)}
+                                type="button"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            className="ghost-button"
+                            onClick={addRrPair}
+                            type="button"
+                          >
+                            + Agregar par emoji/rol
+                          </button>
+                        </div>
+
+                        <datalist id="guild-emojis">
+                          {guildEmojis.map((emoji) => (
+                            <option
+                              key={emoji.id}
+                              value={
+                                emoji.animated
+                                  ? `<a:${emoji.name}:${emoji.id}>`
+                                  : `<:${emoji.name}:${emoji.id}>`
+                              }
+                            >
+                              {emoji.name}
+                            </option>
+                          ))}
+                        </datalist>
+
+                        <div className="rr-preview">
+                          <div className="rr-preview-label">
+                            Vista previa del mensaje
+                          </div>
+                          {rrPreviewLines().length > 0 ? (
+                            rrPreviewLines().map((line, index) =>
+                              line.startsWith("**") && line.endsWith("**") ? (
+                                <div className="rr-preview-title" key={index}>
+                                  {line.slice(2, -2)}
+                                </div>
+                              ) : (
+                                <div className="rr-preview-line" key={index}>
+                                  {line}
+                                </div>
+                              ),
+                            )
+                          ) : (
+                            <div className="rr-preview-line muted">
+                              Sin contenido para previsualizar.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="rr-jobs">
+                          {rrJobs.length > 0 ? (
+                            <>
+                              <div className="rr-jobs-head">
+                                <strong>Estado de publicación</strong>
+                                <button
+                                  className="icon-button"
+                                  onClick={() => void refreshRrJobs()}
+                                  title="Refrescar estado"
+                                  aria-label="Refrescar estado"
+                                  type="button"
+                                >
+                                  <RefreshIcon />
+                                </button>
+                              </div>
+                              <div className="rr-jobs-list">
+                                {rrJobs.filter((job) => job.status !== "done")
+                                  .length > 0 ? (
+                                  rrJobs
+                                    .filter((job) => job.status !== "done")
+                                    .slice(0, 5)
+                                    .map((job) => (
+                                      <div
+                                        className={`rr-job rr-job-${job.status}`}
+                                        key={job.id}
+                                      >
+                                        <div className="rr-job-line">
+                                          <span>
+                                            {job.status === "pending"
+                                              ? "En cola"
+                                              : "Error"}{" "}
+                                            · {job.action}
+                                            {job.title ? ` · ${job.title}` : ""}
+                                            {job.status !== "pending"
+                                              ? ` · ${new Date(
+                                                  job.createdAt,
+                                                ).toLocaleString()}`
+                                              : ""}
+                                          </span>
+                                          <button
+                                            className="rr-job-dismiss"
+                                            onClick={() =>
+                                              void dismissReactionRoleJob(
+                                                job.id,
+                                              )
+                                            }
+                                            title="Quitar de la lista"
+                                            aria-label="Quitar de la lista"
+                                            type="button"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                        {job.error ? (
+                                          <span className="rr-job-error">
+                                            {job.error}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    ))
+                                ) : (
+                                  <div className="rr-job-ok">
+                                    Todo publicado. Sin trabajos pendientes.
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+
+                        {reactionPanels.length > 0 ? (
+                          <div className="rr-panels-list">
+                            <div className="rr-panels-head">
+                              <h4>Plantillas ({reactionPanels.length})</h4>
                               <button
                                 className="icon-button"
-                                onClick={() => void refreshRrJobs()}
-                                title="Refrescar estado"
-                                aria-label="Refrescar estado"
+                                onClick={() => void refreshReactionPanels()}
+                                title="Refrescar paneles"
+                                aria-label="Refrescar paneles"
                                 type="button"
                               >
                                 <RefreshIcon />
                               </button>
                             </div>
-                            <div className="rr-jobs-list">
-                              {rrJobs.filter((job) => job.status !== "done")
-                                .length > 0 ? (
-                                rrJobs
-                                  .filter((job) => job.status !== "done")
-                                  .slice(0, 5)
-                                  .map((job) => (
-                                    <div
-                                      className={`rr-job rr-job-${job.status}`}
-                                      key={job.id}
-                                    >
-                                      <div className="rr-job-line">
-                                        <span>
-                                          {job.status === "pending"
-                                            ? "En cola"
-                                            : "Error"}{" "}
-                                          · {job.action}
-                                          {job.title ? ` · ${job.title}` : ""}
-                                          {job.status !== "pending"
-                                            ? ` · ${new Date(
-                                                job.createdAt,
-                                              ).toLocaleString()}`
-                                            : ""}
-                                        </span>
+                            {reactionPanels.map((panel) => {
+                              const channelName =
+                                textChannels.find(
+                                  (channel) => channel.id === panel.channelId,
+                                )?.name ?? "?";
+                              const expanded =
+                                expandedPanelId === panel.messageId;
+                              return (
+                                <div
+                                  className="rr-panel-card"
+                                  key={panel.messageId}
+                                >
+                                  <button
+                                    className="rr-panel-header"
+                                    onClick={() =>
+                                      setExpandedPanelId(
+                                        expanded ? null : panel.messageId,
+                                      )
+                                    }
+                                    type="button"
+                                  >
+                                    <span className="rr-panel-title">
+                                      {panel.title || "Plantilla sin título"}
+                                    </span>
+                                    <span className="rr-panel-meta">
+                                      {panel.status === "draft"
+                                        ? "Borrador"
+                                        : `#${channelName}`}{" "}
+                                      · {panel.rules.length} rol/es
+                                    </span>
+                                    <span className="rr-caret">
+                                      {expanded ? "▴" : "▾"}
+                                    </span>
+                                  </button>
+                                  {expanded ? (
+                                    <div className="rr-panel-body">
+                                      <div className="rr-rules">
+                                        {panel.rules.map((rule, index) => {
+                                          const roleName =
+                                            guildRoles.find(
+                                              (role) => role.id === rule.roleId,
+                                            )?.name ?? rule.roleId;
+                                          return (
+                                            <span
+                                              className="rr-rule"
+                                              key={`${rule.emoji}-${index}`}
+                                            >
+                                              {formatReactionRuleEmoji(
+                                                rule.emoji,
+                                              )}{" "}
+                                              → {roleName}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                      <div className="rr-panel-actions">
                                         <button
-                                          className="rr-job-dismiss"
+                                          className="ghost-button"
                                           onClick={() =>
-                                            void dismissReactionRoleJob(job.id)
+                                            startEditReactionTemplate(panel)
                                           }
-                                          title="Quitar de la lista"
-                                          aria-label="Quitar de la lista"
                                           type="button"
                                         >
-                                          ✕
+                                          Editar
+                                        </button>
+                                        <button
+                                          className="primary-button"
+                                          onClick={() =>
+                                            void handlePublishReactionPanel(
+                                              panel,
+                                            )
+                                          }
+                                          type="button"
+                                        >
+                                          {panel.status === "published"
+                                            ? "Republicar"
+                                            : "Publicar"}
+                                        </button>
+                                        <button
+                                          className="danger-button"
+                                          onClick={() =>
+                                            requestDeleteReactionPanel(panel)
+                                          }
+                                          type="button"
+                                        >
+                                          Eliminar plantilla
                                         </button>
                                       </div>
-                                      {job.error ? (
-                                        <span className="rr-job-error">
-                                          {job.error}
-                                        </span>
-                                      ) : null}
                                     </div>
-                                  ))
-                              ) : (
-                                <div className="rr-job-ok">
-                                  Todo publicado. Sin trabajos pendientes.
+                                  ) : null}
                                 </div>
-                              )}
-                            </div>
-                          </>
+                              );
+                            })}
+                          </div>
                         ) : null}
                       </div>
-
-                      {reactionPanels.length > 0 ? (
-                        <div className="rr-panels-list">
-                          <div className="rr-panels-head">
-                            <h4>Plantillas ({reactionPanels.length})</h4>
-                            <button
-                              className="icon-button"
-                              onClick={() => void refreshReactionPanels()}
-                              title="Refrescar paneles"
-                              aria-label="Refrescar paneles"
-                              type="button"
-                            >
-                              <RefreshIcon />
-                            </button>
-                          </div>
-                          {reactionPanels.map((panel) => {
-                            const channelName =
-                              textChannels.find(
-                                (channel) => channel.id === panel.channelId,
-                              )?.name ?? "?";
-                            const expanded =
-                              expandedPanelId === panel.messageId;
-                            return (
-                              <div
-                                className="rr-panel-card"
-                                key={panel.messageId}
-                              >
-                                <button
-                                  className="rr-panel-header"
-                                  onClick={() =>
-                                    setExpandedPanelId(
-                                      expanded ? null : panel.messageId,
-                                    )
-                                  }
-                                  type="button"
-                                >
-                                  <span className="rr-panel-title">
-                                    {panel.title || "Plantilla sin título"}
-                                  </span>
-                                  <span className="rr-panel-meta">
-                                    {panel.status === "draft"
-                                      ? "Borrador"
-                                      : `#${channelName}`}{" "}
-                                    · {panel.rules.length} rol/es
-                                  </span>
-                                  <span className="rr-caret">
-                                    {expanded ? "▴" : "▾"}
-                                  </span>
-                                </button>
-                                {expanded ? (
-                                  <div className="rr-panel-body">
-                                    <div className="rr-rules">
-                                      {panel.rules.map((rule, index) => {
-                                        const roleName =
-                                          guildRoles.find(
-                                            (role) => role.id === rule.roleId,
-                                          )?.name ?? rule.roleId;
-                                        return (
-                                          <span
-                                            className="rr-rule"
-                                            key={`${rule.emoji}-${index}`}
-                                          >
-                                            {formatReactionRuleEmoji(
-                                              rule.emoji,
-                                            )}{" "}
-                                            → {roleName}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                    <div className="rr-panel-actions">
-                                      <button
-                                        className="ghost-button"
-                                        onClick={() =>
-                                          startEditReactionTemplate(panel)
-                                        }
-                                        type="button"
-                                      >
-                                        Editar
-                                      </button>
-                                      <button
-                                        className="primary-button"
-                                        onClick={() =>
-                                          void handlePublishReactionPanel(panel)
-                                        }
-                                        type="button"
-                                      >
-                                        {panel.status === "published"
-                                          ? "Republicar"
-                                          : "Publicar"}
-                                      </button>
-                                      <button
-                                        className="danger-button"
-                                        onClick={() =>
-                                          requestDeleteReactionPanel(panel)
-                                        }
-                                        type="button"
-                                      >
-                                        Eliminar plantilla
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="admin-card-footer">
-                      <button
-                        className="primary-button"
-                        onClick={() => void handleSaveReactionPanel()}
-                        disabled={savingAction !== null}
-                        type="button"
-                      >
-                        {savingAction === "panel"
-                          ? "Guardando…"
-                          : "Guardar plantilla"}
-                      </button>
-                    </div>
-                  </details>
-
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Mensajes Diarios</h3>
-                        <p>
-                          El loro de Karpindomo: frases que el bot publica al
-                          azar en un canal, a intervalos aleatorios.
-                        </p>
+                      <div className="admin-card-footer">
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleSaveReactionPanel()}
+                          disabled={savingAction !== null}
+                          type="button"
+                        >
+                          {savingAction === "panel"
+                            ? "Guardando…"
+                            : "Guardar plantilla"}
+                        </button>
                       </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <div className="form-grid">
+                    </details>
+                  ) : null}
+
+                  {canAccess("daily") ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Mensajes Diarios</h3>
+                          <p>
+                            El loro de Karpindomo: frases que el bot publica al
+                            azar en un canal, a intervalos aleatorios.
+                          </p>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="form-grid">
+                          <label>
+                            <span>Canal de publicación</span>
+                            <select
+                              className="select"
+                              value={config.dailyMessagesChannelId ?? ""}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  dailyMessagesChannelId:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                            >
+                              <option value="">Sin canal configurado</option>
+                              {textChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Intervalo mínimo (min)</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={config.dailyMessagesMinMinutes ?? 15}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  dailyMessagesMinMinutes:
+                                    Number(event.target.value) || 1,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>Intervalo máximo (min)</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={config.dailyMessagesMaxMinutes ?? 90}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  dailyMessagesMaxMinutes:
+                                    Number(event.target.value) || 1,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+
+                        <div className="daily-actions-row">
+                          <label className="checkbox-row">
+                            <input
+                              type="checkbox"
+                              checked={config.dailyMessagesEnabled ?? false}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  dailyMessagesEnabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span>Loro activado</span>
+                          </label>
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveDailyConfig()}
+                            disabled={savingAction !== null}
+                            type="button"
+                          >
+                            {savingAction === "daily"
+                              ? "Guardando…"
+                              : "Guardar configuración"}
+                          </button>
+                        </div>
+
+                        <div className="daily-messages-editor">
+                          <div className="daily-messages-head">
+                            <strong>Frases del loro</strong>
+                            <span className="muted-text">
+                              {
+                                dailyMessages.filter(
+                                  (message) => message.enabled,
+                                ).length
+                              }{" "}
+                              de {dailyMessages.length} activas
+                            </span>
+                          </div>
+                          <textarea
+                            className="textarea"
+                            rows={3}
+                            value={dailyMessageDraft}
+                            onChange={(event) =>
+                              setDailyMessageDraft(event.target.value)
+                            }
+                            placeholder='Escribí una frase de Karpindomo… ej: "OE, LO MATAS!"'
+                          />
+                          <button
+                            className="ghost-button"
+                            onClick={() => void handleCreateDailyMessage()}
+                            type="button"
+                          >
+                            + Agregar frase
+                          </button>
+
+                          {dailyMessages.length === 0 ? (
+                            <div className="empty-state">
+                              <p>
+                                No hay frases todavía. ¡Agregá la primera para
+                                que el loro empiece a hablar!
+                              </p>
+                            </div>
+                          ) : (
+                            dailyMessages.map((message) => (
+                              <div
+                                className="daily-message-row"
+                                key={message.id}
+                              >
+                                <span
+                                  className={`daily-message-content${message.enabled ? "" : " muted"}`}
+                                >
+                                  {message.content}
+                                </span>
+                                <div className="daily-message-actions">
+                                  <button
+                                    className="ghost-button"
+                                    onClick={() =>
+                                      void handleToggleDailyMessage(message)
+                                    }
+                                    type="button"
+                                  >
+                                    {message.enabled ? "Pausar" : "Activar"}
+                                  </button>
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() =>
+                                      void handleDeleteDailyMessage(message)
+                                    }
+                                    type="button"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  ) : null}
+
+                  {canAccess("raids") ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Logs de Raid</h3>
+                          <p>Sincronización con Warcraft Logs.</p>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
                         <label>
-                          <span>Canal de publicación</span>
+                          <span>Canal de Discord para publicar logs</span>
                           <select
                             className="select"
-                            value={config.dailyMessagesChannelId ?? ""}
+                            value={config.logsChannelId ?? ""}
                             onChange={(event) =>
                               setConfig((current) => ({
                                 ...current,
-                                dailyMessagesChannelId:
-                                  event.target.value || undefined,
+                                logsChannelId: event.target.value || undefined,
                               }))
                             }
                           >
@@ -3432,313 +3785,157 @@ function App() {
                             ))}
                           </select>
                         </label>
-                        <label>
-                          <span>Intervalo mínimo (min)</span>
-                          <input
-                            type="number"
-                            min="1"
-                            value={config.dailyMessagesMinMinutes ?? 15}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                dailyMessagesMinMinutes:
-                                  Number(event.target.value) || 1,
-                              }))
-                            }
-                          />
-                        </label>
-                        <label>
-                          <span>Intervalo máximo (min)</span>
-                          <input
-                            type="number"
-                            min="1"
-                            value={config.dailyMessagesMaxMinutes ?? 90}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                dailyMessagesMaxMinutes:
-                                  Number(event.target.value) || 1,
-                              }))
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <div className="daily-actions-row">
-                        <label className="checkbox-row">
-                          <input
-                            type="checkbox"
-                            checked={config.dailyMessagesEnabled ?? false}
-                            onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                dailyMessagesEnabled: event.target.checked,
-                              }))
-                            }
-                          />
-                          <span>Loro activado</span>
-                        </label>
                         <button
                           className="primary-button"
-                          onClick={() => void handleSaveDailyConfig()}
+                          onClick={() => void handleSaveLogsConfig()}
                           disabled={savingAction !== null}
                           type="button"
                         >
-                          {savingAction === "daily"
+                          {savingAction === "config"
                             ? "Guardando…"
-                            : "Guardar configuración"}
-                        </button>
-                      </div>
-
-                      <div className="daily-messages-editor">
-                        <div className="daily-messages-head">
-                          <strong>Frases del loro</strong>
-                          <span className="muted-text">
-                            {
-                              dailyMessages.filter((message) => message.enabled)
-                                .length
-                            }{" "}
-                            de {dailyMessages.length} activas
-                          </span>
-                        </div>
-                        <textarea
-                          className="textarea"
-                          rows={3}
-                          value={dailyMessageDraft}
-                          onChange={(event) =>
-                            setDailyMessageDraft(event.target.value)
-                          }
-                          placeholder='Escribí una frase de Karpindomo… ej: "OE, LO MATAS!"'
-                        />
-                        <button
-                          className="ghost-button"
-                          onClick={() => void handleCreateDailyMessage()}
-                          type="button"
-                        >
-                          + Agregar frase
+                            : "Guardar canal"}
                         </button>
 
-                        {dailyMessages.length === 0 ? (
-                          <div className="empty-state">
-                            <p>
-                              No hay frases todavía. ¡Agregá la primera para que
-                              el loro empiece a hablar!
-                            </p>
-                          </div>
-                        ) : (
-                          dailyMessages.map((message) => (
-                            <div className="daily-message-row" key={message.id}>
-                              <span
-                                className={`daily-message-content${message.enabled ? "" : " muted"}`}
-                              >
-                                {message.content}
-                              </span>
-                              <div className="daily-message-actions">
-                                <button
-                                  className="ghost-button"
-                                  onClick={() =>
-                                    void handleToggleDailyMessage(message)
+                        <div className="daily-messages-editor">
+                          <div className="daily-messages-head">
+                            <div className="daily-messages-title">
+                              <strong>Vigilar gremio</strong>
+                              <label className="checkbox-row">
+                                <input
+                                  type="checkbox"
+                                  checked={config.logsWatchEnabled ?? false}
+                                  onChange={(event) =>
+                                    setConfig((current) => ({
+                                      ...current,
+                                      logsWatchEnabled: event.target.checked,
+                                    }))
                                   }
-                                  type="button"
-                                >
-                                  {message.enabled ? "Pausar" : "Activar"}
-                                </button>
-                                <button
-                                  className="ghost-button danger"
-                                  onClick={() =>
-                                    void handleDeleteDailyMessage(message)
-                                  }
-                                  type="button"
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
+                                />
+                                <span>Vigilado activado</span>
+                              </label>
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </details>
-
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Logs de Raid</h3>
-                        <p>Sincronización con Warcraft Logs.</p>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <label>
-                        <span>Canal de Discord para publicar logs</span>
-                        <select
-                          className="select"
-                          value={config.logsChannelId ?? ""}
-                          onChange={(event) =>
-                            setConfig((current) => ({
-                              ...current,
-                              logsChannelId: event.target.value || undefined,
-                            }))
-                          }
-                        >
-                          <option value="">Sin canal configurado</option>
-                          {textChannels.map((channel) => (
-                            <option key={channel.id} value={channel.id}>
-                              {channel.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        className="primary-button"
-                        onClick={() => void handleSaveLogsConfig()}
-                        disabled={savingAction !== null}
-                        type="button"
-                      >
-                        {savingAction === "config"
-                          ? "Guardando…"
-                          : "Guardar canal"}
-                      </button>
-
-                      <div className="daily-messages-editor">
-                        <div className="daily-messages-head">
-                          <div className="daily-messages-title">
-                            <strong>Vigilar gremio</strong>
-                            <label className="checkbox-row">
+                          </div>
+                          <p className="muted-text">
+                            Publica automáticamente los logs de RAID nuevos del
+                            gremio en Warcraft Logs (excluye Mythic+).
+                          </p>
+                          <div className="form-grid">
+                            <label>
+                              <span>Gremio (nombre en Warcraft Logs)</span>
                               <input
-                                type="checkbox"
-                                checked={config.logsWatchEnabled ?? false}
+                                value={config.logsWatchGuild ?? ""}
                                 onChange={(event) =>
                                   setConfig((current) => ({
                                     ...current,
-                                    logsWatchEnabled: event.target.checked,
+                                    logsWatchGuild:
+                                      event.target.value || undefined,
                                   }))
                                 }
+                                placeholder="ej: Bonafide"
                               />
-                              <span>Vigilado activado</span>
+                            </label>
+                            <label>
+                              <span>Servidor</span>
+                              <input
+                                value={config.logsWatchServer ?? ""}
+                                onChange={(event) =>
+                                  setConfig((current) => ({
+                                    ...current,
+                                    logsWatchServer:
+                                      event.target.value || undefined,
+                                  }))
+                                }
+                                placeholder="ej: Ragnaros"
+                              />
+                            </label>
+                            <label>
+                              <span>Región</span>
+                              <select
+                                className="select"
+                                value={config.logsWatchRegion ?? "EU"}
+                                onChange={(event) =>
+                                  setConfig((current) => ({
+                                    ...current,
+                                    logsWatchRegion: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="EU">EU</option>
+                                <option value="US">US</option>
+                              </select>
                             </label>
                           </div>
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveLogsWatch()}
+                            disabled={savingAction !== null}
+                            type="button"
+                          >
+                            Guardar watcher
+                          </button>
                         </div>
-                        <p className="muted-text">
-                          Publica automáticamente los logs de RAID nuevos del
-                          gremio en Warcraft Logs (excluye Mythic+).
-                        </p>
-                        <div className="form-grid">
-                          <label>
-                            <span>Gremio (nombre en Warcraft Logs)</span>
-                            <input
-                              value={config.logsWatchGuild ?? ""}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchGuild:
-                                    event.target.value || undefined,
-                                }))
-                              }
-                              placeholder="ej: Bonafide"
-                            />
-                          </label>
-                          <label>
-                            <span>Servidor</span>
-                            <input
-                              value={config.logsWatchServer ?? ""}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchServer:
-                                    event.target.value || undefined,
-                                }))
-                              }
-                              placeholder="ej: Ragnaros"
-                            />
-                          </label>
-                          <label>
-                            <span>Región</span>
-                            <select
-                              className="select"
-                              value={config.logsWatchRegion ?? "EU"}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  logsWatchRegion: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="EU">EU</option>
-                              <option value="US">US</option>
-                            </select>
-                          </label>
-                        </div>
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveLogsWatch()}
-                          disabled={savingAction !== null}
-                          type="button"
-                        >
-                          Guardar watcher
-                        </button>
-                      </div>
 
-                      <div className="daily-messages-editor">
-                        <div className="daily-messages-head">
-                          <strong>Agregar log</strong>
-                          <span className="muted-text">
-                            Link de warcraftlogs.com/reports/…
-                          </span>
-                        </div>
-                        <input
-                          value={raidLogUrl}
-                          onChange={(event) =>
-                            setRaidLogUrl(event.target.value)
-                          }
-                          placeholder="https://www.warcraftlogs.com/reports/XXXX"
-                        />
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleCreateRaidLog()}
-                          type="button"
-                        >
-                          + Agregar log de raid
-                        </button>
-
-                        {raidLogs.length === 0 ? (
-                          <div className="empty-state">
-                            <p>No hay logs todavía. ¡Agregá el primero!</p>
+                        <div className="daily-messages-editor">
+                          <div className="daily-messages-head">
+                            <strong>Agregar log</strong>
+                            <span className="muted-text">
+                              Link de warcraftlogs.com/reports/…
+                            </span>
                           </div>
-                        ) : (
-                          raidLogs.map((log) => (
-                            <div className="daily-message-row" key={log.id}>
-                              <div className="daily-message-content">
-                                <strong>{log.title || log.reportCode}</strong>
-                                <div className="muted-text">
-                                  ⚔️ {log.fightCount} fights · 💀 {log.kills}{" "}
-                                  kills ·{" "}
-                                  {log.status === "failed"
-                                    ? "sin datos"
-                                    : log.discordPosted
-                                      ? "publicado"
-                                      : "en espera"}
+                          <input
+                            value={raidLogUrl}
+                            onChange={(event) =>
+                              setRaidLogUrl(event.target.value)
+                            }
+                            placeholder="https://www.warcraftlogs.com/reports/XXXX"
+                          />
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleCreateRaidLog()}
+                            type="button"
+                          >
+                            + Agregar log de raid
+                          </button>
+
+                          {raidLogs.length === 0 ? (
+                            <div className="empty-state">
+                              <p>No hay logs todavía. ¡Agregá el primero!</p>
+                            </div>
+                          ) : (
+                            raidLogs.map((log) => (
+                              <div className="daily-message-row" key={log.id}>
+                                <div className="daily-message-content">
+                                  <strong>{log.title || log.reportCode}</strong>
+                                  <div className="muted-text">
+                                    ⚔️ {log.fightCount} fights · 💀 {log.kills}{" "}
+                                    kills ·{" "}
+                                    {log.status === "failed"
+                                      ? "sin datos"
+                                      : log.discordPosted
+                                        ? "publicado"
+                                        : "en espera"}
+                                  </div>
+                                </div>
+                                <div className="daily-message-actions">
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() =>
+                                      void handleDeleteRaidLog(log)
+                                    }
+                                    type="button"
+                                  >
+                                    Eliminar
+                                  </button>
                                 </div>
                               </div>
-                              <div className="daily-message-actions">
-                                <button
-                                  className="ghost-button danger"
-                                  onClick={() => void handleDeleteRaidLog(log)}
-                                  type="button"
-                                >
-                                  Eliminar
-                                </button>
-                              </div>
-                            </div>
-                          ))
-                        )}
+                            ))
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </details>
+                    </details>
+                  ) : null}
 
-                  {xpConfig ? (
+                  {canAccess("xp") && xpConfig ? (
                     <details className="admin-card admin-card-acc">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -4135,70 +4332,74 @@ function App() {
                     </details>
                   ) : null}
 
-                  <details className="admin-card admin-card-acc">
-                    <summary className="admin-card-header admin-acc-header">
-                      <div>
-                        <h3>Registro de cambios (auditoría)</h3>
-                        <p>
-                          Quién cambió cada cosa en el Hub. Solo lectura y
-                          visible únicamente para el owner.
-                        </p>
-                      </div>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="admin-card-body">
-                      <div className="audit-body-actions">
-                        <span className="audit-count">
-                          {auditLogs.length} registro
-                          {auditLogs.length === 1 ? "" : "s"}
-                        </span>
-                        <button
-                          className="icon-button"
-                          onClick={() => void refreshAuditLogs()}
-                          title="Refrescar registro"
-                          aria-label="Refrescar registro"
-                          type="button"
-                        >
-                          <RefreshIcon />
-                        </button>
-                      </div>
-                      {selectedGuild?.owner ? (
-                        auditLogs.length === 0 ? (
-                          <div className="empty-state">
-                            Aún no hay cambios registrados. Las acciones del
-                            panel Admin quedan anotadas acá.
-                          </div>
-                        ) : (
-                          <div className="audit-list">
-                            {auditLogs.map((entry) => (
-                              <div className="audit-row" key={entry.id}>
-                                <span className="audit-time">
-                                  {new Date(entry.createdAt).toLocaleString()}
-                                </span>
-                                <span className="audit-actor">
-                                  {entry.actorName ?? entry.actorUserId ?? "—"}
-                                </span>
-                                <span className="audit-action">
-                                  {entry.action}
-                                </span>
-                                {entry.details ? (
-                                  <span className="audit-detail">
-                                    {entry.details}
-                                  </span>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        )
-                      ) : (
-                        <div className="empty-state">
-                          Solo el owner de la guild puede ver este registro.
+                  {isAdminOwner ? (
+                    <details className="admin-card admin-card-acc">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>Registro de cambios (auditoría)</h3>
+                          <p>
+                            Quién cambió cada cosa en el Hub. Solo lectura y
+                            visible únicamente para el owner.
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  </details>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <div className="audit-body-actions">
+                          <span className="audit-count">
+                            {auditLogs.length} registro
+                            {auditLogs.length === 1 ? "" : "s"}
+                          </span>
+                          <button
+                            className="icon-button"
+                            onClick={() => void refreshAuditLogs()}
+                            title="Refrescar registro"
+                            aria-label="Refrescar registro"
+                            type="button"
+                          >
+                            <RefreshIcon />
+                          </button>
+                        </div>
+                        {selectedGuild?.owner ? (
+                          auditLogs.length === 0 ? (
+                            <div className="empty-state">
+                              Aún no hay cambios registrados. Las acciones del
+                              panel Admin quedan anotadas acá.
+                            </div>
+                          ) : (
+                            <div className="audit-list">
+                              {auditLogs.map((entry) => (
+                                <div className="audit-row" key={entry.id}>
+                                  <span className="audit-time">
+                                    {new Date(entry.createdAt).toLocaleString()}
+                                  </span>
+                                  <span className="audit-actor">
+                                    {entry.actorName ??
+                                      entry.actorUserId ??
+                                      "—"}
+                                  </span>
+                                  <span className="audit-action">
+                                    {entry.action}
+                                  </span>
+                                  {entry.details ? (
+                                    <span className="audit-detail">
+                                      {entry.details}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        ) : (
+                          <div className="empty-state">
+                            Solo el owner de la guild puede ver este registro.
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  ) : null}
                 </>
               ) : activeTab === "admin" ? (
                 <div className="empty-state">
