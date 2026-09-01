@@ -993,7 +993,7 @@ function App() {
         if (!cancelled) {
           setKarpindomoOpen(false);
         }
-      }, 9_000);
+      }, 10_000);
     };
 
     const schedule = (first: boolean): void => {

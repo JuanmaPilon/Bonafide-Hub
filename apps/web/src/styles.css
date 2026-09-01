@@ -1891,33 +1891,49 @@ a:hover {
 
 .karpindomo-bubble {
   position: relative;
-  max-width: 280px;
-  padding: 12px 14px;
-  border-radius: 16px 16px 4px 16px;
+  max-width: 340px;
+  padding: 16px 18px;
+  border-radius: 22px 22px 8px 22px;
   background: linear-gradient(
     160deg,
-    rgba(54, 89, 185, 0.95),
-    rgba(223, 90, 61, 0.95)
+    rgba(54, 89, 185, 0.96),
+    rgba(223, 90, 61, 0.96)
   );
-  border: 1px solid rgba(255, 180, 84, 0.6);
+  border: 1px solid rgba(255, 180, 84, 0.65);
   color: var(--text);
   box-shadow: 0 18px 50px rgba(2, 8, 13, 0.55);
-  animation: karpindomo-in 200ms ease;
+  animation: karpindomo-pop 300ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+/* Brillo de burbuja (reflejo arriba a la izquierda) */
+.karpindomo-bubble::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 14px;
+  width: 48px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  filter: blur(7px);
+  transform: rotate(-12deg);
+  pointer-events: none;
 }
 
 .karpindomo-bubble-tail {
   position: absolute;
-  right: 14px;
-  bottom: -6px;
-  width: 12px;
-  height: 12px;
+  right: 20px;
+  bottom: -8px;
+  width: 16px;
+  height: 16px;
   background: linear-gradient(
     160deg,
-    rgba(54, 89, 185, 0.95),
-    rgba(223, 90, 61, 0.95)
+    rgba(54, 89, 185, 0.96),
+    rgba(223, 90, 61, 0.96)
   );
-  border-right: 1px solid rgba(255, 180, 84, 0.6);
-  border-bottom: 1px solid rgba(255, 180, 84, 0.6);
+  border-right: 1px solid rgba(255, 180, 84, 0.65);
+  border-bottom: 1px solid rgba(255, 180, 84, 0.65);
+  border-radius: 0 0 3px 0;
   transform: rotate(45deg);
 }
 
@@ -1930,14 +1946,14 @@ a:hover {
 
 .karpindomo-bubble-head strong {
   color: #ffd08f;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
 }
 
 .karpindomo-bubble p {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: var(--text);
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .karpindomo-bubble-close {
@@ -1954,15 +1970,20 @@ a:hover {
   color: #fff;
 }
 
-@keyframes karpindomo-in {
-  from {
+@keyframes karpindomo-pop {
+  0% {
     opacity: 0;
-    transform: translateY(12px);
+    transform: scale(0.85) translateY(12px);
   }
 
-  to {
+  60% {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1.03) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 
