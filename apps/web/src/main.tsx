@@ -2809,10 +2809,15 @@ function App() {
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
                 <>
                   {canAccess("config") ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Configuración general del servidor</h3>
+                          <h3>
+                            Configuración general del servidor{" "}
+                            <span className="admin-tier-badge tier-admin">
+                              Admin
+                            </span>
+                          </h3>
                           <p>
                             Canales y roles base del servidor. Se guardan por
                             servidor.
@@ -2964,10 +2969,15 @@ function App() {
                   ) : null}
 
                   {isAdminOwner ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Módulos</h3>
+                          <h3>
+                            Módulos{" "}
+                            <span className="admin-tier-badge tier-owner">
+                              Owner
+                            </span>
+                          </h3>
                           <p>
                             Activa o desactiva qué secciones aparecen en la
                             navegación. Lo que desactives queda oculto para
@@ -3024,10 +3034,15 @@ function App() {
                   ) : null}
 
                   {isAdminOwner ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Permisos de staff</h3>
+                          <h3>
+                            Permisos de staff{" "}
+                            <span className="admin-tier-badge tier-owner">
+                              Owner
+                            </span>
+                          </h3>
                           <p>
                             Rangos de acceso del staff. Solo el owner puede
                             editarlos: Admin (casi todo) u Officer (operativo).
@@ -3200,10 +3215,15 @@ function App() {
                   ) : null}
 
                   {canAccess("comunicados") ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Comunicados</h3>
+                          <h3>
+                            Comunicados{" "}
+                            <span className="admin-tier-badge tier-officer">
+                              Officer
+                            </span>
+                          </h3>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -3327,10 +3347,15 @@ function App() {
                   ) : null}
 
                   {canAccess("reaction") ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Reaction Roles</h3>
+                          <h3>
+                            Reaction Roles{" "}
+                            <span className="admin-tier-badge tier-officer">
+                              Officer
+                            </span>
+                          </h3>
                           <p>
                             Paneles de roles por reacción que el bot publica en
                             Discord.
@@ -3688,10 +3713,15 @@ function App() {
                   ) : null}
 
                   {canAccess("daily") ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Mensajes Diarios</h3>
+                          <h3>
+                            Mensajes Diarios{" "}
+                            <span className="admin-tier-badge tier-officer">
+                              Officer
+                            </span>
+                          </h3>
                           <p>
                             El loro de Karpindomo: frases que el bot publica al
                             azar en un canal, a intervalos aleatorios.
@@ -3858,10 +3888,15 @@ function App() {
                   ) : null}
 
                   {canAccess("raids") ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Logs de Raid</h3>
+                          <h3>
+                            Logs de Raid{" "}
+                            <span className="admin-tier-badge tier-officer">
+                              Officer
+                            </span>
+                          </h3>
                           <p>Sincronización con Warcraft Logs.</p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
@@ -4040,10 +4075,15 @@ function App() {
                   ) : null}
 
                   {canAccess("xp") && xpConfig ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Sistema de XP</h3>
+                          <h3>
+                            Sistema de XP{" "}
+                            <span className="admin-tier-badge tier-admin">
+                              Admin
+                            </span>
+                          </h3>
                           <p>
                             Configuración de niveles, roles por nivel y
                             multiplicadores.
@@ -4437,10 +4477,15 @@ function App() {
                   ) : null}
 
                   {isAdminOwner ? (
-                    <details className="admin-card admin-card-acc">
+                    <details className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
-                          <h3>Registro de cambios (auditoría)</h3>
+                          <h3>
+                            Registro de cambios (auditoría){" "}
+                            <span className="admin-tier-badge tier-owner">
+                              Owner
+                            </span>
+                          </h3>
                           <p>
                             Quién cambió cada cosa en el Hub. Solo lectura y
                             visible únicamente para el owner.

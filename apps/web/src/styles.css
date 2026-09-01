@@ -687,6 +687,85 @@ a:hover {
   transform: rotate(90deg);
 }
 
+/* Colores de tarjetas del Admin por rango (Owner / Admin / Officer) */
+.admin-card--owner {
+  border-color: rgba(255, 215, 0, 0.4);
+}
+
+.admin-card--owner > .admin-card-header {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 215, 0, 0.09),
+    transparent 45%
+  );
+}
+
+.admin-card--owner .admin-card-header h3 {
+  color: #ffd700;
+}
+
+.admin-card--admin {
+  border-color: rgba(255, 138, 92, 0.36);
+}
+
+.admin-card--admin > .admin-card-header {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 138, 92, 0.09),
+    transparent 45%
+  );
+}
+
+.admin-card--admin .admin-card-header h3 {
+  color: #ff8a5c;
+}
+
+.admin-card--officer {
+  border-color: rgba(124, 227, 139, 0.34);
+}
+
+.admin-card--officer > .admin-card-header {
+  background: linear-gradient(
+    90deg,
+    rgba(124, 227, 139, 0.08),
+    transparent 45%
+  );
+}
+
+.admin-card--officer .admin-card-header h3 {
+  color: #7ce38b;
+}
+
+/* Badge de rango dentro del título de la tarjeta */
+.admin-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+
+.tier-owner {
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.1);
+}
+
+.tier-admin {
+  color: #ff8a5c;
+  background: rgba(255, 138, 92, 0.1);
+}
+
+.tier-officer {
+  color: #7ce38b;
+  background: rgba(124, 227, 139, 0.1);
+}
+
 .plantillas-actions {
   display: flex;
   justify-content: flex-end;
