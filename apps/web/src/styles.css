@@ -716,6 +716,12 @@ a:hover {
   gap: 18px;
 }
 
+.admin-card-loading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .admin-card-footer {
   display: flex;
   align-items: center;

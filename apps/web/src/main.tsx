@@ -2961,10 +2961,6 @@ function App() {
                               Admin
                             </span>
                           </h3>
-                          <p>
-                            Canales y roles base del servidor. Se guardan por
-                            servidor.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -3175,11 +3171,6 @@ function App() {
                               Owner
                             </span>
                           </h3>
-                          <p>
-                            Activa o desactiva qué secciones aparecen en la
-                            navegación. Lo que desactives queda oculto para
-                            todos. Inicio y Admin siempre están visibles.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -3240,10 +3231,6 @@ function App() {
                               Owner
                             </span>
                           </h3>
-                          <p>
-                            Rangos de acceso del staff. Solo el owner puede
-                            editarlos: Admin (casi todo) u Officer (operativo).
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -3553,10 +3540,6 @@ function App() {
                               Officer
                             </span>
                           </h3>
-                          <p>
-                            Paneles de roles por reacción que el bot publica en
-                            Discord.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -3919,10 +3902,6 @@ function App() {
                               Officer
                             </span>
                           </h3>
-                          <p>
-                            El loro de Karpindomo: frases que el bot publica al
-                            azar en un canal, a intervalos aleatorios.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -4094,7 +4073,6 @@ function App() {
                               Officer
                             </span>
                           </h3>
-                          <p>Sincronización con Warcraft Logs.</p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -4271,7 +4249,7 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("xp") && xpConfig ? (
+                  {canAccess("xp") ? (
                     <details className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -4281,15 +4259,12 @@ function App() {
                               Admin
                             </span>
                           </h3>
-                          <p>
-                            Configuración de niveles, roles por nivel y
-                            multiplicadores.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
                         </span>
                       </summary>
+                      {xpConfig ? (
                       <div className="admin-card-body">
                         <div className="form-grid">
                           <label>
@@ -4670,6 +4645,13 @@ function App() {
                             : "Guardar configuración de XP"}
                         </button>
                       </div>
+                      ) : (
+                        <div className="admin-card-body">
+                          <p className="admin-card-loading">
+                            Cargando configuración de XP…
+                          </p>
+                        </div>
+                      )}
                     </details>
                   ) : null}
 
@@ -4683,10 +4665,6 @@ function App() {
                               Owner
                             </span>
                           </h3>
-                          <p>
-                            Quién cambió cada cosa en el Hub. Solo lectura y
-                            visible únicamente para el owner.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
