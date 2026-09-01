@@ -238,6 +238,43 @@ function ToastViewport({ toasts }: { toasts: ToastItem[] }) {
   );
 }
 
+// Frases random de Karpindomo en el popup (humor "anuncios para adultos").
+const KARPINDOMO_LINES: string[] = [
+  "Señor, hay karpinchos calientes en su zona",
+  "Señor, encontré karpinchos dispuestos a farmear con usted",
+  "Señor, hay un karpincho soltero a 50 metros de su personaje",
+  "Señor, ¿le interesa un karpincho con doble specc?",
+  "Señor, los karpinchos de su zona lo están esperando",
+];
+
+function KarpindomoPopup({
+  popup,
+  onClose,
+}: {
+  popup: { id: number; line: string };
+  onClose: () => void;
+}) {
+  return (
+    <div className="karpindomo-popup" role="dialog" aria-label="Karpindomo">
+      <button
+        className="karpindomo-close"
+        onClick={onClose}
+        aria-label="Cerrar"
+        type="button"
+      >
+        ✕
+      </button>
+      <span className="karpindomo-avatar" aria-hidden="true">
+        🦜
+      </span>
+      <div className="karpindomo-content">
+        <strong>Karpindomo</strong>
+        <p>{popup.line}</p>
+      </div>
+    </div>
+  );
+}
+
 // Lista reutilizable de logs de raid (se usa en la tab Logs y en Raids).
 // Cada log es un acordeón: el detalle se expande solo al hacer click.
 function RaidLogsList({ logs }: { logs: RaidLog[] }) {
@@ -891,6 +928,10 @@ function App() {
   >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [karpindomoPopup, setKarpindomoPopup] = useState<{
+    id: number;
+    line: string;
+  } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
     null,
   );
@@ -906,6 +947,65 @@ function App() {
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 4000);
   }
+
+  // Popup random de Karpindomo: solo cuando hay sesión, con tiempo aleatorio
+  // y ~65% de probabilidad por ciclo (para que "no siempre" aparezca).
+  useEffect(() => {
+    if (!username) {
+      setKarpindomoPopup(null);
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let dismissId: ReturnType<typeof setTimeout> | undefined;
+
+    const appear = (): void => {
+      if (cancelled) {
+        return;
+      }
+      const line =
+        KARPINDOMO_LINES[
+          Math.floor(Math.random() * KARPINDOMO_LINES.length)
+        ] ?? KARPINDOMO_LINES[0];
+      setKarpindomoPopup({ id: Date.now(), line });
+      dismissId = setTimeout(() => {
+        if (!cancelled) {
+          setKarpindomoPopup(null);
+        }
+      }, 9_000);
+    };
+
+    const schedule = (first: boolean): void => {
+      if (cancelled) {
+        return;
+      }
+      const delay = first
+        ? 90_000 + Math.floor(Math.random() * 120_000) // 1.5m a 3.5m
+        : 60_000 + Math.floor(Math.random() * 240_000); // 1m a 5m
+      timeoutId = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+        if (Math.random() < 0.65) {
+          appear();
+        }
+        schedule(false);
+      }, delay);
+    };
+
+    schedule(true);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (dismissId) {
+        clearTimeout(dismissId);
+      }
+    };
+  }, [username]);
 
   const selectedGuild = useMemo(
     () => guilds.find((guild) => guild.id === selectedGuildId) ?? null,
@@ -2579,6 +2679,12 @@ function App() {
   return (
     <div className="app-shell">
       <ToastViewport toasts={toasts} />
+      {karpindomoPopup ? (
+        <KarpindomoPopup
+          popup={karpindomoPopup}
+          onClose={() => setKarpindomoPopup(null)}
+        />
+      ) : null}
       <header className="topbar">
         <div className="topbar-inner">
           <button
