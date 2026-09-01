@@ -753,6 +753,39 @@ function RefreshIcon() {
   );
 }
 
+function SunIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
 const PODIUM_TIERS = [
   { color: "#ffd700", label: "Oro" },
   { color: "#c0c0c0", label: "Plata" },
@@ -949,6 +982,15 @@ function App() {
     (CommunicationInput & { id: string | null }) | null
   >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
+  // Tema visual: oscuro por defecto, con persistencia en localStorage.
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try {
+      const stored = window.localStorage.getItem("bonafide-theme");
+      return stored === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [karpindomoMsg, setKarpindomoMsg] = useState(KARPINDOMO_LINES[0] ?? "");
   const [karpindomoOpen, setKarpindomoOpen] = useState(false);
@@ -1091,6 +1133,16 @@ function App() {
   useEffect(() => {
     void refreshSession();
   }, []);
+
+  // Aplica el tema elegido al documento y lo persiste.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      window.localStorage.setItem("bonafide-theme", theme);
+    } catch {
+      // Almacenamiento no disponible: el tema solo vale para esta sesión.
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (!selectedGuildId) {
@@ -2751,6 +2803,21 @@ function App() {
                 />
               ) : null}
               {username}
+            </button>
+            <button
+              className="theme-toggle"
+              onClick={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
+              type="button"
+              title={
+                theme === "dark"
+                  ? "Cambiar a tema claro"
+                  : "Cambiar a tema oscuro"
+              }
+              aria-label="Cambiar tema"
+            >
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
             </button>
             <button
               className="logout-button"

@@ -399,6 +399,32 @@ a:hover {
   cursor: not-allowed;
 }
 
+/* Botón de tema (sol/luna) junto al perfil */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(134, 158, 214, 0.3);
+  background: rgba(12, 19, 37, 0.55);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  border-color: rgba(106, 168, 255, 0.6);
+  color: var(--accent);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
 .page {
   max-width: 1320px;
   margin: 0 auto;
@@ -3104,4 +3130,199 @@ input {
   .staff-tier-select {
     width: 100%;
   }
+}
+
+/* ============================================================
+   Tema claro (light mode)
+   Se activa con data-theme="light" en <html>.
+   ============================================================ */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-1: #e9eff8;
+  --bg-2: #dbe6f4;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-border: rgba(60, 85, 130, 0.26);
+  --text: #18233b;
+  --muted: #4f5f7d;
+  --accent: #2f6bff;
+  --accent-strong: #d95a1e;
+  --danger: #c0392e;
+  /* Superficies claras reutilizables */
+  --surface-card: rgba(255, 255, 255, 0.8);
+  --surface-input: rgba(244, 248, 253, 0.95);
+}
+
+/* Barra superior */
+:root[data-theme="light"] .topbar {
+  background: rgba(255, 255, 255, 0.82);
+  border-bottom-color: rgba(60, 85, 130, 0.22);
+}
+
+:root[data-theme="light"] .theme-toggle {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(60, 85, 130, 0.3);
+}
+
+/* Chip de usuario: fondo claro y texto oscuro según el rango */
+:root[data-theme="light"] .user-chip {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(60, 85, 130, 0.3);
+}
+
+:root[data-theme="light"] .user-chip-link {
+  color: #4a2c18;
+}
+
+:root[data-theme="light"] .user-chip--admin {
+  color: #6b5500;
+}
+
+:root[data-theme="light"] .user-chip--officer {
+  color: #1c5c2a;
+}
+
+/* Tarjetas y filas con fondo oscuro -> claro */
+:root[data-theme="light"] .user-pill,
+:root[data-theme="light"] .xp-role-row,
+:root[data-theme="light"] .daily-message-row,
+:root[data-theme="light"] .raid-log-badge,
+:root[data-theme="light"] .raid-log-fight,
+:root[data-theme="light"] .raid-log-watcher,
+:root[data-theme="light"] .raid-logs-admin,
+:root[data-theme="light"] .profile-badge,
+:root[data-theme="light"] .profile-stat,
+:root[data-theme="light"] .profile-role,
+:root[data-theme="light"] .rr-panel-card,
+:root[data-theme="light"] .rr-job,
+:root[data-theme="light"] .audit-row,
+:root[data-theme="light"] .home-hero,
+:root[data-theme="light"] .podium-item,
+:root[data-theme="light"] .podium-tier,
+:root[data-theme="light"] .stat-tile,
+:root[data-theme="light"] .xp-remove-roles,
+:root[data-theme="light"] .rr-rule,
+:root[data-theme="light"] .rr-preview,
+:root[data-theme="light"] .admin-card-footer,
+:root[data-theme="light"] .module-toggle,
+:root[data-theme="light"] .suggestion-tier-chip,
+:root[data-theme="light"] .staff-role-editor,
+:root[data-theme="light"] .staff-hierarchy-tier {
+  background: var(--surface-card);
+}
+
+/* Jerarquía de staff: mantener el tinte de cada rango sobre fondo claro */
+:root[data-theme="light"] .staff-hierarchy-tier.owner {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 138, 92, 0.16),
+    var(--surface-card)
+  );
+}
+
+:root[data-theme="light"] .staff-hierarchy-tier.admin {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 215, 0, 0.14),
+    var(--surface-card)
+  );
+}
+
+:root[data-theme="light"] .staff-hierarchy-tier.officer {
+  background: linear-gradient(
+    160deg,
+    rgba(124, 227, 139, 0.1),
+    var(--surface-card)
+  );
+}
+
+/* Inputs y campos -> claros */
+:root[data-theme="light"] .select,
+:root[data-theme="light"] input,
+:root[data-theme="light"] .role-multiselect,
+:root[data-theme="light"] .xp-color-row input[type="color"],
+:root[data-theme="light"] .comm-form input,
+:root[data-theme="light"] .comm-form .select,
+:root[data-theme="light"] .comm-form .textarea,
+:root[data-theme="light"] .suggestions-field .textarea {
+  background: var(--surface-input);
+  color: var(--text);
+}
+
+/* Botones fantasma e iconos -> claros */
+:root[data-theme="light"] .icon-button,
+:root[data-theme="light"] .ghost-button {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(60, 85, 130, 0.28);
+}
+
+:root[data-theme="light"] .ghost-button:hover {
+  background: rgba(226, 234, 246, 0.95);
+}
+
+/* Comunicados: tarjeta y bloques admin */
+:root[data-theme="light"] .comunicado-card {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.85),
+    rgba(240, 245, 252, 0.92)
+  );
+}
+
+:root[data-theme="light"] .comunicado-admin-row,
+:root[data-theme="light"] .comunicado-admin-block {
+  background: rgba(255, 255, 255, 0.8);
+}
+
+:root[data-theme="light"] .comunicado-markdown pre {
+  background: rgba(233, 239, 248, 0.95);
+}
+
+/* Toasts */
+:root[data-theme="light"] .toast {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 40px rgba(30, 45, 80, 0.18);
+}
+
+/* Etiquetas de formulario (verde claro) -> más oscuras */
+:root[data-theme="light"] .form-grid label span,
+:root[data-theme="light"] .role-multiselect-field > span,
+:root[data-theme="light"] .comm-form label span,
+:root[data-theme="light"] .suggestions-field span,
+:root[data-theme="light"] .staff-role-picker > span {
+  color: #43516d;
+}
+
+/* Elementos "booster" (púrpura) -> tintes claros */
+:root[data-theme="light"] .booster-item {
+  background: rgba(244, 127, 255, 0.1);
+  border-color: rgba(244, 127, 255, 0.4);
+}
+
+:root[data-theme="light"] .booster-pill,
+:root[data-theme="light"] .boost-count-badge {
+  background: rgba(244, 127, 255, 0.14);
+  border-color: rgba(244, 127, 255, 0.5);
+  color: #9a3f9e;
+  text-shadow: none;
+}
+
+/* Nav Admin (naranja) más oscuro sobre fondo claro */
+:root[data-theme="light"] .nav-link--admin {
+  color: #b3541f;
+}
+
+:root[data-theme="light"] .nav-link--admin:hover {
+  color: #98441a;
+}
+
+:root[data-theme="light"] .nav-link--admin.active {
+  color: #6e2d0e;
+  background: rgba(255, 138, 92, 0.18);
+}
+
+/* Burbuja de Karpindomo: fondo con gradiente saturado -> texto blanco */
+:root[data-theme="light"] .karpindomo-bubble,
+:root[data-theme="light"] .karpindomo-bubble p {
+  color: #fff;
 }
