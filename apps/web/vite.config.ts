@@ -20,8 +20,8 @@ export default defineConfig(({ mode }) => {
     preview: {
       allowedHosts: [
         ".railway.app",
-        "bonafide.com",
-        ".bonafide.com",
+        "bonafide-cum.com",
+        ".bonafide-cum.com",
         "localhost",
         "127.0.0.1",
       ],
