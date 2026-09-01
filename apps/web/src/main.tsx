@@ -4265,7 +4265,8 @@ function App() {
                         </span>
                       </summary>
                       {xpConfig ? (
-                      <div className="admin-card-body">
+                        <>
+                          <div className="admin-card-body">
                         <div className="form-grid">
                           <label>
                             <span>XP por mensaje</span>
@@ -4645,6 +4646,7 @@ function App() {
                             : "Guardar configuración de XP"}
                         </button>
                       </div>
+                        </>
                       ) : (
                         <div className="admin-card-body">
                           <p className="admin-card-loading">
