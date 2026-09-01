@@ -238,39 +238,61 @@ function ToastViewport({ toasts }: { toasts: ToastItem[] }) {
   );
 }
 
-// Frases random de Karpindomo en el popup (humor "anuncios para adultos").
+// Frases random de Karpindomo en el widget flotante (humor "anuncios").
 const KARPINDOMO_LINES: string[] = [
   "Señor, hay karpinchos calientes en su zona",
   "Señor, encontré karpinchos dispuestos a farmear con usted",
-  "Señor, hay un karpincho soltero a 50 metros de su personaje",
-  "Señor, ¿le interesa un karpincho con doble specc?",
+  "Señor, hay un karpincho soltero a 50 metros de usted",
+  "Señor, ¿le interesa un karpincho con doble pinga?",
   "Señor, los karpinchos de su zona lo están esperando",
 ];
 
-function KarpindomoPopup({
-  popup,
+// Widget de Karpindomo: un botón flotante estilo burbuja de chat (como los
+// widgets de ayuda), que se abre con un mensaje random. No usa clases ni
+// layout de "popup", así los bloqueadores de publicidad no lo esconden.
+function KarpindomoWidget({
+  msg,
+  open,
+  onToggle,
   onClose,
 }: {
-  popup: { id: number; line: string };
+  msg: string;
+  open: boolean;
+  onToggle: () => void;
   onClose: () => void;
 }) {
   return (
-    <div className="karpindomo-popup" role="dialog" aria-label="Karpindomo">
+    <div className="karpindomo-widget">
+      {open ? (
+        <div
+          className="karpindomo-bubble"
+          role="dialog"
+          aria-label="Karpindomo"
+        >
+          <span className="karpindomo-bubble-tail" aria-hidden="true" />
+          <div className="karpindomo-bubble-head">
+            <strong>Karpindomo</strong>
+            <button
+              className="karpindomo-bubble-close"
+              onClick={onClose}
+              aria-label="Cerrar"
+              type="button"
+            >
+              ✕
+            </button>
+          </div>
+          <p>{msg}</p>
+        </div>
+      ) : null}
       <button
-        className="karpindomo-close"
-        onClick={onClose}
-        aria-label="Cerrar"
+        className={`karpindomo-fab${open ? " open" : ""}`}
+        onClick={onToggle}
+        aria-label="Karpindomo"
+        title="Karpindomo"
         type="button"
       >
-        ✕
-      </button>
-      <span className="karpindomo-avatar" aria-hidden="true">
         🦜
-      </span>
-      <div className="karpindomo-content">
-        <strong>Karpindomo</strong>
-        <p>{popup.line}</p>
-      </div>
+      </button>
     </div>
   );
 }
@@ -928,10 +950,8 @@ function App() {
   >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [karpindomoPopup, setKarpindomoPopup] = useState<{
-    id: number;
-    line: string;
-  } | null>(null);
+  const [karpindomoMsg, setKarpindomoMsg] = useState(KARPINDOMO_LINES[0] ?? "");
+  const [karpindomoOpen, setKarpindomoOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
     null,
   );
@@ -948,11 +968,11 @@ function App() {
     }, 4000);
   }
 
-  // Popup random de Karpindomo: solo cuando hay sesión, con tiempo aleatorio
-  // y ~65% de probabilidad por ciclo (para que "no siempre" aparezca).
+  // Karpindomo random: solo con sesión, tiempos aleatorios y ~65% de
+  // probabilidad por ciclo (para que "no siempre" aparezca).
   useEffect(() => {
     if (!username) {
-      setKarpindomoPopup(null);
+      setKarpindomoOpen(false);
       return;
     }
 
@@ -965,13 +985,13 @@ function App() {
         return;
       }
       const line =
-        KARPINDOMO_LINES[
-          Math.floor(Math.random() * KARPINDOMO_LINES.length)
-        ] ?? KARPINDOMO_LINES[0];
-      setKarpindomoPopup({ id: Date.now(), line });
+        KARPINDOMO_LINES[Math.floor(Math.random() * KARPINDOMO_LINES.length)] ??
+        KARPINDOMO_LINES[0];
+      setKarpindomoMsg(line);
+      setKarpindomoOpen(true);
       dismissId = setTimeout(() => {
         if (!cancelled) {
-          setKarpindomoPopup(null);
+          setKarpindomoOpen(false);
         }
       }, 9_000);
     };
@@ -2454,20 +2474,22 @@ function App() {
       listReactionRoleJobs(selectedGuildId),
       listDailyMessages(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, members, panels, emojis, jobs, daily]) => {
-        if (cancelled) {
-          return;
-        }
+      .then(
+        ([channels, textCh, roles, members, panels, emojis, jobs, daily]) => {
+          if (cancelled) {
+            return;
+          }
 
-        setVoiceChannels(channels);
-        setTextChannels(textCh);
-        setGuildRoles(roles);
-        setGuildMembers(members);
-        setReactionPanels(panels);
-        setGuildEmojis(emojis);
-        setRrJobs(jobs);
-        setDailyMessages(daily);
-      })
+          setVoiceChannels(channels);
+          setTextChannels(textCh);
+          setGuildRoles(roles);
+          setGuildMembers(members);
+          setReactionPanels(panels);
+          setGuildEmojis(emojis);
+          setRrJobs(jobs);
+          setDailyMessages(daily);
+        },
+      )
       .catch((error: unknown) => {
         if (!cancelled) {
           void error;
@@ -2679,10 +2701,12 @@ function App() {
   return (
     <div className="app-shell">
       <ToastViewport toasts={toasts} />
-      {karpindomoPopup ? (
-        <KarpindomoPopup
-          popup={karpindomoPopup}
-          onClose={() => setKarpindomoPopup(null)}
+      {username ? (
+        <KarpindomoWidget
+          msg={karpindomoMsg}
+          open={karpindomoOpen}
+          onToggle={() => setKarpindomoOpen((value) => !value)}
+          onClose={() => setKarpindomoOpen(false)}
         />
       ) : null}
       <header className="topbar">
@@ -3079,10 +3103,9 @@ function App() {
                             <div className="suggestion-tier-chips">
                               {(["owner", "admin", "officer"] as const).map(
                                 (tier) => {
-                                  const checked =
-                                    (config.suggestionsDmTiers ?? []).includes(
-                                      tier,
-                                    );
+                                  const checked = (
+                                    config.suggestionsDmTiers ?? []
+                                  ).includes(tier);
                                   const label =
                                     tier === "owner"
                                       ? "Owner"

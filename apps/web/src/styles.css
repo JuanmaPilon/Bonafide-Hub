@@ -1849,56 +1849,98 @@ a:hover {
   pointer-events: none;
 }
 
-/* Popup random de Karpindomo (humor "anuncios para adultos") */
-.karpindomo-popup {
+/* Widget de Karpindomo: botón flotante + burbuja de chat (estilo widget de
+   ayuda, que los bloqueadores de publicidad no esconden). */
+.karpindomo-widget {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 300;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 12px;
-  max-width: 320px;
-  padding: 14px 34px 14px 16px;
-  border-radius: 16px;
+}
+
+.karpindomo-fab {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  font-size: 1.7rem;
+  line-height: 1;
   background: linear-gradient(
     160deg,
-    rgba(54, 89, 185, 0.92),
-    rgba(223, 90, 61, 0.92)
+    rgba(54, 89, 185, 0.95),
+    rgba(223, 90, 61, 0.95)
+  );
+  border: 1px solid rgba(255, 180, 84, 0.6);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(2, 8, 13, 0.5);
+  transition: transform 160ms ease;
+  animation: karpindomo-fab-pulse 3s ease-in-out infinite;
+}
+
+.karpindomo-fab:hover {
+  transform: scale(1.06);
+}
+
+.karpindomo-fab.open {
+  animation: none;
+}
+
+.karpindomo-bubble {
+  position: relative;
+  max-width: 280px;
+  padding: 12px 14px;
+  border-radius: 16px 16px 4px 16px;
+  background: linear-gradient(
+    160deg,
+    rgba(54, 89, 185, 0.95),
+    rgba(223, 90, 61, 0.95)
   );
   border: 1px solid rgba(255, 180, 84, 0.6);
   color: var(--text);
   box-shadow: 0 18px 50px rgba(2, 8, 13, 0.55);
-  animation: karpindomo-in 260ms ease;
+  animation: karpindomo-in 200ms ease;
 }
 
-.karpindomo-avatar {
-  font-size: 1.8rem;
-  line-height: 1;
-  flex-shrink: 0;
+.karpindomo-bubble-tail {
+  position: absolute;
+  right: 14px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(
+    160deg,
+    rgba(54, 89, 185, 0.95),
+    rgba(223, 90, 61, 0.95)
+  );
+  border-right: 1px solid rgba(255, 180, 84, 0.6);
+  border-bottom: 1px solid rgba(255, 180, 84, 0.6);
+  transform: rotate(45deg);
 }
 
-.karpindomo-content {
-  display: grid;
-  gap: 4px;
+.karpindomo-bubble-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.karpindomo-content strong {
+.karpindomo-bubble-head strong {
   color: #ffd08f;
   font-size: 0.95rem;
 }
 
-.karpindomo-content p {
-  margin: 0;
+.karpindomo-bubble p {
+  margin: 6px 0 0;
   color: var(--text);
   font-size: 0.88rem;
   line-height: 1.45;
 }
 
-.karpindomo-close {
-  position: absolute;
-  top: 6px;
-  right: 8px;
+.karpindomo-bubble-close {
   background: transparent;
   border: none;
   color: rgba(237, 242, 255, 0.7);
@@ -1908,7 +1950,7 @@ a:hover {
   padding: 4px;
 }
 
-.karpindomo-close:hover {
+.karpindomo-bubble-close:hover {
   color: #fff;
 }
 
@@ -1924,11 +1966,23 @@ a:hover {
   }
 }
 
+@keyframes karpindomo-fab-pulse {
+  0%,
+  100% {
+    box-shadow: 0 8px 24px rgba(2, 8, 13, 0.5);
+  }
+
+  50% {
+    box-shadow:
+      0 8px 24px rgba(2, 8, 13, 0.5),
+      0 0 0 8px rgba(255, 180, 84, 0.12);
+  }
+}
+
 @media (max-width: 640px) {
-  .karpindomo-popup {
+  .karpindomo-widget {
     right: 12px;
-    left: 12px;
-    max-width: none;
+    bottom: 12px;
   }
 }
 
