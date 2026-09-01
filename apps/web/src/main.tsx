@@ -1103,8 +1103,13 @@ function App() {
       getGuildConfig(selectedGuildId),
       getGuildWidgetStatus(selectedGuildId),
       getLeaderboard(selectedGuildId),
+      // La config de XP se carga junto con el leaderboard para que los
+      // colores por nivel estén listos al primer render (evita el flash de
+      // nombres blancos al entrar al Dashboard). Un fallo acá no rompe el
+      // resto de la carga.
+      getXpConfig(selectedGuildId).catch(() => null),
     ])
-      .then(([nextConfig, nextWidgetStatus, nextLeaderboard]) => {
+      .then(([nextConfig, nextWidgetStatus, nextLeaderboard, nextXpConfig]) => {
         if (cancelled) {
           return;
         }
@@ -1112,6 +1117,7 @@ function App() {
         setConfig(nextConfig);
         setWidgetStatus(nextWidgetStatus);
         setLeaderboard(nextLeaderboard);
+        setXpConfig(nextXpConfig);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -2532,33 +2538,6 @@ function App() {
   }, [activeTab, selectedGuildId]);
 
   useEffect(() => {
-    if (
-      !selectedGuildId ||
-      (activeTab !== "admin" && activeTab !== "dashboard")
-    ) {
-      setXpConfig(null);
-      return;
-    }
-
-    let cancelled = false;
-    getXpConfig(selectedGuildId)
-      .then((xp) => {
-        if (!cancelled) {
-          setXpConfig(xp);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setXpConfig(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, selectedGuildId]);
-
-  useEffect(() => {
     if (activeTab !== "home" || !selectedGuildId) {
       setBoosters([]);
       return;
@@ -3187,7 +3166,6 @@ function App() {
                               >
                                 <span className="module-toggle-text">
                                   <strong>{mod.label}</strong>
-                                  <small>{mod.description}</small>
                                 </span>
                                 <span className="module-switch">
                                   <input
@@ -4267,385 +4245,387 @@ function App() {
                       {xpConfig ? (
                         <>
                           <div className="admin-card-body">
-                        <div className="form-grid">
-                          <label>
-                            <span>XP por mensaje</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={xpConfig.messageXp}
-                              onChange={(event) =>
-                                setXpConfig((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        messageXp:
-                                          Number(event.target.value) || 0,
-                                      }
-                                    : current,
-                                )
-                              }
-                            />
-                          </label>
-
-                          <label>
-                            <span>XP por minuto en voz</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={xpConfig.voiceXpPerMinute}
-                              onChange={(event) =>
-                                setXpConfig((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        voiceXpPerMinute:
-                                          Number(event.target.value) || 0,
-                                      }
-                                    : current,
-                                )
-                              }
-                            />
-                          </label>
-
-                          <label>
-                            <span>Cooldown anti-spam (segundos)</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={xpConfig.cooldownSeconds}
-                              onChange={(event) =>
-                                setXpConfig((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        cooldownSeconds:
-                                          Number(event.target.value) || 0,
-                                      }
-                                    : current,
-                                )
-                              }
-                            />
-                          </label>
-
-                          <label>
-                            <span>XP base por nivel</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={xpConfig.levelBaseXp}
-                              onChange={(event) =>
-                                setXpConfig((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        levelBaseXp:
-                                          Number(event.target.value) || 0,
-                                      }
-                                    : current,
-                                )
-                              }
-                            />
-                          </label>
-
-                          <label>
-                            <span>Cap de nivel (0 = sin límite)</span>
-                            <input
-                              type="number"
-                              min="0"
-                              value={xpConfig.maxLevel}
-                              onChange={(event) =>
-                                setXpConfig((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        maxLevel:
-                                          Math.max(
-                                            0,
-                                            Number(event.target.value),
-                                          ) || 0,
-                                      }
-                                    : current,
-                                )
-                              }
-                            />
-                          </label>
-                        </div>
-
-                        <h4>Roles por nivel</h4>
-                        <div className="xp-roles">
-                          {xpConfig.levelRoles.length === 0 ? (
-                            <div className="empty-state">
-                              Aún no hay roles por nivel configurados.
-                            </div>
-                          ) : (
-                            xpConfig.levelRoles.map((rule, index) => (
-                              <div className="xp-role-row" key={index}>
-                                <label className="xp-role-level-input">
-                                  <span>Nivel</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={rule.level}
-                                    onChange={(event) =>
-                                      changeXpRoleLevel(
-                                        rule.level,
-                                        Number(event.target.value),
-                                      )
-                                    }
-                                  />
-                                </label>
-                                <select
-                                  className="select"
-                                  value={rule.roleId}
+                            <div className="form-grid">
+                              <label>
+                                <span>XP por mensaje</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={xpConfig.messageXp}
                                   onChange={(event) =>
-                                    updateXpRole(rule.level, {
-                                      roleId: event.target.value,
-                                    })
+                                    setXpConfig((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            messageXp:
+                                              Number(event.target.value) || 0,
+                                          }
+                                        : current,
+                                    )
                                   }
-                                >
-                                  <option value="">Sin rol</option>
-                                  {guildRoles.map((role) => (
-                                    <option key={role.id} value={role.id}>
-                                      {role.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <label className="xp-nickname-prefix">
-                                  <span>Prefijo de nombre</span>
-                                  <input
-                                    type="text"
-                                    maxLength={8}
-                                    placeholder="🔵"
-                                    value={rule.nicknamePrefix ?? ""}
-                                    onChange={(event) =>
-                                      updateXpRole(rule.level, {
-                                        nicknamePrefix: event.target.value,
-                                      })
-                                    }
-                                  />
-                                </label>
-                                <label className="xp-color-input">
-                                  <span>Color (nivel/nombre)</span>
-                                  <span className="xp-color-row">
-                                    <input
-                                      type="color"
-                                      value={rule.color ?? "#6aa8ff"}
+                                />
+                              </label>
+
+                              <label>
+                                <span>XP por minuto en voz</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={xpConfig.voiceXpPerMinute}
+                                  onChange={(event) =>
+                                    setXpConfig((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            voiceXpPerMinute:
+                                              Number(event.target.value) || 0,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                />
+                              </label>
+
+                              <label>
+                                <span>Cooldown anti-spam (segundos)</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={xpConfig.cooldownSeconds}
+                                  onChange={(event) =>
+                                    setXpConfig((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            cooldownSeconds:
+                                              Number(event.target.value) || 0,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                />
+                              </label>
+
+                              <label>
+                                <span>XP base por nivel</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={xpConfig.levelBaseXp}
+                                  onChange={(event) =>
+                                    setXpConfig((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            levelBaseXp:
+                                              Number(event.target.value) || 0,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                />
+                              </label>
+
+                              <label>
+                                <span>Cap de nivel (0 = sin límite)</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={xpConfig.maxLevel}
+                                  onChange={(event) =>
+                                    setXpConfig((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            maxLevel:
+                                              Math.max(
+                                                0,
+                                                Number(event.target.value),
+                                              ) || 0,
+                                          }
+                                        : current,
+                                    )
+                                  }
+                                />
+                              </label>
+                            </div>
+
+                            <h4>Roles por nivel</h4>
+                            <div className="xp-roles">
+                              {xpConfig.levelRoles.length === 0 ? (
+                                <div className="empty-state">
+                                  Aún no hay roles por nivel configurados.
+                                </div>
+                              ) : (
+                                xpConfig.levelRoles.map((rule, index) => (
+                                  <div className="xp-role-row" key={index}>
+                                    <label className="xp-role-level-input">
+                                      <span>Nivel</span>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={rule.level}
+                                        onChange={(event) =>
+                                          changeXpRoleLevel(
+                                            rule.level,
+                                            Number(event.target.value),
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    <select
+                                      className="select"
+                                      value={rule.roleId}
                                       onChange={(event) =>
                                         updateXpRole(rule.level, {
-                                          color: event.target.value,
+                                          roleId: event.target.value,
                                         })
                                       }
-                                    />
-                                    {rule.color ? (
+                                    >
+                                      <option value="">Sin rol</option>
+                                      {guildRoles.map((role) => (
+                                        <option key={role.id} value={role.id}>
+                                          {role.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <label className="xp-nickname-prefix">
+                                      <span>Prefijo de nombre</span>
+                                      <input
+                                        type="text"
+                                        maxLength={8}
+                                        placeholder="🔵"
+                                        value={rule.nicknamePrefix ?? ""}
+                                        onChange={(event) =>
+                                          updateXpRole(rule.level, {
+                                            nicknamePrefix: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <label className="xp-color-input">
+                                      <span>Color (nivel/nombre)</span>
+                                      <span className="xp-color-row">
+                                        <input
+                                          type="color"
+                                          value={rule.color ?? "#6aa8ff"}
+                                          onChange={(event) =>
+                                            updateXpRole(rule.level, {
+                                              color: event.target.value,
+                                            })
+                                          }
+                                        />
+                                        {rule.color ? (
+                                          <button
+                                            type="button"
+                                            className="ghost-button small"
+                                            onClick={() =>
+                                              updateXpRole(rule.level, {
+                                                color: undefined,
+                                              })
+                                            }
+                                          >
+                                            Quitar
+                                          </button>
+                                        ) : null}
+                                      </span>
+                                    </label>
+                                    <div
+                                      className="xp-mode-toggle"
+                                      title="Comportamiento al alcanzar este nivel"
+                                    >
                                       <button
                                         type="button"
-                                        className="ghost-button small"
+                                        className={
+                                          rule.stacking !== "replace"
+                                            ? "active"
+                                            : ""
+                                        }
                                         onClick={() =>
                                           updateXpRole(rule.level, {
-                                            color: undefined,
+                                            stacking: "stack",
                                           })
                                         }
                                       >
-                                        Quitar
+                                        Acumular
                                       </button>
-                                    ) : null}
-                                  </span>
-                                </label>
-                                <div
-                                  className="xp-mode-toggle"
-                                  title="Comportamiento al alcanzar este nivel"
-                                >
-                                  <button
-                                    type="button"
-                                    className={
-                                      rule.stacking !== "replace"
-                                        ? "active"
-                                        : ""
-                                    }
-                                    onClick={() =>
-                                      updateXpRole(rule.level, {
-                                        stacking: "stack",
-                                      })
-                                    }
-                                  >
-                                    Acumular
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={
-                                      rule.stacking === "replace"
-                                        ? "active"
-                                        : ""
-                                    }
-                                    onClick={() =>
-                                      updateXpRole(rule.level, {
-                                        stacking: "replace",
-                                      })
-                                    }
-                                  >
-                                    Reemplazar
-                                  </button>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="ghost-button xp-remove-trigger"
-                                  onClick={() =>
-                                    setRoleModal({
-                                      kind: "add",
-                                      level: rule.level,
-                                    })
-                                  }
-                                >
-                                  Dar roles extra ({rule.addRoleIds.length})
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ghost-button xp-remove-trigger"
-                                  onClick={() =>
-                                    setRoleModal({
-                                      kind: "remove",
-                                      level: rule.level,
-                                    })
-                                  }
-                                >
-                                  Quitar roles extra (
-                                  {rule.removeRoleIds.length})
-                                </button>
-                                <button
-                                  className="ghost-button danger"
-                                  onClick={() => removeXpRole(rule.level)}
-                                  type="button"
-                                >
-                                  Borrar
-                                </button>
-                              </div>
-                            ))
-                          )}
+                                      <button
+                                        type="button"
+                                        className={
+                                          rule.stacking === "replace"
+                                            ? "active"
+                                            : ""
+                                        }
+                                        onClick={() =>
+                                          updateXpRole(rule.level, {
+                                            stacking: "replace",
+                                          })
+                                        }
+                                      >
+                                        Reemplazar
+                                      </button>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="ghost-button xp-remove-trigger"
+                                      onClick={() =>
+                                        setRoleModal({
+                                          kind: "add",
+                                          level: rule.level,
+                                        })
+                                      }
+                                    >
+                                      Dar roles extra ({rule.addRoleIds.length})
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="ghost-button xp-remove-trigger"
+                                      onClick={() =>
+                                        setRoleModal({
+                                          kind: "remove",
+                                          level: rule.level,
+                                        })
+                                      }
+                                    >
+                                      Quitar roles extra (
+                                      {rule.removeRoleIds.length})
+                                    </button>
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() => removeXpRole(rule.level)}
+                                      type="button"
+                                    >
+                                      Borrar
+                                    </button>
+                                  </div>
+                                ))
+                              )}
 
-                          <button
-                            className="ghost-button"
-                            onClick={addXpRole}
-                            type="button"
-                          >
-                            + Agregar rol de nivel
-                          </button>
-                        </div>
-
-                        <h4>Multiplicadores de XP por rol</h4>
-                        <div className="xp-roles">
-                          {xpConfig.roleMultipliers.length === 0 ? (
-                            <div className="empty-state">
-                              Aún no hay roles con multiplicador de XP.
-                            </div>
-                          ) : (
-                            xpConfig.roleMultipliers.map((entry) => (
-                              <div
-                                className="xp-role-row xp-multiplier-row"
-                                key={entry.roleId}
+                              <button
+                                className="ghost-button"
+                                onClick={addXpRole}
+                                type="button"
                               >
-                                <select
-                                  className="select"
-                                  value={entry.roleId}
-                                  onChange={(event) =>
-                                    updateXpMultiplier(entry.roleId, {
-                                      roleId: event.target.value,
-                                    })
-                                  }
-                                >
-                                  <option value="">Sin rol</option>
-                                  {guildRoles.map((role) => (
-                                    <option key={role.id} value={role.id}>
-                                      {role.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <label className="xp-multiplier">
-                                  <span>Multiplicador (x)</span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    step="0.5"
-                                    value={entry.multiplier}
-                                    onChange={(event) =>
-                                      updateXpMultiplier(entry.roleId, {
-                                        multiplier:
-                                          Number(event.target.value) || 1,
-                                      })
-                                    }
-                                  />
-                                </label>
-                                <button
-                                  className="ghost-button danger"
-                                  onClick={() =>
-                                    removeXpMultiplier(entry.roleId)
-                                  }
-                                  type="button"
-                                >
-                                  Borrar
-                                </button>
-                              </div>
-                            ))
-                          )}
+                                + Agregar rol de nivel
+                              </button>
+                            </div>
 
-                          <button
-                            className="ghost-button"
-                            onClick={addXpMultiplier}
-                            type="button"
-                          >
-                            + Agregar multiplicador
-                          </button>
-                        </div>
+                            <h4>Multiplicadores de XP por rol</h4>
+                            <div className="xp-roles">
+                              {xpConfig.roleMultipliers.length === 0 ? (
+                                <div className="empty-state">
+                                  Aún no hay roles con multiplicador de XP.
+                                </div>
+                              ) : (
+                                xpConfig.roleMultipliers.map((entry) => (
+                                  <div
+                                    className="xp-role-row xp-multiplier-row"
+                                    key={entry.roleId}
+                                  >
+                                    <select
+                                      className="select"
+                                      value={entry.roleId}
+                                      onChange={(event) =>
+                                        updateXpMultiplier(entry.roleId, {
+                                          roleId: event.target.value,
+                                        })
+                                      }
+                                    >
+                                      <option value="">Sin rol</option>
+                                      {guildRoles.map((role) => (
+                                        <option key={role.id} value={role.id}>
+                                          {role.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <label className="xp-multiplier">
+                                      <span>Multiplicador (x)</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        step="0.5"
+                                        value={entry.multiplier}
+                                        onChange={(event) =>
+                                          updateXpMultiplier(entry.roleId, {
+                                            multiplier:
+                                              Number(event.target.value) || 1,
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() =>
+                                        removeXpMultiplier(entry.roleId)
+                                      }
+                                      type="button"
+                                    >
+                                      Borrar
+                                    </button>
+                                  </div>
+                                ))
+                              )}
 
-                        <div className="import-export">
-                          <button
-                            className="ghost-button"
-                            onClick={() => void handleExportXp()}
-                            type="button"
-                          >
-                            Exportar XP
-                          </button>
-                          <button
-                            className="ghost-button"
-                            onClick={() => importFileRef.current?.click()}
-                            type="button"
-                          >
-                            Importar XP
-                          </button>
-                          <input
-                            ref={importFileRef}
-                            type="file"
-                            accept="application/json,.json"
-                            hidden
-                            onChange={(event) => void handleImportXpFile(event)}
-                          />
-                          <button
-                            className="ghost-button"
-                            onClick={requestSyncRoles}
-                            type="button"
-                          >
-                            Re-sincronizar roles
-                          </button>
-                          <button
-                            className="ghost-button danger"
-                            onClick={requestResetAllXp}
-                            type="button"
-                          >
-                            Resetear niveles de todos
-                          </button>
-                        </div>
-                      </div>
-                      <div className="admin-card-footer">
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveXp()}
-                          disabled={savingAction !== null}
-                        >
-                          {savingAction === "xp"
-                            ? "Guardando…"
-                            : "Guardar configuración de XP"}
-                        </button>
-                      </div>
+                              <button
+                                className="ghost-button"
+                                onClick={addXpMultiplier}
+                                type="button"
+                              >
+                                + Agregar multiplicador
+                              </button>
+                            </div>
+
+                            <div className="import-export">
+                              <button
+                                className="ghost-button"
+                                onClick={() => void handleExportXp()}
+                                type="button"
+                              >
+                                Exportar XP
+                              </button>
+                              <button
+                                className="ghost-button"
+                                onClick={() => importFileRef.current?.click()}
+                                type="button"
+                              >
+                                Importar XP
+                              </button>
+                              <input
+                                ref={importFileRef}
+                                type="file"
+                                accept="application/json,.json"
+                                hidden
+                                onChange={(event) =>
+                                  void handleImportXpFile(event)
+                                }
+                              />
+                              <button
+                                className="ghost-button"
+                                onClick={requestSyncRoles}
+                                type="button"
+                              >
+                                Re-sincronizar roles
+                              </button>
+                              <button
+                                className="ghost-button danger"
+                                onClick={requestResetAllXp}
+                                type="button"
+                              >
+                                Resetear niveles de todos
+                              </button>
+                            </div>
+                          </div>
+                          <div className="admin-card-footer">
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleSaveXp()}
+                              disabled={savingAction !== null}
+                            >
+                              {savingAction === "xp"
+                                ? "Guardando…"
+                                : "Guardar configuración de XP"}
+                            </button>
+                          </div>
                         </>
                       ) : (
                         <div className="admin-card-body">
