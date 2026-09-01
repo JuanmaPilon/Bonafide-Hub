@@ -253,6 +253,23 @@ a:hover {
   color: var(--text);
 }
 
+/* La tab Admin es especial: siempre resaltada en naranja (rango owner). */
+.nav-link--admin {
+  border-color: rgba(255, 138, 92, 0.5);
+  color: #ffb28f;
+}
+
+.nav-link--admin:hover {
+  color: #ffc4ab;
+}
+
+.nav-link--admin.active {
+  background: rgba(255, 138, 92, 0.2);
+  border-color: rgba(255, 138, 92, 0.8);
+  color: #ffe3cf;
+  box-shadow: 0 0 14px rgba(255, 138, 92, 0.25);
+}
+
 .topbar-user {
   display: flex;
   align-items: center;
@@ -311,6 +328,52 @@ a:hover {
   box-shadow:
     0 0 16px rgba(255, 138, 92, 0.4),
     inset 0 0 0 1px rgba(106, 168, 255, 0.2);
+}
+
+/* Chip de usuario según el rango: Owner (naranja), Admin (dorado),
+   Officer (verde). Sin rango queda con el estilo base. */
+.user-chip--owner {
+  border-color: rgba(255, 138, 92, 0.75);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 138, 92, 0.3),
+    rgba(255, 138, 92, 0.1)
+  );
+  box-shadow: 0 0 14px rgba(255, 138, 92, 0.28);
+}
+
+.user-chip--owner .user-chip-avatar {
+  border-color: rgba(255, 138, 92, 0.85);
+}
+
+.user-chip--admin {
+  border-color: rgba(255, 215, 0, 0.6);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 215, 0, 0.18),
+    rgba(255, 215, 0, 0.06)
+  );
+  color: #fff3c9;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+}
+
+.user-chip--admin .user-chip-avatar {
+  border-color: rgba(255, 215, 0, 0.7);
+}
+
+.user-chip--officer {
+  border-color: rgba(124, 227, 139, 0.6);
+  background: linear-gradient(
+    160deg,
+    rgba(124, 227, 139, 0.18),
+    rgba(124, 227, 139, 0.06)
+  );
+  color: #d6ffd9;
+  box-shadow: 0 0 12px rgba(124, 227, 139, 0.2);
+}
+
+.user-chip--officer .user-chip-avatar {
+  border-color: rgba(124, 227, 139, 0.7);
 }
 
 /* Botón Salir: rojo con texto blanco (indica salida) */

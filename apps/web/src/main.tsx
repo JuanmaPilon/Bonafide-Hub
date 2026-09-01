@@ -918,6 +918,11 @@ function App() {
   const canAccess = (module: string): boolean =>
     isAdminOwner || adminAccessModules.includes(module);
 
+  // Rango efectivo del usuario logueado, para el chip (owner/admin/officer).
+  const myTier: "owner" | "admin" | "officer" | null = isAdminOwner
+    ? "owner"
+    : tierForModules(adminAccessModules);
+
   // Roles asignados a cada rango, para la vista por jerarquía.
   const staffByTier: Record<"admin" | "officer", string[]> = {
     admin: [],
@@ -2589,7 +2594,7 @@ function App() {
             {visibleTabs.map((tab) => (
               <button
                 key={tab}
-                className={`nav-link ${activeTab === tab ? "active" : ""}`}
+                className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
                 onClick={() => setActiveTab(tab)}
                 type="button"
               >
@@ -2616,7 +2621,7 @@ function App() {
               </select>
             ) : null}
             <button
-              className="user-chip user-chip-link"
+              className={`user-chip user-chip-link${myTier ? ` user-chip--${myTier}` : ""}`}
               onClick={() => setActiveTab("perfil")}
               type="button"
               title="Ver mi perfil"
