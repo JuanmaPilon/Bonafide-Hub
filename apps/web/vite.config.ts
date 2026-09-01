@@ -18,7 +18,13 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
-      allowedHosts: [".railway.app", "localhost", "127.0.0.1"],
+      allowedHosts: [
+        ".railway.app",
+        "bonafide.com",
+        ".bonafide.com",
+        "localhost",
+        "127.0.0.1",
+      ],
       proxy: {
         "/api": {
           changeOrigin: true,
