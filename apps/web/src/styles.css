@@ -1866,8 +1866,8 @@ a:hover {
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  font-size: 1.7rem;
-  line-height: 1;
+  padding: 0;
+  overflow: hidden;
   background: linear-gradient(
     160deg,
     rgba(54, 89, 185, 0.95),
@@ -1879,6 +1879,14 @@ a:hover {
   box-shadow: 0 8px 24px rgba(2, 8, 13, 0.5);
   transition: transform 160ms ease;
   animation: karpindomo-fab-pulse 3s ease-in-out infinite;
+}
+
+.karpindomo-fab-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .karpindomo-fab:hover {

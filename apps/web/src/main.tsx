@@ -291,7 +291,11 @@ function KarpindomoWidget({
         title="Karpindomo"
         type="button"
       >
-        🦜
+        <img
+          className="karpindomo-fab-icon"
+          src="/karpindomo.png"
+          alt=""
+        />
       </button>
     </div>
   );
