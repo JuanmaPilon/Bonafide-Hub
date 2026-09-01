@@ -968,8 +968,8 @@ function App() {
     }, 4000);
   }
 
-  // Karpindomo random: solo con sesión, tiempos aleatorios y ~65% de
-  // probabilidad por ciclo (para que "no siempre" aparezca).
+  // Karpindomo random: solo con sesión. La primera vez aparece sí o sí al
+  // poco de entrar; después sigue apareciendo solo con tiempos aleatorios.
   useEffect(() => {
     if (!username) {
       setKarpindomoOpen(false);
@@ -1001,13 +1001,14 @@ function App() {
         return;
       }
       const delay = first
-        ? 90_000 + Math.floor(Math.random() * 120_000) // 1.5m a 3.5m
-        : 60_000 + Math.floor(Math.random() * 240_000); // 1m a 5m
+        ? 15_000 + Math.floor(Math.random() * 30_000) // 15s a 45s
+        : 45_000 + Math.floor(Math.random() * 180_000); // 45s a 3m45s
       timeoutId = setTimeout(() => {
         if (cancelled) {
           return;
         }
-        if (Math.random() < 0.65) {
+        // La primera vez aparece siempre; después ~70% por ciclo.
+        if (first || Math.random() < 0.7) {
           appear();
         }
         schedule(false);
