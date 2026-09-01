@@ -18,6 +18,7 @@ import {
   getGuildBoosters,
   getGuildConfig,
   getGuildEmojis,
+  getGuildMembers,
   getGuildRoles,
   getGuilds,
   getGuildTextChannels,
@@ -59,6 +60,7 @@ import {
   type GuildChannel,
   type GuildConfig,
   type GuildEmoji,
+  type GuildMember,
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
@@ -843,6 +845,7 @@ function App() {
   const [voiceChannels, setVoiceChannels] = useState<GuildChannel[]>([]);
   const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
+  const [guildMembers, setGuildMembers] = useState<GuildMember[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
   const [reactionPanels, setReactionPanels] = useState<ReactionRolePanel[]>([]);
   const [rrChannelId, setRrChannelId] = useState("");
@@ -2331,6 +2334,7 @@ function App() {
       setVoiceChannels([]);
       setTextChannels([]);
       setGuildRoles([]);
+      setGuildMembers([]);
       setReactionPanels([]);
       setGuildEmojis([]);
       setRrJobs([]);
@@ -2344,12 +2348,13 @@ function App() {
       getGuildVoiceChannels(selectedGuildId),
       getGuildTextChannels(selectedGuildId),
       getGuildRoles(selectedGuildId),
+      getGuildMembers(selectedGuildId),
       listReactionRolePanels(selectedGuildId),
       getGuildEmojis(selectedGuildId),
       listReactionRoleJobs(selectedGuildId),
       listDailyMessages(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, panels, emojis, jobs, daily]) => {
+      .then(([channels, textCh, roles, members, panels, emojis, jobs, daily]) => {
         if (cancelled) {
           return;
         }
@@ -2357,6 +2362,7 @@ function App() {
         setVoiceChannels(channels);
         setTextChannels(textCh);
         setGuildRoles(roles);
+        setGuildMembers(members);
         setReactionPanels(panels);
         setGuildEmojis(emojis);
         setRrJobs(jobs);
@@ -2368,6 +2374,7 @@ function App() {
           setVoiceChannels([]);
           setTextChannels([]);
           setGuildRoles([]);
+          setGuildMembers([]);
           setReactionPanels([]);
           setGuildEmojis([]);
           setRrJobs([]);
@@ -2940,23 +2947,78 @@ function App() {
                           </label>
 
                           <label>
-                            <span>
-                              ID que recibe las sugerencias (opcional)
-                            </span>
-                            <input
-                              className="input"
+                            <span>Recibe las sugerencias (persona)</span>
+                            <select
+                              className="select select-inline"
                               value={config.suggestionsDmUserId ?? ""}
                               onChange={(event) =>
                                 setConfig((current) => ({
                                   ...current,
                                   suggestionsDmUserId:
-                                    event.target.value.trim() || undefined,
+                                    event.target.value || undefined,
                                 }))
                               }
-                              placeholder="Vacío = dueño del servidor"
-                              maxLength={32}
-                            />
+                            >
+                              <option value="">Nadie en particular</option>
+                              {guildMembers.map((member) => (
+                                <option key={member.id} value={member.id}>
+                                  {member.displayName}
+                                </option>
+                              ))}
+                            </select>
                           </label>
+
+                          <label>
+                            <span>Recibe las sugerencias (por rango)</span>
+                            <div className="suggestion-tier-chips">
+                              {(["owner", "admin", "officer"] as const).map(
+                                (tier) => {
+                                  const checked =
+                                    (config.suggestionsDmTiers ?? []).includes(
+                                      tier,
+                                    );
+                                  const label =
+                                    tier === "owner"
+                                      ? "Owner"
+                                      : tier === "admin"
+                                        ? "Admin"
+                                        : "Officer";
+                                  return (
+                                    <label
+                                      className={`suggestion-tier-chip${checked ? " checked" : ""}`}
+                                      key={tier}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() =>
+                                          setConfig((current) => {
+                                            const tiers = new Set(
+                                              current.suggestionsDmTiers ?? [],
+                                            );
+                                            if (checked) {
+                                              tiers.delete(tier);
+                                            } else {
+                                              tiers.add(tier);
+                                            }
+                                            return {
+                                              ...current,
+                                              suggestionsDmTiers: [...tiers],
+                                            };
+                                          })
+                                        }
+                                      />
+                                      <span>{label}</span>
+                                    </label>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </label>
+                          <p className="suggestion-recipient-hint">
+                            Si no se elige nada, las sugerencias van al dueño
+                            del servidor.
+                          </p>
                         </div>
                       </div>
                       <div className="admin-card-footer">

@@ -32,6 +32,7 @@ export type GuildConfig = {
   musicRoleIds?: string[];
   reactionRolesChannelId?: string;
   suggestionsDmUserId?: string;
+  suggestionsDmTiers?: string[];
 };
 
 export type DailyMessage = {
@@ -332,6 +333,25 @@ export async function getGuildRoles(guildId: string): Promise<GuildRole[]> {
   );
 
   return data.roles;
+}
+
+export type GuildMember = {
+  displayName: string;
+  id: string;
+  username: string;
+};
+
+export async function getGuildMembers(
+  guildId: string,
+): Promise<GuildMember[]> {
+  const data = await requestJson<{ members: GuildMember[] }>(
+    `/guilds/${guildId}/members`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.members;
 }
 
 export async function getXpConfig(guildId: string): Promise<XpConfig> {

@@ -115,6 +115,14 @@ type DiscordGuildWidgetResponse = {
   presence_count?: number;
 };
 
+// Módulos por rango de staff. Deben coincidir con STAFF_TIERS de la web
+// para poder resolver, a partir de adminRoleModules, qué roles tienen cada
+// rango (usado para saber quién recibe las sugerencias).
+const STAFF_TIER_MODULES: Record<"admin" | "officer", string[]> = {
+  admin: ["config", "comunicados", "raids", "daily", "reaction", "xp"],
+  officer: ["comunicados", "raids", "daily", "reaction"],
+};
+
 // Fetch a Discord con reintento ante rate limits (429). Discord manda el
 // header retry-after; si no viene, usamos un backoff simple. Así un 429
 // transitorio (común con IPs compartidas de Railway) no rompe el login ni
@@ -1399,6 +1407,79 @@ export function buildApp() {
       guildId: params.guildId,
       textChannels,
       voiceChannels,
+    };
+  });
+
+  // Lista de miembros (id + nombre) para pickers del panel Admin.
+  app.get("/guilds/:guildId/members", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await hasAnyStaffAccess(session, params.guildId))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (!env.DISCORD_BOT_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "DISCORD_BOT_TOKEN is not configured",
+      });
+    }
+
+    const membersResponse = await fetchWithDiscordRetry(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/members?limit=1000`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    );
+    if (!membersResponse.ok) {
+      return reply.code(502).send({
+        ok: false,
+        error: `Discord API returned ${membersResponse.status}`,
+      });
+    }
+
+    const members = (await membersResponse.json()) as Array<{
+      nick?: string | null;
+      user?: {
+        global_name?: string | null;
+        id?: string;
+        username?: string;
+      } | null;
+    }>;
+
+    const list = members
+      .map((member) => {
+        const user = member.user ?? {};
+        const id = user.id;
+        if (!id) {
+          return null;
+        }
+        return {
+          displayName:
+            member.nick ?? user.global_name ?? user.username ?? "—",
+          id,
+          username: user.username ?? "",
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      .sort((left, right) =>
+        left.displayName.localeCompare(right.displayName),
+      );
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      members: list,
     };
   });
 
@@ -2734,6 +2815,10 @@ export function buildApp() {
       allowedBody.suggestionsDmUserId = body.suggestionsDmUserId;
     }
 
+    if (isOwner && body.suggestionsDmTiers !== undefined) {
+      allowedBody.suggestionsDmTiers = body.suggestionsDmTiers;
+    }
+
     if (isOwner && body.adminRoleModules !== undefined) {
       allowedBody.adminRoleModules = body.adminRoleModules;
     }
@@ -2793,9 +2878,88 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
-    let recipientId = config.suggestionsDmUserId?.trim();
 
-    if (!recipientId) {
+    // Destinatarios: un usuario específico y/o los rangos tildados.
+    const recipients = new Set<string>();
+    const explicit = config.suggestionsDmUserId?.trim();
+    if (explicit) {
+      recipients.add(explicit);
+    }
+
+    const tiers = config.suggestionsDmTiers ?? [];
+    if (tiers.length > 0) {
+      const needOwner = tiers.includes("owner");
+      const staffTiers = tiers.filter(
+        (tier): tier is "admin" | "officer" =>
+          tier === "admin" || tier === "officer",
+      );
+
+      let ownerId: string | null = null;
+      if (needOwner || staffTiers.length > 0) {
+        const guildResponse = await fetch(
+          `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}`,
+          {
+            headers: {
+              Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+            },
+          },
+        ).catch(() => null);
+        const guildData = guildResponse?.ok
+          ? ((await guildResponse.json()) as { owner_id?: string })
+          : null;
+        ownerId = guildData?.owner_id?.trim() ?? null;
+      }
+
+      if (needOwner && ownerId) {
+        recipients.add(ownerId);
+      }
+
+      if (staffTiers.length > 0) {
+        // Roles que tienen cada rango (según adminRoleModules).
+        const roleIdsByTier: Record<string, string[]> = {};
+        for (const rule of config.adminRoleModules ?? []) {
+          const modules = [...rule.modules].sort().join(",");
+          for (const tier of staffTiers) {
+            const expected = [...STAFF_TIER_MODULES[tier]].sort().join(",");
+            if (modules === expected) {
+              (roleIdsByTier[tier] ??= []).push(rule.roleId);
+            }
+          }
+        }
+        const wantedRoleIds = new Set(
+          staffTiers.flatMap((tier) => roleIdsByTier[tier] ?? []),
+        );
+
+        if (wantedRoleIds.size > 0) {
+          // Una página de 1000 miembros cubre guilds chicas/medianas.
+          const membersResponse = await fetchWithDiscordRetry(
+            `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}/members?limit=1000`,
+            {
+              headers: {
+                Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+              },
+            },
+          );
+          if (membersResponse.ok) {
+            const members = (await membersResponse.json()) as Array<{
+              roles?: string[];
+              user?: { id?: string };
+            }>;
+            for (const member of members) {
+              if (
+                member.user?.id &&
+                (member.roles ?? []).some((roleId) => wantedRoleIds.has(roleId))
+              ) {
+                recipients.add(member.user.id);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (recipients.size === 0) {
+      // Fallback: dueño del server.
       const guildResponse = await fetch(
         `https://discord.com/api/v10/guilds/${encodeURIComponent(params.guildId)}`,
         {
@@ -2807,35 +2971,18 @@ export function buildApp() {
       const guildData = guildResponse?.ok
         ? ((await guildResponse.json()) as { owner_id?: string })
         : null;
-      recipientId = guildData?.owner_id?.trim();
+      const ownerId = guildData?.owner_id?.trim();
+      if (ownerId) {
+        recipients.add(ownerId);
+      }
     }
 
-    if (!recipientId) {
+    if (recipients.size === 0) {
       return reply.code(502).send({
         ok: false,
         error: "No se pudo resolver el destinatario de la sugerencia.",
       });
     }
-
-    // Abrir un canal DM con el destinatario.
-    const dmChannelResponse = await fetchWithDiscordRetry(
-      "https://discord.com/api/v10/users/@me/channels",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ recipient_id: recipientId }),
-      },
-    );
-    if (!dmChannelResponse.ok) {
-      return reply.code(502).send({
-        ok: false,
-        error: `No se pudo abrir el DM con el destinatario (${dmChannelResponse.status}).`,
-      });
-    }
-    const dmChannel = (await dmChannelResponse.json()) as { id: string };
 
     const senderName = session.user.username || "Alguien";
     const embed = {
@@ -2850,21 +2997,44 @@ export function buildApp() {
       footer: { text: "Bonafide Hub · Sugerencias" },
     };
 
-    const messageResponse = await fetchWithDiscordRetry(
-      `https://discord.com/api/v10/channels/${dmChannel.id}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-          "Content-Type": "application/json",
+    let sentCount = 0;
+    for (const recipientId of recipients) {
+      const dmChannelResponse = await fetchWithDiscordRetry(
+        "https://discord.com/api/v10/users/@me/channels",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ recipient_id: recipientId }),
         },
-        body: JSON.stringify({ embeds: [embed] }),
-      },
-    );
-    if (!messageResponse.ok) {
+      );
+      if (!dmChannelResponse.ok) {
+        continue;
+      }
+      const dmChannel = (await dmChannelResponse.json()) as { id: string };
+
+      const messageResponse = await fetchWithDiscordRetry(
+        `https://discord.com/api/v10/channels/${dmChannel.id}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ embeds: [embed] }),
+        },
+      );
+      if (messageResponse.ok) {
+        sentCount += 1;
+      }
+    }
+
+    if (sentCount === 0) {
       return reply.code(502).send({
         ok: false,
-        error: `No se pudo enviar el DM (${messageResponse.status}).`,
+        error: "No se pudo enviar el DM a ningún destinatario.",
       });
     }
 
@@ -2872,6 +3042,7 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       sent: true,
+      recipients: sentCount,
     };
   });
 

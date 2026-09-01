@@ -763,11 +763,7 @@ a:hover {
 }
 
 .admin-card--owner > .admin-card-header {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 138, 92, 0.11),
-    transparent 45%
-  );
+  background: linear-gradient(90deg, rgba(255, 138, 92, 0.11), transparent 45%);
 }
 
 .admin-card--owner .admin-card-header h3 {
@@ -780,11 +776,7 @@ a:hover {
 }
 
 .admin-card--admin > .admin-card-header {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 215, 0, 0.09),
-    transparent 45%
-  );
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.09), transparent 45%);
 }
 
 .admin-card--admin .admin-card-header h3 {
@@ -2767,6 +2759,53 @@ input {
 .suggestions-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+/* Destinatarios de sugerencias: persona + rangos (config del servidor) */
+.suggestion-tier-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+}
+
+.suggestion-tier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(133, 156, 212, 0.28);
+  background: rgba(12, 19, 37, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.suggestion-tier-chip input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.suggestion-tier-chip.checked {
+  border-color: rgba(106, 168, 255, 0.55);
+  background: rgba(106, 168, 255, 0.1);
+  color: var(--text);
+}
+
+.suggestion-recipient-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 /* ---------- Permisos de staff (owner) ---------- */

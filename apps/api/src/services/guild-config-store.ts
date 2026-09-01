@@ -38,6 +38,7 @@ export type GuildConfig = {
   reactionRoles?: ReactionRoleRule[];
   reactionRolesChannelId?: string;
   suggestionsDmUserId?: string;
+  suggestionsDmTiers?: string[];
   temporaryVoiceChannelIds?: string[];
   xpSyncRequested?: boolean;
 };
@@ -62,6 +63,7 @@ function toGuildConfig(
     musicRoleIds: string[];
     reactionRolesChannelId: string | null;
     suggestionsDmUserId: string | null;
+    suggestionsDmTiers: string[];
     temporaryVoiceChannelIds: string[];
     xpSyncRequested: boolean;
   } | null,
@@ -98,6 +100,7 @@ function toGuildConfig(
     reactionRoles,
     reactionRolesChannelId: record.reactionRolesChannelId ?? undefined,
     suggestionsDmUserId: record.suggestionsDmUserId ?? undefined,
+    suggestionsDmTiers: record.suggestionsDmTiers,
     temporaryVoiceChannelIds: record.temporaryVoiceChannelIds,
     xpSyncRequested: record.xpSyncRequested,
   };
@@ -147,6 +150,7 @@ type NormalizedGuildConfig = {
   reactionRoles: ReactionRoleRule[];
   reactionRolesChannelId?: string;
   suggestionsDmUserId?: string;
+  suggestionsDmTiers: string[];
   temporaryVoiceChannelIds: string[];
   xpSyncRequested: boolean;
 };
@@ -189,6 +193,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     reactionRoles: normalizedRules,
     reactionRolesChannelId: config.reactionRolesChannelId,
     suggestionsDmUserId: config.suggestionsDmUserId,
+    suggestionsDmTiers: config.suggestionsDmTiers ?? [],
     temporaryVoiceChannelIds: config.temporaryVoiceChannelIds ?? [],
     xpSyncRequested: config.xpSyncRequested ?? false,
   };
@@ -256,6 +261,7 @@ export async function replaceGuildConfig(
         musicEnabled: normalized.musicEnabled,
         musicRoleIds: normalized.musicRoleIds,
         suggestionsDmUserId: normalized.suggestionsDmUserId,
+        suggestionsDmTiers: normalized.suggestionsDmTiers,
       },
       update: {
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
@@ -278,6 +284,7 @@ export async function replaceGuildConfig(
         musicEnabled: normalized.musicEnabled,
         musicRoleIds: normalized.musicRoleIds,
         suggestionsDmUserId: normalized.suggestionsDmUserId,
+        suggestionsDmTiers: normalized.suggestionsDmTiers,
       },
     });
 
