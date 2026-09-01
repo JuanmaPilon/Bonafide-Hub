@@ -2807,7 +2807,7 @@ function App() {
               ) : null}
 
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
-                <>
+                <div className="admin-card-stack">
                   {canAccess("config") ? (
                     <details className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
@@ -4549,7 +4549,7 @@ function App() {
                       </div>
                     </details>
                   ) : null}
-                </>
+                </div>
               ) : activeTab === "admin" ? (
                 <div className="empty-state">
                   {selectedGuild
