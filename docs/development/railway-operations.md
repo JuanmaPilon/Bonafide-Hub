@@ -7,6 +7,10 @@ Guia operativa para desplegar y mantener bot, API y DB en Railway.
 1. `Discord_BOT`
 2. `API`
 3. `PRD_DB` (PostgreSQL)
+4. `Web` (frontend estático de Vite; URL pública de la comunidad)
+
+Dominio propio: `bonafide-cum.com` (web y callback de OAuth). El `vite.config.ts`
+de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 
 ## 2. Variables por servicio
 
@@ -45,7 +49,7 @@ Guia operativa para desplegar y mantener bot, API y DB en Railway.
 ### API
 
 1. Pre-deploy: `npx prisma db push`
-   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `reaction_role_panels`, `reaction_role_panel_jobs`, `communications`, `daily_messages`, `raid_logs`).
+   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `reaction_role_panels`, `reaction_role_panel_jobs`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`).
 2. Build: `npm ci --include=dev && npm run build`
 3. Start: `npm run start`
 

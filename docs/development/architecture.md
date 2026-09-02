@@ -67,6 +67,12 @@ El bot usa dos modos para guild config:
 - Archivo `apps/discord-bot/data/guild-config.json`
 - Se usa cuando API no responde o no hay variables remotas
 
+> **Merge selectivo (importante):** el bot desconoce los campos del hub
+> (`enabledModules`, `suggestionsDmUserId/Tiers`, `adminRoleModules`,
+> `logsWatch*`, `logsChannelId`). El `PUT /internal/.../config` **fusiona** los
+> campos del bot sobre la config actual y preserva los del hub; el bot nunca
+> los resetea.
+
 ## 4. Patrón de jobs (web -> bot)
 
 Los paneles de reaction roles se administran desde la web:
@@ -123,22 +129,24 @@ Endpoints:
 6. `GET /internal/guilds/:guildId/xp/profiles`
 7. `GET /internal/guilds/:guildId/reaction-roles/jobs`
 8. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
+9. `GET /internal/guilds/:guildId/daily-messages` (frases habilitadas del loro)
 
 ## 8. Persistencia actual
 
 Tablas:
 
-1. `guild_configs` — config por guild (canales, rol de entrada, `xpSyncRequested`, salas temporales, loro, logs)
-2. `reaction_role_rules` — reglas por `guildId + messageId + emojiKey`
-3. `reaction_role_panels` — metadata de paneles (título, descripción, modo, canal)
-4. `reaction_role_panel_jobs` — jobs encolados (create/update/delete)
-5. `xp_configs` — config de XP (niveles, multiplicadores, colores)
-6. `xp_profiles` — XP/nivel/contadores por usuario
-7. `audit_log_entries` — registro de auditoría
-8. `discord_sessions` / `oauth_states` — OAuth
-9. `communications` / `communication_instances` — comunicados y sus publicaciones
-10. `daily_messages` — frases del loro de Karpindomo
-11. `raid_logs` — logs de raid sincronizados con Warcraft Logs
+1. `guild_configs` — config por guild (canales, rol de entrada, `enabledModules`, `suggestionsDm*`, `xpSyncRequested`, salas temporales, loro, logs)
+2. `admin_role_modules` — permisos de staff: qué módulos del Admin ve cada rol de Discord
+3. `reaction_role_rules` — reglas por `guildId + messageId + emojiKey`
+4. `reaction_role_panels` — metadata de paneles (título, descripción, modo, canal)
+5. `reaction_role_panel_jobs` — jobs encolados (create/update/delete)
+6. `xp_configs` — config de XP (niveles, multiplicadores, colores)
+7. `xp_profiles` — XP/nivel/contadores por usuario
+8. `audit_log_entries` — registro de auditoría
+9. `discord_sessions` / `oauth_states` — OAuth
+10. `communications` / `communication_instances` — comunicados y sus publicaciones
+11. `daily_messages` — frases del loro de Karpindomo
+12. `raid_logs` — logs de raid sincronizados con Warcraft Logs
 
 ## 9. Decisiones operativas
 
@@ -173,3 +181,42 @@ Scheduler (cada 5 min) -> observa reports sin publicar / perfiles vigilados
    -> solo RAID (zone tipo Raid + título contiene "raid") -> publica cuando hay fights
 Web -> tab Raids muestra los logs (acordeón colapsable)
 ```
+
+## 13. Módulos del hub y permisos de staff
+
+El panel Admin no es un único bloque: se compone de tarjetas por funcionalidad y
+cada una exige acceso a un módulo. El acceso se decide así:
+
+```text
+Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
+        - owner (dueño del server) => acceso total
+        - resto => se leen sus roles de Discord y sus reglas en admin_role_modules
+                  -> se obtiene la lista de módulos permitidos
+```
+
+1. `enabledModules` (guild_configs) decide qué tabs se muestran en la web.
+   Vacío/ausente = todos visibles. Solo el owner lo edita.
+2. `admin_role_modules` asocia roles de Discord a módulos del Admin
+   (config, comunicados, raids, daily, reaction, xp).
+3. La UI agrupa el staff en tiers para mostrar quién tiene qué:
+   owner (naranja) > admin (dorado) > officer (verde).
+
+## 14. Sugerencias del hub (web -> DM)
+
+```text
+Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
+   -> API resuelve destinatarios:
+        suggestionsDmUserId (persona) + suggestionsDmTiers (rangos owner/admin/officer)
+        (si no hay ninguno, cae al dueño del server)
+   -> envía el DM por Discord
+```
+
+## 15. Tema claro/oscuro y widget de Karpindomo
+
+1. Tema: la web aplica `data-theme="light"` en `<html>` y persiste la elección en
+   `localStorage` (`bonafide-theme`). El tema claro redefine variables CSS y las
+   superficies oscuras hardcodeadas se adaptan con overrides bajo
+   `:root[data-theme="light"]`.
+2. Karpindomo (web): FAB de chat flotante con burbuja de frases del asistente;
+   aparece solo tras login. Usa clases tipo "widget" para no ser bloqueado por
+   adblockers.

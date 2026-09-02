@@ -117,6 +117,12 @@ Notas:
 2. Fallback: `apps/discord-bot/data/guild-config.json`.
 3. Los timers se guardan en `apps/discord-bot/data/reminders.json`.
 
+> El bot **solo escribe sus propios campos** de config (reaction roles, salas
+> temporales, canales del loro, rol de entrada, etc.). Los campos del hub
+> (módulos activables, sugerencias, permisos de staff, logs de raid) se
+> preservan: el PUT interno de config es un merge selectivo y el bot no los
+> pisa. Esto evita que los módulos ocultos vuelvan a aparecer solos.
+
 ## 8. Flujo recomendado de cambios
 
 1. Cambiar código en local.

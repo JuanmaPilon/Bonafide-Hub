@@ -26,7 +26,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 ### API (`apps/api`)
 
 1. OAuth Discord + sesiones en PostgreSQL
-2. Configuración por guild
+2. Configuración por guild (canales, rol de entrada, módulos activables, destinatarios de sugerencias)
 3. Config de XP (niveles, roles, multiplicadores, colores)
 4. Leaderboard enriquecido (avatar, nombre, `isBooster`)
 5. Paneles de reaction roles (jobs encolados que ejecuta el bot)
@@ -37,15 +37,24 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 10. Mensajes diarios del loro de Karpindomo (CRUD + config)
 11. Logs de raid con Warcraft Logs: links manuales + vigilado de perfil (solo raids)
 12. Leaderboard público (`/public/leaderboard`) para la landing
+13. **Permisos de staff por rol de Discord** (`admin_role_modules`): qué módulos del Admin ve cada rol (tiers owner/admin/officer)
+14. **Sugerencias del hub**: se envían por DM al staff (persona y/o rangos configurados)
+15. **Endpoint interno del bot con merge selectivo**: el bot solo escribe sus campos y ya no pisa módulos/sugerencias/permisos del hub
 
 ### Web hub (`apps/web`)
 
 1. Home de bienvenida con podio top 5, carrusel de boosters y login centrado
-2. Dashboard con stats del servidor, leaderboard, neón por rango y badge de booster
+2. Dashboard con stats del servidor, leaderboard, colores por nivel y badge de booster
 3. Tab Comunicados (publicados desde el admin)
 4. Tab Raids con card colapsable de Logs de Raid (sincronizados con Warcraft Logs)
-5. Panel Admin: configuración general, comunicados, reaction roles, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
-6. Navegación por hash (`/#/home`, `/#/dashboard`, `/#/admin`, ...)
+5. Tab Sugerencias: form que llega por DM al staff (destinatario por persona y/o rango)
+6. Panel Admin: configuración general, módulos, permisos de staff, comunicados, reaction roles, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
+7. **Módulos activables/ocultables** desde Admin → Módulos (inicio y admin siempre visibles)
+8. **Permisos de staff por rango**: tarjetas del Admin coloreadas y ordenadas por tier (owner/admin/officer) y acceso filtrado por rol
+9. Perfil accesible desde el chip de usuario (no es una tab)
+10. **Tema claro/oscuro** (botón junto al perfil, persistido en `localStorage`)
+11. Widget de **Karpindomo** (asistente de la comunidad): burbuja de chat flotante
+12. Navegación por hash (`/#/home`, `/#/dashboard`, `/#/admin`, ...)
 
 ## Estructura del repo
 
@@ -124,15 +133,23 @@ cd apps/web && npm run build
 ## Base de datos
 
 - Schema: `apps/api/prisma/schema.prisma`
-- Tablas: `guild_configs`, `reaction_role_rules`, `reaction_role_panels`, `reaction_role_panel_jobs`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`, `communications`, `communication_instances`, `daily_messages`, `raid_logs`
+- Tablas: `guild_configs`, `admin_role_modules`, `reaction_role_rules`, `reaction_role_panels`, `reaction_role_panel_jobs`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`, `communications`, `communication_instances`, `daily_messages`, `raid_logs`
 - Al agregar tablas al schema: `cd apps/api && npx prisma db push --skip-generate` (pre-deploy en Railway)
+
+Campos destacados de `guild_configs`:
+
+- `enabledModules` — módulos visibles del hub (vacío = todos visibles).
+- `suggestionsDmUserId` / `suggestionsDmTiers` — destinatarios de sugerencias (DM).
+- `admin_role_modules` — permisos de staff por rol de Discord (módulos accesibles en Admin).
+
+> Los campos que administra el hub (módulos, sugerencias, permisos, logs de raid) **solo los escribe la web**. El PUT interno del bot fusiona únicamente sus propios campos, así que nunca los resetea.
 
 ## Documentación técnica
 
-1. `docs/development/architecture.md`
-2. `docs/development/discord-bot.md`
-3. `docs/development/api.md`
-4. `docs/development/railway-operations.md`
+1. `docs/development/architecture.md` — arquitectura, config remota/fallback, jobs, XP
+2. `docs/development/discord-bot.md` — guía del bot (comandos, eventos, XP)
+3. `docs/development/api.md` — guía de la API (endpoints, env, persistencia)
+4. `docs/development/railway-operations.md` — despliegue y operación en Railway
 
 ## Consideraciones de seguridad
 
