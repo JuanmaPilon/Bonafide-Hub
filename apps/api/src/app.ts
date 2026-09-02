@@ -755,7 +755,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    const body = request.body as { config?: GuildConfig };
+    const body = request.body as { config?: Record<string, unknown> };
     if (!body?.config || typeof body.config !== "object") {
       return reply.code(400).send({
         ok: false,
@@ -763,7 +763,40 @@ export function buildApp() {
       });
     }
 
-    const config = await replaceGuildConfig(params.guildId, body.config);
+    // El bot no conoce todos los campos que administra el Hub (módulos
+    // habilitados, destinatarios de sugerencias, permisos de staff, logs de
+    // raid, etc.). Un reemplazo total aquí borraría esos ajustes cada vez que
+    // el bot guarda su config. Por eso solo se fusionan los campos propios
+    // del bot sobre la configuración actual, preservando el resto.
+    const BOT_CONFIG_FIELDS = [
+      "bannedVoiceRoleIds",
+      "dailyMessagesChannelId",
+      "dailyMessagesEnabled",
+      "dailyMessagesMaxMinutes",
+      "dailyMessagesMinMinutes",
+      "defaultRoleId",
+      "dynamicVoiceCreateChannelId",
+      "memberLogChannelId",
+      "musicEnabled",
+      "musicRoleIds",
+      "reactionRoles",
+      "temporaryVoiceChannelIds",
+      "xpSyncRequested",
+    ] as const;
+
+    const current = await getGuildConfig(params.guildId);
+    const merged: Record<string, unknown> = { ...current };
+    for (const key of BOT_CONFIG_FIELDS) {
+      const value = body.config[key];
+      if (value !== undefined) {
+        merged[key] = value;
+      }
+    }
+
+    const config = await replaceGuildConfig(
+      params.guildId,
+      merged as GuildConfig,
+    );
 
     return {
       ok: true,
