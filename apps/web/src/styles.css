@@ -3139,18 +3139,112 @@ input {
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg-1: #e9eff8;
-  --bg-2: #dbe6f4;
-  --panel: rgba(255, 255, 255, 0.86);
-  --panel-border: rgba(60, 85, 130, 0.26);
-  --text: #18233b;
-  --muted: #4f5f7d;
-  --accent: #2f6bff;
-  --accent-strong: #d95a1e;
-  --danger: #c0392e;
+  --bg-1: #dbe5f1;
+  --bg-2: #c6d5ea;
+  --panel: rgba(255, 255, 255, 0.94);
+  --panel-border: rgba(48, 77, 122, 0.32);
+  --text: #101a2e;
+  --muted: #3f4f6b;
+  --accent: #2456d6;
+  --accent-strong: #c44f16;
+  --danger: #b92e24;
   /* Superficies claras reutilizables */
-  --surface-card: rgba(255, 255, 255, 0.8);
-  --surface-input: rgba(244, 248, 253, 0.95);
+  --surface-card: rgba(255, 255, 255, 0.92);
+  --surface-input: #ffffff;
+}
+
+/* Canvas claro: fondo más profundo y glow más tenues para que el contenido
+   coloreado no quede "lavado" por el blanco. */
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(
+      circle at 15% 14%,
+      rgba(74, 124, 255, 0.12),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 78% 16%,
+      rgba(255, 102, 59, 0.07),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 50% 88%,
+      rgba(255, 149, 77, 0.07),
+      transparent 24%
+    ),
+    linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 100%);
+}
+
+/* Sombras de paneles más suaves en claro */
+:root[data-theme="light"] .panel,
+:root[data-theme="light"] .modal {
+  box-shadow: 0 18px 45px rgba(38, 58, 92, 0.16);
+}
+
+/* Título neón: colores más profundos + sombra sutil (legible sobre blanco) */
+:root[data-theme="light"] .brand-gradient {
+  background: linear-gradient(
+    90deg,
+    #2a5fd0 0%,
+    #d97706 22%,
+    #e2541b 45%,
+    #cf3228 55%,
+    #2a5fd0 78%,
+    #d97706 100%
+  );
+  background-size: 300% 100%;
+  filter: drop-shadow(0 1px 1px rgba(28, 45, 80, 0.22));
+}
+
+/* Podio: metales más oscuros para que contrasten sobre blanco y sin glow */
+:root[data-theme="light"] .podium-place-1 {
+  box-shadow: 0 0 0 1px rgba(210, 160, 0, 0.55);
+}
+
+:root[data-theme="light"] .podium-place-2 {
+  box-shadow: 0 0 0 1px rgba(120, 132, 148, 0.45);
+}
+
+:root[data-theme="light"] .podium-place-3 {
+  box-shadow: 0 0 0 1px rgba(176, 98, 45, 0.45);
+}
+
+:root[data-theme="light"] .podium-place-4 {
+  box-shadow: 0 0 0 1px rgba(110, 122, 138, 0.4);
+}
+
+:root[data-theme="light"] .podium-place-5 {
+  box-shadow: 0 0 0 1px rgba(150, 92, 34, 0.45);
+}
+
+:root[data-theme="light"] .podium-place-1 .podium-rank,
+:root[data-theme="light"] .podium-place-1 .podium-tier {
+  color: #a67905;
+  text-shadow: none;
+}
+
+:root[data-theme="light"] .podium-place-2 .podium-rank,
+:root[data-theme="light"] .podium-place-2 .podium-tier {
+  color: #5f6b78;
+  text-shadow: none;
+}
+
+:root[data-theme="light"] .podium-place-3 .podium-rank,
+:root[data-theme="light"] .podium-place-3 .podium-tier {
+  color: #96511f;
+  text-shadow: none;
+}
+
+:root[data-theme="light"] .podium-place-4 .podium-rank,
+:root[data-theme="light"] .podium-place-4 .podium-tier {
+  color: #59636f;
+  text-shadow: none;
+}
+
+:root[data-theme="light"] .podium-place-5 .podium-rank,
+:root[data-theme="light"] .podium-place-5 .podium-tier {
+  color: #8a4c14;
+  text-shadow: none;
 }
 
 /* Barra superior */
