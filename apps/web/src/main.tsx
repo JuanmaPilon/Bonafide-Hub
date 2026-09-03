@@ -1243,22 +1243,30 @@ function App() {
   }, [selectedGuildId]);
 
   useEffect(() => {
-    if (!selectedGuildId) {
+    if (!selectedGuildId || activeTab !== "raids") {
       setRaidLogs([]);
       return;
     }
     let cancelled = false;
-    listRaidLogs(selectedGuildId)
-      .then((logs) => {
-        if (!cancelled) {
-          setRaidLogs(logs);
-        }
-      })
-      .catch(() => {});
+
+    const refreshRaidLogs = (): void => {
+      void listRaidLogs(selectedGuildId)
+        .then((logs) => {
+          if (!cancelled) {
+            setRaidLogs(logs);
+          }
+        })
+        .catch(() => {});
+    };
+
+    refreshRaidLogs();
+    const refreshTimer = window.setInterval(refreshRaidLogs, 60_000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
     };
-  }, [selectedGuildId]);
+  }, [activeTab, selectedGuildId]);
 
   useEffect(() => {
     if (activeTab !== "perfil" || !selectedGuildId || !me) {

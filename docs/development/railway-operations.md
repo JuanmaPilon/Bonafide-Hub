@@ -92,6 +92,34 @@ Si la API duerme:
 2. Verificar jerarquia de rol.
 3. Revisar logs del bot para fallback remoto/local.
 
+### Watcher de Warcraft Logs no detecta o publica raids
+
+El watcher corre dentro del proceso **API**, no dentro de la Web. Ejecuta una
+comprobación inmediata al arrancar y luego cada 5 minutos.
+
+Revisar en los logs de Railway de `API`:
+
+1. `[raid-logs] scheduler iniciado` debe indicar `API key configurada` y
+   `token Discord configurado`.
+2. `[raid-logs] watch: N guild/s` confirma que la config tiene gremio y servidor.
+3. `watch ...: X report/s, Y nuevo/s` confirma que Warcraft Logs devolvió
+   reports. Los reports que no sean raid se cuentan como `fuera de zona raid`.
+4. `Warcraft Logs v1 respondió 401` indica key ausente, inválida o revocada.
+   `403` indica falta de permisos o key no autorizada.
+5. Si detecta un report pero no publica, revisar `no hay logsChannelId` o el
+   mensaje de Discord. `logsChannelId` debe ser un canal de texto y el bot debe
+   poder ver el canal, enviar mensajes y leer historial.
+
+Variables necesarias en el servicio `API` (environment correcto):
+
+- `WARCRAFT_LOGS_API_KEY`: API key válida de Warcraft Logs.
+- `DISCORD_BOT_TOKEN`: token del bot que publica el resumen.
+
+La Web refresca la lista de logs cada 60 segundos mientras la pestaña `Raids`
+está abierta. La API sigue siendo la fuente de verdad; un redeploy de Web no
+soluciona un watcher detenido, por lo que hay que revisar primero los logs de
+API y sus variables.
+
 ## 6. Seguridad operativa
 
 1. No guardar secretos en repo.

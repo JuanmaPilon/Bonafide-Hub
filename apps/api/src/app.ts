@@ -425,6 +425,11 @@ async function runRaidLogSync(): Promise<void> {
 
       for (const created of result.created) {
         const refreshed = await refreshRaidLog(created.id);
+        if (refreshed.error) {
+          console.warn(
+            `[raid-logs] report ${created.reportCode} detectado pero no se pudo refrescar: ${refreshed.error}`,
+          );
+        }
         if (
           config.logsChannelId &&
           token &&
@@ -435,7 +440,18 @@ async function runRaidLogSync(): Promise<void> {
           const ids = await postMessages(token, config.logsChannelId, chunks);
           if (ids.length > 0) {
             await markRaidLogPosted(created.id);
+            console.log(
+              `[raid-logs] report ${created.reportCode} publicado en Discord para guild ${watch.guildId}`,
+            );
+          } else {
+            console.warn(
+              `[raid-logs] report ${created.reportCode} detectado, pero Discord no devolvió mensajes creados (guild ${watch.guildId})`,
+            );
           }
+        } else if (!config.logsChannelId) {
+          console.warn(
+            `[raid-logs] report ${created.reportCode} detectado, pero no hay logsChannelId configurado para guild ${watch.guildId}`,
+          );
         }
       }
     }
@@ -448,6 +464,9 @@ function startRaidLogSync(): void {
   if (raidLogSyncTimer) {
     return;
   }
+  console.log(
+    `[raid-logs] scheduler iniciado (intervalo ${RAID_LOG_SYNC_INTERVAL_MS / 60000} min, API key ${env.WARCRAFT_LOGS_API_KEY ? "configurada" : "FALTANTE"}, token Discord ${env.DISCORD_BOT_TOKEN ? "configurado" : "FALTANTE"})`,
+  );
   void runRaidLogSync();
   raidLogSyncTimer = setInterval(() => {
     void runRaidLogSync();

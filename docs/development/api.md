@@ -71,6 +71,12 @@ Logs de raid (Warcraft Logs):
 2. `DELETE /guilds/:guildId/raid-logs/:logId`
 3. `GET /public/leaderboard` (top 30 público para la landing)
 
+El watcher automático de raids corre en el scheduler de la API cada 5 minutos.
+Usa la API v1 de Warcraft Logs con `WARCRAFT_LOGS_API_KEY`, guarda los reports
+nuevos en `raid_logs`, consulta sus fights y los publica en `logsChannelId` con
+`DISCORD_BOT_TOKEN`. Los reports se filtran por zona `Raid` o por título que
+contenga `raid`.
+
 XP:
 
 1. `GET /guilds/:guildId/xp-config`

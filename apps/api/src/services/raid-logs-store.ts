@@ -315,7 +315,10 @@ async function fetchV1Json(path: string): Promise<unknown> {
   );
 
   if (!response.ok) {
-    throw new Error(`Warcraft Logs v1 responded ${response.status}`);
+    const details = await response.text().catch(() => "");
+    throw new Error(
+      `Warcraft Logs v1 respondió ${response.status}${details ? `: ${details.slice(0, 240)}` : ""}`,
+    );
   }
 
   return response.json();
