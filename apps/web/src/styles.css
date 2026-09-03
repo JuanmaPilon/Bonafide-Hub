@@ -696,6 +696,8 @@ a:hover {
   text-decoration: none;
   cursor: pointer;
   padding: 11px 18px;
+  justify-self: start;
+  width: fit-content;
   background: #e5484d;
   color: #fff;
   font-weight: 700;
@@ -2348,6 +2350,8 @@ a:hover {
   text-decoration: none;
   cursor: pointer;
   padding: 11px 18px;
+  justify-self: start;
+  width: fit-content;
 }
 
 .primary-button {
