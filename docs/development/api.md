@@ -50,7 +50,7 @@ Config guild: `GET/PATCH /guilds/:guildId/config`
 
 Permisos de staff (acceso del Admin del hub): `GET /guilds/:guildId/admin-access` → `{ owner, modules }` (qué módulos del Admin puede ver el usuario según su rol de Discord; el owner siempre tiene todo)
 
-Sugerencias del hub: `POST /guilds/:guildId/suggestions` → la API la envía por DM al staff configurado (`suggestionsDmUserId` y/o `suggestionsDmTiers`)
+Sugerencias del hub: `POST /guilds/:guildId/suggestions` → la API la envía por DM a los rangos configurados en `suggestionsDmTiers` (`owner`, `admin` y/o `officer`). Si no hay rangos seleccionados, se usa el owner.
 
 Comunicados:
 
@@ -148,7 +148,7 @@ Tablas:
 Campos relevantes de `guild_configs`:
 
 - `enabledModules` — módulos visibles del hub (vacío = todos visibles). Lo escribe solo el owner.
-- `suggestionsDmUserId` / `suggestionsDmTiers` — destinatarios de sugerencias por DM.
+- `suggestionsDmTiers` — rangos que reciben sugerencias por DM. El antiguo `suggestionsDmUserId` queda como columna legacy y ya no se usa.
 - `logsWatchGuild` / `logsWatchServer` / `logsWatchRegion` — vigilado de raid de Warcraft Logs (el viejo `logsWatchCharacter` quedó como legacy sin uso).
 
 Scripts (`apps/api/package.json`):

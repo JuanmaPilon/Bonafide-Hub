@@ -209,8 +209,8 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
 ```text
 Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
    -> API resuelve destinatarios:
-        suggestionsDmUserId (persona) + suggestionsDmTiers (rangos owner/admin/officer)
-        (si no hay ninguno, cae al dueño del server)
+      suggestionsDmTiers (rangos owner/admin/officer)
+      (si no hay ninguno, cae al owner de la guild)
    -> envía el DM por Discord
 ```
 

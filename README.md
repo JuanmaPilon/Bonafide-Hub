@@ -26,7 +26,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 ### API (`apps/api`)
 
 1. OAuth Discord + sesiones en PostgreSQL
-2. Configuración por guild (canales, rol de entrada, módulos activables, destinatarios de sugerencias)
+2. Configuración por guild (canales, rol de entrada, módulos activables, rangos destinatarios de sugerencias)
 3. Config de XP (niveles, roles, multiplicadores, colores)
 4. Leaderboard enriquecido (avatar, nombre, `isBooster`)
 5. Paneles de reaction roles (jobs encolados que ejecuta el bot)
@@ -38,7 +38,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 11. Logs de raid con Warcraft Logs: links manuales + vigilado de perfil (solo raids)
 12. Leaderboard público (`/public/leaderboard`) para la landing
 13. **Permisos de staff por rol de Discord** (`admin_role_modules`): qué módulos del Admin ve cada rol (tiers owner/admin/officer)
-14. **Sugerencias del hub**: se envían por DM al staff (persona y/o rangos configurados)
+14. **Sugerencias del hub**: se envían por DM al staff según los rangos configurados
 15. **Endpoint interno del bot con merge selectivo**: el bot solo escribe sus campos y ya no pisa módulos/sugerencias/permisos del hub
 
 ### Web hub (`apps/web`)
@@ -47,7 +47,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 2. Dashboard con stats del servidor, leaderboard, colores por nivel y badge de booster
 3. Tab Comunicados (publicados desde el admin)
 4. Tab Raids con card colapsable de Logs de Raid (sincronizados con Warcraft Logs)
-5. Tab Sugerencias: form que llega por DM al staff (destinatario por persona y/o rango)
+5. Tab Sugerencias: form que llega por DM al staff según su rango
 6. Panel Admin: configuración general, módulos, permisos de staff, comunicados, reaction roles, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
 7. **Módulos activables/ocultables** desde Admin → Módulos (inicio y admin siempre visibles)
 8. **Permisos de staff por rango**: tarjetas del Admin coloreadas y ordenadas por tier (owner/admin/officer) y acceso filtrado por rol

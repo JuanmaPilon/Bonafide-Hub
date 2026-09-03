@@ -18,7 +18,6 @@ import {
   getGuildBoosters,
   getGuildConfig,
   getGuildEmojis,
-  getGuildMembers,
   getGuildRoles,
   getGuilds,
   getGuildTextChannels,
@@ -60,7 +59,6 @@ import {
   type GuildChannel,
   type GuildConfig,
   type GuildEmoji,
-  type GuildMember,
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
@@ -938,7 +936,6 @@ function App() {
   const [voiceChannels, setVoiceChannels] = useState<GuildChannel[]>([]);
   const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
-  const [guildMembers, setGuildMembers] = useState<GuildMember[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
   const [reactionPanels, setReactionPanels] = useState<ReactionRolePanel[]>([]);
   const [rrChannelId, setRrChannelId] = useState("");
@@ -2528,7 +2525,6 @@ function App() {
       setVoiceChannels([]);
       setTextChannels([]);
       setGuildRoles([]);
-      setGuildMembers([]);
       setReactionPanels([]);
       setGuildEmojis([]);
       setRrJobs([]);
@@ -2542,14 +2538,13 @@ function App() {
       getGuildVoiceChannels(selectedGuildId),
       getGuildTextChannels(selectedGuildId),
       getGuildRoles(selectedGuildId),
-      getGuildMembers(selectedGuildId),
       listReactionRolePanels(selectedGuildId),
       getGuildEmojis(selectedGuildId),
       listReactionRoleJobs(selectedGuildId),
       listDailyMessages(selectedGuildId),
     ])
       .then(
-        ([channels, textCh, roles, members, panels, emojis, jobs, daily]) => {
+        ([channels, textCh, roles, panels, emojis, jobs, daily]) => {
           if (cancelled) {
             return;
           }
@@ -2557,7 +2552,6 @@ function App() {
           setVoiceChannels(channels);
           setTextChannels(textCh);
           setGuildRoles(roles);
-          setGuildMembers(members);
           setReactionPanels(panels);
           setGuildEmojis(emojis);
           setRrJobs(jobs);
@@ -2570,7 +2564,6 @@ function App() {
           setVoiceChannels([]);
           setTextChannels([]);
           setGuildRoles([]);
-          setGuildMembers([]);
           setReactionPanels([]);
           setGuildEmojis([]);
           setRrJobs([]);
@@ -3127,28 +3120,6 @@ function App() {
                               {voiceChannels.map((channel) => (
                                 <option key={channel.id} value={channel.id}>
                                   {channel.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-
-                          <label>
-                            <span>DM de sugerencias</span>
-                            <select
-                              className="select suggestion-recipient-select"
-                              value={config.suggestionsDmUserId ?? ""}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  suggestionsDmUserId:
-                                    event.target.value || undefined,
-                                }))
-                              }
-                            >
-                              <option value="">Ninguno</option>
-                              {guildMembers.map((member) => (
-                                <option key={member.id} value={member.id}>
-                                  {member.displayName}
                                 </option>
                               ))}
                             </select>

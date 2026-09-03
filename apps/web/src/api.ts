@@ -31,7 +31,6 @@ export type GuildConfig = {
   musicEnabled?: boolean;
   musicRoleIds?: string[];
   reactionRolesChannelId?: string;
-  suggestionsDmUserId?: string;
   suggestionsDmTiers?: string[];
 };
 

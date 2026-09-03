@@ -3119,10 +3119,6 @@ input {
   outline-offset: 2px;
 }
 
-.suggestion-recipient-select {
-  width: 100%;
-}
-
 .suggestion-recipient-hint {
   grid-column: 1 / -1;
   margin: 0;

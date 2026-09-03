@@ -35,7 +35,8 @@ model GuildConfig {
   logsWatchGuild               String?
   logsWatchServer              String?
   logsWatchRegion              String?
-  // Destinatario de las sugerencias del hub (DM). Vacío => dueño del server.
+  // LEGACY: antes permitía un destinatario individual; las sugerencias usan
+  // únicamente suggestionsDmTiers. Se conserva para no borrar datos previos.
   suggestionsDmUserId          String?
   // Rangos (owner/admin/officer) que reciben las sugerencias.
   suggestionsDmTiers           String[] @default([])

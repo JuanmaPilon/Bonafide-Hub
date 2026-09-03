@@ -1516,16 +1516,13 @@ export function buildApp() {
           return null;
         }
         return {
-          displayName:
-            member.nick ?? user.global_name ?? user.username ?? "—",
+          displayName: member.nick ?? user.global_name ?? user.username ?? "—",
           id,
           username: user.username ?? "",
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
-      .sort((left, right) =>
-        left.displayName.localeCompare(right.displayName),
-      );
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
 
     return {
       ok: true,
@@ -2862,10 +2859,6 @@ export function buildApp() {
       allowedBody.bannedVoiceRoleIds = body.bannedVoiceRoleIds;
     }
 
-    if (isOwner && body.suggestionsDmUserId !== undefined) {
-      allowedBody.suggestionsDmUserId = body.suggestionsDmUserId;
-    }
-
     if (isOwner && body.suggestionsDmTiers !== undefined) {
       allowedBody.suggestionsDmTiers = body.suggestionsDmTiers;
     }
@@ -2887,8 +2880,7 @@ export function buildApp() {
     };
   });
 
-  // Sugerencias del hub: llegan como DM al staff (dueño del server o un ID
-  // configurado en suggestionsDmUserId).
+  // Sugerencias del hub: llegan como DM al staff según los rangos configurados.
   app.post("/guilds/:guildId/suggestions", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -2930,13 +2922,8 @@ export function buildApp() {
 
     const config = await getGuildConfig(params.guildId);
 
-    // Destinatarios: un usuario específico y/o los rangos tildados.
+    // Destinatarios: únicamente los rangos tildados.
     const recipients = new Set<string>();
-    const explicit = config.suggestionsDmUserId?.trim();
-    if (explicit) {
-      recipients.add(explicit);
-    }
-
     const tiers = config.suggestionsDmTiers ?? [];
     if (tiers.length > 0) {
       const needOwner = tiers.includes("owner");
