@@ -3111,9 +3111,7 @@ function App() {
                           />
 
                           <label>
-                            <span>
-                              Canal creador de salas
-                            </span>
+                            <span>Canal creador de salas</span>
                             <select
                               className="select select-inline"
                               value={config.dynamicVoiceCreateChannelId ?? ""}
@@ -3137,7 +3135,7 @@ function App() {
                           <label>
                             <span>DM de sugerencias</span>
                             <select
-                              className="select select-inline"
+                              className="select suggestion-recipient-select"
                               value={config.suggestionsDmUserId ?? ""}
                               onChange={(event) =>
                                 setConfig((current) => ({
@@ -3147,7 +3145,7 @@ function App() {
                                 }))
                               }
                             >
-                              <option value="">Nadie en particular</option>
+                              <option value="">Ninguno</option>
                               {guildMembers.map((member) => (
                                 <option key={member.id} value={member.id}>
                                   {member.displayName}
@@ -3213,9 +3211,7 @@ function App() {
                           onClick={() => void handleSave()}
                           disabled={savingAction !== null}
                         >
-                          {savingAction === "config"
-                            ? "Guardando…"
-                            : "Guardar"}
+                          {savingAction === "config" ? "Guardando…" : "Guardar"}
                         </button>
                       </div>
                     </details>
@@ -4186,10 +4182,11 @@ function App() {
                                   }))
                                 }
                               />
-                              <span className="raid-watcher-switch" aria-hidden="true" />
-                              <span className="sr-only">
-                                Activar watcher
-                              </span>
+                              <span
+                                className="raid-watcher-switch"
+                                aria-hidden="true"
+                              />
+                              <span className="sr-only">Activar watcher</span>
                             </label>
                           </div>
                           <div className="form-grid">

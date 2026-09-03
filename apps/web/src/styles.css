@@ -3062,19 +3062,20 @@ input {
 
 /* Destinatarios de sugerencias: persona + rangos (config del servidor) */
 .suggestion-tier-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  align-items: center;
-  min-height: 44px;
+  width: 100%;
 }
 
 .suggestion-tier-chip {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border-radius: 999px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 12px;
   border: 1px solid rgba(133, 156, 212, 0.28);
   background: rgba(12, 19, 37, 0.6);
   color: var(--muted);
@@ -3087,17 +3088,39 @@ input {
 }
 
 .suggestion-tier-chip input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  flex-shrink: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
 }
 
 .suggestion-tier-chip.checked {
   border-color: rgba(106, 168, 255, 0.55);
   background: rgba(106, 168, 255, 0.1);
   color: var(--text);
+}
+
+.suggestion-tier-chip.checked::after {
+  content: "✓";
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.suggestion-tier-chip:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.suggestion-recipient-select {
+  width: 100%;
 }
 
 .suggestion-recipient-hint {
@@ -3381,6 +3404,12 @@ input {
 
 :root[data-theme="light"] .user-chip--officer {
   color: #1c5c2a;
+}
+
+:root[data-theme="light"] .suggestion-tier-chip.checked {
+  background: rgba(47, 107, 255, 0.12);
+  border-color: rgba(47, 107, 255, 0.55);
+  color: var(--text);
 }
 
 /* Tarjetas y filas con fondo oscuro -> claro */
