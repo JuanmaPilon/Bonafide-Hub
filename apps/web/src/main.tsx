@@ -4140,7 +4140,7 @@ function App() {
                       </summary>
                       <div className="admin-card-body">
                         <label>
-                          <span>Canal de Discord para publicar logs</span>
+                          <span>Canal de publicación</span>
                           <select
                             className="select"
                             value={config.logsChannelId ?? ""}
@@ -4170,32 +4170,32 @@ function App() {
                             : "Guardar canal"}
                         </button>
 
-                        <div className="daily-messages-editor">
-                          <div className="daily-messages-head">
-                            <div className="daily-messages-title">
-                              <strong>Vigilar gremio</strong>
-                              <label className="checkbox-row">
-                                <input
-                                  type="checkbox"
-                                  checked={config.logsWatchEnabled ?? false}
-                                  onChange={(event) =>
-                                    setConfig((current) => ({
-                                      ...current,
-                                      logsWatchEnabled: event.target.checked,
-                                    }))
-                                  }
-                                />
-                                <span>Vigilado activado</span>
-                              </label>
+                        <div className="raid-watcher-editor">
+                          <div className="raid-watcher-head">
+                            <div>
+                              <strong>Watcher</strong>
+                              <span>Publica nuevas raids automáticamente</span>
                             </div>
+                            <label className="raid-watcher-toggle">
+                              <input
+                                type="checkbox"
+                                checked={config.logsWatchEnabled ?? false}
+                                onChange={(event) =>
+                                  setConfig((current) => ({
+                                    ...current,
+                                    logsWatchEnabled: event.target.checked,
+                                  }))
+                                }
+                              />
+                              <span className="raid-watcher-switch" aria-hidden="true" />
+                              <span className="sr-only">
+                                Activar watcher
+                              </span>
+                            </label>
                           </div>
-                          <p className="muted-text">
-                            Publica automáticamente los logs de RAID nuevos del
-                            gremio en Warcraft Logs (excluye Mythic+).
-                          </p>
                           <div className="form-grid">
                             <label>
-                              <span>Gremio (nombre en Warcraft Logs)</span>
+                              <span>Guild</span>
                               <input
                                 value={config.logsWatchGuild ?? ""}
                                 onChange={(event) =>
@@ -4205,11 +4205,11 @@ function App() {
                                       event.target.value || undefined,
                                   }))
                                 }
-                                placeholder="ej: Bonafide"
+                                placeholder="Nombre en Warcraft Logs"
                               />
                             </label>
                             <label>
-                              <span>Servidor</span>
+                              <span>Realm</span>
                               <input
                                 value={config.logsWatchServer ?? ""}
                                 onChange={(event) =>
@@ -4219,7 +4219,7 @@ function App() {
                                       event.target.value || undefined,
                                   }))
                                 }
-                                placeholder="ej: Ragnaros"
+                                placeholder="Nombre del realm"
                               />
                             </label>
                             <label>
@@ -4245,16 +4245,13 @@ function App() {
                             disabled={savingAction !== null}
                             type="button"
                           >
-                            Guardar watcher
+                            Guardar
                           </button>
                         </div>
 
                         <div className="daily-messages-editor">
                           <div className="daily-messages-head">
                             <strong>Agregar log</strong>
-                            <span className="muted-text">
-                              Link de warcraftlogs.com/reports/…
-                            </span>
                           </div>
                           <input
                             value={raidLogUrl}
