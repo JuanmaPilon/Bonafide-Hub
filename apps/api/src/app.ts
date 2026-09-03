@@ -803,18 +803,17 @@ export function buildApp() {
       "xpSyncRequested",
     ] as const;
 
-    const current = await getGuildConfig(params.guildId);
-    const merged: Record<string, unknown> = { ...current };
+    const botConfig: Record<string, unknown> = {};
     for (const key of BOT_CONFIG_FIELDS) {
       const value = body.config[key];
       if (value !== undefined) {
-        merged[key] = value;
+        botConfig[key] = value;
       }
     }
 
-    const config = await replaceGuildConfig(
+    const config = await upsertGuildConfig(
       params.guildId,
-      merged as GuildConfig,
+      botConfig as GuildConfig,
     );
 
     return {

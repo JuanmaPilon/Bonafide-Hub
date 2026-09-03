@@ -92,6 +92,18 @@ Si la API duerme:
 2. Verificar jerarquia de rol.
 3. Revisar logs del bot para fallback remoto/local.
 
+### Los permisos Admin/Officer desaparecen después de un deploy
+
+Los permisos se guardan en PostgreSQL, en `admin_role_modules`; un redeploy
+normal no debería borrarlos. La API usa `prisma db push` para sincronizar el
+schema, no para recrear la base de datos.
+
+El bot y las demás tarjetas de configuración usan guardados parciales: no
+tocan `admin_role_modules`. Solo la tarjeta **Permisos de staff**, guardada por
+el owner, reemplaza esas reglas. Si desaparecen tras un deploy, revisar que el
+servicio API siga apuntando a la misma `DATABASE_URL` y que no se haya creado
+una base de datos nueva o cambiado de environment en Railway.
+
 ### Watcher de Warcraft Logs no detecta o publica raids
 
 El watcher corre dentro del proceso **API**, no dentro de la Web. Ejecuta una

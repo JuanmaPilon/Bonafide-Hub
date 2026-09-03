@@ -292,18 +292,23 @@ export async function replaceGuildConfig(
       where: { guildId },
     });
 
-    await tx.adminRoleModule.deleteMany({
-      where: { guildId },
-    });
-
-    if (normalized.adminRoleModules.length > 0) {
-      await tx.adminRoleModule.createMany({
-        data: normalized.adminRoleModules.map((rule) => ({
-          guildId,
-          modules: rule.modules,
-          roleId: rule.roleId,
-        })),
+    // Los permisos de staff tienen su propia actualización lógica. Si el
+    // payload no los incluye, conservarlos evita que un guardado de otra
+    // tarjeta o del bot los borre accidentalmente.
+    if (fullConfig.adminRoleModules !== undefined) {
+      await tx.adminRoleModule.deleteMany({
+        where: { guildId },
       });
+
+      if (normalized.adminRoleModules.length > 0) {
+        await tx.adminRoleModule.createMany({
+          data: normalized.adminRoleModules.map((rule) => ({
+            guildId,
+            modules: rule.modules,
+            roleId: rule.roleId,
+          })),
+        });
+      }
     }
 
     if (normalized.reactionRoles.length > 0) {
@@ -332,6 +337,12 @@ export async function upsertGuildConfig(
     ...current,
     ...partialConfig,
   };
+
+  // No propagar la copia leída de adminRoleModules en guardados parciales:
+  // solo el guardado explícito de permisos debe reemplazar esa relación.
+  if (partialConfig.adminRoleModules === undefined) {
+    delete next.adminRoleModules;
+  }
 
   return replaceGuildConfig(guildId, next);
 }

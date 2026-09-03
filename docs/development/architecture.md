@@ -200,6 +200,9 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
    (config, comunicados, raids, daily, reaction, xp).
 3. La UI agrupa el staff en tiers para mostrar quién tiene qué:
    owner (naranja) > admin (dorado) > officer (verde).
+4. Los guardados parciales de configuración y los del bot no modifican
+   `admin_role_modules`. Esa relación solo se reemplaza cuando el owner guarda
+   explícitamente la tarjeta de permisos de staff.
 
 ## 14. Sugerencias del hub (web -> DM)
 
