@@ -3017,7 +3017,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Configuración general del servidor{" "}
+                            Configuración varias{" "}
                             <span className="admin-tier-badge tier-admin">
                               Admin
                             </span>
@@ -3030,7 +3030,7 @@ function App() {
                       <div className="admin-card-body">
                         <div className="form-grid">
                           <label>
-                            <span>Canal principal de Karpindomo</span>
+                            <span>Canal de Karpindomo</span>
                             <select
                               className="select"
                               value={config.memberLogChannelId ?? ""}
@@ -3052,7 +3052,7 @@ function App() {
                           </label>
 
                           <label>
-                            <span>Rol de entrada del servidor</span>
+                            <span>Rol de entrada</span>
                             <select
                               className="select"
                               value={config.defaultRoleId ?? ""}
@@ -3097,7 +3097,7 @@ function App() {
                           </label>
 
                           <RoleMultiSelect
-                            label="Roles desperuanizados (no ven las salas de voz dinámicas)"
+                            label="Roles sin acceso a salas dinámicas"
                             roles={guildRoles}
                             value={config.bannedVoiceRoleIds ?? []}
                             onChange={(next) =>
@@ -3107,12 +3107,12 @@ function App() {
                               }))
                             }
                             emptyText="Ningún rol desperuanizado"
-                            hint="Quienes tengan estos roles no podrán ver una sala dinámica cuando uses /desperuanizar."
+                            hint="No podrán ver salas dinámicas."
                           />
 
                           <label>
                             <span>
-                              Canal para creación dinámica de salas (voz)
+                              Canal creador de salas
                             </span>
                             <select
                               className="select select-inline"
@@ -3135,7 +3135,7 @@ function App() {
                           </label>
 
                           <label>
-                            <span>Recibe las sugerencias (persona)</span>
+                            <span>DM de sugerencias</span>
                             <select
                               className="select select-inline"
                               value={config.suggestionsDmUserId ?? ""}
@@ -3157,7 +3157,7 @@ function App() {
                           </label>
 
                           <label>
-                            <span>Recibe las sugerencias (por rango)</span>
+                            <span>Rangos que reciben sugerencias</span>
                             <div className="suggestion-tier-chips">
                               {(["owner", "admin", "officer"] as const).map(
                                 (tier) => {
@@ -3203,8 +3203,7 @@ function App() {
                             </div>
                           </label>
                           <p className="suggestion-recipient-hint">
-                            Si no se elige nada, las sugerencias van al dueño
-                            del servidor.
+                            Sin selección, se envían al owner.
                           </p>
                         </div>
                       </div>
@@ -3216,7 +3215,7 @@ function App() {
                         >
                           {savingAction === "config"
                             ? "Guardando…"
-                            : "Guardar cambios"}
+                            : "Guardar"}
                         </button>
                       </div>
                     </details>
