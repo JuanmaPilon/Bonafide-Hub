@@ -928,6 +928,7 @@ function App() {
   const [guilds, setGuilds] = useState<ApiGuild[]>([]);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [config, setConfig] = useState<GuildConfig>({});
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [adminAccess, setAdminAccess] = useState<AdminAccess | null>(null);
   // Rol seleccionado en el panel de Permisos de staff (solo owner).
   const [staffRoleId, setStaffRoleId] = useState("");
@@ -1150,6 +1151,8 @@ function App() {
     }
 
     let cancelled = false;
+    setConfigLoaded(false);
+    setConfig({});
     setLoadingGuildData(true);
     Promise.all([
       getGuildConfig(selectedGuildId),
@@ -1179,6 +1182,7 @@ function App() {
       })
       .finally(() => {
         if (!cancelled) {
+          setConfigLoaded(true);
           setLoadingGuildData(false);
         }
       });
@@ -2469,9 +2473,11 @@ function App() {
   // La navegación = Inicio (siempre) + módulos activos + Admin (con permisos).
   const visibleTabs: HubTab[] = [
     "home",
-    ...HUB_MODULES.filter((mod) => isModuleEnabled(config, mod.key)).map(
-      (mod) => mod.key,
-    ),
+    ...(configLoaded
+      ? HUB_MODULES.filter((mod) => isModuleEnabled(config, mod.key)).map(
+          (mod) => mod.key,
+        )
+      : []),
     ...(adminEnabled ? (["admin"] as HubTab[]) : []),
   ];
 
@@ -2483,12 +2489,13 @@ function App() {
     // Solo los módulos activables pueden redirigir. Los tabs personales
     // (perfil) o de estructura (home) nunca se ocultan por la config.
     if (
+      configLoaded &&
       HUB_MODULES.some((mod) => mod.key === activeTab) &&
       !isModuleEnabled(config, activeTab)
     ) {
       setActiveTab("dashboard");
     }
-  }, [activeTab, adminEnabled, config.enabledModules]);
+  }, [activeTab, adminEnabled, config.enabledModules, configLoaded]);
 
   useEffect(() => {
     const onHashChange = (): void => {
