@@ -998,6 +998,12 @@ a:hover {
   background: rgba(124, 227, 139, 0.08);
 }
 
+.raid-log-live {
+  color: #ffb454;
+  border-color: rgba(255, 180, 84, 0.4);
+  background: rgba(255, 180, 84, 0.1);
+}
+
 .raid-log-failed {
   color: #ff8a8a;
   border-color: rgba(255, 138, 138, 0.35);

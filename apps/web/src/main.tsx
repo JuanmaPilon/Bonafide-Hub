@@ -348,9 +348,11 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
                 <span className={`raid-log-badge raid-log-${log.status}`}>
                   {log.status === "failed"
                     ? "Sin datos"
-                    : log.discordPosted
-                      ? "Publicado"
-                      : "En espera"}
+                    : log.status === "live"
+                      ? "En vivo"
+                      : log.discordPosted
+                        ? "Publicado"
+                        : "En espera"}
                 </span>
                 <span
                   className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
@@ -4249,9 +4251,11 @@ function App() {
                                     kills ·{" "}
                                     {log.status === "failed"
                                       ? "sin datos"
-                                      : log.discordPosted
-                                        ? "publicado"
-                                        : "en espera"}
+                                      : log.status === "live"
+                                        ? "en vivo"
+                                        : log.discordPosted
+                                          ? "publicado"
+                                          : "en espera"}
                                   </div>
                                 </div>
                                 <div className="daily-message-actions">

@@ -170,22 +170,28 @@ model DailyMessage {
 // Log de raid sincronizado con Warcraft Logs. El API observa el report,
 // guarda el resumen (para la web) y publica en Discord cuando tiene fights.
 model RaidLog {
-  id            String    @id @default(cuid())
-  guildId       String
-  reportCode    String
-  reportUrl     String
-  title         String?
-  zone          Int?
-  fightCount    Int       @default(0)
-  kills         Int       @default(0)
-  summary       Json?
-  status        String    @default("new") // new | synced | failed
-  error         String?
-  discordPosted Boolean   @default(false)
-  firstFightAt  DateTime?
-  lastSyncedAt  DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  guildId            String
+  reportCode         String
+  reportUrl          String
+  title              String?
+  zone               Int?
+  fightCount         Int       @default(0)
+  kills              Int       @default(0)
+  summary            Json?
+  status             String    @default("new") // new | live | synced | failed
+  error              String?
+  discordPosted      Boolean   @default(false)
+  firstFightAt       DateTime?
+  lastSyncedAt       DateTime?
+  // Detectan si el report todavía está "en vivo" (WCL sigue agregando
+  // fights). Si fightCount no creció desde la última sincronización, se
+  // guarda cuándo se detectó por primera vez; una vez pasado el umbral sin
+  // crecer, se considera terminado y recién ahí se publica.
+  previousFightCount Int       @default(0)
+  fightsStableSince  DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([guildId])
   @@map("raid_logs")

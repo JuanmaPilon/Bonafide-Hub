@@ -58,6 +58,15 @@ Guía técnica y funcional del bot de Discord.
    > **Permisos DJ**: para detener/desconectar (`/stop`, `/leave` y botones ⏹️/👋) hay que estar en el **mismo canal de voz** que el bot (además del rol DJ configurado).
    > El fallback a SoundCloud **deduplica por título** para no encolar copias del mismo tema.
 
+### Salas de voz dinámicas
+
+Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
+
+1. `/desperuanizar` — oculta la sala a los roles vetados (`bannedVoiceRoleIds`); agrega el sufijo ` 🚫🇵🇪` al nombre.
+2. `/reperuanizar` — revierte `/desperuanizar`; quita el sufijo.
+3. `/lock` — tranca la sala para `@everyone` (deniega Connect): los que ya están adentro se quedan, nadie nuevo puede entrar; agrega el sufijo ` 🔒`.
+4. `/unlock` — revierte `/lock`; quita el sufijo.
+
 ## 3. Eventos y automatizaciones
 
 1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada

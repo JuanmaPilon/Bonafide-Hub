@@ -2108,6 +2108,139 @@ async function handleVoiceBanCommand(
   }
 }
 
+// Mensajes del mayordomo de Karpindomo al trancar/destrancar una sala.
+const LOCK_CHANNEL_BUTLER_MESSAGES = [
+  "🔒 Sala trancada, {user}. Nadie más va a poder entrar.",
+  "🗝️ {user} trancó la sala. Los que ya están adentro se quedan, nadie más entra.",
+  "🚪 Puerta con llave, señor. {user} dejó esta sala trancada.",
+];
+
+const UNLOCK_CHANNEL_BUTLER_MESSAGES = [
+  "🔓 Sala destrancada, {user}. Ya puede entrar cualquiera.",
+  "🗝️ {user} destrancó la sala. Vuelve a estar abierta para todos.",
+  "🚪 Puerta abierta de nuevo, señor. {user} la destrancó.",
+];
+
+// Sufijo que se agrega/quita al nombre de la sala al trancar.
+const LOCK_SUFFIX = " 🔒";
+
+// /lock y /unlock: trancan o destrancan una sala de voz dinámica para
+// @everyone (a diferencia de /desperuanizar, que solo oculta a roles
+// vetados). Quienes ya están adentro se quedan; nadie nuevo puede entrar.
+async function handleVoiceLockCommand(
+  interaction: ChatInputCommandInteraction,
+  lock: boolean,
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    await interaction.reply({
+      content: "Este comando solo se puede usar dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Ver el comentario equivalente en handleVoiceBanCommand: deferimos para
+  // evitar el timeout de 3s y todo el cuerpo va en try/catch para siempre
+  // terminar respondiendo.
+  await interaction.deferReply();
+
+  try {
+    const member = await interaction.guild.members
+      .fetch(interaction.user.id)
+      .catch(() => null);
+    if (!member) {
+      await interaction.editReply({
+        content: "No pude obtener tu perfil de miembro.",
+      });
+      return;
+    }
+
+    const voiceChannelId = member.voice.channelId ?? null;
+    if (!voiceChannelId) {
+      await interaction.editReply({
+        content: "Tenés que estar en una sala de voz para usar este comando.",
+      });
+      return;
+    }
+
+    const isTemporary = await isTemporaryVoiceChannel(
+      interaction.guildId,
+      voiceChannelId,
+    );
+    if (!isTemporary) {
+      await interaction.editReply({
+        content:
+          "Este comando solo funciona en salas de voz dinámicas creadas por Karpindomo.",
+      });
+      return;
+    }
+
+    const channel = await interaction.guild.channels
+      .fetch(voiceChannelId)
+      .catch(() => null);
+    if (!channel?.isVoiceBased()) {
+      await interaction.editReply({
+        content: "No pude acceder al canal de voz.",
+      });
+      return;
+    }
+
+    const everyoneRoleId = interaction.guild.roles.everyone.id;
+    if (lock) {
+      await channel.permissionOverwrites.edit(everyoneRoleId, {
+        Connect: false,
+      });
+    } else {
+      const overwrite = channel.permissionOverwrites.cache.get(everyoneRoleId);
+      if (overwrite) {
+        await channel.permissionOverwrites.delete(everyoneRoleId);
+      }
+    }
+
+    // Marca la sala en el nombre: agregamos/quitamos el candado.
+    try {
+      const currentName = channel.name;
+      if (lock) {
+        if (!currentName.endsWith(LOCK_SUFFIX)) {
+          await channel.setName(`${currentName}${LOCK_SUFFIX}`);
+        }
+      } else if (currentName.endsWith(LOCK_SUFFIX)) {
+        await channel.setName(currentName.slice(0, -LOCK_SUFFIX.length));
+      }
+    } catch (error) {
+      console.error("[discord-bot] Failed to rename channel", {
+        guildId: interaction.guildId,
+        channelId: voiceChannelId,
+        error,
+      });
+    }
+
+    const messages = lock
+      ? LOCK_CHANNEL_BUTLER_MESSAGES
+      : UNLOCK_CHANNEL_BUTLER_MESSAGES;
+    const template = pickRandom(messages);
+    await interaction.editReply({
+      content: template.replace("{user}", interaction.user.toString()),
+    });
+  } catch (error) {
+    console.error(
+      "[discord-bot] handleVoiceLockCommand failed (respondiendo de todos modos)",
+      {
+        guildId: interaction.guildId,
+        error,
+      },
+    );
+    await interaction
+      .editReply({
+        content:
+          "Ocurrió un error al actualizar la sala. Revisá que el bot tenga permiso de Gestionar Canales y volvé a intentar.",
+      })
+      .catch(() => {
+        // Si ni siquiera podemos editar la respuesta, no queda nada por hacer.
+      });
+  }
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     // Botones del player de música (estilo Rythm).
@@ -2393,6 +2526,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.commandName === "reperuanizar") {
     await handleVoiceBanCommand(interaction, false);
+    return;
+  }
+
+  if (interaction.commandName === "lock") {
+    await handleVoiceLockCommand(interaction, true);
+    return;
+  }
+
+  if (interaction.commandName === "unlock") {
+    await handleVoiceLockCommand(interaction, false);
     return;
   }
 

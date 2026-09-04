@@ -77,6 +77,14 @@ nuevos en `raid_logs`, consulta sus fights y los publica en `logsChannelId` con
 `DISCORD_BOT_TOKEN`. Los reports se filtran por zona `Raid` o por título que
 contenga `raid`.
 
+Un report recién detectado puede seguir "en vivo" (WCL sigue agregando fights
+mientras el raid continúa). Para no publicar con datos incompletos (0 kills),
+cada sync compara `fightCount` contra la sincronización anterior
+(`previousFightCount`): si creció, se considera en vivo (`status: "live"`) y
+no se publica. Si no creció, se guarda cuándo se detectó por primera vez
+(`fightsStableSince`); recién cuando pasan 6 minutos sin crecer, el report se
+marca `status: "synced"` y ahí se publica.
+
 XP:
 
 1. `GET /guilds/:guildId/xp-config`

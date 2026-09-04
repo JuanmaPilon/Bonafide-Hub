@@ -207,6 +207,14 @@ export const commandDefinitions = [
       "Vuelve a hacer visible tu sala de voz dinámica a los roles vetados",
     ),
   new SlashCommandBuilder()
+    .setName("lock")
+    .setDescription(
+      "Tranca tu sala de voz dinámica: nadie nuevo puede entrar",
+    ),
+  new SlashCommandBuilder()
+    .setName("unlock")
+    .setDescription("Destranca tu sala de voz dinámica"),
+  new SlashCommandBuilder()
     .setName("ranking")
     .setDescription(
       "Muestra el top 10 del ranking de XP del servidor",

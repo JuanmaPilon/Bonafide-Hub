@@ -210,8 +210,13 @@ export async function deleteRaidLog(
   }
 }
 
+// Cuánto tiempo tiene que pasar sin que aparezcan fights nuevos para
+// considerar el report terminado (y recién ahí publicarlo). Evita publicar
+// logs "en vivo" con 0 kills mientras el raid sigue en curso.
+const FIGHT_STABLE_THRESHOLD_MS = 6 * 60 * 1000;
+
 // Vuelve a consultar Warcraft Logs y actualiza el log guardado.
-// `changed` = aparecieron fights y todavía no se publicaron en Discord.
+// `changed` = el report dejó de crecer (terminó) y todavía no se publicó.
 export async function refreshRaidLog(id: string): Promise<{
   changed: boolean;
   error?: string;
@@ -232,15 +237,29 @@ export async function refreshRaidLog(id: string): Promise<{
       fightCount > 0 ? (current.firstFightAt ?? now) : current.firstFightAt;
     const wasPosted = current.discordPosted;
 
+    // ¿Sigue creciendo? Si el fightCount cambió desde la última vez,
+    // reiniciamos el contador de estabilidad (todavía está en vivo).
+    const grew = fightCount !== current.previousFightCount;
+    const fightsStableSince = grew ? null : (current.fightsStableSince ?? now);
+    const isStable =
+      fightCount > 0 &&
+      fightsStableSince !== null &&
+      now.getTime() - fightsStableSince.getTime() >= FIGHT_STABLE_THRESHOLD_MS;
+
+    const status =
+      fightCount === 0 ? "new" : isStable ? "synced" : "live";
+
     const updated = await prisma.raidLog.update({
       where: { id },
       data: {
         error: null,
         fightCount,
+        fightsStableSince,
         firstFightAt,
         kills,
         lastSyncedAt: now,
-        status: fightCount > 0 ? "synced" : "new",
+        previousFightCount: fightCount,
+        status,
         summary: {
           fights: summary.fights,
           title: summary.title,
@@ -252,7 +271,7 @@ export async function refreshRaidLog(id: string): Promise<{
     });
 
     return {
-      changed: fightCount > 0 && !wasPosted,
+      changed: status === "synced" && !wasPosted,
       log: toRaidLog(updated),
     };
   } catch (error) {
