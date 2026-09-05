@@ -68,6 +68,7 @@ import {
   deleteKarutaDrop,
   listOwnedKarutaCards,
   listRecentKarutaDrops,
+  processKarutaGrab,
   upsertKarutaCard,
 } from "./services/karuta-store.js";
 import {
@@ -2947,6 +2948,61 @@ export function buildApp() {
         guildId: params.guildId,
         burned: card !== null,
         card,
+      };
+    },
+  );
+
+  // Grab de una carta ya registrada (mensaje "@X took the <name> card `<code>`!").
+  // Si el code está en la colección: registra el drop (grabber + dropper =
+  // dueño anterior) y transfiere la posesión al grabber. Idempotente por
+  // sourceMessageId.
+  app.post(
+    "/internal/guilds/:guildId/karuta/grabs",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const body = (request.body ?? {}) as {
+        cardName?: string;
+        code?: string;
+        grabberUsername?: string;
+        sourceMessageId?: string;
+      };
+
+      if (!body.code) {
+        return reply.code(400).send({ ok: false, error: "Missing code" });
+      }
+      if (!body.sourceMessageId) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Missing sourceMessageId" });
+      }
+
+      const result = await processKarutaGrab({
+        cardName: body.cardName,
+        code: body.code,
+        grabberUsername: body.grabberUsername,
+        guildId: params.guildId,
+        sourceMessageId: body.sourceMessageId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        processed: result.processed,
       };
     },
   );

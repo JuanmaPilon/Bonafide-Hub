@@ -2,7 +2,9 @@ import { prisma } from "../db/prisma.js";
 
 export type KarutaDrop = {
   cardName?: string;
+  code?: string;
   createdAt: Date;
+  dropperUsername?: string;
   guildId: string;
   id: string;
   imageUrl?: string;
@@ -17,7 +19,9 @@ export type KarutaDrop = {
 
 function toKarutaDrop(record: {
   cardName: string | null;
+  code: string | null;
   createdAt: Date;
+  dropperUsername: string | null;
   guildId: string;
   id: string;
   imageUrl: string | null;
@@ -31,7 +35,9 @@ function toKarutaDrop(record: {
 }): KarutaDrop {
   return {
     cardName: record.cardName ?? undefined,
+    code: record.code ?? undefined,
     createdAt: record.createdAt,
+    dropperUsername: record.dropperUsername ?? undefined,
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
@@ -250,6 +256,8 @@ export async function deleteKarutaDrop(
 // (reconexión, doble evento) no duplica la entrada.
 export async function createKarutaDrop(input: {
   cardName?: string;
+  code?: string;
+  dropperUsername?: string;
   guildId: string;
   imageUrl?: string;
   printNumber?: number;
@@ -264,6 +272,8 @@ export async function createKarutaDrop(input: {
     const record = await prisma.karutaDrop.create({
       data: {
         cardName: input.cardName,
+        code: input.code,
+        dropperUsername: input.dropperUsername,
         guildId: input.guildId,
         imageUrl: input.imageUrl,
         printNumber: input.printNumber,
@@ -278,14 +288,80 @@ export async function createKarutaDrop(input: {
     return { created: true, drop: toKarutaDrop(record) };
   } catch (error) {
     // P2002 = unique constraint violation (sourceMessageId ya existe).
-    const isDuplicate =
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code?: string }).code === "P2002";
+    const isDuplicate = isUniqueViolation(error);
     if (isDuplicate) {
       return { created: false, drop: null };
     }
     throw error;
   }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
+// Grab de una carta ya registrada en la colección: registra el drop
+// (quién la agarró + quién la tiró = dueño anterior) y transfiere el dueño.
+// Best-effort: si la carta nunca se vio con `kv`, no está en la colección y
+// no podemos saber su rareza, así que se ignora.
+export async function processKarutaGrab(input: {
+  cardName?: string;
+  code: string;
+  grabberUsername?: string;
+  guildId: string;
+  sourceMessageId: string;
+}): Promise<{
+  processed: boolean;
+  drop: KarutaDrop | null;
+  card: KarutaCard | null;
+}> {
+  const card = await prisma.karutaCard.findUnique({
+    where: { guildId_code: { guildId: input.guildId, code: input.code } },
+  });
+  if (!card || card.status !== "owned") {
+    return { processed: false, drop: null, card: null };
+  }
+
+  let dropRecord;
+  try {
+    dropRecord = await prisma.karutaDrop.create({
+      data: {
+        cardName: card.cardName ?? input.cardName,
+        code: card.code,
+        dropperUsername: card.ownerUsername,
+        guildId: input.guildId,
+        imageUrl: card.imageUrl,
+        printNumber: card.printNumber,
+        reasons: ["grab"],
+        series: card.series,
+        sourceMessageId: input.sourceMessageId,
+        username: input.grabberUsername,
+        wishlistCount: card.wishlistCount,
+      },
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return { processed: false, drop: null, card: toKarutaCard(card) };
+    }
+    throw error;
+  }
+
+  const updated = await prisma.karutaCard.update({
+    where: { id: card.id },
+    data: {
+      ownerUsername: input.grabberUsername,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  return {
+    processed: true,
+    drop: toKarutaDrop(dropRecord),
+    card: toKarutaCard(updated),
+  };
 }

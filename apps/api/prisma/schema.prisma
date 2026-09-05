@@ -214,6 +214,8 @@ model KarutaDrop {
   guildId         String
   userId          String?
   username        String?
+  dropperUsername String?
+  code            String?
   cardName        String?
   series          String?
   printNumber     Int?

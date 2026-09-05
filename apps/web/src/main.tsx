@@ -160,7 +160,7 @@ const HUB_MODULES: Array<{
   {
     key: "karuta",
     label: "Karuta",
-    description: "Guía de comandos y drops raros de Karuta.",
+    description: "Drops, cartas y guía de comandos de Karuta.",
   },
   {
     key: "sugerencias",
@@ -634,7 +634,7 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "karuta") {
-    return "Guía de comandos y drops raros de Karuta.";
+    return "Drops, cartas y guía de comandos de Karuta.";
   }
 
   if (tab === "perfil") {
@@ -1512,7 +1512,7 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Quitar carta",
-      message: `¿Quitar "${card.cardName ?? "esta carta"}" del registro de posesión?`,
+      message: `¿Quitar "${card.cardName ?? "esta carta"}" del listado?`,
       onConfirm: () => {
         void (async () => {
           try {
@@ -3488,7 +3488,9 @@ function App() {
                           <div className="karuta-watcher-head">
                             <div>
                               <strong>Watcher de Karuta</strong>
-                              <span>Detecta drops raros automáticamente</span>
+                              <span>
+                                Detecta drops y cartas automáticamente
+                              </span>
                             </div>
                             <label className="raid-watcher-toggle">
                               <input
@@ -5432,14 +5434,14 @@ function App() {
                       onClick={() => setKarutaSection("drops")}
                       type="button"
                     >
-                      Drops raros
+                      Drops
                     </button>
                     <button
                       className={`karuta-subtab${karutaSection === "coleccion" ? " active" : ""}`}
                       onClick={() => setKarutaSection("coleccion")}
                       type="button"
                     >
-                      Colección
+                      Cartas
                     </button>
                     <button
                       className={`karuta-subtab${karutaSection === "guia" ? " active" : ""}`}
@@ -5452,12 +5454,9 @@ function App() {
 
                   {karutaSection === "drops" ? (
                     <section className="karuta-section">
-                      <h3>Drops raros</h3>
                       {karutaDrops.length === 0 ? (
                         <div className="empty-state">
-                          Todavía no se detectó ningún drop raro. Se avisa acá
-                          apenas alguien se lleva una carta con print bajo, muy
-                          wishlisteada o con algo especial.
+                          Todavía no se detectó ningún drop.
                         </div>
                       ) : (
                         <div className="karuta-drops-grid">
@@ -5478,6 +5477,9 @@ function App() {
                                   </span>
                                 ) : null}
                                 <span className="karuta-drop-user">
+                                  {drop.dropperUsername
+                                    ? `${drop.dropperUsername} lo tiró · `
+                                    : ""}
                                   {drop.username ?? "Alguien"} se la llevó
                                 </span>
                                 <div className="karuta-drop-reasons">
@@ -5491,20 +5493,6 @@ function App() {
                                       {drop.wishlistCount} en wishlist
                                     </span>
                                   ) : null}
-                                  {drop.reasons
-                                    .filter(
-                                      (reason) =>
-                                        reason !== "print-bajo" &&
-                                        reason !== "wishlist",
-                                    )
-                                    .map((reason) => (
-                                      <span
-                                        className="karuta-drop-badge"
-                                        key={reason}
-                                      >
-                                        {reason}
-                                      </span>
-                                    ))}
                                 </div>
                                 <span className="karuta-drop-date">
                                   {new Date(drop.createdAt).toLocaleString()}
@@ -5526,18 +5514,9 @@ function App() {
                     </section>
                   ) : karutaSection === "coleccion" ? (
                     <section className="karuta-section">
-                      <h3>Colección de cartas raras</h3>
-                      <p className="meta-text">
-                        Registro de posesión: el bot la agrega cuando alguien ve
-                        su propia carta con <code>kv</code> y la da de baja
-                        cuando la quema (<code>kb</code>). Se puede ajustar a
-                        mano.
-                      </p>
                       {karutaCards.length === 0 ? (
                         <div className="empty-state">
-                          Todavía no hay cartas raras registradas. Se agregan
-                          automáticamente cuando alguien hace <code>kv</code> a
-                          una carta que posee.
+                          Todavía no hay cartas registradas.
                         </div>
                       ) : (
                         <div className="karuta-drops-grid">

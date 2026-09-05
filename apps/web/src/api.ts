@@ -79,7 +79,9 @@ export type RaidLog = {
 
 export type KarutaDrop = {
   cardName?: string;
+  code?: string;
   createdAt: string;
+  dropperUsername?: string;
   guildId: string;
   id: string;
   imageUrl?: string;
