@@ -3508,6 +3508,9 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     // kv (ver carta propia): registra en la colección SOLO si es rara (OR).
     const kv = parseKarutaKv(rawEmbed, message.content);
     if (kv) {
+      console.log(
+        `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} (printMax=${guildConfig.karutaRarePrintMax ?? 10} wishlistMin=${guildConfig.karutaRareWishlistMin ?? 3})`,
+      );
       const reasons = karutaRareReasons(
         kv.printNumber,
         kv.wishlistCount,
