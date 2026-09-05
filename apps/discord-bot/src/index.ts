@@ -3086,10 +3086,10 @@ function parseKarutaKv(
   }
 
   // Línea resumen: code · ★+ · #print · wishlist · serie (·|-) nombre.
-  // El símbolo de wishlist (✦/✧) a veces está y a veces no, así que es
-  // opcional. La serie y el nombre van separados por " - " o por " · ".
+  // El símbolo de wishlist varía entre cartas (✦, ♦, o ninguno), así que
+  // aceptamos cualquier símbolo opcional antes del número.
   const summaryMatch = allText.match(
-    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*([✦✧]?\d+)\s*·\s*([^\n]+)/m,
+    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*(\D?\d+)\s*·\s*([^\n]+)/m,
   );
   if (!summaryMatch) {
     return null;
@@ -3120,7 +3120,7 @@ function parseKarutaKv(
     ownerUsername: owner,
     printNumber: Number(summaryMatch[3]),
     series,
-    wishlistCount: Number(summaryMatch[4].replace(/[✦✧]/g, "")),
+    wishlistCount: Number(summaryMatch[4].replace(/\D/g, "")),
   };
 }
 
@@ -3370,11 +3370,16 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     const grabberUsername = grab.mentionedUserId
       ? message.mentions.users.get(grab.mentionedUserId)?.username
       : undefined;
-    await postKarutaGrab(message.guildId, message.id, {
+    const saved = await postKarutaGrab(message.guildId, message.id, {
       cardName: grab.cardName,
       code: grab.code,
       grabberUsername,
     });
+    if (saved) {
+      console.log(
+        `[discord-bot] Karuta grab detectado: ${grab.code} por ${grabberUsername ?? "?"}`,
+      );
+    }
     return;
   }
 
@@ -3400,9 +3405,17 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
         guildConfig,
       );
       if (reasons.length === 0) {
+        console.log(
+          `[discord-bot] Karuta kv ignorada (no rara): ${kv.code} print=${kv.printNumber ?? "?"} wishlist=${kv.wishlistCount ?? "?"}`,
+        );
         continue;
       }
-      await postKarutaCard(message.guildId, kv);
+      const saved = await postKarutaCard(message.guildId, kv);
+      if (saved) {
+        console.log(
+          `[discord-bot] Karuta kv registrada: ${kv.code} (${kv.ownerUsername ?? "?"})`,
+        );
+      }
       continue;
     }
   }
