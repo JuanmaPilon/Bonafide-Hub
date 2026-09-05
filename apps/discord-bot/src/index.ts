@@ -3037,6 +3037,7 @@ type ParsedKarutaKv = {
   code: string;
   edition?: number;
   imageUrl?: string;
+  ownerUserId?: string;
   ownerUsername?: string;
   printNumber?: number;
   series?: string;
@@ -3057,10 +3058,11 @@ function normalizeKarutaUsername(raw: string | undefined): string | undefined {
   return cleaned || undefined;
 }
 
-// kv → ver una carta. Formato confirmado (con variantes):
+// kv → ver una carta. Formato REAL (visto en el embed crudo):
 //   Card Details
-//   Owned by <owner>
-//   <code> · ★★★★ · #<print> · [✦?]<wishlist> · <serie> (<·>|<->) <nombre>
+//   description: "Owned by <@ID>\n\n**`code`** · `★★★★` · `#print` · `◈wish` · serie · **nombre**"
+// O sea: el dueño es una MENCIÓN (<@ID>) y la línea resumen usa markdown
+// (backticks y negrita). El símbolo de wishlist varía por carta.
 function parseKarutaKv(
   embed: KarutaEmbed,
   content: string,
@@ -3076,20 +3078,31 @@ function parseKarutaKv(
     .filter(Boolean)
     .join("\n");
 
-  const ownedMatch = allText.match(/owned by\s+(.+)/i);
+  // Quitamos el markdown de Karuta (backticks y asteriscos) para parsear
+  // texto plano.
+  const plainText = allText.replace(/[`*]/g, "");
+
+  const ownedMatch = plainText.match(/owned by\s+(.+)/i);
   if (!ownedMatch) {
     return null;
   }
-  const owner = normalizeKarutaUsername(ownedMatch[1]);
-  if (!owner) {
-    return null;
+
+  const ownerRaw = ownedMatch[1].trim();
+  let ownerUserId: string | undefined;
+  let ownerUsername: string | undefined;
+  const mentionMatch = ownerRaw.match(/^<@!?(\d+)>$/);
+  if (mentionMatch) {
+    ownerUserId = mentionMatch[1];
+  } else {
+    ownerUsername = normalizeKarutaUsername(ownerRaw);
+    if (!ownerUsername) {
+      return null;
+    }
   }
 
-  // Línea resumen: code · ★+ · #print · wishlist · serie (·|-) nombre.
-  // El símbolo de wishlist varía entre cartas (✦, ♦, ⚛️, o ninguno) y puede
-  // tener más de un carácter (ej. emoji + variation selector), así que
-  // aceptamos cualquier cantidad de símbolos antes del número.
-  const summaryMatch = allText.match(
+  // Línea resumen (ya sin markdown):
+  //   <code> · ★+ · #print · [símbolo?]wishlist · serie (·|-) nombre
+  const summaryMatch = plainText.match(
     /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*(\D*\d+)\s*·\s*([^\n]+)/m,
   );
   if (!summaryMatch) {
@@ -3118,7 +3131,8 @@ function parseKarutaKv(
     code: summaryMatch[1],
     edition: summaryMatch[2].length,
     imageUrl: embed.image?.url || undefined,
-    ownerUsername: owner,
+    ownerUserId,
+    ownerUsername,
     printNumber: Number(summaryMatch[3]),
     series,
     wishlistCount: Number(summaryMatch[4].replace(/\D/g, "")),
@@ -3261,6 +3275,7 @@ async function postKarutaCard(
           code: card.code,
           edition: card.edition,
           imageUrl: card.imageUrl,
+          ownerUserId: card.ownerUserId,
           ownerUsername: card.ownerUsername,
           printNumber: card.printNumber,
           series: card.series,
@@ -3411,6 +3426,17 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
         );
         continue;
       }
+
+      // El dueño viene como mención (<@ID>) en el embed: lo resolvemos a
+      // username para mostrarlo en la colección.
+      if (kv.ownerUserId && !kv.ownerUsername) {
+        const member = await message.guild?.members
+          .fetch(kv.ownerUserId)
+          .catch(() => null);
+        kv.ownerUsername =
+          member?.user.username ?? member?.nickname ?? "Desconocido";
+      }
+
       const saved = await postKarutaCard(message.guildId, kv);
       if (saved) {
         console.log(
