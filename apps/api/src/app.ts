@@ -62,9 +62,13 @@ import {
   syncGuildWatch,
 } from "./services/raid-logs-store.js";
 import {
+  burnKarutaCard,
   createKarutaDrop,
+  deleteKarutaCard,
   deleteKarutaDrop,
+  listOwnedKarutaCards,
   listRecentKarutaDrops,
+  upsertKarutaCard,
 } from "./services/karuta-store.js";
 import {
   getGuildConfig,
@@ -2790,6 +2794,162 @@ export function buildApp() {
       created: result.created,
     };
   });
+
+  // Registro de posesión de cartas raras (alimentado por `kv` del bot).
+  // Lectura pública para miembros.
+  app.get("/guilds/:guildId/karuta/cards", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const cards = await listOwnedKarutaCards(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      cards,
+    };
+  });
+
+  // Quitar manualmente una carta del registro (admin/owner). Red de seguridad
+  // cuando el bot no puede deducir un burn/trade automáticamente.
+  app.delete(
+    "/guilds/:guildId/karuta/cards/:cardId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        cardId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.cardId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "config"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteKarutaCard(params.guildId, params.cardId);
+
+      await logAdminAction(session, params.guildId, "karuta-card:delete", {
+        details: "Carta de Karuta eliminada del registro de posesión.",
+        targetId: params.cardId,
+        targetType: "karuta-card",
+      });
+
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
+
+  // Upsert de posesión desde el bot (kv → "Owned by X"). Una carta (code)
+  // tiene un único dueño actual.
+  app.post("/internal/guilds/:guildId/karuta/cards", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const body = (request.body ?? {}) as {
+      cardName?: string;
+      code?: string;
+      edition?: number;
+      imageUrl?: string;
+      ownerUserId?: string;
+      ownerUsername?: string;
+      printNumber?: number;
+      series?: string;
+      wishlistCount?: number;
+    };
+
+    if (!body.code) {
+      return reply.code(400).send({ ok: false, error: "Missing code" });
+    }
+
+    const card = await upsertKarutaCard({
+      cardName: body.cardName,
+      code: body.code,
+      edition: body.edition,
+      guildId: params.guildId,
+      imageUrl: body.imageUrl,
+      ownerUserId: body.ownerUserId,
+      ownerUsername: body.ownerUsername,
+      printNumber: body.printNumber,
+      series: body.series,
+      wishlistCount: body.wishlistCount,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      card,
+    };
+  });
+
+  // Baja por burn desde el bot (kb → "The card has been burned.").
+  // Best-effort: kb no muestra el code, se matchea por dueño (+nombre si hay).
+  app.post(
+    "/internal/guilds/:guildId/karuta/cards/burn",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const body = (request.body ?? {}) as {
+        cardName?: string;
+        ownerUsername?: string;
+      };
+
+      const card = await burnKarutaCard({
+        cardName: body.cardName,
+        guildId: params.guildId,
+        ownerUsername: body.ownerUsername,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        burned: card !== null,
+        card,
+      };
+    },
+  );
 
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);

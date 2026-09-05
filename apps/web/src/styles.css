@@ -3361,6 +3361,14 @@ input {
   margin-top: 2px;
 }
 
+.karuta-card-code {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  word-break: break-all;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
 .karuta-command-groups {
   display: grid;
   gap: 20px;
@@ -3452,12 +3460,7 @@ input {
 }
 
 :root[data-theme="light"] .karuta-view .karuta-drop-card {
-  background: linear-gradient(
-    160deg,
-    #ffffff 0%,
-    #fff4e4 52%,
-    #ffe9d6 100%
-  );
+  background: linear-gradient(160deg, #ffffff 0%, #fff4e4 52%, #ffe9d6 100%);
   border-color: rgba(194, 105, 0, 0.3);
   box-shadow: 0 8px 20px rgba(150, 90, 20, 0.1);
 }

@@ -30,6 +30,8 @@ import {
   getXpConfig,
   deleteKarutaDrop,
   getKarutaDrops,
+  deleteKarutaCard,
+  getKarutaCards,
   importXpData,
   listCommunications,
   listDailyMessages,
@@ -68,6 +70,7 @@ import {
   type PublicLeaderboardEntry,
   type RaidLog,
   type KarutaDrop,
+  type KarutaCard,
   type ReactionRoleJob,
   type ReactionRolePairInput,
   type ReactionRolePanel,
@@ -1103,9 +1106,10 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
-  const [karutaSection, setKarutaSection] = useState<"drops" | "guia">(
-    "drops",
-  );
+  const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
+  const [karutaSection, setKarutaSection] = useState<
+    "drops" | "coleccion" | "guia"
+  >("drops");
   const [savingAction, setSavingAction] = useState<
     "config" | "xp" | "panel" | "daily" | "modules" | "permissions" | null
   >(null);
@@ -1432,6 +1436,7 @@ function App() {
   useEffect(() => {
     if (!selectedGuildId || activeTab !== "karuta") {
       setKarutaDrops([]);
+      setKarutaCards([]);
       return;
     }
     let cancelled = false;
@@ -1446,8 +1451,22 @@ function App() {
         .catch(() => {});
     };
 
+    const refreshKarutaCards = (): void => {
+      void getKarutaCards(selectedGuildId)
+        .then((cards) => {
+          if (!cancelled) {
+            setKarutaCards(cards);
+          }
+        })
+        .catch(() => {});
+    };
+
     refreshKarutaDrops();
-    const refreshTimer = window.setInterval(refreshKarutaDrops, 60_000);
+    refreshKarutaCards();
+    const refreshTimer = window.setInterval(() => {
+      refreshKarutaDrops();
+      refreshKarutaCards();
+    }, 60_000);
 
     return () => {
       cancelled = true;
@@ -1477,6 +1496,36 @@ function App() {
               error instanceof Error
                 ? error.message
                 : "No se pudo eliminar el drop.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
+  }
+
+  // Quita manualmente una carta del registro de posesión (admin/owner).
+  function handleDeleteKarutaCard(card: KarutaCard): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Quitar carta",
+      message: `¿Quitar "${card.cardName ?? "esta carta"}" del registro de posesión?`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await deleteKarutaCard(selectedGuildId, card.id);
+            setKarutaCards((current) =>
+              current.filter((entry) => entry.id !== card.id),
+            );
+            pushToast("Carta quitada del registro.", "success");
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "No se pudo quitar la carta.",
               "error",
             );
           }
@@ -5386,6 +5435,13 @@ function App() {
                       Drops raros
                     </button>
                     <button
+                      className={`karuta-subtab${karutaSection === "coleccion" ? " active" : ""}`}
+                      onClick={() => setKarutaSection("coleccion")}
+                      type="button"
+                    >
+                      Colección
+                    </button>
+                    <button
                       className={`karuta-subtab${karutaSection === "guia" ? " active" : ""}`}
                       onClick={() => setKarutaSection("guia")}
                       type="button"
@@ -5460,6 +5516,77 @@ function App() {
                                     type="button"
                                   >
                                     Eliminar
+                                  </button>
+                                ) : null}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  ) : karutaSection === "coleccion" ? (
+                    <section className="karuta-section">
+                      <h3>Colección de cartas raras</h3>
+                      <p className="meta-text">
+                        Registro de posesión: el bot la agrega cuando alguien ve
+                        su propia carta con <code>kv</code> y la da de baja
+                        cuando la quema (<code>kb</code>). Se puede ajustar a
+                        mano.
+                      </p>
+                      {karutaCards.length === 0 ? (
+                        <div className="empty-state">
+                          Todavía no hay cartas raras registradas. Se agregan
+                          automáticamente cuando alguien hace <code>kv</code> a
+                          una carta que posee.
+                        </div>
+                      ) : (
+                        <div className="karuta-drops-grid">
+                          {karutaCards.map((card) => (
+                            <article className="karuta-drop-card" key={card.id}>
+                              {card.imageUrl ? (
+                                <img
+                                  className="karuta-drop-image"
+                                  src={card.imageUrl}
+                                  alt={card.cardName ?? "Carta"}
+                                />
+                              ) : null}
+                              <div className="karuta-drop-body">
+                                <strong>{card.cardName ?? "Carta"}</strong>
+                                {card.series ? (
+                                  <span className="karuta-drop-series">
+                                    {card.series}
+                                  </span>
+                                ) : null}
+                                <span className="karuta-drop-user">
+                                  {card.ownerUsername ?? "Desconocido"} la posee
+                                </span>
+                                <div className="karuta-drop-reasons">
+                                  {card.printNumber != null ? (
+                                    <span className="karuta-drop-badge">
+                                      Print #{card.printNumber}
+                                    </span>
+                                  ) : null}
+                                  {card.wishlistCount != null ? (
+                                    <span className="karuta-drop-badge">
+                                      {card.wishlistCount} en wishlist
+                                    </span>
+                                  ) : null}
+                                  {card.edition != null ? (
+                                    <span className="karuta-drop-badge">
+                                      {"★".repeat(card.edition)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <code className="karuta-card-code">
+                                  {card.code}
+                                </code>
+                                {canAccess("config") ? (
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() => handleDeleteKarutaCard(card)}
+                                    type="button"
+                                  >
+                                    Quitar
                                   </button>
                                 ) : null}
                               </div>

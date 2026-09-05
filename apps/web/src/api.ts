@@ -110,6 +110,42 @@ export async function deleteKarutaDrop(
   );
 }
 
+export type KarutaCard = {
+  cardName?: string;
+  code: string;
+  createdAt: string;
+  edition?: number;
+  firstSeenAt: string;
+  guildId: string;
+  id: string;
+  imageUrl?: string;
+  lastSeenAt: string;
+  ownerUserId?: string;
+  ownerUsername?: string;
+  printNumber?: number;
+  series?: string;
+  status: string;
+  wishlistCount?: number;
+};
+
+export async function getKarutaCards(guildId: string): Promise<KarutaCard[]> {
+  const data = await requestJson<{ cards: KarutaCard[] }>(
+    `/guilds/${guildId}/karuta/cards`,
+    { method: "GET" },
+  );
+  return data.cards;
+}
+
+export async function deleteKarutaCard(
+  guildId: string,
+  cardId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/karuta/cards/${encodeURIComponent(cardId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export type CommunicationInstance = {
   authorName?: string;
   channelId: string;

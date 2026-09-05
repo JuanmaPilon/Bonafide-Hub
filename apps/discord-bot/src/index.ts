@@ -3088,6 +3088,121 @@ function parseKarutaDrop(
   };
 }
 
+type ParsedKarutaKv = {
+  cardName?: string;
+  code: string;
+  edition?: number;
+  imageUrl?: string;
+  ownerUsername?: string;
+  printNumber?: number;
+  series?: string;
+  wishlistCount?: number;
+};
+
+// Limpia el "owned by" para quedarnos solo con el username (saca emojis
+// decorativos tipo 👑, ⭐, etc.). Discord display names suelen ser ASCII.
+function normalizeKarutaUsername(raw: string | undefined): string | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const cleaned = raw
+    .replace(/[^\w@\s.\-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || undefined;
+}
+
+// kv → ver una carta. Formato confirmado:
+//   Card Details
+//   Owned by <owner>
+//   <code> · ★★★★ · #<print> · ✧<wishlist> · <serie> · <nombre>
+function parseKarutaKv(
+  embed: KarutaEmbed,
+  content: string,
+): ParsedKarutaKv | null {
+  const allText = [
+    content,
+    embed.title,
+    embed.description,
+    embed.author?.name,
+    embed.footer?.text,
+    ...(embed.fields ?? []).map((field) => `${field.name}: ${field.value}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const ownedMatch = allText.match(/owned by\s+(.+)/i);
+  if (!ownedMatch) {
+    return null;
+  }
+  const owner = normalizeKarutaUsername(ownedMatch[1]);
+  if (!owner) {
+    return null;
+  }
+
+  // Línea resumen: code · ★★★★ · #print · ✧wishlist · serie · nombre
+  const summaryMatch = allText.match(
+    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*✧(\d+)\s*·\s*(.+?)\s*·\s*(.+)$/m,
+  );
+  if (!summaryMatch) {
+    return null;
+  }
+
+  return {
+    cardName: summaryMatch[6].trim() || undefined,
+    code: summaryMatch[1],
+    edition: summaryMatch[2].length,
+    imageUrl: embed.image?.url || undefined,
+    ownerUsername: owner,
+    printNumber: Number(summaryMatch[3]),
+    series: summaryMatch[5].trim() || undefined,
+    wishlistCount: Number(summaryMatch[4]),
+  };
+}
+
+type ParsedKarutaBurn = {
+  cardName?: string;
+  ownerUsername?: string;
+};
+
+// kb → quemar una carta. Formato confirmado:
+//   Burn Card
+//   @ <user>, you will receive:  ...  "The card has been burned."
+function parseKarutaBurn(
+  embed: KarutaEmbed,
+  content: string,
+): ParsedKarutaBurn | null {
+  const allText = [
+    content,
+    embed.title,
+    embed.description,
+    embed.author?.name,
+    embed.footer?.text,
+    ...(embed.fields ?? []).map((field) => `${field.name}: ${field.value}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  if (!/has been burned/i.test(allText)) {
+    return null;
+  }
+
+  const ownerMatch =
+    allText.match(/@\s*([^\s,]+)\s*,\s*you will receive/i) ??
+    allText.match(/([^\s,]+)\s*,\s*you will receive/i);
+  const owner = normalizeKarutaUsername(ownerMatch?.[1]);
+
+  // El nombre de la carta no está garantizado en el texto del burn; si
+  // aparece en la descripción y no es la línea del owner, lo tomamos.
+  const description = embed.description?.trim();
+  const cardName =
+    description && !/you will receive/i.test(description)
+      ? description
+      : undefined;
+
+  return { cardName, ownerUsername: owner };
+}
+
 function evaluateKarutaRarity(
   drop: ParsedKarutaDrop,
   config: {
@@ -3165,6 +3280,102 @@ async function postKarutaDrop(
   }
 }
 
+async function postKarutaCard(
+  guildId: string,
+  card: ParsedKarutaKv,
+): Promise<boolean> {
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/cards`,
+      {
+        body: JSON.stringify({
+          cardName: card.cardName,
+          code: card.code,
+          edition: card.edition,
+          imageUrl: card.imageUrl,
+          ownerUsername: card.ownerUsername,
+          printNumber: card.printNumber,
+          series: card.series,
+          wishlistCount: card.wishlistCount,
+        }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta card upsert falló (${response.status}) para guild ${guildId}.`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta card upsert error: ${getErrorMessage(error)}`,
+    );
+    return false;
+  }
+}
+
+async function postKarutaBurn(
+  guildId: string,
+  burn: ParsedKarutaBurn,
+): Promise<boolean> {
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/cards/burn`,
+      {
+        body: JSON.stringify({
+          cardName: burn.cardName,
+          ownerUsername: burn.ownerUsername,
+        }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta card burn falló (${response.status}) para guild ${guildId}.`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta card burn error: ${getErrorMessage(error)}`,
+    );
+    return false;
+  }
+}
+
 function buildKarutaAnnouncementEmbed(drop: ParsedKarutaDrop): EmbedBuilder {
   const embed = new EmbedBuilder()
     .setTitle(`🎴 ${drop.username ?? "Alguien"} se llevó una carta rara`)
@@ -3232,6 +3443,20 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
   }
 
   for (const rawEmbed of embeds) {
+    // Orden de prioridad: burn y kv son formatos explícitos y fiables, así
+    // que se detectan antes que el drop (que es un heurístico más frágil).
+    const burn = parseKarutaBurn(rawEmbed, message.content);
+    if (burn) {
+      await postKarutaBurn(message.guildId, burn);
+      continue;
+    }
+
+    const kv = parseKarutaKv(rawEmbed, message.content);
+    if (kv) {
+      await postKarutaCard(message.guildId, kv);
+      continue;
+    }
+
     const parsed = parseKarutaDrop(rawEmbed, message.content);
     if (!parsed) {
       continue;

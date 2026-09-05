@@ -227,6 +227,32 @@ model KarutaDrop {
   @@map("karuta_drops")
 }
 
+// Registro de posesión de cartas raras de Karuta. Se alimenta con `kv`
+// (ver una carta propia → "Owned by X") y se da de baja con `kb` (burn).
+// Es best-effort: 1 carta = 1 dueño actual, con borrado manual como red.
+model KarutaCard {
+  id            String   @id @default(cuid())
+  guildId       String
+  code          String
+  cardName      String?
+  series        String?
+  printNumber   Int?
+  wishlistCount Int?
+  edition       Int?
+  imageUrl      String?
+  ownerUserId   String?
+  ownerUsername String?
+  status        String   @default("owned") // owned | burned | traded_away
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([guildId, code])
+  @@index([guildId, status])
+  @@map("karuta_cards")
+}
+
 model DiscordSession {
   id        String   @id
   createdAt DateTime @default(now())
