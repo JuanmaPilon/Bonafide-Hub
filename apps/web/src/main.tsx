@@ -888,6 +888,35 @@ const KARUTA_COMMAND_GROUPS: Array<{
     ],
   },
   {
+    title: "Tags",
+    commands: [
+      {
+        command: "ktags [user]",
+        description: "Ver los tags de un usuario",
+      },
+      {
+        command: "kaddtag [nombre]",
+        description: "Agregar un tag a tus cartas",
+      },
+      {
+        command: "kremovetag [nombre]",
+        description: "Quitar un tag",
+      },
+      {
+        command: "krenametag [viejo] [nuevo]",
+        description: "Renombrar un tag",
+      },
+      {
+        command: "kcleartags",
+        description: "Eliminar todos tus tags",
+      },
+      {
+        command: "t:tag",
+        description: "Filtro combinable: kb t:t, kc t:t, kburn t:t",
+      },
+    ],
+  },
+  {
     title: "Info",
     commands: [
       {
@@ -1041,6 +1070,9 @@ function App() {
   const [config, setConfig] = useState<GuildConfig>({});
   const [configLoaded, setConfigLoaded] = useState(false);
   const [configDirty, setConfigDirty] = useState(false);
+  const [dirtyModules, setDirtyModules] = useState<Set<string>>(new Set());
+  const [xpDirty, setXpDirty] = useState(false);
+  const savedXpRef = useRef<string | null>(null);
   const [adminAccess, setAdminAccess] = useState<AdminAccess | null>(null);
   // Rol seleccionado en el panel de Permisos de staff (solo owner).
   const [staffRoleId, setStaffRoleId] = useState("");
@@ -1257,6 +1289,15 @@ function App() {
     }
   }, [theme]);
 
+  // La config de XP tiene muchos campos: en lugar de marcar cada editor,
+  // comparamos el estado actual contra el último guardado.
+  useEffect(() => {
+    if (!xpConfig) {
+      return;
+    }
+    setXpDirty(JSON.stringify(xpConfig) !== savedXpRef.current);
+  }, [xpConfig]);
+
   useEffect(() => {
     if (!selectedGuildId) {
       return;
@@ -1283,9 +1324,14 @@ function App() {
 
         setConfig(nextConfig);
         setConfigDirty(false);
+        setDirtyModules(new Set());
         setWidgetStatus(nextWidgetStatus);
         setLeaderboard(nextLeaderboard);
         setXpConfig(nextXpConfig);
+        savedXpRef.current = nextXpConfig
+          ? JSON.stringify(nextXpConfig)
+          : null;
+        setXpDirty(false);
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -1573,10 +1619,35 @@ function App() {
     }
   }
 
-  // Marca la config de la tarjeta "Configuración varias" como modificada y
-  // actualiza el estado. El botón Guardar solo se muestra cuando hay cambios.
-  function editConfig(updater: (current: GuildConfig) => GuildConfig): void {
-    setConfigDirty(true);
+  // Marca un módulo como "con cambios sin guardar". El botón Guardar de cada
+  // tarjeta solo se muestra cuando su módulo está sucio.
+  function markDirty(module: string): void {
+    setDirtyModules((current) => new Set(current).add(module));
+  }
+
+  function clearDirty(module: string): void {
+    setDirtyModules((current) => {
+      const next = new Set(current);
+      next.delete(module);
+      return next;
+    });
+  }
+
+  function isDirty(module: string): boolean {
+    return dirtyModules.has(module);
+  }
+
+  // Actualiza la config y marca el módulo correspondiente como modificado.
+  // Sin `module`, aplica a la tarjeta "Configuración varias" (configDirty).
+  function editConfig(
+    updater: (current: GuildConfig) => GuildConfig,
+    module?: string,
+  ): void {
+    if (module) {
+      markDirty(module);
+    } else {
+      setConfigDirty(true);
+    }
     setConfig(updater);
   }
 
@@ -1601,6 +1672,7 @@ function App() {
 
   // ── Módulos activos (toggles del panel Admin) ────────────────────
   function toggleModule(key: string): void {
+    markDirty("modules");
     setConfig((current) => {
       const enabled = new Set(
         current.enabledModules && current.enabledModules.length > 0
@@ -1626,6 +1698,7 @@ function App() {
         enabledModules: config.enabledModules ?? [],
       });
       setConfig(nextConfig);
+      clearDirty("modules");
       pushToast("Módulos actualizados.", "success");
     } catch (error) {
       void error;
@@ -1645,6 +1718,7 @@ function App() {
         adminRoleModules: config.adminRoleModules ?? [],
       });
       setConfig(nextConfig);
+      clearDirty("permissions");
       pushToast("Permisos de staff actualizados.", "success");
     } catch (error) {
       void error;
@@ -1692,6 +1766,7 @@ function App() {
         dailyMessagesMaxMinutes: config.dailyMessagesMaxMinutes,
         dailyMessagesMinMinutes: config.dailyMessagesMinMinutes,
       });
+      clearDirty("daily");
       setConfig(nextConfig);
       pushToast("Configuración del loro guardada.", "success");
     } catch (error) {
@@ -1839,6 +1914,7 @@ function App() {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
         logsChannelId: config.logsChannelId,
       });
+      clearDirty("logsChannel");
       setConfig(nextConfig);
       pushToast("Canal de logs guardado.", "success");
     } catch (error) {
@@ -1863,6 +1939,7 @@ function App() {
         logsWatchServer: config.logsWatchServer,
       });
       setConfig(nextConfig);
+      clearDirty("logsWatch");
       pushToast("Vigilado de gremio guardado.", "success");
     } catch (error) {
       void error;
@@ -1881,6 +1958,8 @@ function App() {
     try {
       const nextXp = await saveXpConfig(selectedGuildId, xpConfig);
       setXpConfig(nextXp);
+      savedXpRef.current = JSON.stringify(nextXp);
+      setXpDirty(false);
       pushToast("Configuración de XP guardada.", "success");
     } catch (error) {
       void error;
@@ -3468,17 +3547,19 @@ function App() {
                           })}
                         </div>
                       </div>
-                      <div className="admin-card-footer">
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveModules()}
-                          disabled={savingAction !== null}
-                        >
-                          {savingAction === "modules"
-                            ? "Guardando…"
-                            : "Guardar módulos"}
-                        </button>
-                      </div>
+                      {isDirty("modules") ? (
+                        <div className="admin-card-footer">
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveModules()}
+                            disabled={savingAction !== null}
+                          >
+                            {savingAction === "modules"
+                              ? "Guardando…"
+                              : "Guardar módulos"}
+                          </button>
+                        </div>
+                      ) : null}
                     </details>
                   ) : null}
 
@@ -3601,7 +3682,7 @@ function App() {
                                         const nextTier = event.target.value as
                                           | StaffTier
                                           | "";
-                                        setConfig((current) => {
+                                        editConfig((current) => {
                                           const rules = [
                                             ...(current.adminRoleModules ?? []),
                                           ];
@@ -3625,7 +3706,7 @@ function App() {
                                             ...current,
                                             adminRoleModules: rules,
                                           };
-                                        });
+                                        }, "permissions");
                                       }}
                                     >
                                       <option value="">Sin acceso</option>
@@ -3645,17 +3726,19 @@ function App() {
                             })()
                           : null}
                       </div>
-                      <div className="admin-card-footer">
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveStaffPermissions()}
-                          disabled={savingAction !== null}
-                        >
-                          {savingAction === "permissions"
-                            ? "Guardando…"
-                            : "Guardar permisos"}
-                        </button>
-                      </div>
+                      {isDirty("permissions") ? (
+                        <div className="admin-card-footer">
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveStaffPermissions()}
+                            disabled={savingAction !== null}
+                          >
+                            {savingAction === "permissions"
+                              ? "Guardando…"
+                              : "Guardar permisos"}
+                          </button>
+                        </div>
+                      ) : null}
                     </details>
                   ) : null}
 
@@ -4176,11 +4259,14 @@ function App() {
                               className="select"
                               value={config.dailyMessagesChannelId ?? ""}
                               onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  dailyMessagesChannelId:
-                                    event.target.value || undefined,
-                                }))
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    dailyMessagesChannelId:
+                                      event.target.value || undefined,
+                                  }),
+                                  "daily",
+                                )
                               }
                             >
                               <option value="">Sin canal configurado</option>
@@ -4198,11 +4284,14 @@ function App() {
                               min="1"
                               value={config.dailyMessagesMinMinutes ?? 15}
                               onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  dailyMessagesMinMinutes:
-                                    Number(event.target.value) || 1,
-                                }))
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    dailyMessagesMinMinutes:
+                                      Number(event.target.value) || 1,
+                                  }),
+                                  "daily",
+                                )
                               }
                             />
                           </label>
@@ -4213,11 +4302,14 @@ function App() {
                               min="1"
                               value={config.dailyMessagesMaxMinutes ?? 90}
                               onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  dailyMessagesMaxMinutes:
-                                    Number(event.target.value) || 1,
-                                }))
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    dailyMessagesMaxMinutes:
+                                      Number(event.target.value) || 1,
+                                  }),
+                                  "daily",
+                                )
                               }
                             />
                           </label>
@@ -4229,24 +4321,29 @@ function App() {
                               type="checkbox"
                               checked={config.dailyMessagesEnabled ?? false}
                               onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  dailyMessagesEnabled: event.target.checked,
-                                }))
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    dailyMessagesEnabled: event.target.checked,
+                                  }),
+                                  "daily",
+                                )
                               }
                             />
                             <span>Loro activado</span>
                           </label>
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSaveDailyConfig()}
-                            disabled={savingAction !== null}
-                            type="button"
-                          >
-                            {savingAction === "daily"
-                              ? "Guardando…"
-                              : "Guardar configuración"}
-                          </button>
+                          {isDirty("daily") ? (
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleSaveDailyConfig()}
+                              disabled={savingAction !== null}
+                              type="button"
+                            >
+                              {savingAction === "daily"
+                                ? "Guardando…"
+                                : "Guardar configuración"}
+                            </button>
+                          ) : null}
                         </div>
 
                         <div className="daily-messages-editor">
@@ -4346,10 +4443,14 @@ function App() {
                             className="select"
                             value={config.logsChannelId ?? ""}
                             onChange={(event) =>
-                              setConfig((current) => ({
-                                ...current,
-                                logsChannelId: event.target.value || undefined,
-                              }))
+                              editConfig(
+                                (current) => ({
+                                  ...current,
+                                  logsChannelId:
+                                    event.target.value || undefined,
+                                }),
+                                "logsChannel",
+                              )
                             }
                           >
                             <option value="">Sin canal configurado</option>
@@ -4360,16 +4461,18 @@ function App() {
                             ))}
                           </select>
                         </label>
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveLogsConfig()}
-                          disabled={savingAction !== null}
-                          type="button"
-                        >
-                          {savingAction === "config"
-                            ? "Guardando…"
-                            : "Guardar canal"}
-                        </button>
+                        {isDirty("logsChannel") ? (
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveLogsConfig()}
+                            disabled={savingAction !== null}
+                            type="button"
+                          >
+                            {savingAction === "config"
+                              ? "Guardando…"
+                              : "Guardar canal"}
+                          </button>
+                        ) : null}
 
                         <div className="raid-watcher-editor">
                           <div className="raid-watcher-head">
@@ -4382,10 +4485,13 @@ function App() {
                                 type="checkbox"
                                 checked={config.logsWatchEnabled ?? false}
                                 onChange={(event) =>
-                                  setConfig((current) => ({
-                                    ...current,
-                                    logsWatchEnabled: event.target.checked,
-                                  }))
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      logsWatchEnabled: event.target.checked,
+                                    }),
+                                    "logsWatch",
+                                  )
                                 }
                               />
                               <span
@@ -4401,11 +4507,14 @@ function App() {
                               <input
                                 value={config.logsWatchGuild ?? ""}
                                 onChange={(event) =>
-                                  setConfig((current) => ({
-                                    ...current,
-                                    logsWatchGuild:
-                                      event.target.value || undefined,
-                                  }))
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      logsWatchGuild:
+                                        event.target.value || undefined,
+                                    }),
+                                    "logsWatch",
+                                  )
                                 }
                                 placeholder="Nombre en Warcraft Logs"
                               />
@@ -4415,11 +4524,14 @@ function App() {
                               <input
                                 value={config.logsWatchServer ?? ""}
                                 onChange={(event) =>
-                                  setConfig((current) => ({
-                                    ...current,
-                                    logsWatchServer:
-                                      event.target.value || undefined,
-                                  }))
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      logsWatchServer:
+                                        event.target.value || undefined,
+                                    }),
+                                    "logsWatch",
+                                  )
                                 }
                                 placeholder="Nombre del realm"
                               />
@@ -4430,10 +4542,13 @@ function App() {
                                 className="select"
                                 value={config.logsWatchRegion ?? "EU"}
                                 onChange={(event) =>
-                                  setConfig((current) => ({
-                                    ...current,
-                                    logsWatchRegion: event.target.value,
-                                  }))
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      logsWatchRegion: event.target.value,
+                                    }),
+                                    "logsWatch",
+                                  )
                                 }
                               >
                                 <option value="EU">EU</option>
@@ -4441,14 +4556,16 @@ function App() {
                               </select>
                             </label>
                           </div>
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSaveLogsWatch()}
-                            disabled={savingAction !== null}
-                            type="button"
-                          >
-                            Guardar
-                          </button>
+                          {isDirty("logsWatch") ? (
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleSaveLogsWatch()}
+                              disabled={savingAction !== null}
+                              type="button"
+                            >
+                              Guardar
+                            </button>
+                          ) : null}
                         </div>
 
                         <div className="daily-messages-editor">
@@ -4898,17 +5015,19 @@ function App() {
                               </button>
                             </div>
                           </div>
-                          <div className="admin-card-footer">
-                            <button
-                              className="primary-button"
-                              onClick={() => void handleSaveXp()}
-                              disabled={savingAction !== null}
-                            >
-                              {savingAction === "xp"
-                                ? "Guardando…"
-                                : "Guardar configuración de XP"}
-                            </button>
-                          </div>
+                          {xpDirty ? (
+                            <div className="admin-card-footer">
+                              <button
+                                className="primary-button"
+                                onClick={() => void handleSaveXp()}
+                                disabled={savingAction !== null}
+                              >
+                                {savingAction === "xp"
+                                  ? "Guardando…"
+                                  : "Guardar configuración de XP"}
+                              </button>
+                            </div>
+                          ) : null}
                         </>
                       ) : (
                         <div className="admin-card-body">

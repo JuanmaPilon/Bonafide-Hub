@@ -3051,6 +3051,19 @@ function parseKarutaDrop(
 
   const cardName = embed.title?.trim() || undefined;
   const imageUrl = embed.image?.url || undefined;
+  const username = embed.author?.name?.trim() || undefined;
+
+  // Solo contamos "grabs" reales. Karuta reutiliza el mismo layout de carta
+  // para `kv` (ver una carta) que para un drop, y una vista NO es una
+  // obtención. Salteamos el mensaje si:
+  //   - no tiene autor (no sabemos quién la obtuvo), o
+  //   - el texto parece la vista de una carta ya poseída por alguien.
+  if (!username) {
+    return null;
+  }
+  if (/owned by|belongs to|\bowner\b/i.test(allText)) {
+    return null;
+  }
   if (!cardName && !imageUrl) {
     return null;
   }
@@ -3070,7 +3083,7 @@ function parseKarutaDrop(
     printNumber,
     reasons: [],
     series: seriesMatch?.[1]?.trim() || undefined,
-    username: embed.author?.name?.trim() || undefined,
+    username,
     wishlistCount,
   };
 }
