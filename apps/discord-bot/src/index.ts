@@ -3042,15 +3042,15 @@ const pendingCardCompanionWishlists = new Map<
 
 type ParsedCardCompanionLine = {
   cardName: string;
-  printNumber?: number;
   series?: string;
   wishlistCount?: number;
 };
 
 // Card Companion, al droppear, postea una lista con la wishlist de cada
-// carta. Formato por línea:
-//   "<idx> <print> ⭐ <wishlist> - <nombre> · <serie>"
-// Ej: "1 1 ⭐ 1 - Silque · Fire Emblem Echoes: Shadows of Valentia"
+// carta. Formato por línea (markdown):
+//   ![🃏](icono) ![:no_N:](emoji) `♡` `N` · **Nombre** · Serie
+// Ej: "![🃏](…) ![:no_1:](…) `♡` `1` · **Roux Louka** · Mobile Suit Gundam ZZ"
+// El número tras `♡` es la wishlist; el nombre va en negrita.
 function parseCardCompanionDrop(
   content: string,
 ): ParsedCardCompanionLine[] {
@@ -3061,16 +3061,15 @@ function parseCardCompanionDrop(
       continue;
     }
     const match = line.match(
-      /^\d+\s+(\d+)\s*⭐\s*(\d+)\s*-\s*(.+?)\s*·\s*(.+)$/,
+      /`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.+)$/,
     );
     if (!match) {
       continue;
     }
     lines.push({
-      printNumber: Number(match[1]),
-      wishlistCount: Number(match[2]),
-      cardName: match[3].trim(),
-      series: match[4].trim() || undefined,
+      wishlistCount: Number(match[1]),
+      cardName: match[2].trim(),
+      series: match[3].trim() || undefined,
     });
   }
   return lines;
