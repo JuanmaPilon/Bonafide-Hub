@@ -3086,10 +3086,11 @@ function parseKarutaKv(
   }
 
   // Línea resumen: code · ★+ · #print · wishlist · serie (·|-) nombre.
-  // El símbolo de wishlist varía entre cartas (✦, ♦, o ninguno), así que
-  // aceptamos cualquier símbolo opcional antes del número.
+  // El símbolo de wishlist varía entre cartas (✦, ♦, ⚛️, o ninguno) y puede
+  // tener más de un carácter (ej. emoji + variation selector), así que
+  // aceptamos cualquier cantidad de símbolos antes del número.
   const summaryMatch = allText.match(
-    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*(\D?\d+)\s*·\s*([^\n]+)/m,
+    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*(\D*\d+)\s*·\s*([^\n]+)/m,
   );
   if (!summaryMatch) {
     return null;
