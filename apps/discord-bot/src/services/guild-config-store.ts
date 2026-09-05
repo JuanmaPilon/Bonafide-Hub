@@ -10,6 +10,11 @@ type GuildConfig = {
   dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
+  karutaBotUserId?: string;
+  karutaChannelId?: string;
+  karutaRarePrintMax?: number;
+  karutaRareWishlistMin?: number;
+  karutaWatchEnabled?: boolean;
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
@@ -57,6 +62,11 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     dailyMessagesMinMinutes: input.dailyMessagesMinMinutes ?? 15,
     defaultRoleId: input.defaultRoleId,
     dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
+    karutaBotUserId: input.karutaBotUserId,
+    karutaChannelId: input.karutaChannelId,
+    karutaRarePrintMax: input.karutaRarePrintMax ?? 10,
+    karutaRareWishlistMin: input.karutaRareWishlistMin ?? 3,
+    karutaWatchEnabled: input.karutaWatchEnabled ?? false,
     memberLogChannelId: input.memberLogChannelId,
     musicEnabled: input.musicEnabled ?? true,
     musicRoleIds: input.musicRoleIds ?? [],
@@ -70,6 +80,8 @@ function hasAnyConfigData(config: GuildConfig): boolean {
   return Boolean(
     config.dailyMessagesChannelId ||
     config.dynamicVoiceCreateChannelId ||
+    config.karutaChannelId ||
+    config.karutaWatchEnabled ||
     config.memberLogChannelId ||
     (config.reactionRoles?.length ?? 0) > 0 ||
     (config.temporaryVoiceChannelIds?.length ?? 0) > 0,

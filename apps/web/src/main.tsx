@@ -28,6 +28,7 @@ import {
   getMemberProfile,
   getPublicLeaderboard,
   getXpConfig,
+  getKarutaDrops,
   importXpData,
   listCommunications,
   listDailyMessages,
@@ -65,6 +66,7 @@ import {
   type MemberProfile,
   type PublicLeaderboardEntry,
   type RaidLog,
+  type KarutaDrop,
   type ReactionRoleJob,
   type ReactionRolePairInput,
   type ReactionRolePanel,
@@ -99,7 +101,7 @@ type HubTab =
   | "raids"
   | "eventos"
   | "memes"
-  | "muro"
+  | "karuta"
   | "perfil"
   | "sugerencias"
   | "admin";
@@ -111,7 +113,7 @@ const VALID_TABS: HubTab[] = [
   "raids",
   "eventos",
   "memes",
-  "muro",
+  "karuta",
   "perfil",
   "sugerencias",
   "admin",
@@ -152,9 +154,9 @@ const HUB_MODULES: Array<{
     description: "Highlights, clips y contenido destacado.",
   },
   {
-    key: "muro",
-    label: "Muro",
-    description: "Publicaciones y mensajes destacados del muro.",
+    key: "karuta",
+    label: "Karuta",
+    description: "Guía de comandos y drops raros de Karuta.",
   },
   {
     key: "sugerencias",
@@ -206,6 +208,11 @@ function tierForModules(modules: string[]): StaffTier | null {
 function isModuleEnabled(config: GuildConfig, moduleKey: string): boolean {
   const enabled = config.enabledModules;
   if (!enabled || enabled.length === 0) {
+    return true;
+  }
+  // "muro" era el nombre anterior de "karuta": si una guild ya configuró
+  // sus módulos antes del rename, seguimos respetando esa elección.
+  if (moduleKey === "karuta" && enabled.includes("muro")) {
     return true;
   }
   return enabled.includes(moduleKey);
@@ -542,8 +549,8 @@ function tabLabel(tab: HubTab): string {
     return "Memes";
   }
 
-  if (tab === "muro") {
-    return "Muro";
+  if (tab === "karuta") {
+    return "Karuta";
   }
 
   if (tab === "perfil") {
@@ -582,8 +589,8 @@ function panelTitle(tab: HubTab): string {
     return "Memes";
   }
 
-  if (tab === "muro") {
-    return "Muro de la Comunidad";
+  if (tab === "karuta") {
+    return "Karuta";
   }
 
   if (tab === "perfil") {
@@ -622,8 +629,8 @@ function panelDescription(tab: HubTab): string {
     return "Highlights, clips y contenido curado de la comunidad.";
   }
 
-  if (tab === "muro") {
-    return "Perfiles destacados, hall of fame y contribuciones clave.";
+  if (tab === "karuta") {
+    return "Guía de comandos y drops raros de Karuta.";
   }
 
   if (tab === "perfil") {
@@ -794,6 +801,110 @@ const PODIUM_TIERS = [
   { color: "#b87333", label: "Cobre" },
 ] as const;
 
+// Guía de comandos de Karuta con el prefijo del server ("k" + comando).
+// Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
+// renombra comandos, esta lista se actualiza acá.
+const KARUTA_COMMAND_GROUPS: Array<{
+  title: string;
+  commands: Array<{ command: string; description: string }>;
+}> = [
+  {
+    title: "Diario y cooldowns",
+    commands: [
+      { command: "kdrop", description: "Larga un set de cartas en el canal" },
+      { command: "kdaily", description: "Bonus de gold cada 23.5 horas" },
+      {
+        command: "kvote",
+        description: "Link para votar (1 ticket cada 12h, 2 vie-dom)",
+      },
+      {
+        command: "kremind",
+        description: "Ver o activar aviso por DM de vote/daily/drop/grab",
+      },
+    ],
+  },
+  {
+    title: "Colección",
+    commands: [
+      {
+        command: "kcollection [user]",
+        description: "Ver la colección de alguien",
+      },
+      {
+        command: "kview [código]",
+        description: "Ver una carta en alta resolución",
+      },
+      { command: "klookup [personaje]", description: "Buscar un personaje" },
+    ],
+  },
+  {
+    title: "Wishlist",
+    commands: [
+      {
+        command: "kwishlist [user]",
+        description: "Ver la wishlist de alguien",
+      },
+      {
+        command: "kwishadd [personaje]",
+        description: "Agregar un personaje a tu wishlist",
+      },
+      {
+        command: "kwishremove [personaje]",
+        description: "Sacar un personaje de tu wishlist",
+      },
+      {
+        command: "kwishwatch",
+        description: "Avisa por acá cuando dropea algo de tu wishlist",
+      },
+    ],
+  },
+  {
+    title: "Cartas e ítems",
+    commands: [
+      {
+        command: "kburn [código]",
+        description: "Destruye una carta y da recursos",
+      },
+      { command: "kgive", description: "Regalar una carta a otro user" },
+      { command: "ktrade", description: "Tradear una carta con otro user" },
+      {
+        command: "kmultitrade",
+        description: "Tradear varias cartas/ítems a la vez",
+      },
+      { command: "kitems [user]", description: "Ver el inventario de alguien" },
+      { command: "kuse", description: "Usar un ítem del inventario" },
+    ],
+  },
+  {
+    title: "Tiendas",
+    commands: [
+      { command: "kitemshop", description: "Tienda de ítems estándar" },
+      { command: "kgemshop", description: "Tienda de gemas" },
+      { command: "kticketshop", description: "Tienda de tickets" },
+      {
+        command: "kbuy [cantidad]",
+        description: "Comprar un ítem de una tienda",
+      },
+    ],
+  },
+  {
+    title: "Info",
+    commands: [
+      {
+        command: "kuserinfo [user]",
+        description: "Ver detalles de un usuario",
+      },
+      { command: "kserverinfo", description: "Ver detalles del servidor" },
+      { command: "kchestview", description: "Ver el cofre del servidor" },
+      {
+        command: "kchestgive [cantidad]",
+        description: "Contribuir gemas al cofre",
+      },
+      { command: "khelp", description: "Lista completa de comandos de Karuta" },
+    ],
+  },
+];
+
 function HomeView({
   boostCount,
   boosters,
@@ -957,6 +1068,7 @@ function App() {
   const [dailyMessageDraft, setDailyMessageDraft] = useState("");
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [raidLogUrl, setRaidLogUrl] = useState("");
+  const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
   const [savingAction, setSavingAction] = useState<
     "config" | "xp" | "panel" | "daily" | "modules" | "permissions" | null
   >(null);
@@ -1260,6 +1372,32 @@ function App() {
 
     refreshRaidLogs();
     const refreshTimer = window.setInterval(refreshRaidLogs, 60_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+    };
+  }, [activeTab, selectedGuildId]);
+
+  useEffect(() => {
+    if (!selectedGuildId || activeTab !== "karuta") {
+      setKarutaDrops([]);
+      return;
+    }
+    let cancelled = false;
+
+    const refreshKarutaDrops = (): void => {
+      void getKarutaDrops(selectedGuildId)
+        .then((drops) => {
+          if (!cancelled) {
+            setKarutaDrops(drops);
+          }
+        })
+        .catch(() => {});
+    };
+
+    refreshKarutaDrops();
+    const refreshTimer = window.setInterval(refreshKarutaDrops, 60_000);
 
     return () => {
       cancelled = true;
@@ -2545,21 +2683,19 @@ function App() {
       listReactionRoleJobs(selectedGuildId),
       listDailyMessages(selectedGuildId),
     ])
-      .then(
-        ([channels, textCh, roles, panels, emojis, jobs, daily]) => {
-          if (cancelled) {
-            return;
-          }
+      .then(([channels, textCh, roles, panels, emojis, jobs, daily]) => {
+        if (cancelled) {
+          return;
+        }
 
-          setVoiceChannels(channels);
-          setTextChannels(textCh);
-          setGuildRoles(roles);
-          setReactionPanels(panels);
-          setGuildEmojis(emojis);
-          setRrJobs(jobs);
-          setDailyMessages(daily);
-        },
-      )
+        setVoiceChannels(channels);
+        setTextChannels(textCh);
+        setGuildRoles(roles);
+        setReactionPanels(panels);
+        setGuildEmojis(emojis);
+        setRrJobs(jobs);
+        setDailyMessages(daily);
+      })
       .catch((error: unknown) => {
         if (!cancelled) {
           void error;
@@ -3175,6 +3311,96 @@ function App() {
                           </label>
                           <p className="suggestion-recipient-hint">
                             Sin selección, se envían al owner.
+                          </p>
+                        </div>
+
+                        <div className="karuta-watcher-editor">
+                          <div className="karuta-watcher-head">
+                            <div>
+                              <strong>Watcher de Karuta</strong>
+                              <span>
+                                Detecta drops raros automáticamente
+                              </span>
+                            </div>
+                            <label className="raid-watcher-toggle">
+                              <input
+                                type="checkbox"
+                                checked={config.karutaWatchEnabled ?? false}
+                                onChange={(event) =>
+                                  setConfig((current) => ({
+                                    ...current,
+                                    karutaWatchEnabled: event.target.checked,
+                                  }))
+                                }
+                              />
+                              <span
+                                className="raid-watcher-switch"
+                                aria-hidden="true"
+                              />
+                              <span className="sr-only">Activar watcher</span>
+                            </label>
+                          </div>
+                          <div className="form-grid">
+                            <label>
+                              <span>Canal de Karuta</span>
+                              <select
+                                className="select"
+                                value={config.karutaChannelId ?? ""}
+                                onChange={(event) =>
+                                  setConfig((current) => ({
+                                    ...current,
+                                    karutaChannelId:
+                                      event.target.value || undefined,
+                                  }))
+                                }
+                              >
+                                <option value="">Sin canal configurado</option>
+                                {textChannels.map((channel) => (
+                                  <option key={channel.id} value={channel.id}>
+                                    {channel.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Print máximo para "rara"</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10000}
+                                value={config.karutaRarePrintMax ?? 10}
+                                onChange={(event) => {
+                                  const raw = event.target.value;
+                                  setConfig((current) => ({
+                                    ...current,
+                                    karutaRarePrintMax:
+                                      raw === "" ? undefined : Number(raw),
+                                  }));
+                                }}
+                              />
+                            </label>
+                            <label>
+                              <span>Wishlists mínimas</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={100000}
+                                value={config.karutaRareWishlistMin ?? 3}
+                                onChange={(event) => {
+                                  const raw = event.target.value;
+                                  setConfig((current) => ({
+                                    ...current,
+                                    karutaRareWishlistMin:
+                                      raw === "" ? undefined : Number(raw),
+                                  }));
+                                }}
+                              />
+                            </label>
+                          </div>
+                          <p className="suggestion-recipient-hint">
+                            Una carta se considera rara si su print es igual o
+                            menor al máximo, o si está en al menos esa cantidad
+                            de wishlists. Se guarda con el botón "Guardar".
                           </p>
                         </div>
                       </div>
@@ -4990,6 +5216,98 @@ function App() {
                       {sendingSuggestion ? "Enviando…" : "Enviar sugerencia"}
                     </button>
                   </div>
+                </div>
+              ) : activeTab === "karuta" ? (
+                <div className="karuta-view">
+                  <section className="karuta-section">
+                    <h3>Drops raros</h3>
+                    {karutaDrops.length === 0 ? (
+                      <div className="empty-state">
+                        Todavía no se detectó ningún drop raro. Se avisa acá
+                        apenas alguien se lleva una carta con print bajo, muy
+                        wishlisteada o con algo especial.
+                      </div>
+                    ) : (
+                      <div className="karuta-drops-grid">
+                        {karutaDrops.map((drop) => (
+                          <article className="karuta-drop-card" key={drop.id}>
+                            {drop.imageUrl ? (
+                              <img
+                                className="karuta-drop-image"
+                                src={drop.imageUrl}
+                                alt={drop.cardName ?? "Carta"}
+                              />
+                            ) : null}
+                            <div className="karuta-drop-body">
+                              <strong>{drop.cardName ?? "Carta"}</strong>
+                              {drop.series ? (
+                                <span className="karuta-drop-series">
+                                  {drop.series}
+                                </span>
+                              ) : null}
+                              <span className="karuta-drop-user">
+                                {drop.username ?? "Alguien"} se la llevó
+                              </span>
+                              <div className="karuta-drop-reasons">
+                                {drop.printNumber != null ? (
+                                  <span className="karuta-drop-badge">
+                                    Print #{drop.printNumber}
+                                  </span>
+                                ) : null}
+                                {drop.wishlistCount != null ? (
+                                  <span className="karuta-drop-badge">
+                                    {drop.wishlistCount} en wishlist
+                                  </span>
+                                ) : null}
+                                {drop.reasons
+                                  .filter(
+                                    (reason) =>
+                                      reason !== "print-bajo" &&
+                                      reason !== "wishlist",
+                                  )
+                                  .map((reason) => (
+                                    <span
+                                      className="karuta-drop-badge"
+                                      key={reason}
+                                    >
+                                      {reason}
+                                    </span>
+                                  ))}
+                              </div>
+                              <span className="karuta-drop-date">
+                                {new Date(drop.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="karuta-section">
+                    <h3>Guía de comandos</h3>
+                    <p className="meta-text">
+                      Comandos de Karuta con el prefijo de este server.
+                    </p>
+                    <div className="karuta-command-groups">
+                      {KARUTA_COMMAND_GROUPS.map((group) => (
+                        <div className="karuta-command-group" key={group.title}>
+                          <h4>{group.title}</h4>
+                          <div className="karuta-command-list">
+                            {group.commands.map((entry) => (
+                              <div
+                                className="karuta-command-row"
+                                key={entry.command}
+                              >
+                                <code>{entry.command}</code>
+                                <span>{entry.description}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 </div>
               ) : activeTab === "dashboard" ? null : (
                 <div className="empty-state">

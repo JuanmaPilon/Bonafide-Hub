@@ -130,6 +130,7 @@ Endpoints:
 7. `GET /internal/guilds/:guildId/reaction-roles/jobs`
 8. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
 9. `GET /internal/guilds/:guildId/daily-messages` (frases habilitadas del loro)
+10. `POST /internal/guilds/:guildId/karuta/drops` (drops raros detectados por el bot; idempotente)
 
 ## 8. Persistencia actual
 

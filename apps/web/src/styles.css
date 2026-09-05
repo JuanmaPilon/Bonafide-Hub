@@ -3258,6 +3258,153 @@ input {
   }
 }
 
+/* ---------- Karuta (guía de comandos + drops raros) ---------- */
+
+.karuta-view {
+  display: grid;
+  gap: 28px;
+}
+
+.karuta-section h3 {
+  margin: 0 0 4px;
+}
+
+.karuta-drops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.karuta-drop-card {
+  display: grid;
+  gap: 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(134, 158, 214, 0.2);
+  background: rgba(12, 19, 37, 0.55);
+}
+
+.karuta-drop-image {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+}
+
+.karuta-drop-body {
+  display: grid;
+  gap: 4px;
+  padding: 0 12px 12px;
+}
+
+.karuta-drop-series {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.karuta-drop-user {
+  font-size: 0.85rem;
+}
+
+.karuta-drop-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.karuta-drop-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 180, 84, 0.4);
+  background: rgba(255, 180, 84, 0.1);
+  color: #ffb454;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.karuta-drop-date {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin-top: 2px;
+}
+
+.karuta-command-groups {
+  display: grid;
+  gap: 20px;
+  margin-top: 14px;
+}
+
+.karuta-command-group h4 {
+  margin: 0 0 8px;
+  color: var(--accent, #6aa8ff);
+}
+
+.karuta-command-list {
+  display: grid;
+  gap: 6px;
+}
+
+.karuta-command-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(134, 158, 214, 0.12);
+}
+
+.karuta-command-row code {
+  flex: 0 0 auto;
+  min-width: 160px;
+  color: #ffb454;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+}
+
+.karuta-command-row span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.karuta-watcher-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(255, 180, 84, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 180, 84, 0.06);
+}
+
+.karuta-watcher-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.karuta-watcher-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.karuta-watcher-head span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 640px) {
+  .karuta-command-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .karuta-command-row code {
+    min-width: 0;
+  }
+}
+
 /* ============================================================
    Tema claro (light mode)
    Se activa con data-theme="light" en <html>.
@@ -3422,6 +3569,7 @@ input {
 :root[data-theme="light"] .raid-log-fight,
 :root[data-theme="light"] .raid-log-watcher,
 :root[data-theme="light"] .raid-logs-admin,
+:root[data-theme="light"] .karuta-drop-card,
 :root[data-theme="light"] .profile-badge,
 :root[data-theme="light"] .profile-stat,
 :root[data-theme="light"] .profile-role,

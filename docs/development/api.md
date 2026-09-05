@@ -124,6 +124,9 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 6. `GET /internal/guilds/:guildId/reaction-roles/jobs`
 7. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
 8. `GET /internal/guilds/:guildId/daily-messages` (solo frases habilitadas)
+9. `POST /internal/guilds/:guildId/karuta/drops` (detector de drops raros de Karuta; idempotente por `sourceMessageId`)
+
+Drops de Karuta (público para miembros de la guild): `GET /guilds/:guildId/karuta/drops`
 
 > **Merge selectivo en el PUT de config**: el bot no conoce todos los campos que administra el hub (módulos, sugerencias, permisos de staff, logs de raid). El PUT interno **solo fusiona los campos propios del bot** (`reactionRoles`, `temporaryVoiceChannelIds`, canales del loro, `defaultRoleId`, `musicRoleIds`, etc.) sobre la config actual. Los campos del hub se preservan y el bot nunca los resetea.
 

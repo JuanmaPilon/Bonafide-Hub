@@ -22,6 +22,10 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  karutaChannelId?: string;
+  karutaRarePrintMax?: number;
+  karutaRareWishlistMin?: number;
+  karutaWatchEnabled?: boolean;
   logsChannelId?: string;
   logsWatchEnabled?: boolean;
   logsWatchGuild?: string;
@@ -72,6 +76,29 @@ export type RaidLog = {
   updatedAt: string;
   zone?: number | null;
 };
+
+export type KarutaDrop = {
+  cardName?: string;
+  createdAt: string;
+  guildId: string;
+  id: string;
+  imageUrl?: string;
+  printNumber?: number;
+  reasons: string[];
+  series?: string;
+  sourceMessageId: string;
+  userId?: string;
+  username?: string;
+  wishlistCount?: number;
+};
+
+export async function getKarutaDrops(guildId: string): Promise<KarutaDrop[]> {
+  const data = await requestJson<{ drops: KarutaDrop[] }>(
+    `/guilds/${guildId}/karuta/drops`,
+    { method: "GET" },
+  );
+  return data.drops;
+}
 
 export type CommunicationInstance = {
   authorName?: string;
@@ -340,9 +367,7 @@ export type GuildMember = {
   username: string;
 };
 
-export async function getGuildMembers(
-  guildId: string,
-): Promise<GuildMember[]> {
+export async function getGuildMembers(guildId: string): Promise<GuildMember[]> {
   const data = await requestJson<{ members: GuildMember[] }>(
     `/guilds/${guildId}/members`,
     {

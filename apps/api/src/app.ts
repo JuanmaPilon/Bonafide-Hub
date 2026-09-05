@@ -62,6 +62,10 @@ import {
   syncGuildWatch,
 } from "./services/raid-logs-store.js";
 import {
+  createKarutaDrop,
+  listRecentKarutaDrops,
+} from "./services/karuta-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -2666,6 +2670,91 @@ export function buildApp() {
     };
   });
 
+  // Feed de drops raros de Karuta detectados por el bot (lectura pública
+  // para cualquier miembro; la config de vigilado vive en /guilds/:id/config).
+  app.get("/guilds/:guildId/karuta/drops", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const drops = await listRecentKarutaDrops(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      drops,
+    };
+  });
+
+  // El bot llama esto cuando detecta un grab raro de Karuta en el canal
+  // vigilado. Idempotente por sourceMessageId (evita duplicados si el bot
+  // reprocesa el mismo mensaje).
+  app.post("/internal/guilds/:guildId/karuta/drops", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const body = (request.body ?? {}) as {
+      cardName?: string;
+      imageUrl?: string;
+      printNumber?: number;
+      reasons?: string[];
+      series?: string;
+      sourceMessageId?: string;
+      userId?: string;
+      username?: string;
+      wishlistCount?: number;
+    };
+
+    if (!body.sourceMessageId) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Missing sourceMessageId",
+      });
+    }
+
+    const result = await createKarutaDrop({
+      cardName: body.cardName,
+      guildId: params.guildId,
+      imageUrl: body.imageUrl,
+      printNumber: body.printNumber,
+      reasons: body.reasons ?? [],
+      series: body.series,
+      sourceMessageId: body.sourceMessageId,
+      userId: body.userId,
+      username: body.username,
+      wishlistCount: body.wishlistCount,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      created: result.created,
+    };
+  });
+
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -2808,6 +2897,22 @@ export function buildApp() {
 
     if (body.logsChannelId !== undefined) {
       allowedBody.logsChannelId = body.logsChannelId;
+    }
+
+    if (body.karutaChannelId !== undefined) {
+      allowedBody.karutaChannelId = body.karutaChannelId;
+    }
+
+    if (body.karutaWatchEnabled !== undefined) {
+      allowedBody.karutaWatchEnabled = body.karutaWatchEnabled;
+    }
+
+    if (body.karutaRarePrintMax !== undefined) {
+      allowedBody.karutaRarePrintMax = body.karutaRarePrintMax;
+    }
+
+    if (body.karutaRareWishlistMin !== undefined) {
+      allowedBody.karutaRareWishlistMin = body.karutaRareWishlistMin;
     }
 
     if (body.dailyMessagesChannelId !== undefined) {

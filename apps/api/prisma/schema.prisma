@@ -40,6 +40,15 @@ model GuildConfig {
   suggestionsDmUserId          String?
   // Rangos (owner/admin/officer) que reciben las sugerencias.
   suggestionsDmTiers           String[] @default([])
+  // Vigilado de Karuta: detecta grabs de cartas raras (print bajo, muy
+  // wishlisteadas) en el canal donde postea Karuta y avisa en el mismo canal.
+  karutaChannelId              String?
+  karutaWatchEnabled           Boolean  @default(false)
+  // ID del bot de Karuta (default: el oficial). Overrideable por si el
+  // server usa un clon o Karuta cambia de aplicación.
+  karutaBotUserId              String?
+  karutaRarePrintMax           Int      @default(10)
+  karutaRareWishlistMin        Int      @default(3)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
@@ -195,6 +204,27 @@ model RaidLog {
 
   @@index([guildId])
   @@map("raid_logs")
+}
+
+// Grabs de Karuta detectados como "raros" (print bajo, muy wishlisteados o
+// con marcador especial). El bot los publica en el mismo canal de Karuta y
+// los guarda acá para el feed de la web.
+model KarutaDrop {
+  id              String   @id @default(cuid())
+  guildId         String
+  userId          String?
+  username        String?
+  cardName        String?
+  series          String?
+  printNumber     Int?
+  wishlistCount   Int?
+  reasons         String[] @default([])
+  imageUrl        String?
+  sourceMessageId String   @unique
+  createdAt       DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@map("karuta_drops")
 }
 
 model DiscordSession {

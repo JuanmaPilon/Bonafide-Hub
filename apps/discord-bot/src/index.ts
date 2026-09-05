@@ -7,6 +7,7 @@ import {
   EmbedBuilder,
   Events,
   GatewayIntentBits,
+  Message,
   Partials,
   PermissionFlagsBits,
 } from "discord.js";
@@ -2977,11 +2978,264 @@ async function awardXpForMessage(
   }
 }
 
+// ── Karuta: detector de drops raros ────────────────────────────────
+// Karuta es un bot para coleccionar cartas de anime. Usamos el prefijo
+// "k" (kdrop, kd, etc.). Cuando un drop saca una carta rara, Karuta
+// responde con un embed. Lo detectamos, evaluamos si es "rara" según los
+// umbrales configurables y lo guardamos en la API + anunciamos en el canal
+// vigilado. No requiere subir nada manualmente: es seamless.
+const DEFAULT_KARUTA_BOT_USER_ID = "646937666251915264";
+
+type KarutaEmbed = {
+  author?: { name?: string } | null;
+  description?: string | null;
+  fields?: Array<{ name: string; value: string }>;
+  footer?: { text?: string } | null;
+  image?: { url?: string } | null;
+  title?: string | null;
+};
+
+type ParsedKarutaDrop = {
+  cardName?: string;
+  imageUrl?: string;
+  printNumber?: number;
+  reasons: string[];
+  series?: string;
+  username?: string;
+  wishlistCount?: number;
+};
+
+function extractKarutaNumber(
+  text: string,
+  pattern: RegExp,
+): number | undefined {
+  const match = text.match(pattern);
+  if (!match) {
+    return undefined;
+  }
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+// El layout exacto de Karuta no está confirmado, así que parseamos de
+// forma defensiva: título = nombre de carta, autor del embed = quien la
+// agarró, imagen = arte. Print y wishlist se buscan en todo el texto.
+function parseKarutaDrop(
+  embed: KarutaEmbed,
+  content: string,
+): ParsedKarutaDrop | null {
+  const allText = [
+    content,
+    embed.title,
+    embed.description,
+    embed.author?.name,
+    embed.footer?.text,
+    ...(embed.fields ?? []).map((field) => `${field.name}: ${field.value}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const cardName = embed.title?.trim() || undefined;
+  const imageUrl = embed.image?.url || undefined;
+  if (!cardName && !imageUrl) {
+    return null;
+  }
+
+  const printNumber =
+    extractKarutaNumber(allText, /print\s*#?\s*(\d+)/i) ??
+    extractKarutaNumber(allText, /#(\d+)\b/);
+  const wishlistCount =
+    extractKarutaNumber(allText, /wishlist[^0-9]*(\d+)/i) ??
+    extractKarutaNumber(allText, /(\d+)\s*wishlist/i);
+
+  const seriesMatch = allText.match(/series\s*[:：]\s*([^\n]+)/i);
+
+  return {
+    cardName,
+    imageUrl,
+    printNumber,
+    reasons: [],
+    series: seriesMatch?.[1]?.trim() || undefined,
+    username: embed.author?.name?.trim() || undefined,
+    wishlistCount,
+  };
+}
+
+function evaluateKarutaRarity(
+  drop: ParsedKarutaDrop,
+  config: {
+    karutaRarePrintMax?: number;
+    karutaRareWishlistMin?: number;
+  },
+): ParsedKarutaDrop | null {
+  const printMax = config.karutaRarePrintMax ?? 10;
+  const wishlistMin = config.karutaRareWishlistMin ?? 3;
+  const reasons: string[] = [];
+
+  if (drop.printNumber !== undefined && drop.printNumber <= printMax) {
+    reasons.push(`Print #${drop.printNumber}`);
+  }
+  if (
+    drop.wishlistCount !== undefined &&
+    drop.wishlistCount >= wishlistMin
+  ) {
+    reasons.push(`${drop.wishlistCount} wishlists`);
+  }
+
+  if (reasons.length === 0) {
+    return null;
+  }
+
+  return { ...drop, reasons };
+}
+
+async function postKarutaDrop(
+  guildId: string,
+  sourceMessageId: string,
+  drop: ParsedKarutaDrop,
+): Promise<boolean> {
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/drops`,
+      {
+        body: JSON.stringify({
+          cardName: drop.cardName,
+          imageUrl: drop.imageUrl,
+          printNumber: drop.printNumber,
+          reasons: drop.reasons,
+          series: drop.series,
+          sourceMessageId,
+          username: drop.username,
+          wishlistCount: drop.wishlistCount,
+        }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta drop POST falló (${response.status}) para guild ${guildId}.`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta drop POST error: ${getErrorMessage(error)}`,
+    );
+    return false;
+  }
+}
+
+function buildKarutaAnnouncementEmbed(drop: ParsedKarutaDrop): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle(`🎴 ${drop.username ?? "Alguien"} se llevó una carta rara`)
+    .setDescription(drop.cardName ?? "Carta de Karuta")
+    .setColor(0xe91e63);
+
+  if (drop.series) {
+    embed.addFields({ name: "Serie", value: drop.series, inline: true });
+  }
+  if (drop.printNumber !== undefined) {
+    embed.addFields({
+      name: "Print",
+      value: `#${drop.printNumber}`,
+      inline: true,
+    });
+  }
+  if (drop.wishlistCount !== undefined) {
+    embed.addFields({
+      name: "Wishlists",
+      value: String(drop.wishlistCount),
+      inline: true,
+    });
+  }
+  embed.addFields({ name: "¿Por qué es rara?", value: drop.reasons.join(" · ") });
+  if (drop.imageUrl) {
+    embed.setImage(drop.imageUrl);
+  }
+
+  return embed;
+}
+
+async function handleKarutaDropMessage(message: Message): Promise<void> {
+  if (!message.inGuild() || !message.author.bot) {
+    return;
+  }
+
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  const guildConfig = await getGuildConfig(message.guildId).catch(() => null);
+  if (!guildConfig?.karutaWatchEnabled) {
+    return;
+  }
+
+  const karutaBotUserId =
+    guildConfig.karutaBotUserId?.trim() || DEFAULT_KARUTA_BOT_USER_ID;
+  if (message.author.id !== karutaBotUserId) {
+    return;
+  }
+
+  if (
+    guildConfig.karutaChannelId &&
+    message.channelId !== guildConfig.karutaChannelId
+  ) {
+    return;
+  }
+
+  const embeds = message.embeds.map((embed) => embed.toJSON());
+  if (embeds.length === 0) {
+    return;
+  }
+
+  for (const rawEmbed of embeds) {
+    const parsed = parseKarutaDrop(rawEmbed, message.content);
+    if (!parsed) {
+      continue;
+    }
+
+    const rare = evaluateKarutaRarity(parsed, guildConfig);
+    if (!rare) {
+      continue;
+    }
+
+    const saved = await postKarutaDrop(message.guildId, message.id, rare);
+    if (!saved) {
+      continue;
+    }
+
+    await message.channel
+      .send({ embeds: [buildKarutaAnnouncementEmbed(rare)] })
+      .catch((error: unknown) => {
+        console.warn(
+          `[discord-bot] Failed to announce Karuta drop: ${getErrorMessage(error)}`,
+        );
+      });
+  }
+}
+
 client.on(Events.MessageCreate, (message) => {
   const memberRoles = message.member
     ? Array.from(message.member.roles.cache.keys())
     : undefined;
   void awardXpForMessage(message, memberRoles);
+  void handleKarutaDropMessage(message);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {

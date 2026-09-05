@@ -27,6 +27,11 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  karutaBotUserId?: string;
+  karutaChannelId?: string;
+  karutaRarePrintMax?: number;
+  karutaRareWishlistMin?: number;
+  karutaWatchEnabled?: boolean;
   logsChannelId?: string;
   logsWatchEnabled?: boolean;
   logsWatchGuild?: string;
@@ -53,6 +58,11 @@ function toGuildConfig(
     defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
+    karutaBotUserId: string | null;
+    karutaChannelId: string | null;
+    karutaRarePrintMax: number;
+    karutaRareWishlistMin: number;
+    karutaWatchEnabled: boolean;
     logsChannelId: string | null;
     logsWatchEnabled: boolean;
     logsWatchGuild: string | null;
@@ -89,6 +99,11 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
+    karutaBotUserId: record.karutaBotUserId ?? undefined,
+    karutaChannelId: record.karutaChannelId ?? undefined,
+    karutaRarePrintMax: record.karutaRarePrintMax,
+    karutaRareWishlistMin: record.karutaRareWishlistMin,
+    karutaWatchEnabled: record.karutaWatchEnabled,
     logsChannelId: record.logsChannelId ?? undefined,
     logsWatchEnabled: record.logsWatchEnabled,
     logsWatchGuild: record.logsWatchGuild ?? undefined,
@@ -139,6 +154,11 @@ type NormalizedGuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
+  karutaBotUserId?: string;
+  karutaChannelId?: string;
+  karutaRarePrintMax: number;
+  karutaRareWishlistMin: number;
+  karutaWatchEnabled: boolean;
   logsChannelId?: string;
   logsWatchEnabled: boolean;
   logsWatchGuild?: string;
@@ -182,6 +202,11 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
+    karutaBotUserId: config.karutaBotUserId,
+    karutaChannelId: config.karutaChannelId,
+    karutaRarePrintMax: config.karutaRarePrintMax ?? 10,
+    karutaRareWishlistMin: config.karutaRareWishlistMin ?? 3,
+    karutaWatchEnabled: config.karutaWatchEnabled ?? false,
     logsChannelId: config.logsChannelId,
     logsWatchEnabled: config.logsWatchEnabled ?? false,
     logsWatchGuild: config.logsWatchGuild,
@@ -262,6 +287,11 @@ export async function replaceGuildConfig(
         musicRoleIds: normalized.musicRoleIds,
         suggestionsDmUserId: normalized.suggestionsDmUserId,
         suggestionsDmTiers: normalized.suggestionsDmTiers,
+        karutaBotUserId: normalized.karutaBotUserId,
+        karutaChannelId: normalized.karutaChannelId,
+        karutaRarePrintMax: normalized.karutaRarePrintMax,
+        karutaRareWishlistMin: normalized.karutaRareWishlistMin,
+        karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
       update: {
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
@@ -285,6 +315,11 @@ export async function replaceGuildConfig(
         musicRoleIds: normalized.musicRoleIds,
         suggestionsDmUserId: normalized.suggestionsDmUserId,
         suggestionsDmTiers: normalized.suggestionsDmTiers,
+        karutaBotUserId: normalized.karutaBotUserId,
+        karutaChannelId: normalized.karutaChannelId,
+        karutaRarePrintMax: normalized.karutaRarePrintMax,
+        karutaRareWishlistMin: normalized.karutaRareWishlistMin,
+        karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
     });
 
