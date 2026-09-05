@@ -2980,6 +2980,7 @@ export function buildApp() {
         code?: string;
         grabberUsername?: string;
         sourceMessageId?: string;
+        wishlistCount?: number;
       };
 
       if (!body.code) {
@@ -2997,6 +2998,7 @@ export function buildApp() {
         grabberUsername: body.grabberUsername,
         guildId: params.guildId,
         sourceMessageId: body.sourceMessageId,
+        wishlistCount: body.wishlistCount,
       });
 
       return {

@@ -3032,6 +3032,75 @@ function parseKarutaGrab(content: string): ParsedKarutaGrab | null {
   return { cardName, code, mentionedUserId: match[1] };
 }
 
+// Cache de wishlists que Card Companion anuncia al droppear. Karuta no
+// muestra la wishlist en kv, así que la tomamos de acá cuando alguien agarra
+// la carta. Clave: guildId:channelId:nombre (lowercase).
+const pendingCardCompanionWishlists = new Map<
+  string,
+  { wishlist: number; at: number }
+>();
+
+type ParsedCardCompanionLine = {
+  cardName: string;
+  printNumber?: number;
+  series?: string;
+  wishlistCount?: number;
+};
+
+// Card Companion, al droppear, postea una lista con la wishlist de cada
+// carta. Formato por línea:
+//   "<idx> <print> ⭐ <wishlist> - <nombre> · <serie>"
+// Ej: "1 1 ⭐ 1 - Silque · Fire Emblem Echoes: Shadows of Valentia"
+function parseCardCompanionDrop(
+  content: string,
+): ParsedCardCompanionLine[] {
+  const lines: ParsedCardCompanionLine[] = [];
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    const match = line.match(
+      /^\d+\s+(\d+)\s*⭐\s*(\d+)\s*-\s*(.+?)\s*·\s*(.+)$/,
+    );
+    if (!match) {
+      continue;
+    }
+    lines.push({
+      printNumber: Number(match[1]),
+      wishlistCount: Number(match[2]),
+      cardName: match[3].trim(),
+      series: match[4].trim() || undefined,
+    });
+  }
+  return lines;
+}
+
+function rememberCardCompanionWishlists(
+  guildId: string,
+  channelId: string,
+  lines: ParsedCardCompanionLine[],
+): void {
+  const now = Date.now();
+  for (const line of lines) {
+    if (line.wishlistCount === undefined || !line.cardName) {
+      continue;
+    }
+    const key = `${guildId}:${channelId}:${line.cardName.toLowerCase()}`;
+    pendingCardCompanionWishlists.set(key, {
+      wishlist: line.wishlistCount,
+      at: now,
+    });
+  }
+
+  // Limpieza: sacamos entradas con más de 15 minutos.
+  for (const [key, entry] of pendingCardCompanionWishlists) {
+    if (now - entry.at > 15 * 60 * 1000) {
+      pendingCardCompanionWishlists.delete(key);
+    }
+  }
+}
+
 type ParsedKarutaKv = {
   cardName?: string;
   code: string;
@@ -3129,13 +3198,13 @@ function parseKarutaKv(
   return {
     cardName,
     code: summaryMatch[1],
-    edition: summaryMatch[2].length,
+    // El número tras el print (◈5, ♦4, ✦2…) es la EDICIÓN, no la wishlist.
+    edition: Number(summaryMatch[4].replace(/\D/g, "")),
     imageUrl: embed.image?.url || undefined,
     ownerUserId,
     ownerUsername,
     printNumber: Number(summaryMatch[3]),
     series,
-    wishlistCount: Number(summaryMatch[4].replace(/\D/g, "")),
   };
 }
 
@@ -3209,7 +3278,12 @@ function karutaRareReasons(
 async function postKarutaGrab(
   guildId: string,
   sourceMessageId: string,
-  grab: { cardName: string; code: string; grabberUsername?: string },
+  grab: {
+    cardName: string;
+    code: string;
+    grabberUsername?: string;
+    wishlistCount?: number;
+  },
 ): Promise<boolean> {
   const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
   const token = env.BOT_CONFIG_API_TOKEN?.trim();
@@ -3228,6 +3302,7 @@ async function postKarutaGrab(
           code: grab.code,
           grabberUsername: grab.grabberUsername,
           sourceMessageId,
+          wishlistCount: grab.wishlistCount,
         }),
         headers: {
           "content-type": "application/json",
@@ -3367,14 +3442,28 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
 
   const karutaBotUserId =
     guildConfig.karutaBotUserId?.trim() || DEFAULT_KARUTA_BOT_USER_ID;
-  if (message.author.id !== karutaBotUserId) {
-    return;
-  }
 
   if (
     guildConfig.karutaChannelId &&
     message.channelId !== guildConfig.karutaChannelId
   ) {
+    return;
+  }
+
+  // Card Companion (u otro bot) anuncia la wishlist de un drop. No es el bot
+  // de Karuta, así que lo procesamos aparte y salimos.
+  if (message.author.id !== karutaBotUserId) {
+    const lines = parseCardCompanionDrop(message.content);
+    if (lines.length > 0) {
+      rememberCardCompanionWishlists(
+        message.guildId,
+        message.channelId,
+        lines,
+      );
+      console.log(
+        `[discord-bot] Card Companion wishlists recordadas: ${lines.length} cartas`,
+      );
+    }
     return;
   }
 
@@ -3384,16 +3473,21 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
   const grab = parseKarutaGrab(message.content);
   if (grab) {
     const grabberUsername = grab.mentionedUserId
-      ? message.mentions.users.get(grab.mentionedUserId)?.username
+      ? message.mentions.members?.get(grab.mentionedUserId)?.displayName ??
+        message.mentions.users.get(grab.mentionedUserId)?.username
       : undefined;
+    const wishlistEntry = pendingCardCompanionWishlists.get(
+      `${message.guildId}:${message.channelId}:${grab.cardName.toLowerCase()}`,
+    );
     const saved = await postKarutaGrab(message.guildId, message.id, {
       cardName: grab.cardName,
       code: grab.code,
       grabberUsername,
+      wishlistCount: wishlistEntry?.wishlist,
     });
     if (saved) {
       console.log(
-        `[discord-bot] Karuta grab detectado: ${grab.code} por ${grabberUsername ?? "?"}`,
+        `[discord-bot] Karuta grab detectado: ${grab.code} por ${grabberUsername ?? "?"} wishlist=${wishlistEntry?.wishlist ?? "?"}`,
       );
     }
     return;
@@ -3427,14 +3521,13 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
         continue;
       }
 
-      // El dueño viene como mención (<@ID>) en el embed: lo resolvemos a
-      // username para mostrarlo en la colección.
+      // El dueño viene como mención (<@ID>) en el embed: lo resolvemos al
+      // alias (nickname) del server, o al username si no tiene alias.
       if (kv.ownerUserId && !kv.ownerUsername) {
         const member = await message.guild?.members
           .fetch(kv.ownerUserId)
           .catch(() => null);
-        kv.ownerUsername =
-          member?.user.username ?? member?.nickname ?? "Desconocido";
+        kv.ownerUsername = member?.displayName ?? "Desconocido";
       }
 
       const saved = await postKarutaCard(message.guildId, kv);

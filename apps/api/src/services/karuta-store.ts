@@ -307,6 +307,7 @@ function isUniqueViolation(error: unknown): boolean {
 
 // Grab de una carta ya registrada en la colección: registra el drop
 // (quién la agarró + quién la tiró = dueño anterior) y transfiere el dueño.
+// La wishlist (si el bot la trae desde Card Companion) actualiza la carta.
 // Best-effort: si la carta nunca se vio con `kv`, no está en la colección y
 // no podemos saber su rareza, así que se ignora.
 export async function processKarutaGrab(input: {
@@ -315,6 +316,7 @@ export async function processKarutaGrab(input: {
   grabberUsername?: string;
   guildId: string;
   sourceMessageId: string;
+  wishlistCount?: number;
 }): Promise<{
   processed: boolean;
   drop: KarutaDrop | null;
@@ -326,6 +328,8 @@ export async function processKarutaGrab(input: {
   if (!card || card.status !== "owned") {
     return { processed: false, drop: null, card: null };
   }
+
+  const wishlistCount = input.wishlistCount ?? card.wishlistCount;
 
   let dropRecord;
   try {
@@ -341,7 +345,7 @@ export async function processKarutaGrab(input: {
         series: card.series,
         sourceMessageId: input.sourceMessageId,
         username: input.grabberUsername,
-        wishlistCount: card.wishlistCount,
+        wishlistCount,
       },
     });
   } catch (error) {
@@ -355,6 +359,7 @@ export async function processKarutaGrab(input: {
     where: { id: card.id },
     data: {
       ownerUsername: input.grabberUsername,
+      wishlistCount,
       lastSeenAt: new Date(),
     },
   });

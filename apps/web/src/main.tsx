@@ -5537,7 +5537,8 @@ function App() {
                                   </span>
                                 ) : null}
                                 <span className="karuta-drop-user">
-                                  {card.ownerUsername ?? "Desconocido"} la posee
+                                  {card.ownerUsername ?? "Desconocido"} posee la
+                                  carta
                                 </span>
                                 <div className="karuta-drop-reasons">
                                   {card.printNumber != null ? (
@@ -5545,14 +5546,14 @@ function App() {
                                       Print #{card.printNumber}
                                     </span>
                                   ) : null}
+                                  {card.edition != null ? (
+                                    <span className="karuta-drop-badge">
+                                      Edición {card.edition}
+                                    </span>
+                                  ) : null}
                                   {card.wishlistCount != null ? (
                                     <span className="karuta-drop-badge">
                                       {card.wishlistCount} en wishlist
-                                    </span>
-                                  ) : null}
-                                  {card.edition != null ? (
-                                    <span className="karuta-drop-badge">
-                                      {"★".repeat(card.edition)}
                                     </span>
                                   ) : null}
                                 </div>
