@@ -3419,6 +3419,12 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       }
       continue;
     }
+
+    // Diagnóstico: no matcheó ni burn ni kv. Volcamos el embed crudo para
+    // ver el formato exacto (separadores, campos, etc.).
+    console.log(
+      `[discord-bot] Karuta embed sin matchear: ${JSON.stringify(rawEmbed)}`,
+    );
   }
 }
 
