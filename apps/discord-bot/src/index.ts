@@ -3044,22 +3044,23 @@ type ParsedKarutaKv = {
 };
 
 // Limpia el "owned by" para quedarnos solo con el username (saca emojis
-// decorativos tipo 👑, ⭐, etc.). Discord display names suelen ser ASCII.
+// decorativos tipo 👑, ⭐, etc. y el "@" inicial).
 function normalizeKarutaUsername(raw: string | undefined): string | undefined {
   if (!raw) {
     return undefined;
   }
   const cleaned = raw
-    .replace(/[^\w@\s.\-]/g, "")
+    .replace(/^@+/, "")
+    .replace(/[^\w\s.\-]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   return cleaned || undefined;
 }
 
-// kv → ver una carta. Formato confirmado:
+// kv → ver una carta. Formato confirmado (con variantes):
 //   Card Details
 //   Owned by <owner>
-//   <code> · ★★★★ · #<print> · ✦<wishlist> · <serie> - <nombre>
+//   <code> · ★★★★ · #<print> · [✦?]<wishlist> · <serie> (<·>|<->) <nombre>
 function parseKarutaKv(
   embed: KarutaEmbed,
   content: string,
@@ -3084,11 +3085,11 @@ function parseKarutaKv(
     return null;
   }
 
-  // Línea resumen: code · ★★★★ · #print · ✦wishlist · serie - nombre.
-  // Karuta usa ✦ para wishlists (a veces ✧); aceptamos ambos. La serie y el
-  // nombre van separados por " - ", no por "·".
+  // Línea resumen: code · ★+ · #print · wishlist · serie (·|-) nombre.
+  // El símbolo de wishlist (✦/✧) a veces está y a veces no, así que es
+  // opcional. La serie y el nombre van separados por " - " o por " · ".
   const summaryMatch = allText.match(
-    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*[✦✧](\d+)\s*·\s*([^\n]+)/m,
+    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*([✦✧]?\d+)\s*·\s*([^\n]+)/m,
   );
   if (!summaryMatch) {
     return null;
@@ -3098,10 +3099,14 @@ function parseKarutaKv(
   let cardName: string | undefined;
   let series: string | undefined;
   if (rest) {
-    const separatorIndex = rest.lastIndexOf(" - ");
-    if (separatorIndex > 0) {
-      series = rest.slice(0, separatorIndex).trim() || undefined;
-      cardName = rest.slice(separatorIndex + 3).trim() || undefined;
+    const hyphenIndex = rest.lastIndexOf(" - ");
+    const dotIndex = rest.lastIndexOf(" · ");
+    if (hyphenIndex > 0) {
+      series = rest.slice(0, hyphenIndex).trim() || undefined;
+      cardName = rest.slice(hyphenIndex + 3).trim() || undefined;
+    } else if (dotIndex > 0) {
+      series = rest.slice(0, dotIndex).trim() || undefined;
+      cardName = rest.slice(dotIndex + 3).trim() || undefined;
     } else {
       cardName = rest;
     }
@@ -3115,7 +3120,7 @@ function parseKarutaKv(
     ownerUsername: owner,
     printNumber: Number(summaryMatch[3]),
     series,
-    wishlistCount: Number(summaryMatch[4]),
+    wishlistCount: Number(summaryMatch[4].replace(/[✦✧]/g, "")),
   };
 }
 
