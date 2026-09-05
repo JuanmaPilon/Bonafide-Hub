@@ -3051,18 +3051,14 @@ type ParsedCardCompanionLine = {
 //   ![🃏](icono) ![:no_N:](emoji) `♡` `N` · **Nombre** · Serie
 // Ej: "![🃏](…) ![:no_1:](…) `♡` `1` · **Roux Louka** · Mobile Suit Gundam ZZ"
 // El número tras `♡` es la wishlist; el nombre va en negrita.
-function parseCardCompanionDrop(
-  content: string,
-): ParsedCardCompanionLine[] {
+function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
   const lines: ParsedCardCompanionLine[] = [];
   for (const rawLine of content.split("\n")) {
     const line = rawLine.trim();
     if (!line) {
       continue;
     }
-    const match = line.match(
-      /`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.+)$/,
-    );
+    const match = line.match(/`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.+)$/);
     if (!match) {
       continue;
     }
@@ -3126,6 +3122,35 @@ function normalizeKarutaUsername(raw: string | undefined): string | undefined {
   return cleaned || undefined;
 }
 
+// Separa "<serie> <sep> <nombre>" donde <sep> puede ser " - ", " · ",
+// "—" (em-dash), "–" (en-dash) o variantes sin espacios. Usa la ÚLTIMA
+// ocurrencia para no romper series que contengan guiones.
+function splitKarutaSeriesName(
+  rest: string | undefined,
+): { series?: string; cardName?: string } {
+  if (!rest) {
+    return { series: undefined, cardName: undefined };
+  }
+  const separators = [" - ", " · ", "—", "–", "-", "·"];
+  let bestIndex = -1;
+  let bestSeparator = "";
+  for (const separator of separators) {
+    const index = rest.lastIndexOf(separator);
+    if (index > bestIndex) {
+      bestIndex = index;
+      bestSeparator = separator;
+    }
+  }
+  if (bestIndex > 0) {
+    return {
+      series: rest.slice(0, bestIndex).trim() || undefined,
+      cardName:
+        rest.slice(bestIndex + bestSeparator.length).trim() || undefined,
+    };
+  }
+  return { cardName: rest };
+}
+
 // kv → ver una carta. Formato REAL (visto en el embed crudo):
 //   Card Details
 //   description: "Owned by <@ID>\n\n**`code`** · `★★★★` · `#print` · `◈wish` · serie · **nombre**"
@@ -3169,30 +3194,17 @@ function parseKarutaKv(
   }
 
   // Línea resumen (ya sin markdown):
-  //   <code> · ★+ · #print · [símbolo?]wishlist · serie (·|-) nombre
+  //   <code> · ★+ · #print · [símbolo?]edición · serie (<sep>) nombre
+  // Las estrellas pueden ser llenas (★) o huecas (☆), ej. ★★★☆.
   const summaryMatch = plainText.match(
-    /([A-Za-z0-9]{5,32})\s*·\s*(★+)\s*·\s*#(\d+)\s*·\s*(\D*\d+)\s*·\s*([^\n]+)/m,
+    /([A-Za-z0-9]{5,32})\s*·\s*([★☆]+)\s*·\s*#(\d+)\s*·\s*(\D*\d+)\s*·\s*([^\n]+)/m,
   );
   if (!summaryMatch) {
     return null;
   }
 
   const rest = summaryMatch[5]?.trim();
-  let cardName: string | undefined;
-  let series: string | undefined;
-  if (rest) {
-    const hyphenIndex = rest.lastIndexOf(" - ");
-    const dotIndex = rest.lastIndexOf(" · ");
-    if (hyphenIndex > 0) {
-      series = rest.slice(0, hyphenIndex).trim() || undefined;
-      cardName = rest.slice(hyphenIndex + 3).trim() || undefined;
-    } else if (dotIndex > 0) {
-      series = rest.slice(0, dotIndex).trim() || undefined;
-      cardName = rest.slice(dotIndex + 3).trim() || undefined;
-    } else {
-      cardName = rest;
-    }
-  }
+  const { series, cardName } = splitKarutaSeriesName(rest);
 
   return {
     cardName,
@@ -3454,11 +3466,7 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
   if (message.author.id !== karutaBotUserId) {
     const lines = parseCardCompanionDrop(message.content);
     if (lines.length > 0) {
-      rememberCardCompanionWishlists(
-        message.guildId,
-        message.channelId,
-        lines,
-      );
+      rememberCardCompanionWishlists(message.guildId, message.channelId, lines);
       console.log(
         `[discord-bot] Card Companion wishlists recordadas: ${lines.length} cartas`,
       );
@@ -3472,8 +3480,8 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
   const grab = parseKarutaGrab(message.content);
   if (grab) {
     const grabberUsername = grab.mentionedUserId
-      ? message.mentions.members?.get(grab.mentionedUserId)?.displayName ??
-        message.mentions.users.get(grab.mentionedUserId)?.username
+      ? (message.mentions.members?.get(grab.mentionedUserId)?.displayName ??
+        message.mentions.users.get(grab.mentionedUserId)?.username)
       : undefined;
     const wishlistEntry = pendingCardCompanionWishlists.get(
       `${message.guildId}:${message.channelId}:${grab.cardName.toLowerCase()}`,
@@ -3523,13 +3531,19 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
         continue;
       }
 
-      // El dueño viene como mención (<@ID>) en el embed: lo resolvemos al
-      // alias (nickname) del server, o al username si no tiene alias.
+      // El dueño viene como mención (<@ID>) en el embed. Solo registramos
+      // cartas de miembros del server: si no podemos resolverlo, saltamos.
       if (kv.ownerUserId && !kv.ownerUsername) {
         const member = await message.guild?.members
           .fetch(kv.ownerUserId)
           .catch(() => null);
-        kv.ownerUsername = member?.displayName ?? "Desconocido";
+        if (!member) {
+          console.log(
+            `[discord-bot] Karuta kv ignorada: dueño <@${kv.ownerUserId}> no está en el server (${kv.code})`,
+          );
+          continue;
+        }
+        kv.ownerUsername = member.displayName;
       }
 
       const saved = await postKarutaCard(message.guildId, kv);
@@ -3541,11 +3555,14 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       continue;
     }
 
-    // Diagnóstico: no matcheó ni burn ni kv. Volcamos el embed crudo para
-    // ver el formato exacto (separadores, campos, etc.).
-    console.log(
-      `[discord-bot] Karuta embed sin matchear: ${JSON.stringify(rawEmbed)}`,
-    );
+    // Diagnóstico: no matcheó ni burn ni kv. Solo volcamos embeds que
+    // parezcan cartas (imagen o título "Card Details") para no llenar el
+    // log con Reminders.
+    if (rawEmbed.image || rawEmbed.title === "Card Details") {
+      console.log(
+        `[discord-bot] Karuta embed sin matchear: ${JSON.stringify(rawEmbed)}`,
+      );
+    }
   }
 }
 
