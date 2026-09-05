@@ -3262,7 +3262,37 @@ input {
 
 .karuta-view {
   display: grid;
-  gap: 28px;
+  gap: 24px;
+}
+
+.karuta-subtabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.22);
+  background: rgba(134, 158, 214, 0.12);
+  width: fit-content;
+}
+
+.karuta-subtab {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.karuta-subtab.active {
+  background: var(--accent, #6aa8ff);
+  color: #fff;
 }
 
 .karuta-section h3 {
@@ -3407,8 +3437,33 @@ input {
 
 /* Karuta en modo claro: ámbar más profundo para que contraste sobre
    superficies blancas (el naranja del tema oscuro queda ilegible). */
-:root[data-theme="light"] .karuta-drop-card {
-  border-color: rgba(60, 85, 130, 0.22);
+:root[data-theme="light"] .karuta-subtabs {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(60, 85, 130, 0.28);
+}
+
+:root[data-theme="light"] .karuta-subtab {
+  color: #3f4f6b;
+}
+
+:root[data-theme="light"] .karuta-subtab.active {
+  background: #2456d6;
+  color: #fff;
+}
+
+:root[data-theme="light"] .karuta-view .karuta-drop-card {
+  background: linear-gradient(
+    160deg,
+    #ffffff 0%,
+    #fff4e4 52%,
+    #ffe9d6 100%
+  );
+  border-color: rgba(194, 105, 0, 0.3);
+  box-shadow: 0 8px 20px rgba(150, 90, 20, 0.1);
+}
+
+:root[data-theme="light"] .karuta-view .karuta-drop-image {
+  border-bottom: 1px solid rgba(194, 105, 0, 0.16);
 }
 
 :root[data-theme="light"] .karuta-drop-badge {

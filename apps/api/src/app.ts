@@ -63,6 +63,7 @@ import {
 } from "./services/raid-logs-store.js";
 import {
   createKarutaDrop,
+  deleteKarutaDrop,
   listRecentKarutaDrops,
 } from "./services/karuta-store.js";
 import {
@@ -2695,6 +2696,41 @@ export function buildApp() {
       drops,
     };
   });
+
+  // Borrar un drop de Karuta (admin/owner; la config del módulo vive bajo
+  // el módulo "config" del panel Admin). Útil para limpiar falsos positivos
+  // (p. ej. una carta vista con `kv` que se registró por error).
+  app.delete(
+    "/guilds/:guildId/karuta/drops/:dropId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        dropId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.dropId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "config"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteKarutaDrop(params.guildId, params.dropId);
+
+      await logAdminAction(session, params.guildId, "karuta-drop:delete", {
+        details: "Drop de Karuta eliminado.",
+        targetId: params.dropId,
+        targetType: "karuta-drop",
+      });
+
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
 
   // El bot llama esto cuando detecta un grab raro de Karuta en el canal
   // vigilado. Idempotente por sourceMessageId (evita duplicados si el bot

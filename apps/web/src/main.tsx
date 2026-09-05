@@ -28,6 +28,7 @@ import {
   getMemberProfile,
   getPublicLeaderboard,
   getXpConfig,
+  deleteKarutaDrop,
   getKarutaDrops,
   importXpData,
   listCommunications,
@@ -1102,6 +1103,9 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
+  const [karutaSection, setKarutaSection] = useState<"drops" | "guia">(
+    "drops",
+  );
   const [savingAction, setSavingAction] = useState<
     "config" | "xp" | "panel" | "daily" | "modules" | "permissions" | null
   >(null);
@@ -1328,9 +1332,7 @@ function App() {
         setWidgetStatus(nextWidgetStatus);
         setLeaderboard(nextLeaderboard);
         setXpConfig(nextXpConfig);
-        savedXpRef.current = nextXpConfig
-          ? JSON.stringify(nextXpConfig)
-          : null;
+        savedXpRef.current = nextXpConfig ? JSON.stringify(nextXpConfig) : null;
         setXpDirty(false);
       })
       .catch((error: unknown) => {
@@ -1452,6 +1454,36 @@ function App() {
       window.clearInterval(refreshTimer);
     };
   }, [activeTab, selectedGuildId]);
+
+  // Borra un drop de Karuta (admin/owner) y lo saca del feed local.
+  function handleDeleteKarutaDrop(drop: KarutaDrop): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Eliminar drop",
+      message: `¿Eliminar "${drop.cardName ?? "esta carta"}" del feed de Karuta?`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await deleteKarutaDrop(selectedGuildId, drop.id);
+            setKarutaDrops((current) =>
+              current.filter((entry) => entry.id !== drop.id),
+            );
+            pushToast("Drop eliminado.", "success");
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "No se pudo eliminar el drop.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
+  }
 
   useEffect(() => {
     if (activeTab !== "perfil" || !selectedGuildId || !me) {
@@ -5345,95 +5377,126 @@ function App() {
                 </div>
               ) : activeTab === "karuta" ? (
                 <div className="karuta-view">
-                  <section className="karuta-section">
-                    <h3>Drops raros</h3>
-                    {karutaDrops.length === 0 ? (
-                      <div className="empty-state">
-                        Todavía no se detectó ningún drop raro. Se avisa acá
-                        apenas alguien se lleva una carta con print bajo, muy
-                        wishlisteada o con algo especial.
-                      </div>
-                    ) : (
-                      <div className="karuta-drops-grid">
-                        {karutaDrops.map((drop) => (
-                          <article className="karuta-drop-card" key={drop.id}>
-                            {drop.imageUrl ? (
-                              <img
-                                className="karuta-drop-image"
-                                src={drop.imageUrl}
-                                alt={drop.cardName ?? "Carta"}
-                              />
-                            ) : null}
-                            <div className="karuta-drop-body">
-                              <strong>{drop.cardName ?? "Carta"}</strong>
-                              {drop.series ? (
-                                <span className="karuta-drop-series">
-                                  {drop.series}
-                                </span>
+                  <div className="karuta-subtabs" role="tablist">
+                    <button
+                      className={`karuta-subtab${karutaSection === "drops" ? " active" : ""}`}
+                      onClick={() => setKarutaSection("drops")}
+                      type="button"
+                    >
+                      Drops raros
+                    </button>
+                    <button
+                      className={`karuta-subtab${karutaSection === "guia" ? " active" : ""}`}
+                      onClick={() => setKarutaSection("guia")}
+                      type="button"
+                    >
+                      Guía de comandos
+                    </button>
+                  </div>
+
+                  {karutaSection === "drops" ? (
+                    <section className="karuta-section">
+                      <h3>Drops raros</h3>
+                      {karutaDrops.length === 0 ? (
+                        <div className="empty-state">
+                          Todavía no se detectó ningún drop raro. Se avisa acá
+                          apenas alguien se lleva una carta con print bajo, muy
+                          wishlisteada o con algo especial.
+                        </div>
+                      ) : (
+                        <div className="karuta-drops-grid">
+                          {karutaDrops.map((drop) => (
+                            <article className="karuta-drop-card" key={drop.id}>
+                              {drop.imageUrl ? (
+                                <img
+                                  className="karuta-drop-image"
+                                  src={drop.imageUrl}
+                                  alt={drop.cardName ?? "Carta"}
+                                />
                               ) : null}
-                              <span className="karuta-drop-user">
-                                {drop.username ?? "Alguien"} se la llevó
-                              </span>
-                              <div className="karuta-drop-reasons">
-                                {drop.printNumber != null ? (
-                                  <span className="karuta-drop-badge">
-                                    Print #{drop.printNumber}
+                              <div className="karuta-drop-body">
+                                <strong>{drop.cardName ?? "Carta"}</strong>
+                                {drop.series ? (
+                                  <span className="karuta-drop-series">
+                                    {drop.series}
                                   </span>
                                 ) : null}
-                                {drop.wishlistCount != null ? (
-                                  <span className="karuta-drop-badge">
-                                    {drop.wishlistCount} en wishlist
-                                  </span>
-                                ) : null}
-                                {drop.reasons
-                                  .filter(
-                                    (reason) =>
-                                      reason !== "print-bajo" &&
-                                      reason !== "wishlist",
-                                  )
-                                  .map((reason) => (
-                                    <span
-                                      className="karuta-drop-badge"
-                                      key={reason}
-                                    >
-                                      {reason}
+                                <span className="karuta-drop-user">
+                                  {drop.username ?? "Alguien"} se la llevó
+                                </span>
+                                <div className="karuta-drop-reasons">
+                                  {drop.printNumber != null ? (
+                                    <span className="karuta-drop-badge">
+                                      Print #{drop.printNumber}
                                     </span>
-                                  ))}
+                                  ) : null}
+                                  {drop.wishlistCount != null ? (
+                                    <span className="karuta-drop-badge">
+                                      {drop.wishlistCount} en wishlist
+                                    </span>
+                                  ) : null}
+                                  {drop.reasons
+                                    .filter(
+                                      (reason) =>
+                                        reason !== "print-bajo" &&
+                                        reason !== "wishlist",
+                                    )
+                                    .map((reason) => (
+                                      <span
+                                        className="karuta-drop-badge"
+                                        key={reason}
+                                      >
+                                        {reason}
+                                      </span>
+                                    ))}
+                                </div>
+                                <span className="karuta-drop-date">
+                                  {new Date(drop.createdAt).toLocaleString()}
+                                </span>
+                                {canAccess("config") ? (
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() => handleDeleteKarutaDrop(drop)}
+                                    type="button"
+                                  >
+                                    Eliminar
+                                  </button>
+                                ) : null}
                               </div>
-                              <span className="karuta-drop-date">
-                                {new Date(drop.createdAt).toLocaleString()}
-                              </span>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  ) : (
+                    <section className="karuta-section">
+                      <h3>Guía de comandos</h3>
+                      <p className="meta-text">
+                        Comandos de Karuta con el prefijo de este server.
+                      </p>
+                      <div className="karuta-command-groups">
+                        {KARUTA_COMMAND_GROUPS.map((group) => (
+                          <div
+                            className="karuta-command-group"
+                            key={group.title}
+                          >
+                            <h4>{group.title}</h4>
+                            <div className="karuta-command-list">
+                              {group.commands.map((entry) => (
+                                <div
+                                  className="karuta-command-row"
+                                  key={entry.command}
+                                >
+                                  <code>{entry.command}</code>
+                                  <span>{entry.description}</span>
+                                </div>
+                              ))}
                             </div>
-                          </article>
+                          </div>
                         ))}
                       </div>
-                    )}
-                  </section>
-
-                  <section className="karuta-section">
-                    <h3>Guía de comandos</h3>
-                    <p className="meta-text">
-                      Comandos de Karuta con el prefijo de este server.
-                    </p>
-                    <div className="karuta-command-groups">
-                      {KARUTA_COMMAND_GROUPS.map((group) => (
-                        <div className="karuta-command-group" key={group.title}>
-                          <h4>{group.title}</h4>
-                          <div className="karuta-command-list">
-                            {group.commands.map((entry) => (
-                              <div
-                                className="karuta-command-row"
-                                key={entry.command}
-                              >
-                                <code>{entry.command}</code>
-                                <span>{entry.description}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
+                    </section>
+                  )}
                 </div>
               ) : activeTab === "dashboard" ? null : (
                 <div className="empty-state">

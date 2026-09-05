@@ -100,6 +100,16 @@ export async function getKarutaDrops(guildId: string): Promise<KarutaDrop[]> {
   return data.drops;
 }
 
+export async function deleteKarutaDrop(
+  guildId: string,
+  dropId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/karuta/drops/${encodeURIComponent(dropId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export type CommunicationInstance = {
   authorName?: string;
   channelId: string;

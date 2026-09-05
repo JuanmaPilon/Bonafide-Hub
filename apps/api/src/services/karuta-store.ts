@@ -57,6 +57,20 @@ export async function listRecentKarutaDrops(
   return records.map(toKarutaDrop);
 }
 
+export async function deleteKarutaDrop(
+  guildId: string,
+  id: string,
+): Promise<boolean> {
+  try {
+    const result = await prisma.karutaDrop.deleteMany({
+      where: { guildId, id },
+    });
+    return result.count > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Idempotente por sourceMessageId: si el bot reintenta el mismo mensaje
 // (reconexión, doble evento) no duplica la entrada.
 export async function createKarutaDrop(input: {
