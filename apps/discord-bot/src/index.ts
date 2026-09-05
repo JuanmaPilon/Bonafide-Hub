@@ -1601,12 +1601,26 @@ async function buildPodiumBanner(
     ctx.fill();
 
     // Glows radiales decorativos en el fondo.
-    const glow1 = ctx.createRadialGradient(width * 0.2, 40, 0, width * 0.2, 40, 260);
+    const glow1 = ctx.createRadialGradient(
+      width * 0.2,
+      40,
+      0,
+      width * 0.2,
+      40,
+      260,
+    );
     glow1.addColorStop(0, "rgba(106,168,255,0.18)");
     glow1.addColorStop(1, "rgba(106,168,255,0)");
     ctx.fillStyle = glow1;
     ctx.fillRect(0, 0, width, cardHeight);
-    const glow2 = ctx.createRadialGradient(width * 0.85, 40, 0, width * 0.85, 40, 260);
+    const glow2 = ctx.createRadialGradient(
+      width * 0.85,
+      40,
+      0,
+      width * 0.85,
+      40,
+      260,
+    );
     glow2.addColorStop(0, "rgba(255,138,92,0.16)");
     glow2.addColorStop(1, "rgba(255,138,92,0)");
     ctx.fillStyle = glow2;
@@ -3075,10 +3089,7 @@ function evaluateKarutaRarity(
   if (drop.printNumber !== undefined && drop.printNumber <= printMax) {
     reasons.push(`Print #${drop.printNumber}`);
   }
-  if (
-    drop.wishlistCount !== undefined &&
-    drop.wishlistCount >= wishlistMin
-  ) {
+  if (drop.wishlistCount !== undefined && drop.wishlistCount >= wishlistMin) {
     reasons.push(`${drop.wishlistCount} wishlists`);
   }
 
@@ -3164,7 +3175,10 @@ function buildKarutaAnnouncementEmbed(drop: ParsedKarutaDrop): EmbedBuilder {
       inline: true,
     });
   }
-  embed.addFields({ name: "¿Por qué es rara?", value: drop.reasons.join(" · ") });
+  embed.addFields({
+    name: "¿Por qué es rara?",
+    value: drop.reasons.join(" · "),
+  });
   if (drop.imageUrl) {
     embed.setImage(drop.imageUrl);
   }

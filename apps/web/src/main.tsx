@@ -1040,6 +1040,7 @@ function App() {
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [config, setConfig] = useState<GuildConfig>({});
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [configDirty, setConfigDirty] = useState(false);
   const [adminAccess, setAdminAccess] = useState<AdminAccess | null>(null);
   // Rol seleccionado en el panel de Permisos de staff (solo owner).
   const [staffRoleId, setStaffRoleId] = useState("");
@@ -1281,6 +1282,7 @@ function App() {
         }
 
         setConfig(nextConfig);
+        setConfigDirty(false);
         setWidgetStatus(nextWidgetStatus);
         setLeaderboard(nextLeaderboard);
         setXpConfig(nextXpConfig);
@@ -1571,6 +1573,13 @@ function App() {
     }
   }
 
+  // Marca la config de la tarjeta "Configuración varias" como modificada y
+  // actualiza el estado. El botón Guardar solo se muestra cuando hay cambios.
+  function editConfig(updater: (current: GuildConfig) => GuildConfig): void {
+    setConfigDirty(true);
+    setConfig(updater);
+  }
+
   async function handleSave(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -1580,6 +1589,7 @@ function App() {
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, config);
       setConfig(nextConfig);
+      setConfigDirty(false);
       pushToast("Configuración guardada.", "success");
     } catch (error) {
       void error;
@@ -3166,7 +3176,7 @@ function App() {
                               className="select"
                               value={config.memberLogChannelId ?? ""}
                               onChange={(event) =>
-                                setConfig((current) => ({
+                                editConfig((current) => ({
                                   ...current,
                                   memberLogChannelId:
                                     event.target.value || undefined,
@@ -3188,7 +3198,7 @@ function App() {
                               className="select"
                               value={config.defaultRoleId ?? ""}
                               onChange={(event) =>
-                                setConfig((current) => ({
+                                editConfig((current) => ({
                                   ...current,
                                   defaultRoleId:
                                     event.target.value || undefined,
@@ -3210,7 +3220,7 @@ function App() {
                               className="select select-inline"
                               value={(config.musicRoleIds ?? [])[0] ?? ""}
                               onChange={(event) =>
-                                setConfig((current) => ({
+                                editConfig((current) => ({
                                   ...current,
                                   musicRoleIds: event.target.value
                                     ? [event.target.value]
@@ -3232,7 +3242,7 @@ function App() {
                             roles={guildRoles}
                             value={config.bannedVoiceRoleIds ?? []}
                             onChange={(next) =>
-                              setConfig((current) => ({
+                              editConfig((current) => ({
                                 ...current,
                                 bannedVoiceRoleIds: next,
                               }))
@@ -3247,7 +3257,7 @@ function App() {
                               className="select select-inline"
                               value={config.dynamicVoiceCreateChannelId ?? ""}
                               onChange={(event) =>
-                                setConfig((current) => ({
+                                editConfig((current) => ({
                                   ...current,
                                   dynamicVoiceCreateChannelId:
                                     event.target.value || undefined,
@@ -3286,7 +3296,7 @@ function App() {
                                         type="checkbox"
                                         checked={checked}
                                         onChange={() =>
-                                          setConfig((current) => {
+                                          editConfig((current) => {
                                             const tiers = new Set(
                                               current.suggestionsDmTiers ?? [],
                                             );
@@ -3318,16 +3328,14 @@ function App() {
                           <div className="karuta-watcher-head">
                             <div>
                               <strong>Watcher de Karuta</strong>
-                              <span>
-                                Detecta drops raros automáticamente
-                              </span>
+                              <span>Detecta drops raros automáticamente</span>
                             </div>
                             <label className="raid-watcher-toggle">
                               <input
                                 type="checkbox"
                                 checked={config.karutaWatchEnabled ?? false}
                                 onChange={(event) =>
-                                  setConfig((current) => ({
+                                  editConfig((current) => ({
                                     ...current,
                                     karutaWatchEnabled: event.target.checked,
                                   }))
@@ -3347,7 +3355,7 @@ function App() {
                                 className="select"
                                 value={config.karutaChannelId ?? ""}
                                 onChange={(event) =>
-                                  setConfig((current) => ({
+                                  editConfig((current) => ({
                                     ...current,
                                     karutaChannelId:
                                       event.target.value || undefined,
@@ -3371,7 +3379,7 @@ function App() {
                                 value={config.karutaRarePrintMax ?? 10}
                                 onChange={(event) => {
                                   const raw = event.target.value;
-                                  setConfig((current) => ({
+                                  editConfig((current) => ({
                                     ...current,
                                     karutaRarePrintMax:
                                       raw === "" ? undefined : Number(raw),
@@ -3388,7 +3396,7 @@ function App() {
                                 value={config.karutaRareWishlistMin ?? 3}
                                 onChange={(event) => {
                                   const raw = event.target.value;
-                                  setConfig((current) => ({
+                                  editConfig((current) => ({
                                     ...current,
                                     karutaRareWishlistMin:
                                       raw === "" ? undefined : Number(raw),
@@ -3397,22 +3405,21 @@ function App() {
                               />
                             </label>
                           </div>
-                          <p className="suggestion-recipient-hint">
-                            Una carta se considera rara si su print es igual o
-                            menor al máximo, o si está en al menos esa cantidad
-                            de wishlists. Se guarda con el botón "Guardar".
-                          </p>
                         </div>
                       </div>
-                      <div className="admin-card-footer">
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSave()}
-                          disabled={savingAction !== null}
-                        >
-                          {savingAction === "config" ? "Guardando…" : "Guardar"}
-                        </button>
-                      </div>
+                      {configDirty ? (
+                        <div className="admin-card-footer">
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSave()}
+                            disabled={savingAction !== null}
+                          >
+                            {savingAction === "config"
+                              ? "Guardando…"
+                              : "Guardar"}
+                          </button>
+                        </div>
+                      ) : null}
                     </details>
                   ) : null}
 
