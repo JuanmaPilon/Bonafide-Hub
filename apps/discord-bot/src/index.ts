@@ -3122,33 +3122,13 @@ function normalizeKarutaUsername(raw: string | undefined): string | undefined {
   return cleaned || undefined;
 }
 
-// Separa "<serie> <sep> <nombre>" donde <sep> puede ser " - ", " · ",
-// "—" (em-dash), "–" (en-dash) o variantes sin espacios. Usa la ÚLTIMA
-// ocurrencia para no romper series que contengan guiones.
-function splitKarutaSeriesName(
-  rest: string | undefined,
-): { series?: string; cardName?: string } {
-  if (!rest) {
-    return { series: undefined, cardName: undefined };
-  }
-  const separators = [" - ", " · ", "—", "–", "-", "·"];
-  let bestIndex = -1;
-  let bestSeparator = "";
-  for (const separator of separators) {
-    const index = rest.lastIndexOf(separator);
-    if (index > bestIndex) {
-      bestIndex = index;
-      bestSeparator = separator;
-    }
-  }
-  if (bestIndex > 0) {
-    return {
-      series: rest.slice(0, bestIndex).trim() || undefined,
-      cardName:
-        rest.slice(bestIndex + bestSeparator.length).trim() || undefined,
-    };
-  }
-  return { cardName: rest };
+// Limpia markdown residual de nombres/series de Karuta (backticks, negrita,
+// cursiva, tachado).
+function stripKarutaMarkdown(text: string): string {
+  return text
+    .replace(/[`*~_]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // kv → ver una carta. Formato REAL (visto en el embed crudo):
@@ -3171,11 +3151,7 @@ function parseKarutaKv(
     .filter(Boolean)
     .join("\n");
 
-  // Quitamos el markdown de Karuta (backticks y asteriscos) para parsear
-  // texto plano.
-  const plainText = allText.replace(/[`*]/g, "");
-
-  const ownedMatch = plainText.match(/owned by\s+(.+)/i);
+  const ownedMatch = allText.match(/owned by\s+(.+)/i);
   if (!ownedMatch) {
     return null;
   }
@@ -3193,23 +3169,40 @@ function parseKarutaKv(
     }
   }
 
-  // Línea resumen (ya sin markdown):
-  //   <code> · ★+ · #print · [símbolo?]edición · serie (<sep>) nombre
-  // Las estrellas pueden ser llenas (★) o huecas (☆), ej. ★★★☆.
-  const summaryMatch = plainText.match(
-    /([A-Za-z0-9]{5,32})\s*·\s*([★☆]+)\s*·\s*#(\d+)\s*·\s*(\D*\d+)\s*·\s*([^\n]+)/m,
+  // Línea resumen CON markdown:
+  //   **`code`** · `★★★☆` · `#print` · `◈edición` · <serie> · **<nombre>**
+  // Las estrellas pueden ser llenas (★) o huecas (☆).
+  const summaryMatch = allText.match(
+    /\*\*`([A-Za-z0-9]{5,32})`\*\*\s*·\s*`([★☆]+)`\s*·\s*`#(\d+)`\s*·\s*`([^`]+)`\s*·\s*(.+)$/m,
   );
   if (!summaryMatch) {
     return null;
   }
 
-  const rest = summaryMatch[5]?.trim();
-  const { series, cardName } = splitKarutaSeriesName(rest);
+  // El NOMBRE siempre va en negrita (**...**); la SERIE es texto plano. El
+  // orden entre ambos puede variar, así que usamos la negrita para ubicar
+  // el nombre y el resto es la serie.
+  const rest = summaryMatch[5].trim();
+  const boldMatches = [...rest.matchAll(/\*\*(.+?)\*\*/g)];
+  let cardName: string | undefined;
+  let series: string | undefined;
+  if (boldMatches.length > 0) {
+    const lastBold = boldMatches[boldMatches.length - 1];
+    cardName = stripKarutaMarkdown(lastBold[1]) || undefined;
+    const seriesRaw = rest.slice(0, lastBold.index);
+    series = seriesRaw
+      ? stripKarutaMarkdown(seriesRaw)
+          .replace(/[·\s—–-]+$/, "")
+          .trim() || undefined
+      : undefined;
+  } else {
+    cardName = stripKarutaMarkdown(rest) || undefined;
+  }
 
   return {
     cardName,
     code: summaryMatch[1],
-    // El número tras el print (◈5, ♦4, ✦2…) es la EDICIÓN, no la wishlist.
+    // El número tras el print (◈5, ♦4, #7, ✦2…) es la EDICIÓN.
     edition: Number(summaryMatch[4].replace(/\D/g, "")),
     imageUrl: embed.image?.url || undefined,
     ownerUserId,
@@ -3516,8 +3509,11 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     // kv (ver carta propia): registra en la colección SOLO si es rara (OR).
     const kv = parseKarutaKv(rawEmbed, message.content);
     if (kv) {
+      const rawDesc = rawEmbed.description
+        ? rawEmbed.description.replace(/\n/g, " ").slice(0, 220)
+        : "";
       console.log(
-        `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} (printMax=${guildConfig.karutaRarePrintMax ?? 10} wishlistMin=${guildConfig.karutaRareWishlistMin ?? 3})`,
+        `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} | ${rawDesc}`,
       );
       const reasons = karutaRareReasons(
         kv.printNumber,
