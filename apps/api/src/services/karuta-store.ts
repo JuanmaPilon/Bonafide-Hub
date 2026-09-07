@@ -330,12 +330,56 @@ export async function processKarutaGrab(input: {
   }
 
   const wishlistCount = input.wishlistCount ?? card.wishlistCount;
+  const cardName = card.cardName ?? input.cardName;
+
+  // Si Card Companion ya registró el drop al droppear (por wishlist, sin
+  // code), enriquecemos esa entrada con el code/imagen/dropper en vez de
+  // duplicarla.
+  const recentDrop = await prisma.karutaDrop.findFirst({
+    where: {
+      guildId: input.guildId,
+      cardName,
+      code: null,
+      createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (recentDrop) {
+    const enrichedDrop = await prisma.karutaDrop.update({
+      where: { id: recentDrop.id },
+      data: {
+        code: card.code,
+        dropperUsername: card.ownerUsername,
+        imageUrl: card.imageUrl,
+        printNumber: card.printNumber,
+        series: card.series ?? recentDrop.series,
+        username: input.grabberUsername,
+        wishlistCount,
+      },
+    });
+
+    const updated = await prisma.karutaCard.update({
+      where: { id: card.id },
+      data: {
+        ownerUsername: input.grabberUsername,
+        wishlistCount,
+        lastSeenAt: new Date(),
+      },
+    });
+
+    return {
+      processed: true,
+      drop: toKarutaDrop(enrichedDrop),
+      card: toKarutaCard(updated),
+    };
+  }
 
   let dropRecord;
   try {
     dropRecord = await prisma.karutaDrop.create({
       data: {
-        cardName: card.cardName ?? input.cardName,
+        cardName,
         code: card.code,
         dropperUsername: card.ownerUsername,
         guildId: input.guildId,

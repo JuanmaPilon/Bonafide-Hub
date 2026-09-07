@@ -3048,10 +3048,10 @@ type ParsedCardCompanionLine = {
 };
 
 // Card Companion, al droppear, postea una lista con la wishlist de cada
-// carta. Formato por línea (markdown):
-//   ![🃏](icono) ![:no_N:](emoji) `♡` `N` · **Nombre** · Serie
-// Ej: "![🃏](…) ![:no_1:](…) `♡` `1` · **Roux Louka** · Mobile Suit Gundam ZZ"
-// El número tras `♡` es la wishlist; el nombre va en negrita.
+// carta. Soporta dos formatos:
+//   - Markdown viejo: ![🃏](icono) ![:no_N:](emoji) `♡` `N` · **Nombre** · Serie
+//   - Plano actual:   1 ⭐ 1 🃏 124 - Caesar King - Zenless Zone Zero
+// En ambos, la wishlist es el número; el nombre va antes de la serie.
 function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
   const lines: ParsedCardCompanionLine[] = [];
   for (const rawLine of content.split("\n")) {
@@ -3059,15 +3059,32 @@ function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
     if (!line) {
       continue;
     }
-    const match = line.match(/`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.+)$/);
-    if (!match) {
+
+    // Formato markdown viejo: `♡` `N` · **Nombre** · Serie
+    const oldMatch = line.match(
+      /`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.+)$/,
+    );
+    if (oldMatch) {
+      lines.push({
+        wishlistCount: Number(oldMatch[1]),
+        cardName: oldMatch[2].trim(),
+        series: oldMatch[3].trim() || undefined,
+      });
       continue;
     }
-    lines.push({
-      wishlistCount: Number(match[1]),
-      cardName: match[2].trim(),
-      series: match[3].trim() || undefined,
-    });
+
+    // Formato plano actual: "N [estrellas] 🃏 <wishlist> - <nombre> - <serie>".
+    // La wishlist es el último número antes del primer " - ".
+    const plainMatch = line.match(
+      /^\d+\s+.*\s(\d+)\s*-\s*([^-]+?)\s*-\s*(.+)$/,
+    );
+    if (plainMatch) {
+      lines.push({
+        wishlistCount: Number(plainMatch[1]),
+        cardName: plainMatch[2].trim(),
+        series: plainMatch[3].trim() || undefined,
+      });
+    }
   }
   return lines;
 }
@@ -3094,6 +3111,89 @@ function rememberCardCompanionWishlists(
     if (now - entry.at > 15 * 60 * 1000) {
       pendingCardCompanionWishlists.delete(key);
     }
+  }
+}
+
+// Anuncio de drops raros detectados desde Card Companion. No requiere que
+// nadie agarre la carta: se dispara apenas Card Companion lista el drop.
+function buildKarutaRareDropAnnouncement(
+  lines: ParsedCardCompanionLine[],
+): string {
+  const items = lines.map(
+    (line) =>
+      `🎴 **${line.cardName}**${line.series ? ` · ${line.series}` : ""} — 🔥 ${line.wishlistCount} en wishlist`,
+  );
+  return `✨ ¡Drop raro detectado!\n${items.join("\n")}`;
+}
+
+async function announceKarutaRareDrops(
+  message: Message,
+  lines: ParsedCardCompanionLine[],
+): Promise<void> {
+  const channel = message.channel;
+  if (!isSendableTextChannelLike(channel)) {
+    return;
+  }
+  try {
+    await channel.send(buildKarutaRareDropAnnouncement(lines));
+  } catch (error) {
+    console.warn(
+      `[discord-bot] No se pudo anunciar drop raro: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+// Registra un drop en el feed de la web (sin code: viene de Card Companion).
+async function postKarutaDrop(
+  guildId: string,
+  drop: {
+    cardName?: string;
+    series?: string;
+    sourceMessageId: string;
+    wishlistCount?: number;
+  },
+): Promise<boolean> {
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/drops`,
+      {
+        body: JSON.stringify({
+          cardName: drop.cardName,
+          reasons: [`${drop.wishlistCount ?? "?"} wishlists`],
+          series: drop.series,
+          sourceMessageId: drop.sourceMessageId,
+          wishlistCount: drop.wishlistCount,
+        }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta drop POST falló (${response.status}) para guild ${guildId}.`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta drop POST error: ${getErrorMessage(error)}`,
+    );
+    return false;
   }
 }
 
@@ -3739,6 +3839,30 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       console.log(
         `[discord-bot] Card Companion wishlists recordadas: ${lines.length} cartas`,
       );
+
+      // Drops raros por wishlist: se registran y anuncian de inmediato, sin
+      // esperar a que alguien agarre la carta.
+      const wishlistMin = guildConfig.karutaRareWishlistMin ?? 3;
+      const rareLines = lines.filter(
+        (line) =>
+          line.wishlistCount !== undefined && line.wishlistCount >= wishlistMin,
+      );
+      if (rareLines.length > 0) {
+        for (const [index, line] of rareLines.entries()) {
+          const saved = await postKarutaDrop(message.guildId, {
+            cardName: line.cardName,
+            series: line.series,
+            sourceMessageId: `${message.id}:${index}`,
+            wishlistCount: line.wishlistCount,
+          });
+          if (saved) {
+            console.log(
+              `[discord-bot] Karuta drop raro (Card Companion): ${line.cardName} wishlist=${line.wishlistCount}`,
+            );
+          }
+        }
+        await announceKarutaRareDrops(message, rareLines);
+      }
     }
     return;
   }
