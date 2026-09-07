@@ -34,9 +34,11 @@ export type HubEvent = {
   createdByUserId?: string;
   createdByUsername?: string;
   description?: string;
+  durationMinutes?: number;
   guildId: string;
   id: string;
   imageUrl?: string;
+  signupDeadline?: Date;
   startsAt: Date;
   status: string;
   title: string;
@@ -64,9 +66,11 @@ type EventRecord = {
   createdByUserId: string | null;
   createdByUsername: string | null;
   description: string | null;
+  durationMinutes: number | null;
   guildId: string;
   id: string;
   imageUrl: string | null;
+  signupDeadline: Date | null;
   startsAt: Date;
   status: string;
   title: string;
@@ -111,9 +115,11 @@ function toEvent(record: EventRecord): HubEvent {
     createdByUserId: record.createdByUserId ?? undefined,
     createdByUsername: record.createdByUsername ?? undefined,
     description: record.description ?? undefined,
+    durationMinutes: record.durationMinutes ?? undefined,
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
+    signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
     status: record.status,
     title: record.title,
@@ -147,8 +153,10 @@ export async function createEvent(input: {
   createdByUserId?: string;
   createdByUsername?: string;
   description?: string;
+  durationMinutes?: number;
   guildId: string;
   imageUrl?: string;
+  signupDeadline?: string;
   startsAt: string;
   title: string;
   type: string;
@@ -158,8 +166,12 @@ export async function createEvent(input: {
       createdByUserId: input.createdByUserId,
       createdByUsername: input.createdByUsername,
       description: input.description,
+      durationMinutes: input.durationMinutes,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
+      signupDeadline: input.signupDeadline
+        ? new Date(input.signupDeadline)
+        : null,
       startsAt: new Date(input.startsAt),
       title: input.title,
       type: input.type,
@@ -174,7 +186,9 @@ export async function updateEvent(
   eventId: string,
   input: {
     description?: string;
+    durationMinutes?: number | null;
     imageUrl?: string;
+    signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
     title?: string;
@@ -185,7 +199,14 @@ export async function updateEvent(
     where: { id: eventId, guildId },
     data: {
       description: input.description,
+      durationMinutes: input.durationMinutes,
       imageUrl: input.imageUrl,
+      signupDeadline:
+        input.signupDeadline === null
+          ? null
+          : input.signupDeadline
+            ? new Date(input.signupDeadline)
+            : undefined,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
       status: input.status,
       title: input.title,
@@ -254,6 +275,62 @@ export async function deleteSignup(
 ): Promise<boolean> {
   const result = await prisma.eventSignup.deleteMany({
     where: { guildId, eventId, userId },
+  });
+  return result.count > 0;
+}
+
+export type EventImage = {
+  createdAt: Date;
+  dataUrl: string;
+  guildId: string;
+  id: string;
+  name?: string;
+  updatedAt: Date;
+};
+
+export async function listEventImages(guildId: string): Promise<EventImage[]> {
+  const records = await prisma.eventImage.findMany({
+    where: { guildId },
+    orderBy: { createdAt: "desc" },
+  });
+  return records.map((record) => ({
+    createdAt: record.createdAt,
+    dataUrl: record.dataUrl,
+    guildId: record.guildId,
+    id: record.id,
+    name: record.name ?? undefined,
+    updatedAt: record.updatedAt,
+  }));
+}
+
+export async function createEventImage(input: {
+  dataUrl: string;
+  guildId: string;
+  name?: string;
+}): Promise<EventImage> {
+  const record = await prisma.eventImage.create({
+    data: {
+      dataUrl: input.dataUrl,
+      guildId: input.guildId,
+      name: input.name,
+    },
+  });
+  return {
+    createdAt: record.createdAt,
+    dataUrl: record.dataUrl,
+    guildId: record.guildId,
+    id: record.id,
+    name: record.name ?? undefined,
+    updatedAt: record.updatedAt,
+  };
+}
+
+export async function deleteEventImage(
+  guildId: string,
+  imageId: string,
+): Promise<boolean> {
+  const result = await prisma.eventImage.deleteMany({
+    where: { id: imageId, guildId },
   });
   return result.count > 0;
 }

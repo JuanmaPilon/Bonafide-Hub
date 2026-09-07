@@ -896,6 +896,50 @@ export const WOW_CLASSES = [
 
 export const COMBAT_ROLES = ["tank", "healer", "dps"] as const;
 
+export const WOW_CLASS_META: Array<{
+  color: string;
+  emoji: string;
+  key: string;
+}> = [
+  { key: "Death Knight", emoji: "💀", color: "#C41E3A" },
+  { key: "Demon Hunter", emoji: "😈", color: "#A330C9" },
+  { key: "Druid", emoji: "🌿", color: "#FF7C0A" },
+  { key: "Evoker", emoji: "🐉", color: "#33937F" },
+  { key: "Hunter", emoji: "🏹", color: "#AAD372" },
+  { key: "Mage", emoji: "🔮", color: "#3FC7EB" },
+  { key: "Monk", emoji: "🥋", color: "#00FF98" },
+  { key: "Paladin", emoji: "⚜️", color: "#F48CBA" },
+  { key: "Priest", emoji: "🙏", color: "#FFFFFF" },
+  { key: "Rogue", emoji: "🗡️", color: "#FFF468" },
+  { key: "Shaman", emoji: "⚡", color: "#0070DD" },
+  { key: "Warlock", emoji: "🔥", color: "#8788EE" },
+  { key: "Warrior", emoji: "⚔️", color: "#C69B6D" },
+];
+
+export const ROLE_META: Array<{
+  emoji: string;
+  key: string;
+  label: string;
+}> = [
+  { key: "tank", emoji: "🛡️", label: "Tank" },
+  { key: "healer", emoji: "💚", label: "Healer" },
+  { key: "dps", emoji: "⚔️", label: "DPS" },
+];
+
+export function classEmoji(wowClass?: string): string {
+  return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.emoji ?? "❔";
+}
+
+export function classColor(wowClass?: string): string | undefined {
+  return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.color;
+}
+
+export function roleMeta(
+  role?: string,
+): { emoji: string; key: string; label: string } | undefined {
+  return ROLE_META.find((entry) => entry.key === role);
+}
+
 export const EVENT_TYPES: Array<{
   emoji: string;
   key: string;
@@ -912,9 +956,11 @@ export type HubEvent = {
   createdByUserId?: string;
   createdByUsername?: string;
   description?: string;
+  durationMinutes?: number;
   guildId: string;
   id: string;
   imageUrl?: string;
+  signupDeadline?: string;
   startsAt: string;
   status: string;
   title: string;
@@ -949,7 +995,9 @@ export async function createEvent(
   guildId: string,
   input: {
     description?: string;
+    durationMinutes?: number;
     imageUrl?: string;
+    signupDeadline?: string;
     startsAt: string;
     title: string;
     type: string;
@@ -970,7 +1018,9 @@ export async function updateEvent(
   eventId: string,
   input: {
     description?: string;
+    durationMinutes?: number | null;
     imageUrl?: string;
+    signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
     title?: string;
@@ -1024,6 +1074,47 @@ export async function deleteMyEventSignup(
 ): Promise<{ deleted: boolean }> {
   return requestJson<{ deleted: boolean }>(
     `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/me`,
+    { method: "DELETE" },
+  );
+}
+
+export type EventImage = {
+  createdAt: string;
+  dataUrl: string;
+  guildId: string;
+  id: string;
+  name?: string;
+  updatedAt: string;
+};
+
+export async function getEventImages(guildId: string): Promise<EventImage[]> {
+  const data = await requestJson<{ images: EventImage[] }>(
+    `/guilds/${guildId}/events/images`,
+    { method: "GET" },
+  );
+  return data.images;
+}
+
+export async function uploadEventImage(
+  guildId: string,
+  input: { dataUrl: string; name?: string },
+): Promise<EventImage> {
+  const data = await requestJson<{ image: EventImage }>(
+    `/guilds/${guildId}/events/images`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.image;
+}
+
+export async function deleteEventImage(
+  guildId: string,
+  imageId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/events/images/${encodeURIComponent(imageId)}`,
     { method: "DELETE" },
   );
 }

@@ -57,11 +57,17 @@ import {
   COMBAT_ROLES,
   EVENT_TYPES,
   WOW_CLASSES,
+  classColor,
+  classEmoji,
   createEvent,
   deleteEvent,
+  deleteEventImage,
   deleteMyEventSignup,
+  getEventImages,
   getEvents,
+  roleMeta,
   updateEvent,
+  uploadEventImage,
   upsertEventSignup,
   type ApiGuild,
   type AdminAccess,
@@ -91,6 +97,7 @@ import {
   type XpRoleMultiplier,
   type XpRoleRule,
   type EventSignup,
+  type EventImage,
   type HubEvent,
 } from "./api";
 import "./styles.css";
@@ -531,6 +538,18 @@ function EventCard({
     yes: event.signups.filter((signup) => signup.status === "yes").length,
   };
 
+  const signupsClosed =
+    event.status !== "scheduled" ||
+    Boolean(
+      event.signupDeadline &&
+        new Date(event.signupDeadline).getTime() < Date.now(),
+    );
+  const endAt = event.durationMinutes
+    ? new Date(
+        new Date(event.startsAt).getTime() + event.durationMinutes * 60_000,
+      )
+    : undefined;
+
   const submit = async (): Promise<void> => {
     setSubmitting(true);
     try {
@@ -574,7 +593,15 @@ function EventCard({
         </div>
         <div className="event-card-date">
           📅 {new Date(event.startsAt).toLocaleString()}
+          {endAt ? ` → ${endAt.toLocaleTimeString()}` : ""}
         </div>
+        {event.signupDeadline ? (
+          <div className={`event-deadline${signupsClosed ? " closed" : ""}`}>
+            {signupsClosed
+              ? "🔒 Inscripciones cerradas"
+              : `⏳ Cierre de inscripciones: ${new Date(event.signupDeadline).toLocaleString()}`}
+          </div>
+        ) : null}
         {event.description ? (
           <p className="event-card-desc">{event.description}</p>
         ) : null}
@@ -597,14 +624,19 @@ function EventCard({
               return (
                 <div className="event-roster-group" key={combatRole}>
                   <span className="event-roster-role">
-                    {combatRole === "tank"
-                      ? "🛡️ Tank"
-                      : combatRole === "healer"
-                        ? "💚 Healer"
-                        : "⚔️ DPS"}
+                    {roleMeta(combatRole)?.emoji} {roleMeta(combatRole)?.label}
                   </span>
                   {roleSignups.map((signup) => (
-                    <span className="event-roster-member" key={signup.id}>
+                    <span
+                      className="event-roster-member"
+                      key={signup.id}
+                      style={
+                        signup.wowClass
+                          ? { color: classColor(signup.wowClass) }
+                          : undefined
+                      }
+                    >
+                      {classEmoji(signup.wowClass)}{" "}
                       {signup.character
                         ? `${signup.character} (${signup.username})`
                         : signup.username}
@@ -620,81 +652,91 @@ function EventCard({
 
         {meId ? (
           <div className="event-signup">
-            <div className="event-signup-status">
-              {(["yes", "tentative", "no"] as const).map((value) => (
-                <button
-                  className={`event-status-btn ${value}${status === value ? " active" : ""}`}
-                  key={value}
-                  onClick={() => setStatus(value)}
-                  title={
-                    value === "yes"
-                      ? "Voy"
-                      : value === "tentative"
-                        ? "Quizás"
-                        : "No voy"
-                  }
-                  type="button"
-                >
-                  {value === "yes" ? "✅" : value === "tentative" ? "🤔" : "❌"}
-                </button>
-              ))}
-            </div>
-            <div className="event-signup-fields">
-              <select
-                className="select"
-                value={wowClass}
-                onChange={(event) => setWowClass(event.target.value)}
-              >
-                <option value="">Clase (opcional)</option>
-                {WOW_CLASSES.map((cls) => (
-                  <option key={cls} value={cls}>
-                    {cls}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="select"
-                value={role}
-                onChange={(event) => setRole(event.target.value)}
-              >
-                <option value="">Rol (opcional)</option>
-                {COMBAT_ROLES.map((combatRole) => (
-                  <option key={combatRole} value={combatRole}>
-                    {combatRole === "tank"
-                      ? "Tank"
-                      : combatRole === "healer"
-                        ? "Healer"
-                        : "DPS"}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="input"
-                value={character}
-                onChange={(event) => setCharacter(event.target.value)}
-                placeholder="Personaje (opcional)"
-                maxLength={40}
-              />
-            </div>
-            <div className="event-signup-actions">
-              <button
-                className="primary-button"
-                onClick={() => void submit()}
-                disabled={submitting}
-                type="button"
-              >
-                {submitting ? "Guardando…" : "Guardar inscripción"}
-              </button>
-              {mySignup ? (
-                <button
-                  className="ghost-button"
-                  onClick={() => void onRemoveSignup(event.id)}
-                  type="button"
-                >
-                  Quitar inscripción
-                </button>
-              ) : null}
-            </div>
+            {signupsClosed ? (
+              <div className="event-signup-closed">
+                🔒 Las inscripciones están cerradas.
+                {mySignup ? " Tu inscripción actual queda guardada." : ""}
+              </div>
+            ) : (
+              <>
+                <div className="event-signup-status">
+                  {(["yes", "tentative", "no"] as const).map((value) => (
+                    <button
+                      className={`event-status-btn ${value}${status === value ? " active" : ""}`}
+                      key={value}
+                      onClick={() => setStatus(value)}
+                      title={
+                        value === "yes"
+                          ? "Voy"
+                          : value === "tentative"
+                            ? "Quizás"
+                            : "No voy"
+                      }
+                      type="button"
+                    >
+                      {value === "yes"
+                        ? "✅"
+                        : value === "tentative"
+                          ? "🤔"
+                          : "❌"}
+                    </button>
+                  ))}
+                </div>
+                <div className="event-signup-fields">
+                  <select
+                    className="select"
+                    value={wowClass}
+                    onChange={(event) => setWowClass(event.target.value)}
+                  >
+                    <option value="">Clase (opcional)</option>
+                    {WOW_CLASSES.map((cls) => (
+                      <option key={cls} value={cls}>
+                        {classEmoji(cls)} {cls}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="select"
+                    value={role}
+                    onChange={(event) => setRole(event.target.value)}
+                  >
+                    <option value="">Rol (opcional)</option>
+                    {COMBAT_ROLES.map((combatRole) => (
+                      <option key={combatRole} value={combatRole}>
+                        {roleMeta(combatRole)?.emoji}{" "}
+                        {roleMeta(combatRole)?.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="input"
+                    value={character}
+                    onChange={(event) => setCharacter(event.target.value)}
+                    placeholder="Personaje (opcional)"
+                    maxLength={40}
+                  />
+                </div>
+                <div className="event-signup-actions">
+                  <button
+                    className="primary-button"
+                    onClick={() => void submit()}
+                    disabled={submitting}
+                    type="button"
+                  >
+                    {submitting ? "Guardando…" : "Guardar inscripción"}
+                  </button>
+                  {mySignup ? (
+                    <button
+                      className="ghost-button"
+                      onClick={() => void onRemoveSignup(event.id)}
+                      type="button"
+                    >
+                      Quitar inscripción
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -1431,13 +1473,18 @@ function App() {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState({
     description: "",
+    durationMinutes: "",
     imageUrl: "",
+    signupDeadline: "",
     startsAt: "",
     status: "scheduled",
     title: "",
     type: "raid",
   });
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [eventImages, setEventImages] = useState<EventImage[]>([]);
+  const [eventImagesLoading, setEventImagesLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [savingAction, setSavingAction] = useState<
     | "config"
     | "xp"
@@ -2050,7 +2097,9 @@ function App() {
     setEditingEventId(null);
     setEventForm({
       description: "",
+      durationMinutes: "",
       imageUrl: "",
+      signupDeadline: "",
       startsAt: "",
       status: "scheduled",
       title: "",
@@ -2062,13 +2111,82 @@ function App() {
     setEditingEventId(event.id);
     setEventForm({
       description: event.description ?? "",
+      durationMinutes:
+        event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      signupDeadline: event.signupDeadline
+        ? toDateTimeLocal(event.signupDeadline)
+        : "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: event.status,
       title: event.title,
       type: event.type,
     });
     setShowEventForm(true);
+  }
+
+  // Sube una imagen a la biblioteca y la selecciona como imagen del evento.
+  async function handleImageFileChange(
+    changeEvent: ChangeEvent<HTMLInputElement>,
+  ): Promise<void> {
+    const file = changeEvent.target.files?.[0];
+    if (!file || !selectedGuildId) {
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      pushToast("El archivo debe ser una imagen.", "error");
+      changeEvent.target.value = "";
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      pushToast("La imagen es demasiado grande (máx. 3MB).", "error");
+      changeEvent.target.value = "";
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      const image = await uploadEventImage(selectedGuildId, {
+        dataUrl,
+        name: file.name,
+      });
+      setEventImages((current) => [image, ...current]);
+      setEventForm((current) => ({ ...current, imageUrl: image.dataUrl }));
+      pushToast("Imagen subida a la biblioteca.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo subir la imagen.",
+        "error",
+      );
+    } finally {
+      setUploadingImage(false);
+      changeEvent.target.value = "";
+    }
+  }
+
+  async function handleDeleteEventImage(image: EventImage): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteEventImage(selectedGuildId, image.id);
+      setEventImages((current) =>
+        current.filter((entry) => entry.id !== image.id),
+      );
+      pushToast("Imagen eliminada de la biblioteca.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la imagen.",
+        "error",
+      );
+    }
   }
 
   // Crea o actualiza un evento desde la web (sin intervención de Discord).
@@ -2085,7 +2203,11 @@ function App() {
       if (editingEventId) {
         const updated = await updateEvent(selectedGuildId, editingEventId, {
           description: eventForm.description.trim() || undefined,
-          imageUrl: eventForm.imageUrl.trim() || undefined,
+          durationMinutes: eventForm.durationMinutes
+            ? Number(eventForm.durationMinutes)
+            : null,
+          imageUrl: eventForm.imageUrl || undefined,
+          signupDeadline: eventForm.signupDeadline || null,
           startsAt: eventForm.startsAt,
           status: eventForm.status,
           title: eventForm.title.trim(),
@@ -2103,7 +2225,11 @@ function App() {
       } else {
         const created = await createEvent(selectedGuildId, {
           description: eventForm.description.trim() || undefined,
-          imageUrl: eventForm.imageUrl.trim() || undefined,
+          durationMinutes: eventForm.durationMinutes
+            ? Number(eventForm.durationMinutes)
+            : undefined,
+          imageUrl: eventForm.imageUrl || undefined,
+          signupDeadline: eventForm.signupDeadline || undefined,
           startsAt: eventForm.startsAt,
           title: eventForm.title.trim(),
           type: eventForm.type,
@@ -2128,6 +2254,29 @@ function App() {
       setCreatingEvent(false);
     }
   }
+
+  useEffect(() => {
+    if (!selectedGuildId || !showEventForm) {
+      return;
+    }
+    let cancelled = false;
+    setEventImagesLoading(true);
+    getEventImages(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setEventImages(list);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setEventImagesLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGuildId, showEventForm]);
 
   useEffect(() => {
     if (activeTab !== "perfil" || !selectedGuildId || !me) {
@@ -6464,19 +6613,132 @@ function App() {
                           />
                         </label>
                         <label>
-                          <span>Imagen (URL, opcional)</span>
+                          <span>Duración (minutos)</span>
                           <input
                             className="input"
-                            value={eventForm.imageUrl}
+                            type="number"
+                            min="0"
+                            value={eventForm.durationMinutes}
                             onChange={(event) =>
                               setEventForm((current) => ({
                                 ...current,
-                                imageUrl: event.target.value,
+                                durationMinutes: event.target.value,
                               }))
                             }
-                            placeholder="https://…"
+                            placeholder="Ej: 180"
                           />
                         </label>
+                        <label>
+                          <span>Cierre de inscripciones</span>
+                          <input
+                            className="input"
+                            type="datetime-local"
+                            value={eventForm.signupDeadline}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                signupDeadline: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <div className="event-form-wide event-image-editor">
+                          <span className="event-image-editor-label">
+                            Imagen
+                          </span>
+                          {eventForm.imageUrl ? (
+                            <div className="event-image-preview">
+                              <img
+                                src={eventForm.imageUrl}
+                                alt="Imagen del evento"
+                              />
+                              <button
+                                className="ghost-button danger"
+                                onClick={() =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    imageUrl: "",
+                                  }))
+                                }
+                                type="button"
+                              >
+                                Quitar imagen
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="event-image-empty">
+                              Sin imagen seleccionada.
+                            </div>
+                          )}
+                          <div className="event-image-controls">
+                            <input
+                              className="input"
+                              value={
+                                eventForm.imageUrl.startsWith("data:")
+                                  ? ""
+                                  : eventForm.imageUrl
+                              }
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  imageUrl: event.target.value,
+                                }))
+                              }
+                              placeholder="O pegá una URL https://…"
+                            />
+                            <label className="primary-button event-upload-button">
+                              {uploadingImage ? "Subiendo…" : "Subir imagen"}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                hidden
+                                onChange={(event) =>
+                                  void handleImageFileChange(event)
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="event-image-library">
+                            <strong>Biblioteca</strong>
+                            {eventImagesLoading ? (
+                              <span className="muted-text">Cargando…</span>
+                            ) : eventImages.length === 0 ? (
+                              <span className="muted-text">
+                                Vacía: subí una imagen para reutilizarla.
+                              </span>
+                            ) : (
+                              <div className="event-image-library-grid">
+                                {eventImages.map((image) => (
+                                  <div
+                                    className="event-image-library-item"
+                                    key={image.id}
+                                  >
+                                    <img
+                                      src={image.dataUrl}
+                                      alt={image.name ?? "Imagen"}
+                                      onClick={() =>
+                                        setEventForm((current) => ({
+                                          ...current,
+                                          imageUrl: image.dataUrl,
+                                        }))
+                                      }
+                                    />
+                                    <button
+                                      className="event-image-library-delete"
+                                      onClick={() =>
+                                        void handleDeleteEventImage(image)
+                                      }
+                                      title="Eliminar de la biblioteca"
+                                      type="button"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                         <label className="event-form-wide">
                           <span>Descripción</span>
                           <textarea

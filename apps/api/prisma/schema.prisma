@@ -216,6 +216,10 @@ model HubEvent {
   description       String?
   type              String   @default("raid") // raid | mplus | pvp | social
   startsAt          DateTime
+  // Duración del evento en minutos (opcional, para mostrar hora de fin).
+  durationMinutes   Int?
+  // Cierre de inscripciones: a partir de acá ya no se puede anotar.
+  signupDeadline    DateTime?
   imageUrl          String?
   channelId         String?
   status            String   @default("scheduled") // scheduled | cancelled | completed
@@ -250,6 +254,21 @@ model EventSignup {
   @@unique([eventId, userId])
   @@index([guildId, eventId])
   @@map("event_signups")
+}
+
+// Biblioteca de imágenes del módulo de eventos. El staff sube banners y
+// los reutiliza en los eventos. Se guardan como data URL (base64) para no
+// depender de almacenamiento externo.
+model EventImage {
+  id        String   @id @default(cuid())
+  guildId   String
+  name      String?
+  dataUrl   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([guildId, createdAt])
+  @@map("event_images")
 }
 
 // Grabs de Karuta detectados como "raros" (print bajo, muy wishlisteados o

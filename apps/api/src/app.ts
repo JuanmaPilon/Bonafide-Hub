@@ -79,9 +79,12 @@ import {
   COMBAT_ROLES,
   EVENT_TYPES,
   createEvent,
+  createEventImage,
   deleteEvent,
+  deleteEventImage,
   deleteSignup,
   getEvent,
+  listEventImages,
   listEvents,
   updateEvent,
   upsertSignup,
@@ -510,6 +513,8 @@ function startRaidLogSync(): void {
 export function buildApp() {
   const app = Fastify({
     logger: true,
+    // Permite subir imágenes como data URL (hasta ~5MB de body).
+    bodyLimit: 5 * 1024 * 1024,
   });
 
   const allowedOrigins = env.CORS_ORIGINS.split(",")
@@ -2737,7 +2742,9 @@ export function buildApp() {
 
     const body = (request.body ?? {}) as {
       description?: string;
+      durationMinutes?: number;
       imageUrl?: string;
+      signupDeadline?: string;
       startsAt?: string;
       title?: string;
       type?: string;
@@ -2749,6 +2756,15 @@ export function buildApp() {
       return reply.code(400).send({
         ok: false,
         error: "Faltan título o fecha/hora válida",
+      });
+    }
+    if (
+      body.signupDeadline &&
+      Number.isNaN(new Date(body.signupDeadline).getTime())
+    ) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Fecha de cierre de inscripciones inválida",
       });
     }
 
@@ -2763,8 +2779,10 @@ export function buildApp() {
       createdByUserId: user.id,
       createdByUsername: user.global_name ?? user.username ?? undefined,
       description: body.description?.trim() || undefined,
+      durationMinutes: body.durationMinutes,
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
+      signupDeadline: body.signupDeadline?.trim() || undefined,
       startsAt,
       title,
       type,
@@ -2796,7 +2814,9 @@ export function buildApp() {
 
     const body = (request.body ?? {}) as {
       description?: string;
+      durationMinutes?: number | null;
       imageUrl?: string;
+      signupDeadline?: string | null;
       startsAt?: string;
       status?: string;
       title?: string;
@@ -2806,10 +2826,21 @@ export function buildApp() {
     if (body.startsAt && Number.isNaN(new Date(body.startsAt).getTime())) {
       return reply.code(400).send({ ok: false, error: "Fecha inválida" });
     }
+    if (
+      body.signupDeadline &&
+      Number.isNaN(new Date(body.signupDeadline).getTime())
+    ) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Fecha de cierre de inscripciones inválida",
+      });
+    }
 
     const event = await updateEvent(params.guildId, params.eventId, {
       description: body.description?.trim() || undefined,
+      durationMinutes: body.durationMinutes ?? null,
       imageUrl: body.imageUrl?.trim() || undefined,
+      signupDeadline: body.signupDeadline ?? null,
       startsAt: body.startsAt,
       status: body.status,
       title: body.title?.trim() || undefined,
@@ -2859,6 +2890,91 @@ export function buildApp() {
     return { ok: true, guildId: params.guildId, deleted };
   });
 
+  // ── Biblioteca de imágenes de eventos ─────────────────────────────
+  app.get("/guilds/:guildId/events/images", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const images = await listEventImages(params.guildId);
+    return { ok: true, guildId: params.guildId, images };
+  });
+
+  app.post("/guilds/:guildId/events/images", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      dataUrl?: string;
+      name?: string;
+    };
+    const dataUrl = body.dataUrl?.trim();
+    if (!dataUrl || !dataUrl.startsWith("data:image/")) {
+      return reply.code(400).send({
+        ok: false,
+        error: "La imagen debe ser un data URL de imagen válido",
+      });
+    }
+    // Límite de ~4MB en base64 (≈3MB de archivo real).
+    if (dataUrl.length > 4_000_000) {
+      return reply.code(400).send({
+        ok: false,
+        error: "La imagen es demasiado grande (máx. ~3MB)",
+      });
+    }
+
+    const image = await createEventImage({
+      dataUrl,
+      guildId: params.guildId,
+      name: body.name?.trim() || undefined,
+    });
+
+    return { ok: true, guildId: params.guildId, image };
+  });
+
+  app.delete(
+    "/guilds/:guildId/events/images/:imageId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; imageId?: string };
+      if (!params.guildId || !params.imageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteEventImage(params.guildId, params.imageId);
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
+
   // Inscripción del usuario logueado a un evento (upsert).
   app.put(
     "/guilds/:guildId/events/:eventId/signups",
@@ -2882,6 +2998,22 @@ export function buildApp() {
         return reply
           .code(404)
           .send({ ok: false, error: "Evento no encontrado" });
+      }
+
+      if (event.status !== "scheduled") {
+        return reply.code(400).send({
+          ok: false,
+          error: "El evento no está abierto a inscripciones.",
+        });
+      }
+      if (
+        event.signupDeadline &&
+        new Date(event.signupDeadline).getTime() < Date.now()
+      ) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Las inscripciones están cerradas.",
+        });
       }
 
       const user = session.user as {
