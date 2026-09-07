@@ -2782,6 +2782,11 @@ input {
   background: rgba(12, 19, 37, 0.55);
 }
 
+.event-form-title {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
 .event-form-wide {
   grid-column: 1 / -1;
 }
@@ -2819,8 +2824,16 @@ input {
   justify-content: center;
   font-size: 2.4rem;
   background:
-    radial-gradient(circle at 30% 20%, rgba(255, 138, 92, 0.35), transparent 55%),
-    radial-gradient(circle at 75% 80%, rgba(124, 227, 139, 0.25), transparent 55%),
+    radial-gradient(
+      circle at 30% 20%,
+      rgba(255, 138, 92, 0.35),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 75% 80%,
+      rgba(124, 227, 139, 0.25),
+      transparent 55%
+    ),
     linear-gradient(135deg, #1c2340, #0b1226);
 }
 
@@ -2848,6 +2861,33 @@ input {
   border: 1px solid rgba(134, 158, 214, 0.35);
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+.event-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.event-card-status {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.event-card-status.cancelled {
+  color: #ff8a5c;
+  background: rgba(255, 138, 92, 0.12);
+}
+
+.event-card-status.completed {
+  color: #7ce38b;
+  background: rgba(124, 227, 139, 0.12);
 }
 
 .event-card-date {

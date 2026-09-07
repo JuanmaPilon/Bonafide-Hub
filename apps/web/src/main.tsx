@@ -476,6 +476,14 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
   );
 }
 
+// Convierte una fecha a string compatible con <input type="datetime-local">
+// (formato local YYYY-MM-DDTHH:mm, sin zona horaria).
+function toDateTimeLocal(value: Date | string): string {
+  const date = new Date(value);
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
 function EventCard({
@@ -483,6 +491,7 @@ function EventCard({
   event,
   meId,
   onDelete,
+  onEdit,
   onRemoveSignup,
   onSignup,
 }: {
@@ -490,6 +499,7 @@ function EventCard({
   event: HubEvent;
   meId?: string;
   onDelete: (event: HubEvent) => void;
+  onEdit: (event: HubEvent) => void;
   onRemoveSignup: (eventId: string) => Promise<void>;
   onSignup: (
     eventId: string,
@@ -551,9 +561,16 @@ function EventCard({
       <div className="event-card-body">
         <div className="event-card-head">
           <strong>{event.title}</strong>
-          <span className="event-card-type">
-            {typeMeta.emoji} {typeMeta.label}
-          </span>
+          <div className="event-card-badges">
+            {event.status !== "scheduled" ? (
+              <span className={`event-card-status ${event.status}`}>
+                {event.status === "cancelled" ? "Cancelado" : "Completado"}
+              </span>
+            ) : null}
+            <span className="event-card-type">
+              {typeMeta.emoji} {typeMeta.label}
+            </span>
+          </div>
         </div>
         <div className="event-card-date">
           📅 {new Date(event.startsAt).toLocaleString()}
@@ -683,6 +700,13 @@ function EventCard({
 
         {canManage ? (
           <div className="event-card-actions">
+            <button
+              className="ghost-button"
+              onClick={() => onEdit(event)}
+              type="button"
+            >
+              Editar
+            </button>
             <button
               className="ghost-button danger"
               onClick={() => onDelete(event)}
@@ -1404,10 +1428,12 @@ function App() {
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState({
     description: "",
     imageUrl: "",
     startsAt: "",
+    status: "scheduled",
     title: "",
     type: "raid",
   });
@@ -2019,7 +2045,34 @@ function App() {
     });
   }
 
-  async function handleCreateEvent(): Promise<void> {
+  function handleCloseEventForm(): void {
+    setShowEventForm(false);
+    setEditingEventId(null);
+    setEventForm({
+      description: "",
+      imageUrl: "",
+      startsAt: "",
+      status: "scheduled",
+      title: "",
+      type: "raid",
+    });
+  }
+
+  function handleEditEvent(event: HubEvent): void {
+    setEditingEventId(event.id);
+    setEventForm({
+      description: event.description ?? "",
+      imageUrl: event.imageUrl ?? "",
+      startsAt: toDateTimeLocal(event.startsAt),
+      status: event.status,
+      title: event.title,
+      type: event.type,
+    });
+    setShowEventForm(true);
+  }
+
+  // Crea o actualiza un evento desde la web (sin intervención de Discord).
+  async function handleSaveEvent(): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
@@ -2029,31 +2082,47 @@ function App() {
     }
     setCreatingEvent(true);
     try {
-      const created = await createEvent(selectedGuildId, {
-        description: eventForm.description.trim() || undefined,
-        imageUrl: eventForm.imageUrl.trim() || undefined,
-        startsAt: eventForm.startsAt,
-        title: eventForm.title.trim(),
-        type: eventForm.type,
-      });
-      setEvents((current) =>
-        [...current, created].sort(
-          (a, b) =>
-            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-        ),
-      );
-      setShowEventForm(false);
-      setEventForm({
-        description: "",
-        imageUrl: "",
-        startsAt: "",
-        title: "",
-        type: "raid",
-      });
-      pushToast("Evento creado.", "success");
+      if (editingEventId) {
+        const updated = await updateEvent(selectedGuildId, editingEventId, {
+          description: eventForm.description.trim() || undefined,
+          imageUrl: eventForm.imageUrl.trim() || undefined,
+          startsAt: eventForm.startsAt,
+          status: eventForm.status,
+          title: eventForm.title.trim(),
+          type: eventForm.type,
+        });
+        setEvents((current) =>
+          current
+            .map((entry) => (entry.id === updated.id ? updated : entry))
+            .sort(
+              (a, b) =>
+                new Date(a.startsAt).getTime() -
+                new Date(b.startsAt).getTime(),
+            ),
+        );
+        pushToast("Evento actualizado.", "success");
+      } else {
+        const created = await createEvent(selectedGuildId, {
+          description: eventForm.description.trim() || undefined,
+          imageUrl: eventForm.imageUrl.trim() || undefined,
+          startsAt: eventForm.startsAt,
+          title: eventForm.title.trim(),
+          type: eventForm.type,
+        });
+        setEvents((current) =>
+          [...current, created].sort(
+            (a, b) =>
+              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+          ),
+        );
+        pushToast("Evento creado.", "success");
+      }
+      handleCloseEventForm();
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "No se pudo crear el evento.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar el evento.",
         "error",
       );
     } finally {
@@ -6408,7 +6477,11 @@ function App() {
                     <div className="event-actions">
                       <button
                         className="primary-button"
-                        onClick={() => setShowEventForm((open) => !open)}
+                        onClick={() =>
+                          showEventForm
+                            ? handleCloseEventForm()
+                            : setShowEventForm(true)
+                        }
                         type="button"
                       >
                         {showEventForm ? "Cancelar" : "+ Nuevo evento"}
@@ -6418,6 +6491,9 @@ function App() {
 
                   {showEventForm ? (
                     <div className="event-form-card">
+                      <h3 className="event-form-title">
+                        {editingEventId ? "Editar evento" : "Nuevo evento"}
+                      </h3>
                       <div className="form-grid">
                         <label>
                           <span>Título</span>
@@ -6453,6 +6529,25 @@ function App() {
                             ))}
                           </select>
                         </label>
+                        {editingEventId ? (
+                          <label>
+                            <span>Estado</span>
+                            <select
+                              className="select"
+                              value={eventForm.status}
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  status: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="scheduled">Programado</option>
+                              <option value="cancelled">Cancelado</option>
+                              <option value="completed">Completado</option>
+                            </select>
+                          </label>
+                        ) : null}
                         <label>
                           <span>Fecha y hora</span>
                           <input
@@ -6501,11 +6596,15 @@ function App() {
                       <div className="event-form-actions">
                         <button
                           className="primary-button"
-                          onClick={() => void handleCreateEvent()}
+                          onClick={() => void handleSaveEvent()}
                           disabled={creatingEvent}
                           type="button"
                         >
-                          {creatingEvent ? "Creando…" : "Crear evento"}
+                          {creatingEvent
+                            ? "Guardando…"
+                            : editingEventId
+                              ? "Guardar cambios"
+                              : "Crear evento"}
                         </button>
                       </div>
                     </div>
@@ -6529,6 +6628,7 @@ function App() {
                           key={event.id}
                           meId={me?.id}
                           onDelete={handleDeleteEvent}
+                          onEdit={handleEditEvent}
                           onRemoveSignup={handleRemoveEventSignup}
                           onSignup={handleEventSignup}
                         />
