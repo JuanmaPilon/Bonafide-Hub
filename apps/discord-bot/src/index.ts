@@ -3006,6 +3006,7 @@ type KarutaEmbed = {
   fields?: Array<{ name: string; value: string }>;
   footer?: { text?: string } | null;
   image?: { url?: string } | null;
+  thumbnail?: { url?: string } | null;
   title?: string | null;
 };
 
@@ -3204,7 +3205,7 @@ function parseKarutaKv(
     code: summaryMatch[1],
     // El número tras el print (◈5, ♦4, #7, ✦2…) es la EDICIÓN.
     edition: Number(summaryMatch[4].replace(/\D/g, "")),
-    imageUrl: embed.image?.url || undefined,
+    imageUrl: embed.image?.url || embed.thumbnail?.url || undefined,
     ownerUserId,
     ownerUsername,
     printNumber: Number(summaryMatch[3]),
@@ -3644,6 +3645,67 @@ async function postKarutaAlbum(
   }
 }
 
+// Procesa un embed tipo kv (ver carta). Devuelve true si el embed era kv
+// (registrada, ignorada o no rara); false si no matcheaba kv. Se usa en
+// MessageCreate y MessageUpdate porque Karuta a veces edita el mensaje para
+// agregar la imagen final de la carta (igual que con los álbumes).
+async function processKarutaKv(
+  message: Message,
+  rawEmbed: KarutaEmbed,
+  guildConfig: Awaited<ReturnType<typeof getGuildConfig>>,
+): Promise<boolean> {
+  if (!message.guildId) {
+    return false;
+  }
+
+  const kv = parseKarutaKv(rawEmbed, message.content);
+  if (!kv) {
+    return false;
+  }
+
+  const rawDesc = rawEmbed.description
+    ? rawEmbed.description.replace(/\n/g, " ").slice(0, 220)
+    : "";
+  console.log(
+    `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} image=${kv.imageUrl ? "sí" : "no"} | ${rawDesc}`,
+  );
+
+  const reasons = karutaRareReasons(
+    kv.printNumber,
+    kv.wishlistCount,
+    guildConfig,
+  );
+  if (reasons.length === 0) {
+    console.log(
+      `[discord-bot] Karuta kv ignorada (no rara): ${kv.code} print=${kv.printNumber ?? "?"} wishlist=${kv.wishlistCount ?? "?"}`,
+    );
+    return true;
+  }
+
+  // El dueño viene como mención (<@ID>) en el embed. Solo registramos
+  // cartas de miembros del server: si no podemos resolverlo, saltamos.
+  if (kv.ownerUserId && !kv.ownerUsername) {
+    const member = await message.guild?.members
+      .fetch(kv.ownerUserId)
+      .catch(() => null);
+    if (!member) {
+      console.log(
+        `[discord-bot] Karuta kv ignorada: dueño <@${kv.ownerUserId}> no está en el server (${kv.code})`,
+      );
+      return true;
+    }
+    kv.ownerUsername = member.displayName;
+  }
+
+  const saved = await postKarutaCard(message.guildId, kv);
+  if (saved) {
+    console.log(
+      `[discord-bot] Karuta kv registrada: ${kv.code} (${kv.ownerUsername ?? "?"})`,
+    );
+  }
+  return true;
+}
+
 async function handleKarutaDropMessage(message: Message): Promise<void> {
   if (!message.inGuild() || !message.author.bot) {
     return;
@@ -3717,9 +3779,11 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     const transfer = parseKarutaTransfer(rawEmbed, message.content);
     if (transfer) {
       const toUsername = transfer.toUserId
-        ? (await message.guild?.members
-            .fetch(transfer.toUserId)
-            .catch(() => null))?.displayName
+        ? (
+            await message.guild?.members
+              .fetch(transfer.toUserId)
+              .catch(() => null)
+          )?.displayName
         : undefined;
       const saved = await postKarutaTransfer(message.guildId, {
         code: transfer.code,
@@ -3740,48 +3804,8 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       continue;
     }
 
-    // kv (ver carta propia): registra en la colección SOLO si es rara (OR).
-    const kv = parseKarutaKv(rawEmbed, message.content);
-    if (kv) {
-      const rawDesc = rawEmbed.description
-        ? rawEmbed.description.replace(/\n/g, " ").slice(0, 220)
-        : "";
-      console.log(
-        `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} | ${rawDesc}`,
-      );
-      const reasons = karutaRareReasons(
-        kv.printNumber,
-        kv.wishlistCount,
-        guildConfig,
-      );
-      if (reasons.length === 0) {
-        console.log(
-          `[discord-bot] Karuta kv ignorada (no rara): ${kv.code} print=${kv.printNumber ?? "?"} wishlist=${kv.wishlistCount ?? "?"}`,
-        );
-        continue;
-      }
-
-      // El dueño viene como mención (<@ID>) en el embed. Solo registramos
-      // cartas de miembros del server: si no podemos resolverlo, saltamos.
-      if (kv.ownerUserId && !kv.ownerUsername) {
-        const member = await message.guild?.members
-          .fetch(kv.ownerUserId)
-          .catch(() => null);
-        if (!member) {
-          console.log(
-            `[discord-bot] Karuta kv ignorada: dueño <@${kv.ownerUserId}> no está en el server (${kv.code})`,
-          );
-          continue;
-        }
-        kv.ownerUsername = member.displayName;
-      }
-
-      const saved = await postKarutaCard(message.guildId, kv);
-      if (saved) {
-        console.log(
-          `[discord-bot] Karuta kv registrada: ${kv.code} (${kv.ownerUsername ?? "?"})`,
-        );
-      }
+    // kv (ver carta): registra en la colección SOLO si es rara (OR).
+    if (await processKarutaKv(message, rawEmbed, guildConfig)) {
       continue;
     }
 
@@ -3870,9 +3894,11 @@ async function handleKarutaMessageUpdate(message: Message): Promise<void> {
     const transfer = parseKarutaTransfer(rawEmbed, message.content);
     if (transfer) {
       const toUsername = transfer.toUserId
-        ? (await message.guild?.members
-            .fetch(transfer.toUserId)
-            .catch(() => null))?.displayName
+        ? (
+            await message.guild?.members
+              .fetch(transfer.toUserId)
+              .catch(() => null)
+          )?.displayName
         : undefined;
       const saved = await postKarutaTransfer(message.guildId, {
         code: transfer.code,
@@ -3883,6 +3909,12 @@ async function handleKarutaMessageUpdate(message: Message): Promise<void> {
           `[discord-bot] Karuta transfer aceptado (edit): ${transfer.code} → ${toUsername ?? "?"}`,
         );
       }
+      continue;
+    }
+
+    // kv editado: Karuta a veces agrega la imagen final de la carta
+    // editando el mensaje (igual que con los álbumes).
+    if (await processKarutaKv(message, rawEmbed, guildConfig)) {
       continue;
     }
 

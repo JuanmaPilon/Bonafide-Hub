@@ -3375,6 +3375,23 @@ input {
   object-fit: cover;
 }
 
+.karuta-drop-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  background:
+    radial-gradient(
+      circle at 50% 30%,
+      rgba(134, 158, 214, 0.14),
+      transparent 60%
+    ),
+    rgba(8, 13, 24, 0.6);
+}
+
 .karuta-album-images {
   display: grid;
   gap: 6px;

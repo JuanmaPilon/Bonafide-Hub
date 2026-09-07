@@ -5696,7 +5696,11 @@ function App() {
                                   src={drop.imageUrl}
                                   alt={drop.cardName ?? "Carta"}
                                 />
-                              ) : null}
+                              ) : (
+                                <div className="karuta-drop-image karuta-drop-image-placeholder">
+                                  {drop.cardName ?? "Carta"}
+                                </div>
+                              )}
                               <div className="karuta-drop-body">
                                 <strong>{drop.cardName ?? "Carta"}</strong>
                                 {drop.series ? (
@@ -5756,7 +5760,11 @@ function App() {
                                   src={card.imageUrl}
                                   alt={card.cardName ?? "Carta"}
                                 />
-                              ) : null}
+                              ) : (
+                                <div className="karuta-drop-image karuta-drop-image-placeholder">
+                                  {card.cardName ?? "Carta"}
+                                </div>
+                              )}
                               <div className="karuta-drop-body">
                                 <strong>{card.cardName ?? "Carta"}</strong>
                                 {card.series ? (
