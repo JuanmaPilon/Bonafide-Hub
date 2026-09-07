@@ -194,7 +194,7 @@ const STAFF_TIERS: Record<
   admin: {
     label: "Admin",
     description:
-      "Casi todo: configuración, comunicados, raids, loro, reaction roles y XP.",
+      "Casi todo: configuración, comunicados, raids, loro, reaction roles, XP, Karuta y eventos.",
     modules: [
       "config",
       "comunicados",
@@ -203,14 +203,14 @@ const STAFF_TIERS: Record<
       "reaction",
       "xp",
       "karuta",
-      "x",
+      "eventos",
     ],
   },
   officer: {
     label: "Officer",
     description:
-      "Operativo: comunicados, raids/logs, reaction roles, mensajes diarios y Karuta.",
-    modules: ["comunicados", "raids", "daily", "reaction", "karuta"],
+      "Operativo: comunicados, raids/logs, reaction roles, mensajes diarios, Karuta y eventos.",
+    modules: ["comunicados", "raids", "daily", "reaction", "karuta", "eventos"],
   },
 };
 
@@ -2096,8 +2096,7 @@ function App() {
             .map((entry) => (entry.id === updated.id ? updated : entry))
             .sort(
               (a, b) =>
-                new Date(a.startsAt).getTime() -
-                new Date(b.startsAt).getTime(),
+                new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
             ),
         );
         pushToast("Evento actualizado.", "success");
@@ -5390,104 +5389,6 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("x") ? (
-                    <details className="admin-card admin-card-acc admin-card--admin">
-                      <summary className="admin-card-header admin-acc-header">
-                        <div>
-                          <h3>
-                            Módulo X{" "}
-                            <span className="admin-tier-badge tier-admin">
-                              Admin
-                            </span>
-                            <span className="admin-tier-badge tier-disabled">
-                              Deshabilitado
-                            </span>
-                          </h3>
-                        </div>
-                        <span className="admin-acc-chevron" aria-hidden="true">
-                          ▸
-                        </span>
-                      </summary>
-                      <div className="admin-card-body">
-                        <p className="module-x-note">
-                          Mockup del futuro módulo estilo{" "}
-                          <strong>Raid Helper</strong>: eventos con imágenes,
-                          signups por emoji y rosters. Todavía no está activo,
-                          así que los controles no hacen nada.
-                        </p>
-
-                        <div className="module-x-mockup" aria-disabled="true">
-                          <div className="module-x-event-card">
-                            <div
-                              className="module-x-banner"
-                              role="img"
-                              aria-label="Banner del evento"
-                            >
-                              <span aria-hidden="true">🖼️</span>
-                            </div>
-                            <div className="module-x-event-body">
-                              <div className="module-x-event-title">
-                                <strong>🗼 Torre del Brujo — Heroico</strong>
-                                <span className="module-x-event-date">
-                                  📅 Sáb 14 · 21:00
-                                </span>
-                              </div>
-                              <p className="module-x-event-desc">
-                                Traé flasks y comida. Se arma roster 20 min
-                                antes.
-                              </p>
-                              <div className="module-x-emojis">
-                                <span className="module-x-emoji">
-                                  ✅ <b>12</b>
-                                </span>
-                                <span className="module-x-emoji">
-                                  🤔 <b>3</b>
-                                </span>
-                                <span className="module-x-emoji">
-                                  ❌ <b>5</b>
-                                </span>
-                                <span className="module-x-emoji">
-                                  📋 <b>20</b>
-                                </span>
-                              </div>
-                              <div className="module-x-roster">
-                                <div className="module-x-roster-row">
-                                  <span>✅</span>
-                                  <span>⭐ Juan</span>
-                                  <span className="module-x-roster-role">
-                                    Tank
-                                  </span>
-                                </div>
-                                <div className="module-x-roster-row">
-                                  <span>✅</span>
-                                  <span>María</span>
-                                  <span className="module-x-roster-role">
-                                    Healer
-                                  </span>
-                                </div>
-                                <div className="module-x-roster-row">
-                                  <span>🤔</span>
-                                  <span>Pedro</span>
-                                  <span className="module-x-roster-role">
-                                    DPS
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="module-x-templates">
-                                <span className="module-x-template">Raid</span>
-                                <span className="module-x-template">M+</span>
-                                <span className="module-x-template">PvP</span>
-                                <span className="module-x-template">
-                                  Social
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </details>
-                  ) : null}
-
                   {canAccess("xp") ? (
                     <details className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
@@ -6473,7 +6374,7 @@ function App() {
                 </div>
               ) : activeTab === "eventos" ? (
                 <div className="dashboard-stack">
-                  {canAccess("x") ? (
+                  {canAccess("eventos") ? (
                     <div className="event-actions">
                       <button
                         className="primary-button"
@@ -6615,7 +6516,7 @@ function App() {
                   ) : events.length === 0 ? (
                     <div className="empty-state">
                       Todavía no hay eventos.
-                      {canAccess("x")
+                      {canAccess("eventos")
                         ? " Creá el primero con «+ Nuevo evento»."
                         : ""}
                     </div>
@@ -6623,7 +6524,7 @@ function App() {
                     <div className="events-grid">
                       {events.map((event) => (
                         <EventCard
-                          canManage={canAccess("x")}
+                          canManage={canAccess("eventos")}
                           event={event}
                           key={event.id}
                           meId={me?.id}

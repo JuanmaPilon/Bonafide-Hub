@@ -152,9 +152,9 @@ const STAFF_TIER_MODULES: Record<"admin" | "officer", string[]> = {
     "reaction",
     "xp",
     "karuta",
-    "x",
+    "eventos",
   ],
-  officer: ["comunicados", "raids", "daily", "reaction", "karuta"],
+  officer: ["comunicados", "raids", "daily", "reaction", "karuta", "eventos"],
 };
 
 // Fetch a Discord con reintento ante rate limits (429). Discord manda el
@@ -2731,7 +2731,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!(await canManageModule(session, params.guildId, "x"))) {
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2752,9 +2752,7 @@ export function buildApp() {
       });
     }
 
-    const type = EVENT_TYPES.includes(body.type as never)
-      ? body.type!
-      : "raid";
+    const type = EVENT_TYPES.includes(body.type as never) ? body.type! : "raid";
     const user = session.user as {
       global_name?: string | null;
       id?: string;
@@ -2792,7 +2790,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing params" });
     }
 
-    if (!(await canManageModule(session, params.guildId, "x"))) {
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2846,7 +2844,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing params" });
     }
 
-    if (!(await canManageModule(session, params.guildId, "x"))) {
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -2862,65 +2860,70 @@ export function buildApp() {
   });
 
   // Inscripción del usuario logueado a un evento (upsert).
-  app.put("/guilds/:guildId/events/:eventId/signups", async (request, reply) => {
-    const session = await requireSession(request);
-    if (!session) {
-      return reply.code(401).send({ ok: false, error: "Unauthorized" });
-    }
+  app.put(
+    "/guilds/:guildId/events/:eventId/signups",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
 
-    const params = request.params as { eventId?: string; guildId?: string };
-    if (!params.guildId || !params.eventId) {
-      return reply.code(400).send({ ok: false, error: "Missing params" });
-    }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
 
-    if (!isGuildMember(session, params.guildId)) {
-      return reply.code(403).send({ ok: false, error: "Forbidden" });
-    }
+      if (!isGuildMember(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
 
-    const event = await getEvent(params.guildId, params.eventId);
-    if (!event) {
-      return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
-    }
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
 
-    const user = session.user as {
-      global_name?: string | null;
-      id?: string;
-      username?: string | null;
-    };
-    if (!user.id) {
-      return reply.code(400).send({ ok: false, error: "Falta el usuario" });
-    }
+      const user = session.user as {
+        global_name?: string | null;
+        id?: string;
+        username?: string | null;
+      };
+      if (!user.id) {
+        return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+      }
 
-    const body = (request.body ?? {}) as {
-      character?: string;
-      note?: string;
-      role?: string;
-      status?: string;
-      wowClass?: string;
-    };
+      const body = (request.body ?? {}) as {
+        character?: string;
+        note?: string;
+        role?: string;
+        status?: string;
+        wowClass?: string;
+      };
 
-    const status = body.status ?? "tentative";
-    if (!["yes", "tentative", "no"].includes(status)) {
-      return reply.code(400).send({ ok: false, error: "Estado inválido" });
-    }
-    if (body.role && !COMBAT_ROLES.includes(body.role as never)) {
-      return reply.code(400).send({ ok: false, error: "Rol inválido" });
-    }
+      const status = body.status ?? "tentative";
+      if (!["yes", "tentative", "no"].includes(status)) {
+        return reply.code(400).send({ ok: false, error: "Estado inválido" });
+      }
+      if (body.role && !COMBAT_ROLES.includes(body.role as never)) {
+        return reply.code(400).send({ ok: false, error: "Rol inválido" });
+      }
 
-    const signup = await upsertSignup({
-      character: body.character?.trim() || undefined,
-      eventId: params.eventId,
-      guildId: params.guildId,
-      note: body.note?.trim() || undefined,
-      role: body.role?.trim() || undefined,
-      status,
-      userId: user.id,
-      username: user.global_name ?? user.username ?? "Miembro",
-      wowClass: body.wowClass?.trim() || undefined,
-    });
+      const signup = await upsertSignup({
+        character: body.character?.trim() || undefined,
+        eventId: params.eventId,
+        guildId: params.guildId,
+        note: body.note?.trim() || undefined,
+        role: body.role?.trim() || undefined,
+        status,
+        userId: user.id,
+        username: user.global_name ?? user.username ?? "Miembro",
+        wowClass: body.wowClass?.trim() || undefined,
+      });
 
-    return { ok: true, guildId: params.guildId, signup };
-  });
+      return { ok: true, guildId: params.guildId, signup };
+    },
+  );
 
   // Quita la propia inscripción.
   app.delete(
