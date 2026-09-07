@@ -184,13 +184,21 @@ const STAFF_TIERS: Record<
     label: "Admin",
     description:
       "Casi todo: configuración, comunicados, raids, loro, reaction roles y XP.",
-    modules: ["config", "comunicados", "raids", "daily", "reaction", "xp"],
+    modules: [
+      "config",
+      "comunicados",
+      "raids",
+      "daily",
+      "reaction",
+      "xp",
+      "karuta",
+    ],
   },
   officer: {
     label: "Officer",
     description:
-      "Operativo: comunicados, raids/logs, reaction roles y mensajes diarios.",
-    modules: ["comunicados", "raids", "daily", "reaction"],
+      "Operativo: comunicados, raids/logs, reaction roles, mensajes diarios y Karuta.",
+    modules: ["comunicados", "raids", "daily", "reaction", "karuta"],
   },
 };
 
@@ -1161,7 +1169,14 @@ function App() {
     () => parseLocationHash().karutaSection,
   );
   const [savingAction, setSavingAction] = useState<
-    "config" | "xp" | "panel" | "daily" | "modules" | "permissions" | null
+    | "config"
+    | "xp"
+    | "panel"
+    | "daily"
+    | "modules"
+    | "permissions"
+    | "karuta"
+    | null
   >(null);
   const [sendingSuggestion, setSendingSuggestion] = useState(false);
   const [suggestionTitle, setSuggestionTitle] = useState("");
@@ -1551,7 +1566,7 @@ function App() {
     };
 
     runRefresh();
-    const refreshTimer = window.setInterval(runRefresh, 60_000);
+    const refreshTimer = window.setInterval(runRefresh, 20_000);
 
     return () => {
       cancelled = true;
@@ -1860,6 +1875,31 @@ function App() {
     } catch (error) {
       void error;
       pushToast("No se pudo guardar la configuración.", "error");
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  // ── Karuta (watcher + criterios de rareza) ───────────────────────
+  async function handleSaveKarutaConfig(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+
+    setSavingAction("karuta");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        karutaWatchEnabled: config.karutaWatchEnabled,
+        karutaChannelId: config.karutaChannelId,
+        karutaRarePrintMax: config.karutaRarePrintMax,
+        karutaRareWishlistMin: config.karutaRareWishlistMin,
+      });
+      clearDirty("karuta");
+      setConfig(nextConfig);
+      pushToast("Configuración de Karuta guardada.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo guardar la configuración de Karuta.", "error");
     } finally {
       setSavingAction(null);
     }
@@ -3612,7 +3652,39 @@ function App() {
                             Sin selección, se envían al owner.
                           </p>
                         </div>
+                      </div>
+                      {configDirty ? (
+                        <div className="admin-card-footer">
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSave()}
+                            disabled={savingAction !== null}
+                          >
+                            {savingAction === "config"
+                              ? "Guardando…"
+                              : "Guardar"}
+                          </button>
+                        </div>
+                      ) : null}
+                    </details>
+                  ) : null}
 
+                  {canAccess("karuta") ? (
+                    <details className="admin-card admin-card-acc admin-card--officer">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>
+                            Karuta{" "}
+                            <span className="admin-tier-badge tier-officer">
+                              Officer
+                            </span>
+                          </h3>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
                         <div className="karuta-watcher-editor">
                           <div className="karuta-watcher-head">
                             <div>
@@ -3626,10 +3698,14 @@ function App() {
                                 type="checkbox"
                                 checked={config.karutaWatchEnabled ?? false}
                                 onChange={(event) =>
-                                  editConfig((current) => ({
-                                    ...current,
-                                    karutaWatchEnabled: event.target.checked,
-                                  }))
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      karutaWatchEnabled:
+                                        event.target.checked,
+                                    }),
+                                    "karuta",
+                                  )
                                 }
                               />
                               <span
@@ -3646,11 +3722,14 @@ function App() {
                                 className="select"
                                 value={config.karutaChannelId ?? ""}
                                 onChange={(event) =>
-                                  editConfig((current) => ({
-                                    ...current,
-                                    karutaChannelId:
-                                      event.target.value || undefined,
-                                  }))
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      karutaChannelId:
+                                        event.target.value || undefined,
+                                    }),
+                                    "karuta",
+                                  )
                                 }
                               >
                                 <option value="">Sin canal configurado</option>
@@ -3670,11 +3749,14 @@ function App() {
                                 value={config.karutaRarePrintMax ?? 10}
                                 onChange={(event) => {
                                   const raw = event.target.value;
-                                  editConfig((current) => ({
-                                    ...current,
-                                    karutaRarePrintMax:
-                                      raw === "" ? undefined : Number(raw),
-                                  }));
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      karutaRarePrintMax:
+                                        raw === "" ? undefined : Number(raw),
+                                    }),
+                                    "karuta",
+                                  );
                                 }}
                               />
                             </label>
@@ -3687,27 +3769,30 @@ function App() {
                                 value={config.karutaRareWishlistMin ?? 3}
                                 onChange={(event) => {
                                   const raw = event.target.value;
-                                  editConfig((current) => ({
-                                    ...current,
-                                    karutaRareWishlistMin:
-                                      raw === "" ? undefined : Number(raw),
-                                  }));
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      karutaRareWishlistMin:
+                                        raw === "" ? undefined : Number(raw),
+                                    }),
+                                    "karuta",
+                                  );
                                 }}
                               />
                             </label>
                           </div>
                         </div>
                       </div>
-                      {configDirty ? (
+                      {isDirty("karuta") ? (
                         <div className="admin-card-footer">
                           <button
                             className="primary-button"
-                            onClick={() => void handleSave()}
+                            onClick={() => void handleSaveKarutaConfig()}
                             disabled={savingAction !== null}
                           >
-                            {savingAction === "config"
+                            {savingAction === "karuta"
                               ? "Guardando…"
-                              : "Guardar"}
+                              : "Guardar configuración"}
                           </button>
                         </div>
                       ) : null}
@@ -5770,7 +5855,9 @@ function App() {
                                 {canAccess("config") ? (
                                   <button
                                     className="ghost-button danger"
-                                    onClick={() => handleDeleteKarutaAlbum(album)}
+                                    onClick={() =>
+                                      handleDeleteKarutaAlbum(album)
+                                    }
                                     type="button"
                                   >
                                     Quitar
