@@ -229,7 +229,7 @@ type KarutaSection = "drops" | "raras" | "coleccion" | "guia";
 // Slugs de URL para cada sección de Karuta.
 const KARUTA_SECTION_SLUGS: Record<KarutaSection, string> = {
   drops: "drops",
-  raras: "cards",
+  raras: "raras",
   coleccion: "coleccion",
   guia: "guia-de-comandos",
 };
@@ -1174,7 +1174,7 @@ function App() {
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
-  const [publishedLoading, setPublishedLoading] = useState(false);
+  const [publishedLoading, setPublishedLoading] = useState(true);
   const [expandedPublished, setExpandedPublished] = useState<Set<string>>(
     new Set(),
   );
@@ -1446,7 +1446,7 @@ function App() {
   useEffect(() => {
     if (!selectedGuildId) {
       setPublished([]);
-      setPublishedLoading(false);
+      setPublishedLoading(true);
       return;
     }
     let cancelled = false;
@@ -3057,7 +3057,7 @@ function App() {
     return (
       <div className="shell app-loading">
         <main className="app-loading-main">
-          <LoadingState label="Cargando Bonafide…" />
+          <LoadingState label="Cargando…" />
         </main>
       </div>
     );
