@@ -3447,7 +3447,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Configuración varias{" "}
+                            Configuraciones principales{" "}
                             <span className="admin-tier-badge tier-admin">
                               Admin
                             </span>
@@ -3780,7 +3780,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Permisos de staff{" "}
+                            Permisos{" "}
                             <span className="admin-tier-badge tier-owner">
                               Owner
                             </span>
@@ -4453,7 +4453,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Mensajes Diarios{" "}
+                            Mensajes Karpindomo{" "}
                             <span className="admin-tier-badge tier-officer">
                               Officer
                             </span>
@@ -5256,7 +5256,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Registro de cambios (auditoría){" "}
+                            Registros{" "}
                             <span className="admin-tier-badge tier-owner">
                               Owner
                             </span>
