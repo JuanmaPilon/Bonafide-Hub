@@ -237,7 +237,7 @@ type KarutaSection = "drops" | "raras" | "coleccion" | "guia";
 
 // Slugs de URL para cada sección de Karuta.
 const KARUTA_SECTION_SLUGS: Record<KarutaSection, string> = {
-  drops: "drops",
+  drops: "drops-raros",
   raras: "raras",
   coleccion: "coleccion",
   guia: "guia-de-comandos",
@@ -250,7 +250,7 @@ function karutaSectionFromSlug(slug: string): KarutaSection | null {
   return entry ? (entry[0] as KarutaSection) : null;
 }
 
-// Parsea el hash: #/karuta/drops → { tab: "karuta", karutaSection: "drops" }.
+// Parsea el hash: #/karuta/raras → { tab: "karuta", karutaSection: "raras" }.
 // Las demás tabs ignoran el segmento extra.
 function parseLocationHash(): {
   tab: HubTab;
@@ -263,8 +263,8 @@ function parseLocationHash(): {
     : "home";
   const karutaSection =
     tab === "karuta" && parts[1]
-      ? (karutaSectionFromSlug(parts[1]) ?? "drops")
-      : "drops";
+      ? (karutaSectionFromSlug(parts[1]) ?? "raras")
+      : "raras";
   return { tab, karutaSection };
 }
 
@@ -3701,8 +3701,7 @@ function App() {
                                   editConfig(
                                     (current) => ({
                                       ...current,
-                                      karutaWatchEnabled:
-                                        event.target.checked,
+                                      karutaWatchEnabled: event.target.checked,
                                     }),
                                     "karuta",
                                   )
@@ -5650,18 +5649,18 @@ function App() {
                 <div className="karuta-view">
                   <div className="karuta-subtabs" role="tablist">
                     <button
-                      className={`karuta-subtab${karutaSection === "drops" ? " active" : ""}`}
-                      onClick={() => setKarutaSection("drops")}
-                      type="button"
-                    >
-                      Drops
-                    </button>
-                    <button
                       className={`karuta-subtab${karutaSection === "raras" ? " active" : ""}`}
                       onClick={() => setKarutaSection("raras")}
                       type="button"
                     >
                       Raras
+                    </button>
+                    <button
+                      className={`karuta-subtab${karutaSection === "drops" ? " active" : ""}`}
+                      onClick={() => setKarutaSection("drops")}
+                      type="button"
+                    >
+                      Drops raros
                     </button>
                     <button
                       className={`karuta-subtab${karutaSection === "coleccion" ? " active" : ""}`}
