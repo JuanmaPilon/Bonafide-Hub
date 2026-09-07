@@ -3321,6 +3321,19 @@ input {
   object-fit: cover;
 }
 
+.karuta-album-images {
+  display: grid;
+  gap: 6px;
+  padding: 8px 8px 0;
+}
+
+.karuta-album-image {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+}
+
 .karuta-drop-body {
   display: grid;
   gap: 4px;

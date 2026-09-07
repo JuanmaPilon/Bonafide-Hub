@@ -393,6 +393,8 @@ export async function processKarutaTransfer(input: {
   return { processed: true, card: toKarutaCard(updated) };
 }
 
+export type KarutaAlbumImage = { page: number; url: string };
+
 export type KarutaAlbum = {
   albumName?: string;
   background?: string;
@@ -400,12 +402,35 @@ export type KarutaAlbum = {
   guildId: string;
   id: string;
   imageUrl?: string;
+  images: KarutaAlbumImage[];
   ownerUserId?: string;
   ownerUsername?: string;
   page?: number;
   totalPages?: number;
   updatedAt: Date;
 };
+
+function normalizeAlbumImages(raw: unknown): KarutaAlbumImage[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const images: KarutaAlbumImage[] = [];
+  for (const entry of raw) {
+    if (
+      entry &&
+      typeof entry === "object" &&
+      "url" in entry &&
+      typeof (entry as { url?: unknown }).url === "string"
+    ) {
+      const page =
+        "page" in entry && typeof (entry as { page?: unknown }).page === "number"
+          ? ((entry as { page: number }).page as number)
+          : 0;
+      images.push({ page, url: (entry as { url: string }).url });
+    }
+  }
+  return images.sort((a, b) => a.page - b.page);
+}
 
 function toKarutaAlbum(record: {
   albumName: string | null;
@@ -414,6 +439,7 @@ function toKarutaAlbum(record: {
   guildId: string;
   id: string;
   imageUrl: string | null;
+  images: unknown;
   ownerUserId: string | null;
   ownerUsername: string | null;
   page: number | null;
@@ -427,6 +453,7 @@ function toKarutaAlbum(record: {
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
+    images: normalizeAlbumImages(record.images),
     ownerUserId: record.ownerUserId ?? undefined,
     ownerUsername: record.ownerUsername ?? undefined,
     page: record.page ?? undefined,
@@ -448,8 +475,8 @@ export async function listKarutaAlbums(
   return records.map(toKarutaAlbum);
 }
 
-// Upsert best-effort de un álbum (ka). Si ya existe el mismo álbum del
-// mismo dueño, lo actualiza; si no, lo crea.
+// Upsert best-effort de un álbum (ka). Guarda la imagen de cada página que
+// se ve: si llega una página nueva, la agrega; si ya existía, la reemplaza.
 export async function upsertKarutaAlbum(input: {
   albumName?: string;
   background?: string;
@@ -460,6 +487,8 @@ export async function upsertKarutaAlbum(input: {
   page?: number;
   totalPages?: number;
 }): Promise<KarutaAlbum> {
+  const pageNumber = input.page ?? 1;
+
   const existing = await prisma.karutaAlbum.findFirst({
     where: {
       guildId: input.guildId,
@@ -470,13 +499,26 @@ export async function upsertKarutaAlbum(input: {
   });
 
   if (existing) {
+    const existingImages = normalizeAlbumImages(existing.images);
+    const nextImages = [...existingImages];
+    if (input.imageUrl) {
+      const index = nextImages.findIndex((image) => image.page === pageNumber);
+      if (index >= 0) {
+        nextImages[index] = { page: pageNumber, url: input.imageUrl };
+      } else {
+        nextImages.push({ page: pageNumber, url: input.imageUrl });
+        nextImages.sort((a, b) => a.page - b.page);
+      }
+    }
+
     const updated = await prisma.karutaAlbum.update({
       where: { id: existing.id },
       data: {
         background: input.background,
-        imageUrl: input.imageUrl,
+        imageUrl: input.imageUrl ?? existing.imageUrl,
+        images: nextImages,
         ownerUsername: input.ownerUsername,
-        page: input.page,
+        page: pageNumber,
         totalPages: input.totalPages,
       },
     });
@@ -489,9 +531,10 @@ export async function upsertKarutaAlbum(input: {
       background: input.background,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
+      images: input.imageUrl ? [{ page: pageNumber, url: input.imageUrl }] : [],
       ownerUserId: input.ownerUserId,
       ownerUsername: input.ownerUsername,
-      page: input.page,
+      page: pageNumber,
       totalPages: input.totalPages,
     },
   });

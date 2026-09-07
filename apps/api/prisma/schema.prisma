@@ -256,7 +256,7 @@ model KarutaCard {
 }
 
 // Álbumes de Karuta (ka). Colección de un usuario: nombre del álbum, fondo
-// y la imagen con las cartas. Se refresca cada vez que se ve.
+// y las imágenes de cada página. Se refresca cada vez que se ve una página.
 model KarutaAlbum {
   id            String   @id @default(cuid())
   guildId       String
@@ -265,6 +265,7 @@ model KarutaAlbum {
   albumName     String?
   background    String?
   imageUrl      String?
+  images        Json     @default("[]")
   page          Int?
   totalPages    Int?
   createdAt     DateTime @default(now())

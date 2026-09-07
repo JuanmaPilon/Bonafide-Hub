@@ -5647,14 +5647,26 @@ function App() {
                       ) : (
                         <div className="karuta-drops-grid">
                           {karutaAlbums.map((album) => (
-                            <article className="karuta-drop-card" key={album.id}>
-                              {album.imageUrl ? (
-                                <img
-                                  className="karuta-drop-image"
-                                  src={album.imageUrl}
-                                  alt={album.albumName ?? "Álbum"}
-                                />
-                              ) : null}
+                            <article
+                              className="karuta-drop-card"
+                              key={album.id}
+                            >
+                              <div className="karuta-album-images">
+                                {(album.images.length > 0
+                                  ? album.images.map((image) => image.url)
+                                  : album.imageUrl
+                                    ? [album.imageUrl]
+                                    : []
+                                ).map((url, index) => (
+                                  <img
+                                    key={`${album.id}-${index}`}
+                                    className="karuta-album-image"
+                                    src={url}
+                                    alt={`${album.albumName ?? "Álbum"} página ${index + 1}`}
+                                    loading="lazy"
+                                  />
+                                ))}
+                              </div>
                               <div className="karuta-drop-body">
                                 <strong>{album.albumName ?? "Álbum"}</strong>
                                 {album.background ? (
@@ -5668,8 +5680,8 @@ function App() {
                                 {album.totalPages != null ? (
                                   <div className="karuta-drop-reasons">
                                     <span className="karuta-drop-badge">
-                                      Página {album.page ?? 1} de{" "}
-                                      {album.totalPages}
+                                      {album.totalPages} página
+                                      {album.totalPages === 1 ? "" : "s"}
                                     </span>
                                   </div>
                                 ) : null}

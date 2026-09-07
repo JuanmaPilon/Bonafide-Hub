@@ -155,6 +155,7 @@ export type KarutaAlbum = {
   guildId: string;
   id: string;
   imageUrl?: string;
+  images: Array<{ page: number; url: string }>;
   ownerUserId?: string;
   ownerUsername?: string;
   page?: number;
@@ -162,9 +163,7 @@ export type KarutaAlbum = {
   updatedAt: string;
 };
 
-export async function getKarutaAlbums(
-  guildId: string,
-): Promise<KarutaAlbum[]> {
+export async function getKarutaAlbums(guildId: string): Promise<KarutaAlbum[]> {
   const data = await requestJson<{ albums: KarutaAlbum[] }>(
     `/guilds/${guildId}/karuta/albums`,
     { method: "GET" },
