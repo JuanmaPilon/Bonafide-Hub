@@ -54,6 +54,15 @@ import {
   updateCommunication,
   updateDailyMessage,
   updateReactionRolePanel,
+  COMBAT_ROLES,
+  EVENT_TYPES,
+  WOW_CLASSES,
+  createEvent,
+  deleteEvent,
+  deleteMyEventSignup,
+  getEvents,
+  updateEvent,
+  upsertEventSignup,
   type ApiGuild,
   type AdminAccess,
   type AuditLogEntry,
@@ -81,6 +90,8 @@ import {
   type XpImportEntry,
   type XpRoleMultiplier,
   type XpRoleRule,
+  type EventSignup,
+  type HubEvent,
 } from "./api";
 import "./styles.css";
 
@@ -462,6 +473,227 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
         );
       })}
     </>
+  );
+}
+
+// Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
+// usuario logueado (clase, rol, personaje y estado).
+function EventCard({
+  canManage,
+  event,
+  meId,
+  onDelete,
+  onRemoveSignup,
+  onSignup,
+}: {
+  canManage: boolean;
+  event: HubEvent;
+  meId?: string;
+  onDelete: (event: HubEvent) => void;
+  onRemoveSignup: (eventId: string) => Promise<void>;
+  onSignup: (
+    eventId: string,
+    input: {
+      character?: string;
+      role?: string;
+      status: string;
+      wowClass?: string;
+    },
+  ) => Promise<void>;
+}) {
+  const mySignup = meId
+    ? event.signups.find((signup) => signup.userId === meId)
+    : undefined;
+
+  const [wowClass, setWowClass] = useState(mySignup?.wowClass ?? "");
+  const [role, setRole] = useState(mySignup?.role ?? "");
+  const [character, setCharacter] = useState(mySignup?.character ?? "");
+  const [status, setStatus] = useState(mySignup?.status ?? "yes");
+  const [submitting, setSubmitting] = useState(false);
+
+  const typeMeta =
+    EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
+
+  const counts = {
+    no: event.signups.filter((signup) => signup.status === "no").length,
+    tentative: event.signups.filter((signup) => signup.status === "tentative")
+      .length,
+    yes: event.signups.filter((signup) => signup.status === "yes").length,
+  };
+
+  const submit = async (): Promise<void> => {
+    setSubmitting(true);
+    try {
+      await onSignup(event.id, {
+        character: character.trim() || undefined,
+        role: role || undefined,
+        status,
+        wowClass: wowClass || undefined,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <article className="event-card">
+      {event.imageUrl ? (
+        <img
+          className="event-card-image"
+          src={event.imageUrl}
+          alt={event.title}
+        />
+      ) : (
+        <div className="event-card-image event-card-image-placeholder">
+          <span aria-hidden="true">{typeMeta.emoji}</span>
+        </div>
+      )}
+      <div className="event-card-body">
+        <div className="event-card-head">
+          <strong>{event.title}</strong>
+          <span className="event-card-type">
+            {typeMeta.emoji} {typeMeta.label}
+          </span>
+        </div>
+        <div className="event-card-date">
+          📅 {new Date(event.startsAt).toLocaleString()}
+        </div>
+        {event.description ? (
+          <p className="event-card-desc">{event.description}</p>
+        ) : null}
+        <div className="event-card-counts">
+          <span className="event-count yes">✅ {counts.yes}</span>
+          <span className="event-count tentative">🤔 {counts.tentative}</span>
+          <span className="event-count no">❌ {counts.no}</span>
+        </div>
+
+        {event.signups.length > 0 ? (
+          <div className="event-roster">
+            {(["tank", "healer", "dps"] as const).map((combatRole) => {
+              const roleSignups = event.signups.filter(
+                (signup) =>
+                  signup.role === combatRole && signup.status === "yes",
+              );
+              if (roleSignups.length === 0) {
+                return null;
+              }
+              return (
+                <div className="event-roster-group" key={combatRole}>
+                  <span className="event-roster-role">
+                    {combatRole === "tank"
+                      ? "🛡️ Tank"
+                      : combatRole === "healer"
+                        ? "💚 Healer"
+                        : "⚔️ DPS"}
+                  </span>
+                  {roleSignups.map((signup) => (
+                    <span className="event-roster-member" key={signup.id}>
+                      {signup.character
+                        ? `${signup.character} (${signup.username})`
+                        : signup.username}
+                    </span>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="event-roster-empty">Sin inscripciones todavía.</div>
+        )}
+
+        {meId ? (
+          <div className="event-signup">
+            <div className="event-signup-status">
+              {(["yes", "tentative", "no"] as const).map((value) => (
+                <button
+                  className={`event-status-btn ${value}${status === value ? " active" : ""}`}
+                  key={value}
+                  onClick={() => setStatus(value)}
+                  title={
+                    value === "yes"
+                      ? "Voy"
+                      : value === "tentative"
+                        ? "Quizás"
+                        : "No voy"
+                  }
+                  type="button"
+                >
+                  {value === "yes" ? "✅" : value === "tentative" ? "🤔" : "❌"}
+                </button>
+              ))}
+            </div>
+            <div className="event-signup-fields">
+              <select
+                className="select"
+                value={wowClass}
+                onChange={(event) => setWowClass(event.target.value)}
+              >
+                <option value="">Clase (opcional)</option>
+                {WOW_CLASSES.map((cls) => (
+                  <option key={cls} value={cls}>
+                    {cls}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="select"
+                value={role}
+                onChange={(event) => setRole(event.target.value)}
+              >
+                <option value="">Rol (opcional)</option>
+                {COMBAT_ROLES.map((combatRole) => (
+                  <option key={combatRole} value={combatRole}>
+                    {combatRole === "tank"
+                      ? "Tank"
+                      : combatRole === "healer"
+                        ? "Healer"
+                        : "DPS"}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="input"
+                value={character}
+                onChange={(event) => setCharacter(event.target.value)}
+                placeholder="Personaje (opcional)"
+                maxLength={40}
+              />
+            </div>
+            <div className="event-signup-actions">
+              <button
+                className="primary-button"
+                onClick={() => void submit()}
+                disabled={submitting}
+                type="button"
+              >
+                {submitting ? "Guardando…" : "Guardar inscripción"}
+              </button>
+              {mySignup ? (
+                <button
+                  className="ghost-button"
+                  onClick={() => void onRemoveSignup(event.id)}
+                  type="button"
+                >
+                  Quitar inscripción
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {canManage ? (
+          <div className="event-card-actions">
+            <button
+              className="ghost-button danger"
+              onClick={() => onDelete(event)}
+              type="button"
+            >
+              Eliminar evento
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -1169,6 +1401,17 @@ function App() {
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
+  const [events, setEvents] = useState<HubEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    description: "",
+    imageUrl: "",
+    startsAt: "",
+    title: "",
+    type: "raid",
+  });
+  const [creatingEvent, setCreatingEvent] = useState(false);
   const [savingAction, setSavingAction] = useState<
     | "config"
     | "xp"
@@ -1575,6 +1818,31 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
+  useEffect(() => {
+    if (!selectedGuildId || activeTab !== "eventos") {
+      setEvents([]);
+      setEventsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setEventsLoading(true);
+    getEvents(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setEvents(list);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setEventsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
   // Borra un drop de Karuta (admin/owner) y lo saca del feed local.
   function handleDeleteKarutaDrop(drop: KarutaDrop): void {
     if (!selectedGuildId) {
@@ -1662,6 +1930,135 @@ function App() {
         })();
       },
     });
+  }
+
+  async function handleEventSignup(
+    eventId: string,
+    input: {
+      character?: string;
+      role?: string;
+      status: string;
+      wowClass?: string;
+    },
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await upsertEventSignup(selectedGuildId, eventId, input);
+      const list = await getEvents(selectedGuildId);
+      setEvents(list);
+      pushToast("Inscripción guardada.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la inscripción.",
+        "error",
+      );
+    }
+  }
+
+  async function handleRemoveEventSignup(eventId: string): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteMyEventSignup(selectedGuildId, eventId);
+      if (me) {
+        setEvents((current) =>
+          current.map((event) =>
+            event.id === eventId
+              ? {
+                  ...event,
+                  signups: event.signups.filter(
+                    (signup) => signup.userId !== me.id,
+                  ),
+                }
+              : event,
+          ),
+        );
+      }
+      pushToast("Inscripción quitada.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo quitar la inscripción.",
+        "error",
+      );
+    }
+  }
+
+  function handleDeleteEvent(event: HubEvent): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Eliminar evento",
+      message: `¿Eliminar "${event.title}" y todas sus inscripciones?`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await deleteEvent(selectedGuildId, event.id);
+            setEvents((current) =>
+              current.filter((entry) => entry.id !== event.id),
+            );
+            pushToast("Evento eliminado.", "success");
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "No se pudo eliminar el evento.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
+  }
+
+  async function handleCreateEvent(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    if (!eventForm.title.trim() || !eventForm.startsAt) {
+      pushToast("Faltan título o fecha/hora.", "error");
+      return;
+    }
+    setCreatingEvent(true);
+    try {
+      const created = await createEvent(selectedGuildId, {
+        description: eventForm.description.trim() || undefined,
+        imageUrl: eventForm.imageUrl.trim() || undefined,
+        startsAt: eventForm.startsAt,
+        title: eventForm.title.trim(),
+        type: eventForm.type,
+      });
+      setEvents((current) =>
+        [...current, created].sort(
+          (a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+        ),
+      );
+      setShowEventForm(false);
+      setEventForm({
+        description: "",
+        imageUrl: "",
+        startsAt: "",
+        title: "",
+        type: "raid",
+      });
+      pushToast("Evento creado.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo crear el evento.",
+        "error",
+      );
+    } finally {
+      setCreatingEvent(false);
+    }
   }
 
   useEffect(() => {
@@ -6003,6 +6400,140 @@ function App() {
                         ))}
                       </div>
                     </section>
+                  )}
+                </div>
+              ) : activeTab === "eventos" ? (
+                <div className="dashboard-stack">
+                  {canAccess("x") ? (
+                    <div className="event-actions">
+                      <button
+                        className="primary-button"
+                        onClick={() => setShowEventForm((open) => !open)}
+                        type="button"
+                      >
+                        {showEventForm ? "Cancelar" : "+ Nuevo evento"}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {showEventForm ? (
+                    <div className="event-form-card">
+                      <div className="form-grid">
+                        <label>
+                          <span>Título</span>
+                          <input
+                            className="input"
+                            value={eventForm.title}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                title: event.target.value,
+                              }))
+                            }
+                            placeholder="Ej: Raid Heroico — Torre del Brujo"
+                            maxLength={120}
+                          />
+                        </label>
+                        <label>
+                          <span>Tipo</span>
+                          <select
+                            className="select"
+                            value={eventForm.type}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                type: event.target.value,
+                              }))
+                            }
+                          >
+                            {EVENT_TYPES.map((type) => (
+                              <option key={type.key} value={type.key}>
+                                {type.emoji} {type.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          <span>Fecha y hora</span>
+                          <input
+                            className="input"
+                            type="datetime-local"
+                            value={eventForm.startsAt}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                startsAt: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span>Imagen (URL, opcional)</span>
+                          <input
+                            className="input"
+                            value={eventForm.imageUrl}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                imageUrl: event.target.value,
+                              }))
+                            }
+                            placeholder="https://…"
+                          />
+                        </label>
+                        <label className="event-form-wide">
+                          <span>Descripción</span>
+                          <textarea
+                            className="textarea"
+                            rows={3}
+                            value={eventForm.description}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                description: event.target.value,
+                              }))
+                            }
+                            placeholder="Detalle del evento (opcional)"
+                            maxLength={1000}
+                          />
+                        </label>
+                      </div>
+                      <div className="event-form-actions">
+                        <button
+                          className="primary-button"
+                          onClick={() => void handleCreateEvent()}
+                          disabled={creatingEvent}
+                          type="button"
+                        >
+                          {creatingEvent ? "Creando…" : "Crear evento"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {eventsLoading ? (
+                    <LoadingState label="Cargando eventos…" />
+                  ) : events.length === 0 ? (
+                    <div className="empty-state">
+                      Todavía no hay eventos.
+                      {canAccess("x")
+                        ? " Creá el primero con «+ Nuevo evento»."
+                        : ""}
+                    </div>
+                  ) : (
+                    <div className="events-grid">
+                      {events.map((event) => (
+                        <EventCard
+                          canManage={canAccess("x")}
+                          event={event}
+                          key={event.id}
+                          meId={me?.id}
+                          onDelete={handleDeleteEvent}
+                          onRemoveSignup={handleRemoveEventSignup}
+                          onSignup={handleEventSignup}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
               ) : activeTab === "dashboard" ? null : (

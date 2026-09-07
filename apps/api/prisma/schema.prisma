@@ -206,6 +206,52 @@ model RaidLog {
   @@map("raid_logs")
 }
 
+// Evento del "Módulo X" (estilo Raid Helper): raids, M+, PvP o social.
+// Configurable: título, descripción, fecha, imagen y tipo. Los signups
+// se gestionan desde la web y, en una próxima iteración, desde Discord.
+model HubEvent {
+  id                String   @id @default(cuid())
+  guildId           String
+  title             String
+  description       String?
+  type              String   @default("raid") // raid | mplus | pvp | social
+  startsAt          DateTime
+  imageUrl          String?
+  channelId         String?
+  status            String   @default("scheduled") // scheduled | cancelled | completed
+  createdByUserId   String?
+  createdByUsername String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  signups           EventSignup[]
+
+  @@index([guildId, startsAt])
+  @@map("hub_events")
+}
+
+// Inscripción de un miembro a un evento: estado (sí/tentativo/no), clase
+// de WoW, rol de combate, personaje y nota opcional.
+model EventSignup {
+  id        String   @id @default(cuid())
+  guildId   String
+  eventId   String
+  userId    String
+  username  String
+  status    String   @default("tentative") // yes | tentative | no
+  wowClass  String?
+  role      String? // tank | healer | dps
+  character String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event HubEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([guildId, eventId])
+  @@map("event_signups")
+}
+
 // Grabs de Karuta detectados como "raros" (print bajo, muy wishlisteados o
 // con marcador especial). El bot los publica en el mismo canal de Karuta y
 // los guarda acá para el feed de la web.

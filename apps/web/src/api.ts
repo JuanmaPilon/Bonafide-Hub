@@ -875,6 +875,159 @@ export async function saveGuildConfig(
   return data.config;
 }
 
+// ── Módulo X: eventos estilo Raid Helper ───────────────────────────
+// Catálogo estático de clases, roles y tipos de evento para los selects.
+
+export const WOW_CLASSES = [
+  "Death Knight",
+  "Demon Hunter",
+  "Druid",
+  "Evoker",
+  "Hunter",
+  "Mage",
+  "Monk",
+  "Paladin",
+  "Priest",
+  "Rogue",
+  "Shaman",
+  "Warlock",
+  "Warrior",
+] as const;
+
+export const COMBAT_ROLES = ["tank", "healer", "dps"] as const;
+
+export const EVENT_TYPES: Array<{
+  emoji: string;
+  key: string;
+  label: string;
+}> = [
+  { emoji: "⚔️", key: "raid", label: "Raid" },
+  { emoji: "🗝️", key: "mplus", label: "M+" },
+  { emoji: "🏆", key: "pvp", label: "PvP" },
+  { emoji: "🎉", key: "social", label: "Social" },
+];
+
+export type HubEvent = {
+  createdAt: string;
+  createdByUserId?: string;
+  createdByUsername?: string;
+  description?: string;
+  guildId: string;
+  id: string;
+  imageUrl?: string;
+  startsAt: string;
+  status: string;
+  title: string;
+  type: string;
+  updatedAt: string;
+  signups: EventSignup[];
+};
+
+export type EventSignup = {
+  character?: string;
+  createdAt: string;
+  guildId: string;
+  id: string;
+  note?: string;
+  role?: string;
+  status: string;
+  updatedAt: string;
+  userId: string;
+  username: string;
+  wowClass?: string;
+};
+
+export async function getEvents(guildId: string): Promise<HubEvent[]> {
+  const data = await requestJson<{ events: HubEvent[] }>(
+    `/guilds/${guildId}/events`,
+    { method: "GET" },
+  );
+  return data.events;
+}
+
+export async function createEvent(
+  guildId: string,
+  input: {
+    description?: string;
+    imageUrl?: string;
+    startsAt: string;
+    title: string;
+    type: string;
+  },
+): Promise<HubEvent> {
+  const data = await requestJson<{ event: HubEvent }>(
+    `/guilds/${guildId}/events`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.event;
+}
+
+export async function updateEvent(
+  guildId: string,
+  eventId: string,
+  input: {
+    description?: string;
+    imageUrl?: string;
+    startsAt?: string;
+    status?: string;
+    title?: string;
+    type?: string;
+  },
+): Promise<HubEvent> {
+  const data = await requestJson<{ event: HubEvent }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.event;
+}
+
+export async function deleteEvent(
+  guildId: string,
+  eventId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function upsertEventSignup(
+  guildId: string,
+  eventId: string,
+  input: {
+    character?: string;
+    note?: string;
+    role?: string;
+    status: string;
+    wowClass?: string;
+  },
+): Promise<EventSignup> {
+  const data = await requestJson<{ signup: EventSignup }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.signup;
+}
+
+export async function deleteMyEventSignup(
+  guildId: string,
+  eventId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/me`,
+    { method: "DELETE" },
+  );
+}
+
 export async function submitSuggestion(
   guildId: string,
   title: string,

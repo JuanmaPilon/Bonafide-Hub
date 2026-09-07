@@ -76,6 +76,17 @@ import {
   upsertKarutaCard,
 } from "./services/karuta-store.js";
 import {
+  COMBAT_ROLES,
+  EVENT_TYPES,
+  createEvent,
+  deleteEvent,
+  deleteSignup,
+  getEvent,
+  listEvents,
+  updateEvent,
+  upsertSignup,
+} from "./services/events-store.js";
+import {
   getGuildConfig,
   type GuildConfig,
   replaceGuildConfig,
@@ -133,7 +144,16 @@ type DiscordGuildWidgetResponse = {
 // para poder resolver, a partir de adminRoleModules, qué roles tienen cada
 // rango (usado para saber quién recibe las sugerencias).
 const STAFF_TIER_MODULES: Record<"admin" | "officer", string[]> = {
-  admin: ["config", "comunicados", "raids", "daily", "reaction", "xp", "karuta", "x"],
+  admin: [
+    "config",
+    "comunicados",
+    "raids",
+    "daily",
+    "reaction",
+    "xp",
+    "karuta",
+    "x",
+  ],
   officer: ["comunicados", "raids", "daily", "reaction", "karuta"],
 };
 
@@ -2679,6 +2699,257 @@ export function buildApp() {
       deleted,
     };
   });
+
+  // ── Módulo X: eventos estilo Raid Helper ──────────────────────────
+  app.get("/guilds/:guildId/events", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const events = await listEvents(params.guildId);
+    return { ok: true, guildId: params.guildId, events };
+  });
+
+  app.post("/guilds/:guildId/events", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "x"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      description?: string;
+      imageUrl?: string;
+      startsAt?: string;
+      title?: string;
+      type?: string;
+    };
+
+    const title = body.title?.trim();
+    const startsAt = body.startsAt?.trim();
+    if (!title || !startsAt || Number.isNaN(new Date(startsAt).getTime())) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Faltan título o fecha/hora válida",
+      });
+    }
+
+    const type = EVENT_TYPES.includes(body.type as never)
+      ? body.type!
+      : "raid";
+    const user = session.user as {
+      global_name?: string | null;
+      id?: string;
+      username?: string | null;
+    };
+
+    const event = await createEvent({
+      createdByUserId: user.id,
+      createdByUsername: user.global_name ?? user.username ?? undefined,
+      description: body.description?.trim() || undefined,
+      guildId: params.guildId,
+      imageUrl: body.imageUrl?.trim() || undefined,
+      startsAt,
+      title,
+      type,
+    });
+
+    await logAdminAction(session, params.guildId, "event:create", {
+      details: `Evento creado: ${title}`,
+      targetType: "event",
+      targetId: event.id,
+    });
+
+    return { ok: true, guildId: params.guildId, event };
+  });
+
+  app.patch("/guilds/:guildId/events/:eventId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { eventId?: string; guildId?: string };
+    if (!params.guildId || !params.eventId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "x"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      description?: string;
+      imageUrl?: string;
+      startsAt?: string;
+      status?: string;
+      title?: string;
+      type?: string;
+    };
+
+    if (body.startsAt && Number.isNaN(new Date(body.startsAt).getTime())) {
+      return reply.code(400).send({ ok: false, error: "Fecha inválida" });
+    }
+
+    const event = await updateEvent(params.guildId, params.eventId, {
+      description: body.description?.trim() || undefined,
+      imageUrl: body.imageUrl?.trim() || undefined,
+      startsAt: body.startsAt,
+      status: body.status,
+      title: body.title?.trim() || undefined,
+      type: body.type
+        ? EVENT_TYPES.includes(body.type as never)
+          ? body.type
+          : undefined
+        : undefined,
+    });
+
+    if (!event) {
+      return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
+    }
+
+    await logAdminAction(session, params.guildId, "event:update", {
+      details: `Evento actualizado: ${event.title}`,
+      targetType: "event",
+      targetId: event.id,
+    });
+
+    return { ok: true, guildId: params.guildId, event };
+  });
+
+  app.delete("/guilds/:guildId/events/:eventId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { eventId?: string; guildId?: string };
+    if (!params.guildId || !params.eventId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "x"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const deleted = await deleteEvent(params.guildId, params.eventId);
+
+    await logAdminAction(session, params.guildId, "event:delete", {
+      details: "Evento eliminado.",
+      targetType: "event",
+      targetId: params.eventId,
+    });
+
+    return { ok: true, guildId: params.guildId, deleted };
+  });
+
+  // Inscripción del usuario logueado a un evento (upsert).
+  app.put("/guilds/:guildId/events/:eventId/signups", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { eventId?: string; guildId?: string };
+    if (!params.guildId || !params.eventId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const event = await getEvent(params.guildId, params.eventId);
+    if (!event) {
+      return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
+    }
+
+    const user = session.user as {
+      global_name?: string | null;
+      id?: string;
+      username?: string | null;
+    };
+    if (!user.id) {
+      return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+    }
+
+    const body = (request.body ?? {}) as {
+      character?: string;
+      note?: string;
+      role?: string;
+      status?: string;
+      wowClass?: string;
+    };
+
+    const status = body.status ?? "tentative";
+    if (!["yes", "tentative", "no"].includes(status)) {
+      return reply.code(400).send({ ok: false, error: "Estado inválido" });
+    }
+    if (body.role && !COMBAT_ROLES.includes(body.role as never)) {
+      return reply.code(400).send({ ok: false, error: "Rol inválido" });
+    }
+
+    const signup = await upsertSignup({
+      character: body.character?.trim() || undefined,
+      eventId: params.eventId,
+      guildId: params.guildId,
+      note: body.note?.trim() || undefined,
+      role: body.role?.trim() || undefined,
+      status,
+      userId: user.id,
+      username: user.global_name ?? user.username ?? "Miembro",
+      wowClass: body.wowClass?.trim() || undefined,
+    });
+
+    return { ok: true, guildId: params.guildId, signup };
+  });
+
+  // Quita la propia inscripción.
+  app.delete(
+    "/guilds/:guildId/events/:eventId/signups/me",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      const user = session.user as { id?: string };
+      if (!user.id) {
+        return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+      }
+
+      const deleted = await deleteSignup(
+        params.guildId,
+        params.eventId,
+        user.id,
+      );
+
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
 
   // Feed de drops raros de Karuta detectados por el bot (lectura pública
   // para cualquier miembro; la config de vigilado vive en /guilds/:id/config).
