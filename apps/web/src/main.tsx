@@ -283,6 +283,16 @@ function ToastViewport({ toasts }: { toasts: ToastItem[] }) {
   );
 }
 
+// Spinner de carga reutilizable (estado de carga de secciones).
+function LoadingState({ label = "Cargando…" }: { label?: string }) {
+  return (
+    <div className="loading-state">
+      <span className="spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 // Frases random de Karpindomo en el widget flotante (humor "anuncios").
 const KARPINDOMO_LINES: string[] = [
   "Señor, hay karpinchos calientes en su zona",
@@ -1162,6 +1172,7 @@ function App() {
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
+  const [publishedLoading, setPublishedLoading] = useState(false);
   const [expandedPublished, setExpandedPublished] = useState<Set<string>>(
     new Set(),
   );
@@ -1189,6 +1200,9 @@ function App() {
   );
   const [loadingSession, setLoadingSession] = useState(false);
   const [loadingGuildData, setLoadingGuildData] = useState(false);
+  // Indica que ya terminó la PRIMERA validación de sesión. Antes de eso
+  // mostramos un spinner (no la landing) para evitar el parpadeo de login.
+  const [sessionReady, setSessionReady] = useState(false);
   const loading = loadingSession || loadingGuildData;
   const importFileRef = useRef<HTMLInputElement | null>(null);
 
@@ -1317,6 +1331,7 @@ function App() {
       pushToast("No se pudo validar la sesión.", "error");
     } finally {
       setLoadingSession(false);
+      setSessionReady(true);
     }
   }
 
@@ -1429,16 +1444,23 @@ function App() {
   useEffect(() => {
     if (!selectedGuildId) {
       setPublished([]);
+      setPublishedLoading(false);
       return;
     }
     let cancelled = false;
+    setPublishedLoading(true);
     listPublishedCommunications(selectedGuildId)
       .then((list) => {
         if (!cancelled) {
           setPublished(list);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setPublishedLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -3018,6 +3040,16 @@ function App() {
       cancelled = true;
     };
   }, [username]);
+
+  if (!sessionReady) {
+    return (
+      <div className="shell app-loading">
+        <main className="app-loading-main">
+          <LoadingState label="Cargando Bonafide…" />
+        </main>
+      </div>
+    );
+  }
 
   if (!username) {
     const previewPills =
@@ -5389,7 +5421,9 @@ function App() {
                 </div>
               ) : activeTab === "comunicados" ? (
                 <div className="comunicados-stack">
-                  {published.length === 0 ? (
+                  {publishedLoading ? (
+                    <LoadingState label="Cargando comunicados…" />
+                  ) : published.length === 0 ? (
                     <div className="empty-state">
                       Todavía no hay comunicados publicados.
                     </div>
