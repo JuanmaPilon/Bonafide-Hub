@@ -222,9 +222,42 @@ function isModuleEnabled(config: GuildConfig, moduleKey: string): boolean {
   return enabled.includes(moduleKey);
 }
 
-function tabFromHash(): HubTab {
+type KarutaSection = "drops" | "coleccion" | "guia";
+
+// Slugs de URL para cada sección de Karuta.
+const KARUTA_SECTION_SLUGS: Record<KarutaSection, string> = {
+  drops: "drops",
+  coleccion: "cards",
+  guia: "guia-de-comandos",
+};
+
+function karutaSectionFromSlug(slug: string): KarutaSection | null {
+  const entry = Object.entries(KARUTA_SECTION_SLUGS).find(
+    ([, value]) => value === slug,
+  );
+  return entry ? (entry[0] as KarutaSection) : null;
+}
+
+// Parsea el hash: #/karuta/drops → { tab: "karuta", karutaSection: "drops" }.
+// Las demás tabs ignoran el segmento extra.
+function parseLocationHash(): {
+  tab: HubTab;
+  karutaSection: KarutaSection;
+} {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
-  return (VALID_TABS as string[]).includes(raw) ? (raw as HubTab) : "home";
+  const parts = raw.split("/").filter(Boolean);
+  const tab = (VALID_TABS as string[]).includes(parts[0])
+    ? (parts[0] as HubTab)
+    : "home";
+  const karutaSection =
+    tab === "karuta" && parts[1]
+      ? karutaSectionFromSlug(parts[1]) ?? "drops"
+      : "drops";
+  return { tab, karutaSection };
+}
+
+function tabFromHash(): HubTab {
+  return parseLocationHash().tab;
 }
 
 type ToastKind = "success" | "error";
@@ -634,7 +667,7 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "karuta") {
-    return "Drops, cartas y guía de comandos de Karuta.";
+    return "";
   }
 
   if (tab === "perfil") {
@@ -1107,9 +1140,9 @@ function App() {
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
-  const [karutaSection, setKarutaSection] = useState<
-    "drops" | "coleccion" | "guia"
-  >("drops");
+  const [karutaSection, setKarutaSection] = useState<KarutaSection>(
+    () => parseLocationHash().karutaSection,
+  );
   const [savingAction, setSavingAction] = useState<
     "config" | "xp" | "panel" | "daily" | "modules" | "permissions" | null
   >(null);
@@ -2814,7 +2847,9 @@ function App() {
 
   useEffect(() => {
     const onHashChange = (): void => {
-      setActiveTab(tabFromHash());
+      const { tab, karutaSection } = parseLocationHash();
+      setActiveTab(tab);
+      setKarutaSection(karutaSection);
     };
 
     window.addEventListener("hashchange", onHashChange);
@@ -2824,11 +2859,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const target = `#/${activeTab}`;
+    const target =
+      activeTab === "karuta"
+        ? `#/karuta/${KARUTA_SECTION_SLUGS[karutaSection]}`
+        : `#/${activeTab}`;
     if (window.location.hash !== target) {
       window.location.hash = target;
     }
-  }, [activeTab]);
+  }, [activeTab, karutaSection]);
 
   useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
@@ -5441,14 +5479,14 @@ function App() {
                       onClick={() => setKarutaSection("coleccion")}
                       type="button"
                     >
-                      Cartas
+                      Raras
                     </button>
                     <button
                       className={`karuta-subtab${karutaSection === "guia" ? " active" : ""}`}
                       onClick={() => setKarutaSection("guia")}
                       type="button"
                     >
-                      Guía de comandos
+                      Comandos
                     </button>
                   </div>
 
