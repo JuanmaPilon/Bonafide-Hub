@@ -1150,10 +1150,12 @@ function App() {
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
   const [dailyMessageDraft, setDailyMessageDraft] = useState("");
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
+  const [raidLogsLoading, setRaidLogsLoading] = useState(false);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
   const [karutaAlbums, setKarutaAlbums] = useState<KarutaAlbum[]>([]);
+  const [karutaLoading, setKarutaLoading] = useState(false);
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
@@ -1469,18 +1471,29 @@ function App() {
   useEffect(() => {
     if (!selectedGuildId || activeTab !== "raids") {
       setRaidLogs([]);
+      setRaidLogsLoading(false);
       return;
     }
     let cancelled = false;
+    let firstLoad = true;
 
     const refreshRaidLogs = (): void => {
+      if (firstLoad) {
+        setRaidLogsLoading(true);
+      }
       void listRaidLogs(selectedGuildId)
         .then((logs) => {
           if (!cancelled) {
             setRaidLogs(logs);
           }
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) {
+            setRaidLogsLoading(false);
+            firstLoad = false;
+          }
+        });
     };
 
     refreshRaidLogs();
@@ -1497,48 +1510,47 @@ function App() {
       setKarutaDrops([]);
       setKarutaCards([]);
       setKarutaAlbums([]);
+      setKarutaLoading(false);
       return;
     }
     let cancelled = false;
 
-    const refreshKarutaDrops = (): void => {
-      void getKarutaDrops(selectedGuildId)
-        .then((drops) => {
-          if (!cancelled) {
-            setKarutaDrops(drops);
-          }
-        })
-        .catch(() => {});
+    const refreshKaruta = (): Promise<void> => {
+      return Promise.allSettled([
+        getKarutaDrops(selectedGuildId),
+        getKarutaCards(selectedGuildId),
+        getKarutaAlbums(selectedGuildId),
+      ]).then(([drops, cards, albums]) => {
+        if (cancelled) {
+          return;
+        }
+        if (drops.status === "fulfilled") {
+          setKarutaDrops(drops.value);
+        }
+        if (cards.status === "fulfilled") {
+          setKarutaCards(cards.value);
+        }
+        if (albums.status === "fulfilled") {
+          setKarutaAlbums(albums.value);
+        }
+      });
     };
 
-    const refreshKarutaCards = (): void => {
-      void getKarutaCards(selectedGuildId)
-        .then((cards) => {
-          if (!cancelled) {
-            setKarutaCards(cards);
-          }
-        })
-        .catch(() => {});
+    let firstLoad = true;
+    const runRefresh = (): void => {
+      if (firstLoad) {
+        setKarutaLoading(true);
+      }
+      void refreshKaruta().finally(() => {
+        if (!cancelled) {
+          setKarutaLoading(false);
+          firstLoad = false;
+        }
+      });
     };
 
-    const refreshKarutaAlbums = (): void => {
-      void getKarutaAlbums(selectedGuildId)
-        .then((albums) => {
-          if (!cancelled) {
-            setKarutaAlbums(albums);
-          }
-        })
-        .catch(() => {});
-    };
-
-    refreshKarutaDrops();
-    refreshKarutaCards();
-    refreshKarutaAlbums();
-    const refreshTimer = window.setInterval(() => {
-      refreshKarutaDrops();
-      refreshKarutaCards();
-      refreshKarutaAlbums();
-    }, 60_000);
+    runRefresh();
+    const refreshTimer = window.setInterval(runRefresh, 60_000);
 
     return () => {
       cancelled = true;
@@ -5307,7 +5319,11 @@ function App() {
                         </div>
                       ) : null}
                       <div className="comunicados-stack">
-                        <RaidLogsList logs={raidLogs} />
+                        {raidLogsLoading ? (
+                          <LoadingState label="Cargando logs de raid…" />
+                        ) : (
+                          <RaidLogsList logs={raidLogs} />
+                        )}
                       </div>
                     </div>
                   </details>
@@ -5548,7 +5564,9 @@ function App() {
                     </button>
                   </div>
 
-                  {karutaSection === "drops" ? (
+                  {karutaLoading ? (
+                    <LoadingState label="Cargando Karuta…" />
+                  ) : karutaSection === "drops" ? (
                     <section className="karuta-section">
                       {karutaDrops.length === 0 ? (
                         <div className="empty-state">
