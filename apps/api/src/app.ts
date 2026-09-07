@@ -133,8 +133,8 @@ type DiscordGuildWidgetResponse = {
 // para poder resolver, a partir de adminRoleModules, qué roles tienen cada
 // rango (usado para saber quién recibe las sugerencias).
 const STAFF_TIER_MODULES: Record<"admin" | "officer", string[]> = {
-  admin: ["config", "comunicados", "raids", "daily", "reaction", "xp"],
-  officer: ["comunicados", "raids", "daily", "reaction"],
+  admin: ["config", "comunicados", "raids", "daily", "reaction", "xp", "karuta", "x"],
+  officer: ["comunicados", "raids", "daily", "reaction", "karuta"],
 };
 
 // Fetch a Discord con reintento ante rate limits (429). Discord manda el
