@@ -423,7 +423,8 @@ function normalizeAlbumImages(raw: unknown): KarutaAlbumImage[] {
       typeof (entry as { url?: unknown }).url === "string"
     ) {
       const page =
-        "page" in entry && typeof (entry as { page?: unknown }).page === "number"
+        "page" in entry &&
+        typeof (entry as { page?: unknown }).page === "number"
           ? ((entry as { page: number }).page as number)
           : 0;
       images.push({ page, url: (entry as { url: string }).url });
@@ -539,4 +540,18 @@ export async function upsertKarutaAlbum(input: {
     },
   });
   return toKarutaAlbum(created);
+}
+
+export async function deleteKarutaAlbum(
+  guildId: string,
+  id: string,
+): Promise<boolean> {
+  try {
+    const result = await prisma.karutaAlbum.deleteMany({
+      where: { guildId, id },
+    });
+    return result.count > 0;
+  } catch {
+    return false;
+  }
 }

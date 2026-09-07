@@ -33,6 +33,7 @@ import {
   deleteKarutaCard,
   getKarutaCards,
   getKarutaAlbums,
+  deleteKarutaAlbum,
   importXpData,
   listCommunications,
   listDailyMessages,
@@ -1610,6 +1611,35 @@ function App() {
               error instanceof Error
                 ? error.message
                 : "No se pudo quitar la carta.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
+  }
+
+  function handleDeleteKarutaAlbum(album: KarutaAlbum): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Quitar colección",
+      message: `¿Quitar "${album.albumName ?? "esta colección"}" de la sección?`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await deleteKarutaAlbum(selectedGuildId, album.id);
+            setKarutaAlbums((current) =>
+              current.filter((entry) => entry.id !== album.id),
+            );
+            pushToast("Colección quitada.", "success");
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "No se pudo quitar la colección.",
               "error",
             );
           }
@@ -5697,7 +5727,7 @@ function App() {
                           ve su álbum con <code>ka</code>.
                         </div>
                       ) : (
-                        <div className="karuta-drops-grid">
+                        <div className="karuta-albums-grid">
                           {karutaAlbums.map((album) => (
                             <article
                               className="karuta-drop-card"
@@ -5736,6 +5766,15 @@ function App() {
                                       {album.totalPages === 1 ? "" : "s"}
                                     </span>
                                   </div>
+                                ) : null}
+                                {canAccess("config") ? (
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() => handleDeleteKarutaAlbum(album)}
+                                    type="button"
+                                  >
+                                    Quitar
+                                  </button>
                                 ) : null}
                               </div>
                             </article>

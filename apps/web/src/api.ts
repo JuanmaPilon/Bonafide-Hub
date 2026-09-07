@@ -171,6 +171,16 @@ export async function getKarutaAlbums(guildId: string): Promise<KarutaAlbum[]> {
   return data.albums;
 }
 
+export async function deleteKarutaAlbum(
+  guildId: string,
+  albumId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/karuta/albums/${encodeURIComponent(albumId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export type CommunicationInstance = {
   authorName?: string;
   channelId: string;

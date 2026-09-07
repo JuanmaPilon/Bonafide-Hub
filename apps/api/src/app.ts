@@ -64,6 +64,7 @@ import {
 import {
   burnKarutaCard,
   createKarutaDrop,
+  deleteKarutaAlbum,
   deleteKarutaCard,
   deleteKarutaDrop,
   listKarutaAlbums,
@@ -3083,9 +3084,7 @@ export function buildApp() {
       };
 
       if (!body.albumName) {
-        return reply
-          .code(400)
-          .send({ ok: false, error: "Missing albumName" });
+        return reply.code(400).send({ ok: false, error: "Missing albumName" });
       }
 
       const album = await upsertKarutaAlbum({
@@ -3123,6 +3122,40 @@ export function buildApp() {
 
     return { ok: true, guildId: params.guildId, albums };
   });
+
+  // Borrar un álbum de la Colección (admin/owner). Red para quitar entradas
+  // incorrectas.
+  app.delete(
+    "/guilds/:guildId/karuta/albums/:albumId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        albumId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.albumId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "config"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteKarutaAlbum(params.guildId, params.albumId);
+
+      await logAdminAction(session, params.guildId, "karuta-album:delete", {
+        details: "Álbum de Karuta eliminado de la Colección.",
+        targetId: params.albumId,
+        targetType: "karuta-album",
+      });
+
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
 
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);
