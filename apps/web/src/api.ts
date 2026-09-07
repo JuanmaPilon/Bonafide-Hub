@@ -148,6 +148,30 @@ export async function deleteKarutaCard(
   );
 }
 
+export type KarutaAlbum = {
+  albumName?: string;
+  background?: string;
+  createdAt: string;
+  guildId: string;
+  id: string;
+  imageUrl?: string;
+  ownerUserId?: string;
+  ownerUsername?: string;
+  page?: number;
+  totalPages?: number;
+  updatedAt: string;
+};
+
+export async function getKarutaAlbums(
+  guildId: string,
+): Promise<KarutaAlbum[]> {
+  const data = await requestJson<{ albums: KarutaAlbum[] }>(
+    `/guilds/${guildId}/karuta/albums`,
+    { method: "GET" },
+  );
+  return data.albums;
+}
+
 export type CommunicationInstance = {
   authorName?: string;
   channelId: string;

@@ -255,6 +255,25 @@ model KarutaCard {
   @@map("karuta_cards")
 }
 
+// Álbumes de Karuta (ka). Colección de un usuario: nombre del álbum, fondo
+// y la imagen con las cartas. Se refresca cada vez que se ve.
+model KarutaAlbum {
+  id            String   @id @default(cuid())
+  guildId       String
+  ownerUserId   String?
+  ownerUsername String?
+  albumName     String?
+  background    String?
+  imageUrl      String?
+  page          Int?
+  totalPages    Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([guildId, updatedAt])
+  @@map("karuta_albums")
+}
+
 model DiscordSession {
   id        String   @id
   createdAt DateTime @default(now())

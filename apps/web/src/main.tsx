@@ -32,6 +32,7 @@ import {
   getKarutaDrops,
   deleteKarutaCard,
   getKarutaCards,
+  getKarutaAlbums,
   importXpData,
   listCommunications,
   listDailyMessages,
@@ -71,6 +72,7 @@ import {
   type RaidLog,
   type KarutaDrop,
   type KarutaCard,
+  type KarutaAlbum,
   type ReactionRoleJob,
   type ReactionRolePairInput,
   type ReactionRolePanel,
@@ -222,12 +224,13 @@ function isModuleEnabled(config: GuildConfig, moduleKey: string): boolean {
   return enabled.includes(moduleKey);
 }
 
-type KarutaSection = "drops" | "coleccion" | "guia";
+type KarutaSection = "drops" | "raras" | "coleccion" | "guia";
 
 // Slugs de URL para cada sección de Karuta.
 const KARUTA_SECTION_SLUGS: Record<KarutaSection, string> = {
   drops: "drops",
-  coleccion: "cards",
+  raras: "cards",
+  coleccion: "coleccion",
   guia: "guia-de-comandos",
 };
 
@@ -251,7 +254,7 @@ function parseLocationHash(): {
     : "home";
   const karutaSection =
     tab === "karuta" && parts[1]
-      ? karutaSectionFromSlug(parts[1]) ?? "drops"
+      ? (karutaSectionFromSlug(parts[1]) ?? "drops")
       : "drops";
   return { tab, karutaSection };
 }
@@ -1140,6 +1143,7 @@ function App() {
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
+  const [karutaAlbums, setKarutaAlbums] = useState<KarutaAlbum[]>([]);
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
@@ -1470,6 +1474,7 @@ function App() {
     if (!selectedGuildId || activeTab !== "karuta") {
       setKarutaDrops([]);
       setKarutaCards([]);
+      setKarutaAlbums([]);
       return;
     }
     let cancelled = false;
@@ -1494,11 +1499,23 @@ function App() {
         .catch(() => {});
     };
 
+    const refreshKarutaAlbums = (): void => {
+      void getKarutaAlbums(selectedGuildId)
+        .then((albums) => {
+          if (!cancelled) {
+            setKarutaAlbums(albums);
+          }
+        })
+        .catch(() => {});
+    };
+
     refreshKarutaDrops();
     refreshKarutaCards();
+    refreshKarutaAlbums();
     const refreshTimer = window.setInterval(() => {
       refreshKarutaDrops();
       refreshKarutaCards();
+      refreshKarutaAlbums();
     }, 60_000);
 
     return () => {
@@ -5475,11 +5492,18 @@ function App() {
                       Drops
                     </button>
                     <button
+                      className={`karuta-subtab${karutaSection === "raras" ? " active" : ""}`}
+                      onClick={() => setKarutaSection("raras")}
+                      type="button"
+                    >
+                      Raras
+                    </button>
+                    <button
                       className={`karuta-subtab${karutaSection === "coleccion" ? " active" : ""}`}
                       onClick={() => setKarutaSection("coleccion")}
                       type="button"
                     >
-                      Raras
+                      Colección
                     </button>
                     <button
                       className={`karuta-subtab${karutaSection === "guia" ? " active" : ""}`}
@@ -5550,7 +5574,7 @@ function App() {
                         </div>
                       )}
                     </section>
-                  ) : karutaSection === "coleccion" ? (
+                  ) : karutaSection === "raras" ? (
                     <section className="karuta-section">
                       {karutaCards.length === 0 ? (
                         <div className="empty-state">
@@ -5606,6 +5630,48 @@ function App() {
                                   >
                                     Quitar
                                   </button>
+                                ) : null}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  ) : karutaSection === "coleccion" ? (
+                    <section className="karuta-section">
+                      {karutaAlbums.length === 0 ? (
+                        <div className="empty-state">
+                          Todavía no hay colecciones. Se agregan cuando alguien
+                          ve su álbum con <code>ka</code>.
+                        </div>
+                      ) : (
+                        <div className="karuta-drops-grid">
+                          {karutaAlbums.map((album) => (
+                            <article className="karuta-drop-card" key={album.id}>
+                              {album.imageUrl ? (
+                                <img
+                                  className="karuta-drop-image"
+                                  src={album.imageUrl}
+                                  alt={album.albumName ?? "Álbum"}
+                                />
+                              ) : null}
+                              <div className="karuta-drop-body">
+                                <strong>{album.albumName ?? "Álbum"}</strong>
+                                {album.background ? (
+                                  <span className="karuta-drop-series">
+                                    {album.background}
+                                  </span>
+                                ) : null}
+                                <span className="karuta-drop-user">
+                                  {album.ownerUsername ?? "Desconocido"}
+                                </span>
+                                {album.totalPages != null ? (
+                                  <div className="karuta-drop-reasons">
+                                    <span className="karuta-drop-badge">
+                                      Página {album.page ?? 1} de{" "}
+                                      {album.totalPages}
+                                    </span>
+                                  </div>
                                 ) : null}
                               </div>
                             </article>

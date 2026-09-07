@@ -66,9 +66,12 @@ import {
   createKarutaDrop,
   deleteKarutaCard,
   deleteKarutaDrop,
+  listKarutaAlbums,
   listOwnedKarutaCards,
   listRecentKarutaDrops,
   processKarutaGrab,
+  processKarutaTransfer,
+  upsertKarutaAlbum,
   upsertKarutaCard,
 } from "./services/karuta-store.js";
 import {
@@ -2956,8 +2959,59 @@ export function buildApp() {
   // Si el code está en la colección: registra el drop (grabber + dropper =
   // dueño anterior) y transfiere la posesión al grabber. Idempotente por
   // sourceMessageId.
+  app.post("/internal/guilds/:guildId/karuta/grabs", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const body = (request.body ?? {}) as {
+      cardName?: string;
+      code?: string;
+      grabberUsername?: string;
+      sourceMessageId?: string;
+      wishlistCount?: number;
+    };
+
+    if (!body.code) {
+      return reply.code(400).send({ ok: false, error: "Missing code" });
+    }
+    if (!body.sourceMessageId) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Missing sourceMessageId" });
+    }
+
+    const result = await processKarutaGrab({
+      cardName: body.cardName,
+      code: body.code,
+      grabberUsername: body.grabberUsername,
+      guildId: params.guildId,
+      sourceMessageId: body.sourceMessageId,
+      wishlistCount: body.wishlistCount,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      processed: result.processed,
+    };
+  });
+
+  // Transferencia aceptada (kg): cambia el dueño de una carta registrada.
   app.post(
-    "/internal/guilds/:guildId/karuta/grabs",
+    "/internal/guilds/:guildId/karuta/transfers",
     async (request, reply) => {
       if (!env.BOT_API_TOKEN) {
         return reply.code(503).send({
@@ -2976,29 +3030,18 @@ export function buildApp() {
       }
 
       const body = (request.body ?? {}) as {
-        cardName?: string;
         code?: string;
-        grabberUsername?: string;
-        sourceMessageId?: string;
-        wishlistCount?: number;
+        toUsername?: string;
       };
 
       if (!body.code) {
         return reply.code(400).send({ ok: false, error: "Missing code" });
       }
-      if (!body.sourceMessageId) {
-        return reply
-          .code(400)
-          .send({ ok: false, error: "Missing sourceMessageId" });
-      }
 
-      const result = await processKarutaGrab({
-        cardName: body.cardName,
+      const result = await processKarutaTransfer({
         code: body.code,
-        grabberUsername: body.grabberUsername,
         guildId: params.guildId,
-        sourceMessageId: body.sourceMessageId,
-        wishlistCount: body.wishlistCount,
+        toUsername: body.toUsername,
       });
 
       return {
@@ -3008,6 +3051,78 @@ export function buildApp() {
       };
     },
   );
+
+  // Álbum de Karuta (ka): el bot lo sube cuando alguien ve su colección.
+  app.post(
+    "/internal/guilds/:guildId/karuta/albums",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const body = (request.body ?? {}) as {
+        albumName?: string;
+        background?: string;
+        imageUrl?: string;
+        ownerUserId?: string;
+        ownerUsername?: string;
+        page?: number;
+        totalPages?: number;
+      };
+
+      if (!body.albumName) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Missing albumName" });
+      }
+
+      const album = await upsertKarutaAlbum({
+        albumName: body.albumName,
+        background: body.background,
+        guildId: params.guildId,
+        imageUrl: body.imageUrl,
+        ownerUserId: body.ownerUserId,
+        ownerUsername: body.ownerUsername,
+        page: body.page,
+        totalPages: body.totalPages,
+      });
+
+      return { ok: true, guildId: params.guildId, album };
+    },
+  );
+
+  // Listado de álbumes (ka) para la sección Colección. Lectura para miembros.
+  app.get("/guilds/:guildId/karuta/albums", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const albums = await listKarutaAlbums(params.guildId);
+
+    return { ok: true, guildId: params.guildId, albums };
+  });
 
   app.get("/guilds/:guildId/config", async (request, reply) => {
     const session = await requireSession(request);

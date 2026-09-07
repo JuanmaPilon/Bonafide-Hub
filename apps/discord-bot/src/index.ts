@@ -3255,6 +3255,125 @@ function parseKarutaBurn(
   return { cardName, ownerUsername: owner };
 }
 
+type ParsedKarutaTransfer = {
+  cardName?: string;
+  code: string;
+  edition?: number;
+  fromUserId?: string;
+  printNumber?: number;
+  series?: string;
+  toUserId?: string;
+};
+
+// kg → transferir una carta. Formato (embed, aceptado):
+//   Card Transfer
+//   <@from> → <@to>
+//   code - ★★★★ - #print - ♦edición - serie - nombre
+//   "Card transfer has been accepted."
+function parseKarutaTransfer(
+  embed: KarutaEmbed,
+  content: string,
+): ParsedKarutaTransfer | null {
+  if (embed.title !== "Card Transfer") {
+    return null;
+  }
+
+  const allText = [
+    content,
+    embed.title,
+    embed.description,
+    embed.author?.name,
+    embed.footer?.text,
+    ...(embed.fields ?? []).map((field) => `${field.name}: ${field.value}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  // Solo nos interesa cuando la transferencia fue ACEPTADA.
+  if (!/transfer has been accepted/i.test(allText)) {
+    return null;
+  }
+
+  const plainText = allText.replace(/[`*~_]/g, "");
+
+  const transferMatch = plainText.match(/<@!?(\d+)>\s*→\s*<@!?(\d+)>/);
+  if (!transferMatch) {
+    return null;
+  }
+
+  // Resumen: code - ★★★★ - #print - ♦edición - serie - nombre
+  const summaryMatch = plainText.match(
+    /([A-Za-z0-9]{5,32})\s*-\s*([★☆]+)\s*-\s*#(\d+)\s*-\s*(\D*\d+)\s*-\s*(.+?)\s*-\s*(.+)$/m,
+  );
+  if (!summaryMatch) {
+    return null;
+  }
+
+  return {
+    cardName: summaryMatch[6].trim() || undefined,
+    code: summaryMatch[1],
+    edition: Number(summaryMatch[4].replace(/\D/g, "")),
+    fromUserId: transferMatch[1],
+    printNumber: Number(summaryMatch[3]),
+    series: summaryMatch[5].trim() || undefined,
+    toUserId: transferMatch[2],
+  };
+}
+
+type ParsedKarutaAlbum = {
+  albumName?: string;
+  background?: string;
+  imageUrl?: string;
+  ownerUserId?: string;
+  page?: number;
+  totalPages?: number;
+};
+
+// ka → ver un álbum. Formato (embed):
+//   Card Album
+//   Album: <nombre>
+//   Background: <fondo>
+//   Owned by <@ID>
+//   (imagen con las cartas)
+//   Showing page N of M
+function parseKarutaAlbum(
+  embed: KarutaEmbed,
+  content: string,
+): ParsedKarutaAlbum | null {
+  if (embed.title !== "Card Album") {
+    return null;
+  }
+
+  const allText = [
+    content,
+    embed.title,
+    embed.description,
+    embed.author?.name,
+    embed.footer?.text,
+    ...(embed.fields ?? []).map((field) => `${field.name}: ${field.value}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const albumMatch = allText.match(/album:\s*([^\n]+)/i);
+  if (!albumMatch) {
+    return null;
+  }
+
+  const backgroundMatch = allText.match(/background:\s*([^\n]+)/i);
+  const ownerMatch = allText.match(/owned by\s+<@!?(\d+)>/i);
+  const pageMatch = allText.match(/showing page\s+(\d+)\s+of\s+(\d+)/i);
+
+  return {
+    albumName: albumMatch[1].trim() || undefined,
+    background: backgroundMatch?.[1]?.trim() || undefined,
+    imageUrl: embed.image?.url || undefined,
+    ownerUserId: ownerMatch?.[1],
+    page: pageMatch ? Number(pageMatch[1]) : undefined,
+    totalPages: pageMatch ? Number(pageMatch[2]) : undefined,
+  };
+}
+
 // Criterio de rareza (OR): print ≤ máx O wishlist ≥ mín. Se usa para decidir
 // qué cartas se registran en la colección (kv) y para el feed de drops.
 function karutaRareReasons(
@@ -3430,6 +3549,101 @@ async function postKarutaBurn(
   }
 }
 
+async function postKarutaTransfer(
+  guildId: string,
+  transfer: { code: string; toUsername?: string },
+): Promise<boolean> {
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/transfers`,
+      {
+        body: JSON.stringify({
+          code: transfer.code,
+          toUsername: transfer.toUsername,
+        }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta transfer POST falló (${response.status}) para guild ${guildId}.`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta transfer POST error: ${getErrorMessage(error)}`,
+    );
+    return false;
+  }
+}
+
+async function postKarutaAlbum(
+  guildId: string,
+  album: ParsedKarutaAlbum & { ownerUsername?: string },
+): Promise<boolean> {
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return false;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/albums`,
+      {
+        body: JSON.stringify({
+          albumName: album.albumName,
+          background: album.background,
+          imageUrl: album.imageUrl,
+          ownerUserId: album.ownerUserId,
+          ownerUsername: album.ownerUsername,
+          page: album.page,
+          totalPages: album.totalPages,
+        }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta album POST falló (${response.status}) para guild ${guildId}.`,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta album POST error: ${getErrorMessage(error)}`,
+    );
+    return false;
+  }
+}
+
 async function handleKarutaDropMessage(message: Message): Promise<void> {
   if (!message.inGuild() || !message.author.bot) {
     return;
@@ -3499,6 +3713,26 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
   }
 
   for (const rawEmbed of embeds) {
+    // Transferencia (kg) aceptada: cambia el dueño de la carta.
+    const transfer = parseKarutaTransfer(rawEmbed, message.content);
+    if (transfer) {
+      const toUsername = transfer.toUserId
+        ? (await message.guild?.members
+            .fetch(transfer.toUserId)
+            .catch(() => null))?.displayName
+        : undefined;
+      const saved = await postKarutaTransfer(message.guildId, {
+        code: transfer.code,
+        toUsername,
+      });
+      if (saved) {
+        console.log(
+          `[discord-bot] Karuta transfer aceptado: ${transfer.code} → ${toUsername ?? "?"}`,
+        );
+      }
+      continue;
+    }
+
     // Burn (kb): da de baja la carta quemada.
     const burn = parseKarutaBurn(rawEmbed, message.content);
     if (burn) {
@@ -3551,10 +3785,41 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       continue;
     }
 
-    // Diagnóstico: no matcheó ni burn ni kv. Solo volcamos embeds que
-    // parezcan cartas (imagen o título "Card Details") para no llenar el
-    // log con Reminders.
-    if (rawEmbed.image || rawEmbed.title === "Card Details") {
+    // Álbum (ka): registra la colección del usuario (solo miembros).
+    const album = parseKarutaAlbum(rawEmbed, message.content);
+    if (album) {
+      if (!album.ownerUserId) {
+        continue;
+      }
+      const member = await message.guild?.members
+        .fetch(album.ownerUserId)
+        .catch(() => null);
+      if (!member) {
+        console.log(
+          `[discord-bot] Karuta album ignorado: dueño <@${album.ownerUserId}> no está en el server (${album.albumName ?? "?"})`,
+        );
+        continue;
+      }
+      const ownerUsername = member.displayName;
+      const saved = await postKarutaAlbum(message.guildId, {
+        ...album,
+        ownerUsername,
+      });
+      if (saved) {
+        console.log(
+          `[discord-bot] Karuta album registrado: ${album.albumName ?? "?"} de ${ownerUsername}`,
+        );
+      }
+      continue;
+    }
+
+    // Diagnóstico: no matcheó nada conocido. Solo volcamos embeds que
+    // parezcan cartas para no llenar el log con Reminders.
+    if (
+      (rawEmbed.image || rawEmbed.title === "Card Details") &&
+      rawEmbed.title !== "Card Transfer" &&
+      rawEmbed.title !== "Card Album"
+    ) {
       console.log(
         `[discord-bot] Karuta embed sin matchear: ${JSON.stringify(rawEmbed)}`,
       );
@@ -3568,6 +3833,67 @@ client.on(Events.MessageCreate, (message) => {
     : undefined;
   void awardXpForMessage(message, memberRoles);
   void handleKarutaDropMessage(message);
+});
+
+// Las transferencias de Karuta (kg) se aceptan editando el mensaje original
+// (pasa de "pendiente" a "Card transfer has been accepted."). Por eso las
+// procesamos en MessageUpdate.
+async function handleKarutaTransferUpdate(message: Message): Promise<void> {
+  if (!message.inGuild() || !message.author.bot) {
+    return;
+  }
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  const guildConfig = await getGuildConfig(message.guildId).catch(() => null);
+  if (!guildConfig?.karutaWatchEnabled) {
+    return;
+  }
+
+  const karutaBotUserId =
+    guildConfig.karutaBotUserId?.trim() || DEFAULT_KARUTA_BOT_USER_ID;
+  if (message.author.id !== karutaBotUserId) {
+    return;
+  }
+  if (
+    guildConfig.karutaChannelId &&
+    message.channelId !== guildConfig.karutaChannelId
+  ) {
+    return;
+  }
+
+  for (const rawEmbed of message.embeds.map((embed) => embed.toJSON())) {
+    const transfer = parseKarutaTransfer(rawEmbed, message.content);
+    if (!transfer) {
+      continue;
+    }
+    const toUsername = transfer.toUserId
+      ? (await message.guild?.members
+          .fetch(transfer.toUserId)
+          .catch(() => null))?.displayName
+      : undefined;
+    const saved = await postKarutaTransfer(message.guildId, {
+      code: transfer.code,
+      toUsername,
+    });
+    if (saved) {
+      console.log(
+        `[discord-bot] Karuta transfer aceptado (edit): ${transfer.code} → ${toUsername ?? "?"}`,
+      );
+    }
+  }
+}
+
+client.on(Events.MessageUpdate, async (_oldMessage, newMessage) => {
+  if (newMessage.partial) {
+    try {
+      await newMessage.fetch();
+    } catch {
+      return;
+    }
+  }
+  await handleKarutaTransferUpdate(newMessage as Message);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {

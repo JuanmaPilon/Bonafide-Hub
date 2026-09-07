@@ -370,3 +370,130 @@ export async function processKarutaGrab(input: {
     card: toKarutaCard(updated),
   };
 }
+
+// Transferencia aceptada (kg): cambia el dueño de una carta ya registrada.
+// El bot identifica la carta por code y actualiza el dueño.
+export async function processKarutaTransfer(input: {
+  code: string;
+  guildId: string;
+  toUsername?: string;
+}): Promise<{ processed: boolean; card: KarutaCard | null }> {
+  const card = await prisma.karutaCard.findUnique({
+    where: { guildId_code: { guildId: input.guildId, code: input.code } },
+  });
+  if (!card || card.status !== "owned") {
+    return { processed: false, card: null };
+  }
+
+  const updated = await prisma.karutaCard.update({
+    where: { id: card.id },
+    data: { ownerUsername: input.toUsername, lastSeenAt: new Date() },
+  });
+
+  return { processed: true, card: toKarutaCard(updated) };
+}
+
+export type KarutaAlbum = {
+  albumName?: string;
+  background?: string;
+  createdAt: Date;
+  guildId: string;
+  id: string;
+  imageUrl?: string;
+  ownerUserId?: string;
+  ownerUsername?: string;
+  page?: number;
+  totalPages?: number;
+  updatedAt: Date;
+};
+
+function toKarutaAlbum(record: {
+  albumName: string | null;
+  background: string | null;
+  createdAt: Date;
+  guildId: string;
+  id: string;
+  imageUrl: string | null;
+  ownerUserId: string | null;
+  ownerUsername: string | null;
+  page: number | null;
+  totalPages: number | null;
+  updatedAt: Date;
+}): KarutaAlbum {
+  return {
+    albumName: record.albumName ?? undefined,
+    background: record.background ?? undefined,
+    createdAt: record.createdAt,
+    guildId: record.guildId,
+    id: record.id,
+    imageUrl: record.imageUrl ?? undefined,
+    ownerUserId: record.ownerUserId ?? undefined,
+    ownerUsername: record.ownerUsername ?? undefined,
+    page: record.page ?? undefined,
+    totalPages: record.totalPages ?? undefined,
+    updatedAt: record.updatedAt,
+  };
+}
+
+// Álbumes de Karuta, más recientes primero.
+export async function listKarutaAlbums(
+  guildId: string,
+  limit = 100,
+): Promise<KarutaAlbum[]> {
+  const records = await prisma.karutaAlbum.findMany({
+    where: { guildId },
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
+  return records.map(toKarutaAlbum);
+}
+
+// Upsert best-effort de un álbum (ka). Si ya existe el mismo álbum del
+// mismo dueño, lo actualiza; si no, lo crea.
+export async function upsertKarutaAlbum(input: {
+  albumName?: string;
+  background?: string;
+  guildId: string;
+  imageUrl?: string;
+  ownerUserId?: string;
+  ownerUsername?: string;
+  page?: number;
+  totalPages?: number;
+}): Promise<KarutaAlbum> {
+  const existing = await prisma.karutaAlbum.findFirst({
+    where: {
+      guildId: input.guildId,
+      albumName: input.albumName,
+      ...(input.ownerUserId ? { ownerUserId: input.ownerUserId } : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  if (existing) {
+    const updated = await prisma.karutaAlbum.update({
+      where: { id: existing.id },
+      data: {
+        background: input.background,
+        imageUrl: input.imageUrl,
+        ownerUsername: input.ownerUsername,
+        page: input.page,
+        totalPages: input.totalPages,
+      },
+    });
+    return toKarutaAlbum(updated);
+  }
+
+  const created = await prisma.karutaAlbum.create({
+    data: {
+      albumName: input.albumName,
+      background: input.background,
+      guildId: input.guildId,
+      imageUrl: input.imageUrl,
+      ownerUserId: input.ownerUserId,
+      ownerUsername: input.ownerUsername,
+      page: input.page,
+      totalPages: input.totalPages,
+    },
+  });
+  return toKarutaAlbum(created);
+}
