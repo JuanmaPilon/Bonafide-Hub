@@ -3835,10 +3835,12 @@ client.on(Events.MessageCreate, (message) => {
   void handleKarutaDropMessage(message);
 });
 
-// Las transferencias de Karuta (kg) se aceptan editando el mensaje original
-// (pasa de "pendiente" a "Card transfer has been accepted."). Por eso las
-// procesamos en MessageUpdate.
-async function handleKarutaTransferUpdate(message: Message): Promise<void> {
+// Los mensajes de Karuta se EDITA en varios casos:
+//   - kg: la transferencia pasa de "pendiente" a "Card transfer has been
+//     accepted.".
+//   - ka: la imagen del álbum se reemplaza por la real (o cambia de página).
+// Por eso procesamos ambos en MessageUpdate.
+async function handleKarutaMessageUpdate(message: Message): Promise<void> {
   if (!message.inGuild() || !message.author.bot) {
     return;
   }
@@ -3864,23 +3866,52 @@ async function handleKarutaTransferUpdate(message: Message): Promise<void> {
   }
 
   for (const rawEmbed of message.embeds.map((embed) => embed.toJSON())) {
+    // Transferencia aceptada.
     const transfer = parseKarutaTransfer(rawEmbed, message.content);
-    if (!transfer) {
+    if (transfer) {
+      const toUsername = transfer.toUserId
+        ? (await message.guild?.members
+            .fetch(transfer.toUserId)
+            .catch(() => null))?.displayName
+        : undefined;
+      const saved = await postKarutaTransfer(message.guildId, {
+        code: transfer.code,
+        toUsername,
+      });
+      if (saved) {
+        console.log(
+          `[discord-bot] Karuta transfer aceptado (edit): ${transfer.code} → ${toUsername ?? "?"}`,
+        );
+      }
       continue;
     }
-    const toUsername = transfer.toUserId
-      ? (await message.guild?.members
-          .fetch(transfer.toUserId)
-          .catch(() => null))?.displayName
-      : undefined;
-    const saved = await postKarutaTransfer(message.guildId, {
-      code: transfer.code,
-      toUsername,
-    });
-    if (saved) {
-      console.log(
-        `[discord-bot] Karuta transfer aceptado (edit): ${transfer.code} → ${toUsername ?? "?"}`,
-      );
+
+    // Álbum editado: imagen final (reemplaza el placeholder "Loading...") o
+    // cambio de página.
+    const album = parseKarutaAlbum(rawEmbed, message.content);
+    if (album) {
+      if (!album.ownerUserId) {
+        continue;
+      }
+      const member = await message.guild?.members
+        .fetch(album.ownerUserId)
+        .catch(() => null);
+      if (!member) {
+        console.log(
+          `[discord-bot] Karuta album ignorado (edit): dueño <@${album.ownerUserId}> no está en el server`,
+        );
+        continue;
+      }
+      const saved = await postKarutaAlbum(message.guildId, {
+        ...album,
+        ownerUsername: member.displayName,
+      });
+      if (saved) {
+        console.log(
+          `[discord-bot] Karuta album actualizado (edit): ${album.albumName ?? "?"} pág ${album.page ?? 1}`,
+        );
+      }
+      continue;
     }
   }
 }
@@ -3893,7 +3924,7 @@ client.on(Events.MessageUpdate, async (_oldMessage, newMessage) => {
       return;
     }
   }
-  await handleKarutaTransferUpdate(newMessage as Message);
+  await handleKarutaMessageUpdate(newMessage as Message);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
