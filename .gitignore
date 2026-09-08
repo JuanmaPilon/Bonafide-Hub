@@ -19,3 +19,6 @@ pnpm-debug.log*
 
 # Descargas de binarios en runtime (yt-dlp/ffmpeg)
 **/.cache/
+
+# Notas de memoria locales de Copilot (repo memory)
+memories/
