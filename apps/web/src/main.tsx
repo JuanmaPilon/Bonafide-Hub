@@ -3904,9 +3904,6 @@ function App() {
                               )}
                             </div>
                           </label>
-                          <p className="suggestion-recipient-hint">
-                            Sin selección, se envían al owner.
-                          </p>
                         </div>
                       </div>
                       {configDirty ? (
@@ -4508,9 +4505,7 @@ function App() {
                                   )
                                 }
                               >
-                                <option value="">
-                                  Sin canal configurado
-                                </option>
+                                <option value="">Sin canal configurado</option>
                                 {textChannels.map((channel) => (
                                   <option key={channel.id} value={channel.id}>
                                     {channel.name}
