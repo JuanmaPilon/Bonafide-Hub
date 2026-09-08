@@ -68,16 +68,20 @@ import {
   upsertKarutaCard,
 } from "./services/karuta-store.js";
 import {
-  COMBAT_ROLES,
   EVENT_TYPES,
+  RAID_ROLES,
+  SIGNUP_ROLES,
   createEvent,
   createEventImage,
+  createRaidSpec,
   deleteEvent,
   deleteEventImage,
+  deleteRaidSpec,
   deleteSignup,
   getEvent,
   listEventImages,
   listEvents,
+  listRaidSpecs,
   updateEvent,
   upsertSignup,
 } from "./services/events-store.js";
@@ -2533,6 +2537,110 @@ export function buildApp() {
     return { ok: true, guildId: params.guildId, deleted };
   });
 
+  // ── Catálogo de specs de inscripción (RaidSpec, estilo Raid Helper) ──
+  // Cualquier miembro puede leerlo (lo usa el selector de inscripción).
+  app.get("/guilds/:guildId/events/specs", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const specs = await listRaidSpecs(params.guildId);
+    return { ok: true, guildId: params.guildId, specs };
+  });
+
+  // Alta de spec del catálogo (staff con acceso al módulo eventos).
+  app.post("/guilds/:guildId/events/specs", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      animated?: boolean;
+      className?: string;
+      emojiId?: string;
+      emojiName?: string;
+      role?: string;
+      specName?: string;
+    };
+    const role = body.role?.trim().toLowerCase();
+    const className = body.className?.trim();
+    const specName = body.specName?.trim();
+
+    if (
+      !role ||
+      !RAID_ROLES.includes(role as never) ||
+      !className ||
+      !specName
+    ) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          "Faltan rol (tank/healer/melee/ranged), clase o spec válidos",
+      });
+    }
+
+    const spec = await createRaidSpec({
+      animated: Boolean(body.animated),
+      className,
+      emojiId: body.emojiId?.trim() || undefined,
+      emojiName: body.emojiName?.trim() || undefined,
+      guildId: params.guildId,
+      role,
+      specName,
+    });
+    if (!spec) {
+      return reply.code(409).send({
+        ok: false,
+        error: "Ese rol/clase/spec ya existe en el catálogo",
+      });
+    }
+
+    return { ok: true, guildId: params.guildId, spec };
+  });
+
+  // Baja de spec del catálogo.
+  app.delete(
+    "/guilds/:guildId/events/specs/:specId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; specId?: string };
+      if (!params.guildId || !params.specId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteRaidSpec(params.guildId, params.specId);
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
+
   // ── Biblioteca de imágenes de eventos ─────────────────────────────
   app.get("/guilds/:guildId/events/images", async (request, reply) => {
     const session = await requireSession(request);
@@ -2672,6 +2780,7 @@ export function buildApp() {
         character?: string;
         note?: string;
         role?: string;
+        spec?: string;
         status?: string;
         wowClass?: string;
       };
@@ -2680,7 +2789,7 @@ export function buildApp() {
       if (!["yes", "tentative", "no"].includes(status)) {
         return reply.code(400).send({ ok: false, error: "Estado inválido" });
       }
-      if (body.role && !COMBAT_ROLES.includes(body.role as never)) {
+      if (body.role && !SIGNUP_ROLES.includes(body.role as never)) {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
@@ -2690,6 +2799,7 @@ export function buildApp() {
         guildId: params.guildId,
         note: body.note?.trim() || undefined,
         role: body.role?.trim() || undefined,
+        spec: body.spec?.trim() || undefined,
         status,
         userId: user.id,
         username: user.global_name ?? user.username ?? "Miembro",

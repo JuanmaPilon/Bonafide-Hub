@@ -20,14 +20,114 @@ export const WOW_CLASSES = [
   "Warrior",
 ] as const;
 
-export const COMBAT_ROLES = ["tank", "healer", "dps"] as const;
+// Roles de combate estilo Raid Helper (4 ejes). "dps" queda como valor
+// legacy aceptado en inscripciones viejas pero no se ofrece en el catálogo.
+export const RAID_ROLES = ["tank", "healer", "melee", "ranged"] as const;
+export const COMBAT_ROLES = RAID_ROLES;
+export const SIGNUP_ROLES = [...RAID_ROLES, "dps"] as const;
 
 export const EVENT_TYPES = ["raid", "mplus", "pvp", "social"] as const;
 
 export type WowClass = (typeof WOW_CLASSES)[number];
-export type CombatRole = (typeof COMBAT_ROLES)[number];
+export type RaidRole = (typeof RAID_ROLES)[number];
+export type CombatRole = RaidRole;
 export type EventType = (typeof EVENT_TYPES)[number];
 export type SignupStatus = "yes" | "tentative" | "no";
+
+// ── Catálogo de specs configurable por guild (RaidSpec) ─────────────
+
+export type RaidSpec = {
+  animated: boolean;
+  className: string;
+  createdAt: Date;
+  emojiId?: string;
+  emojiName?: string;
+  guildId: string;
+  id: string;
+  position: number;
+  role: string;
+  specName: string;
+  updatedAt: Date;
+};
+
+type RaidSpecRecord = {
+  animated: boolean;
+  className: string;
+  createdAt: Date;
+  emojiId: string | null;
+  emojiName: string | null;
+  guildId: string;
+  id: string;
+  position: number;
+  role: string;
+  specName: string;
+  updatedAt: Date;
+};
+
+function toRaidSpec(record: RaidSpecRecord): RaidSpec {
+  return {
+    animated: record.animated,
+    className: record.className,
+    createdAt: record.createdAt,
+    emojiId: record.emojiId ?? undefined,
+    emojiName: record.emojiName ?? undefined,
+    guildId: record.guildId,
+    id: record.id,
+    position: record.position,
+    role: record.role,
+    specName: record.specName,
+    updatedAt: record.updatedAt,
+  };
+}
+
+export async function listRaidSpecs(guildId: string): Promise<RaidSpec[]> {
+  const records = await prisma.raidSpec.findMany({
+    where: { guildId },
+    orderBy: [{ position: "asc" }, { className: "asc" }, { specName: "asc" }],
+  });
+  return records.map(toRaidSpec);
+}
+
+export async function createRaidSpec(input: {
+  animated?: boolean;
+  className: string;
+  emojiId?: string;
+  emojiName?: string;
+  guildId: string;
+  role: string;
+  specName: string;
+}): Promise<RaidSpec | null> {
+  const position =
+    (await prisma.raidSpec.count({ where: { guildId: input.guildId } })) + 1;
+  try {
+    const record = await prisma.raidSpec.create({
+      data: {
+        animated: input.animated ?? false,
+        className: input.className,
+        emojiId: input.emojiId,
+        emojiName: input.emojiName,
+        guildId: input.guildId,
+        position,
+        role: input.role,
+        specName: input.specName,
+      },
+    });
+    return toRaidSpec(record);
+  } catch {
+    // Duplicado (guildId+role+className+specName ya existe).
+    return null;
+  }
+}
+
+export async function deleteRaidSpec(
+  guildId: string,
+  specId: string,
+): Promise<boolean> {
+  const result = await prisma.raidSpec.deleteMany({
+    where: { id: specId, guildId },
+  });
+  return result.count > 0;
+}
 
 export type HubEvent = {
   createdAt: Date;
@@ -54,6 +154,7 @@ export type EventSignup = {
   id: string;
   note?: string;
   role?: string;
+  spec?: string;
   status: string;
   updatedAt: Date;
   userId: string;
@@ -86,6 +187,7 @@ type SignupRecord = {
   id: string;
   note: string | null;
   role: string | null;
+  spec: string | null;
   status: string;
   updatedAt: Date;
   userId: string;
@@ -101,6 +203,7 @@ function toSignup(record: SignupRecord): EventSignup {
     id: record.id,
     note: record.note ?? undefined,
     role: record.role ?? undefined,
+    spec: record.spec ?? undefined,
     status: record.status,
     updatedAt: record.updatedAt,
     userId: record.userId,
@@ -236,6 +339,7 @@ export async function upsertSignup(input: {
   guildId: string;
   note?: string;
   role?: string;
+  spec?: string;
   status: string;
   userId: string;
   username: string;
@@ -251,6 +355,7 @@ export async function upsertSignup(input: {
       guildId: input.guildId,
       note: input.note,
       role: input.role,
+      spec: input.spec,
       status: input.status,
       userId: input.userId,
       username: input.username,
@@ -260,6 +365,7 @@ export async function upsertSignup(input: {
       character: input.character,
       note: input.note,
       role: input.role,
+      spec: input.spec,
       status: input.status,
       username: input.username,
       wowClass: input.wowClass,

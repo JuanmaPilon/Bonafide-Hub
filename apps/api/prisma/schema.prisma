@@ -180,8 +180,10 @@ model HubEvent {
   @@map("hub_events")
 }
 
-// Inscripción de un miembro a un evento: estado (sí/tentativo/no), clase
-// de WoW, rol de combate, personaje y nota opcional.
+// Inscripción de un miembro a un evento: estado (sí/tentativo/no), rol de
+// combate (tank/healer/melee/ranged), clase, spec, personaje y nota.
+// La clase/spec se guardan como texto (snapshot) y los emojis se resuelven
+// contra el catálogo RaidSpec de la guild al renderizar.
 model EventSignup {
   id        String   @id @default(cuid())
   guildId   String
@@ -189,8 +191,9 @@ model EventSignup {
   userId    String
   username  String
   status    String   @default("tentative") // yes | tentative | no
+  role      String? // tank | healer | melee | ranged (legacy: dps)
   wowClass  String?
-  role      String? // tank | healer | dps
+  spec      String?
   character String?
   note      String?
   createdAt DateTime @default(now())
@@ -201,6 +204,28 @@ model EventSignup {
   @@unique([eventId, userId])
   @@index([guildId, eventId])
   @@map("event_signups")
+}
+
+// Catálogo de specs configurable por guild (estilo Raid Helper): cada fila
+// es un (rol, clase, spec) con su emoji custom de Discord opcional. Lo
+// administra el staff desde el panel Admin y alimenta el selector y el
+// roster de inscripciones. Así sirve para cualquier juego sin tocar código.
+model RaidSpec {
+  id        String   @id @default(cuid())
+  guildId   String
+  role      String // tank | healer | melee | ranged
+  className String
+  specName  String
+  emojiId   String?
+  emojiName String?
+  animated  Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([guildId, role, className, specName])
+  @@index([guildId, role])
+  @@map("raid_specs")
 }
 
 // Biblioteca de imágenes del módulo de eventos. El staff sube banners y
