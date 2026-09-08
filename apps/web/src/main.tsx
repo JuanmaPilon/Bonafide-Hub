@@ -994,7 +994,7 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "raids") {
-    return "Información de raid.";
+    return "";
   }
 
   if (tab === "eventos") {
@@ -5578,42 +5578,6 @@ function App() {
                           >
                             + Agregar log de raid
                           </button>
-
-                          {raidLogs.length === 0 ? (
-                            <div className="empty-state">
-                              <p>No hay logs todavía. ¡Agregá el primero!</p>
-                            </div>
-                          ) : (
-                            raidLogs.map((log) => (
-                              <div className="daily-message-row" key={log.id}>
-                                <div className="daily-message-content">
-                                  <strong>{log.title || log.reportCode}</strong>
-                                  <div className="muted-text">
-                                    ⚔️ {log.fightCount} fights · 💀 {log.kills}{" "}
-                                    kills ·{" "}
-                                    {log.status === "failed"
-                                      ? "sin datos"
-                                      : log.status === "live"
-                                        ? "en vivo"
-                                        : log.discordPosted
-                                          ? "publicado"
-                                          : "en espera"}
-                                  </div>
-                                </div>
-                                <div className="daily-message-actions">
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() =>
-                                      void handleDeleteRaidLog(log)
-                                    }
-                                    type="button"
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </div>
-                            ))
-                          )}
                         </div>
                       </div>
                     </details>
@@ -6119,9 +6083,6 @@ function App() {
                     <div className="raid-logs-acc-body">
                       {config.logsWatchEnabled && config.logsWatchGuild ? (
                         <div className="raid-log-watcher">
-                          <span className="raid-log-watcher-label">
-                            Vigilando
-                          </span>
                           <strong>{config.logsWatchGuild}</strong>
                           <span className="muted-text">
                             {config.logsWatchServer} · {config.logsWatchRegion}
