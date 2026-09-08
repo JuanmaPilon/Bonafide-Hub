@@ -206,42 +206,210 @@ async function createScheduledEvent(input: {
   return { id: data.id };
 }
 
-function buildEmbed(input: {
+// ── Roster estilo Raid Helper dentro del embed del evento ───────────
+
+export type AnnouncementSignup = {
+  character?: string;
+  role?: string;
+  spec?: string;
+  status: string;
+  username: string;
+  wowClass?: string;
+};
+
+export type AnnouncementSpec = {
+  animated: boolean;
+  className: string;
+  emojiId?: string;
+  emojiName?: string;
+  role: string;
+  specName: string;
+};
+
+const ROLE_ORDER = ["tank", "healer", "melee", "ranged"] as const;
+
+const ROLE_META: Record<string, { emoji: string; label: string }> = {
+  tank: { emoji: "🛡️", label: "Tank" },
+  healer: { emoji: "💚", label: "Healer" },
+  melee: { emoji: "⚔️", label: "Melee" },
+  ranged: { emoji: "🏹", label: "Ranged" },
+};
+
+const STATUS_META: Record<string, { emoji: string; label: string }> = {
+  yes: { emoji: "✅", label: "Voy" },
+  tentative: { emoji: "🤔", label: "Quizás" },
+  bench: { emoji: "🪑", label: "Bench" },
+  late: { emoji: "⏰", label: "Tarde" },
+  no: { emoji: "❌", label: "No asiste" },
+};
+
+const EVENT_TYPE_EMOJI: Record<string, string> = {
+  raid: "⚔️",
+  mplus: "🗝️",
+  pvp: "🏆",
+  social: "🎉",
+};
+
+const RECURRENCE_LABEL: Record<EventRecurrence, string | undefined> = {
+  none: undefined,
+  daily: "Repite todos los días",
+  weekly: "Repite semanalmente",
+  biweekly: "Repite cada 2 semanas",
+};
+
+// Mención de emoji custom (`<:name:id>` o `<a:name:id>`) para que Discord
+// la renderice inline dentro del texto del embed.
+function specMention(spec?: AnnouncementSpec): string {
+  if (!spec?.emojiId || !spec.emojiName) {
+    return "";
+  }
+  const marker = spec.animated ? "a" : "";
+  return `<${marker}:${spec.emojiName}:${spec.emojiId}>`;
+}
+
+function signupDisplay(signup: AnnouncementSignup): string {
+  return signup.character
+    ? `${signup.character} (${signup.username})`
+    : signup.username;
+}
+
+// Empuja líneas a un field, partiendo en varios si supera 1024 chars
+// (límite de Discord para el value de un field).
+function pushField(
+  fields: Array<{ name: string; value: string }>,
+  name: string,
+  lines: string[],
+): void {
+  if (lines.length === 0) {
+    return;
+  }
+  let value = "";
+  for (const line of lines) {
+    if (value.length + line.length + 1 > 1024) {
+      fields.push({ name, value });
+      value = "";
+    }
+    value = value ? `${value}\n${line}` : line;
+  }
+  if (value) {
+    fields.push({ name, value });
+  }
+}
+
+// Construye el/los embeds del aviso con info del evento + roster.
+export function buildEventAnnouncementEmbeds(input: {
   description?: string;
+  discordEventId?: string;
+  durationMinutes?: number;
+  guildId: string;
   imageUrl?: string;
+  location?: string;
   recurrence: EventRecurrence;
+  signupDeadline?: Date;
+  signups: AnnouncementSignup[];
+  specs: AnnouncementSpec[];
   startsAt: Date;
   title: string;
   type?: string;
-}) {
-  const recurrenceLabel: Record<EventRecurrence, string | undefined> = {
-    none: undefined,
-    daily: "Repite todos los días",
-    weekly: "Repite semanalmente",
-    biweekly: "Repite cada 2 semanas",
-  };
+}): Array<Record<string, unknown>> {
   const typeLabel = input.type ?? "evento";
   const timestamp = Math.floor(input.startsAt.getTime() / 1000);
-  const fields: Array<{ inline: boolean; name: string; value: string }> = [
-    { inline: true, name: "Inicio", value: `<t:${timestamp}:F>` },
-    { inline: true, name: "Hace", value: `<t:${timestamp}:R>` },
-  ];
-  if (recurrenceLabel[input.recurrence]) {
-    fields.push({
-      inline: false,
-      name: "Repetición",
-      value: recurrenceLabel[input.recurrence]!,
+
+  const lines: string[] = [`🕒 <t:${timestamp}:F> (<t:${timestamp}:R>)`];
+  const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
+  if (recurrenceLabel) {
+    lines.push(`🔁 ${recurrenceLabel}`);
+  }
+  if (input.durationMinutes && input.durationMinutes > 0) {
+    const end = Math.floor(
+      (input.startsAt.getTime() + input.durationMinutes * 60_000) / 1000,
+    );
+    lines.push(
+      `⏱️ Duración: ${input.durationMinutes} min (hasta <t:${end}:t>)`,
+    );
+  }
+  if (input.signupDeadline) {
+    const dl = Math.floor(input.signupDeadline.getTime() / 1000);
+    lines.push(`🔒 Cierre de inscripciones: <t:${dl}:F>`);
+  }
+  if (input.location) {
+    lines.push(`📍 ${input.location}`);
+  }
+
+  // Conteo por estado (solo los que tengan al menos uno).
+  const counts: string[] = [];
+  for (const [status, meta] of Object.entries(STATUS_META)) {
+    const count = input.signups.filter((signup) => signup.status === status)
+      .length;
+    if (count > 0) {
+      counts.push(`${meta.emoji} ${count}`);
+    }
+  }
+  lines.push(
+    counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.",
+  );
+
+  const fields: Array<{ name: string; value: string }> = [];
+  const resolveSpec = (
+    signup: AnnouncementSignup,
+  ): AnnouncementSpec | undefined =>
+    input.specs.find(
+      (spec) =>
+        spec.role === signup.role &&
+        spec.className === signup.wowClass &&
+        spec.specName === signup.spec,
+    );
+
+  const linesFor = (members: AnnouncementSignup[]): string[] =>
+    members.map((signup) => {
+      const spec = resolveSpec(signup);
+      const mention = specMention(spec);
+      const name = `**${signupDisplay(signup)}**`;
+      return mention ? `${mention} ${name}` : `❔ ${name}`;
     });
+
+  const confirmed = input.signups.filter((signup) => signup.status === "yes");
+  for (const role of ROLE_ORDER) {
+    const members = confirmed.filter((signup) => signup.role === role);
+    if (members.length === 0) {
+      continue;
+    }
+    const meta = ROLE_META[role];
+    pushField(
+      fields,
+      `${meta.emoji} ${meta.label} (${members.length})`,
+      linesFor(members),
+    );
+  }
+  // Confirmados sin rol o con rol legacy (dps): se agrupan aparte.
+  const leftovers = confirmed.filter(
+    (signup) => !signup.role || !ROLE_ORDER.includes(signup.role as never),
+  );
+  if (leftovers.length > 0) {
+    pushField(fields, `⭐ Otros (${leftovers.length})`, linesFor(leftovers));
+  }
+
+  const bench = input.signups.filter((signup) => signup.status === "bench");
+  if (bench.length > 0) {
+    pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench));
+  }
+  const late = input.signups.filter((signup) => signup.status === "late");
+  if (late.length > 0) {
+    pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late));
   }
 
   const embed: Record<string, unknown> = {
-    title: input.title.slice(0, 256),
+    title: `${EVENT_TYPE_EMOJI[input.type ?? ""] ?? "📅"} ${input.title.slice(0, 250)}`,
     color: 0x6aa8ff,
+    description: lines.join("\n"),
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
   };
+  if (input.discordEventId) {
+    embed.url = `https://discord.com/events/${encodeURIComponent(input.guildId)}/${encodeURIComponent(input.discordEventId)}`;
+  }
   if (input.description?.trim()) {
-    embed.description = input.description.trim().slice(0, 4096);
+    embed.description = `${lines.join("\n")}\n\n${input.description.trim().slice(0, 1024)}`;
   }
   if (
     input.imageUrl?.startsWith("https://") ||
@@ -249,41 +417,43 @@ function buildEmbed(input: {
   ) {
     embed.thumbnail = { url: input.imageUrl };
   }
-  return embed;
+  return [embed];
+}
+
+// Edita un mensaje-aviso existente con embeds nuevos (auto-refresh del
+// roster cuando cambian las inscripciones). Devuelve si Discord lo aceptó.
+export async function updateEventAnnouncement(input: {
+  channelId: string;
+  embeds: Array<Record<string, unknown>>;
+  messageId: string;
+}): Promise<boolean> {
+  const response = await discordFetch(
+    `/channels/${encodeURIComponent(input.channelId)}/messages/${encodeURIComponent(input.messageId)}`,
+    { method: "PATCH", body: { embeds: input.embeds } },
+  );
+  return response.ok;
 }
 
 // Publica el aviso-embed en un canal. Devuelve el id del mensaje o error.
 async function postAnnouncement(input: {
   channelId: string;
-  description?: string;
   discordEventId?: string;
   guildId: string;
-  imageUrl?: string;
-  recurrence: EventRecurrence;
-  startsAt: Date;
-  title: string;
-  type?: string;
-}): Promise<{ error?: string; messageId?: string }> {
-  const content = input.discordEventId
-    ? `📅 Evento creado: https://discord.com/events/${encodeURIComponent(input.guildId)}/${encodeURIComponent(input.discordEventId)}`
-    : "";
+  signupDeadline?: Date;
+  signups: AnnouncementSignup[];
+  specs: AnnouncementSpec[];
+} & Parameters<typeof buildEventAnnouncementEmbeds>[0]): Promise<{
+  error?: string;
+  messageId?: string;
+}> {
+  const embeds = buildEventAnnouncementEmbeds(input);
   const response = await discordFetch(
     `/channels/${encodeURIComponent(input.channelId)}/messages`,
     {
       method: "POST",
       body: {
         allowed_mentions: { parse: ["users", "roles"] },
-        content,
-        embeds: [
-          buildEmbed({
-            description: input.description,
-            imageUrl: input.imageUrl,
-            recurrence: input.recurrence,
-            startsAt: input.startsAt,
-            title: input.title,
-            type: input.type,
-          }),
-        ],
+        embeds,
       },
     },
   );
@@ -304,6 +474,9 @@ export async function syncEventToDiscord(input: {
   guildId: string;
   imageUrl?: string;
   options: EventDiscordOptions;
+  signupDeadline?: Date;
+  signups?: AnnouncementSignup[];
+  specs?: AnnouncementSpec[];
   startsAt: Date;
   title: string;
   type?: string;
@@ -337,9 +510,14 @@ export async function syncEventToDiscord(input: {
       channelId: options.publishChannelId,
       description: input.description,
       discordEventId: result.discordEventId ?? input.discordEventId,
+      durationMinutes: input.durationMinutes,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
+      location: options.entityType === "external" ? options.location : undefined,
       recurrence: options.recurrence,
+      signupDeadline: input.signupDeadline,
+      signups: input.signups ?? [],
+      specs: input.specs ?? [],
       startsAt: input.startsAt,
       title: input.title,
       type: input.type,

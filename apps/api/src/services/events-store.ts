@@ -32,7 +32,17 @@ export type WowClass = (typeof WOW_CLASSES)[number];
 export type RaidRole = (typeof RAID_ROLES)[number];
 export type CombatRole = RaidRole;
 export type EventType = (typeof EVENT_TYPES)[number];
-export type SignupStatus = "yes" | "tentative" | "no";
+
+// Estados posibles de una inscripción. "tentative" queda como default
+// (legacy) pero la UI ofrece todos los estados.
+export const SIGNUP_STATUSES = [
+  "yes",
+  "tentative",
+  "bench",
+  "late",
+  "no",
+] as const;
+export type SignupStatus = (typeof SIGNUP_STATUSES)[number];
 
 // ── Catálogo de specs configurable por guild (RaidSpec) ─────────────
 

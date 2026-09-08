@@ -71,6 +71,7 @@ import {
   EVENT_TYPES,
   RAID_ROLES,
   SIGNUP_ROLES,
+  SIGNUP_STATUSES,
   createEvent,
   createEventImage,
   createRaidSpec,
@@ -87,8 +88,11 @@ import {
   upsertSignup,
 } from "./services/events-store.js";
 import {
+  buildEventAnnouncementEmbeds,
   cleanupEventDiscord,
   syncEventToDiscord,
+  updateEventAnnouncement,
+  type AnnouncementSignup,
   type EventDiscordOptions,
   type EventRecurrence,
 } from "./services/events-discord-publisher.js";
@@ -561,54 +565,108 @@ function validateDiscordOptions(options: EventDiscordOptions): string | null {
 // Devuelve { event, discordError } para incluir en la respuesta.
 async function syncAndStoreEventDiscord(input: {
   discordOpts: EventDiscordOptions;
-  eventId: string;
-  guildId: string;
-  imageUrl?: string;
-  description?: string;
-  durationMinutes?: number;
-  startsAt: Date;
-  title: string;
-  type?: string;
+  event: {
+    description?: string;
+    durationMinutes?: number;
+    guildId: string;
+    id: string;
+    imageUrl?: string;
+    signupDeadline?: Date;
+    signups: AnnouncementSignup[];
+    startsAt: Date;
+    title: string;
+    type?: string;
+  };
 }): Promise<{
   discordError?: string;
   event: Awaited<ReturnType<typeof setEventDiscordInfo>>;
 }> {
-  const { discordOpts } = input;
+  const { discordOpts, event } = input;
+  const specs = await listRaidSpecs(event.guildId);
   const result = await syncEventToDiscord({
-    description: input.description,
-    durationMinutes: input.durationMinutes,
-    guildId: input.guildId,
-    imageUrl: input.imageUrl,
+    description: event.description,
+    durationMinutes: event.durationMinutes,
+    guildId: event.guildId,
+    imageUrl: event.imageUrl,
     options: discordOpts,
-    startsAt: input.startsAt,
-    title: input.title,
-    type: input.type,
+    signupDeadline: event.signupDeadline,
+    signups: event.signups,
+    specs,
+    startsAt: event.startsAt,
+    title: event.title,
+    type: event.type,
   });
 
-  const event = await setEventDiscordInfo(input.guildId, input.eventId, {
+  const updated = await setEventDiscordInfo(event.guildId, event.id, {
     discordEventConfig: {
       createScheduledEvent: discordOpts.createScheduledEvent,
       entityType: discordOpts.entityType,
       location: discordOpts.location,
       publishMessage: discordOpts.publishMessage,
       recurrence:
-        discordOpts.recurrence === "none"
-          ? undefined
-          : discordOpts.recurrence,
+        discordOpts.recurrence === "none" ? undefined : discordOpts.recurrence,
     },
     discordEventId: result.discordEventId ?? null,
     discordMessageIds: result.messageIds,
     publishChannelId: discordOpts.publishMessage
-      ? discordOpts.publishChannelId ?? null
+      ? (discordOpts.publishChannelId ?? null)
       : null,
     voiceChannelId:
-      discordOpts.createScheduledEvent &&
-      discordOpts.entityType === "voice"
-        ? discordOpts.voiceChannelId ?? null
+      discordOpts.createScheduledEvent && discordOpts.entityType === "voice"
+        ? (discordOpts.voiceChannelId ?? null)
         : null,
   });
 
-  return { discordError: result.error, event };
+  return { discordError: result.error, event: updated };
+}
+
+// Re-renderiza el aviso-embed de un evento publicado (roster al día). Se
+// usa cuando cambia una inscripción. Best-effort: falla silenciosa si el
+// mensaje ya no existe o Discord no responde.
+async function refreshEventAnnouncement(
+  guildId: string,
+  eventId: string,
+): Promise<void> {
+  try {
+    const event = await getEvent(guildId, eventId);
+    if (!event || !event.publishChannelId) {
+      return;
+    }
+    const messageId = (event.discordMessageIds ?? [])[0];
+    if (!messageId) {
+      return;
+    }
+    const specs = await listRaidSpecs(guildId);
+    const embeds = buildEventAnnouncementEmbeds({
+      description: event.description,
+      discordEventId: event.discordEventId,
+      durationMinutes: event.durationMinutes,
+      guildId,
+      imageUrl: event.imageUrl,
+      location:
+        event.discordEventConfig?.entityType === "external"
+          ? event.discordEventConfig.location
+          : undefined,
+      recurrence: (event.discordEventConfig?.recurrence ??
+        "none") as EventRecurrence,
+      signupDeadline: event.signupDeadline,
+      signups: event.signups,
+      specs,
+      startsAt: event.startsAt,
+      title: event.title,
+      type: event.type,
+    });
+    await updateEventAnnouncement({
+      channelId: event.publishChannelId,
+      embeds,
+      messageId,
+    });
+  } catch (error) {
+    console.warn(
+      `[eventos] no se pudo refrescar el aviso del evento ${eventId} en Discord`,
+      error,
+    );
+  }
 }
 
 export function buildApp() {
@@ -2567,17 +2625,7 @@ export function buildApp() {
       if (validationError) {
         return reply.code(400).send({ ok: false, error: validationError });
       }
-      const synced = await syncAndStoreEventDiscord({
-        description: event.description,
-        discordOpts,
-        durationMinutes: event.durationMinutes,
-        eventId: event.id,
-        guildId: params.guildId,
-        imageUrl: event.imageUrl,
-        startsAt: event.startsAt,
-        title: event.title,
-        type: event.type,
-      });
+      const synced = await syncAndStoreEventDiscord({ discordOpts, event });
       discordError = synced.discordError;
       if (synced.event) {
         savedEvent = synced.event;
@@ -2585,12 +2633,17 @@ export function buildApp() {
     }
 
     await logAdminAction(session, params.guildId, "event:create", {
-      details: `Evento creado: ${title}`, 
+      details: `Evento creado: ${title}`,
       targetType: "event",
       targetId: event.id,
     });
 
-    return { ok: true, guildId: params.guildId, event: savedEvent, discordError };
+    return {
+      ok: true,
+      guildId: params.guildId,
+      event: savedEvent,
+      discordError,
+    };
   });
 
   app.patch("/guilds/:guildId/events/:eventId", async (request, reply) => {
@@ -2682,17 +2735,7 @@ export function buildApp() {
     let discordError: string | undefined;
     let savedEvent = event;
     if (discordOpts) {
-      const synced = await syncAndStoreEventDiscord({
-        description: event.description,
-        discordOpts,
-        durationMinutes: event.durationMinutes,
-        eventId: event.id,
-        guildId: params.guildId,
-        imageUrl: event.imageUrl,
-        startsAt: event.startsAt,
-        title: event.title,
-        type: event.type,
-      });
+      const synced = await syncAndStoreEventDiscord({ discordOpts, event });
       discordError = synced.discordError;
       if (synced.event) {
         savedEvent = synced.event;
@@ -2998,7 +3041,7 @@ export function buildApp() {
       };
 
       const status = body.status ?? "tentative";
-      if (!["yes", "tentative", "no"].includes(status)) {
+      if (!SIGNUP_STATUSES.includes(status as never)) {
         return reply.code(400).send({ ok: false, error: "Estado inválido" });
       }
       if (body.role && !SIGNUP_ROLES.includes(body.role as never)) {
@@ -3017,6 +3060,9 @@ export function buildApp() {
         username: user.global_name ?? user.username ?? "Miembro",
         wowClass: body.wowClass?.trim() || undefined,
       });
+
+      // Si el evento está publicado en Discord, actualiza su embed (roster).
+      await refreshEventAnnouncement(params.guildId, params.eventId);
 
       return { ok: true, guildId: params.guildId, signup };
     },
@@ -3046,6 +3092,9 @@ export function buildApp() {
         params.eventId,
         user.id,
       );
+
+      // Si el evento está publicado en Discord, actualiza su embed (roster).
+      await refreshEventAnnouncement(params.guildId, params.eventId);
 
       return { ok: true, guildId: params.guildId, deleted };
     },
