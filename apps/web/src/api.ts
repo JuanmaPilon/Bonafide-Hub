@@ -740,9 +740,7 @@ export async function deleteRaidLogPermanent(
   );
 }
 
-export async function listHiddenRaidLogs(
-  guildId: string,
-): Promise<RaidLog[]> {
+export async function listHiddenRaidLogs(guildId: string): Promise<RaidLog[]> {
   const data = await requestJson<{ logs: RaidLog[] }>(
     `/guilds/${guildId}/raid-logs/hidden`,
     { method: "GET" },
@@ -863,21 +861,43 @@ export const EVENT_TYPES: Array<{
   { emoji: "🎉", key: "social", label: "Social" },
 ];
 
+// Opciones de publicación en Discord de un evento (Módulo X).
+export type EventDiscordOptions = {
+  createScheduledEvent: boolean;
+  entityType: "voice" | "external";
+  location?: string;
+  publishChannelId?: string;
+  publishMessage: boolean;
+  recurrence: "none" | "daily" | "weekly" | "biweekly";
+  voiceChannelId?: string;
+};
+
 export type HubEvent = {
   createdAt: string;
   createdByUserId?: string;
   createdByUsername?: string;
   description?: string;
+  discordEventConfig?: {
+    createScheduledEvent?: boolean;
+    entityType?: "voice" | "external";
+    location?: string;
+    publishMessage?: boolean;
+    recurrence?: "daily" | "weekly" | "biweekly";
+  };
+  discordEventId?: string;
+  discordMessageIds?: string[];
   durationMinutes?: number;
   guildId: string;
   id: string;
   imageUrl?: string;
+  publishChannelId?: string;
   signupDeadline?: string;
   startsAt: string;
   status: string;
   title: string;
   type: string;
   updatedAt: string;
+  voiceChannelId?: string;
   signups: EventSignup[];
 };
 
@@ -908,6 +928,7 @@ export async function createEvent(
   guildId: string,
   input: {
     description?: string;
+    discord?: EventDiscordOptions;
     durationMinutes?: number;
     imageUrl?: string;
     signupDeadline?: string;
@@ -915,15 +936,15 @@ export async function createEvent(
     title: string;
     type: string;
   },
-): Promise<HubEvent> {
-  const data = await requestJson<{ event: HubEvent }>(
-    `/guilds/${guildId}/events`,
-    {
-      method: "POST",
-      body: JSON.stringify(input),
-    },
-  );
-  return data.event;
+): Promise<{ discordError?: string; event: HubEvent }> {
+  const data = await requestJson<{
+    discordError?: string;
+    event: HubEvent;
+  }>(`/guilds/${guildId}/events`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return { discordError: data.discordError, event: data.event };
 }
 
 export async function updateEvent(
@@ -931,6 +952,7 @@ export async function updateEvent(
   eventId: string,
   input: {
     description?: string;
+    discord?: EventDiscordOptions;
     durationMinutes?: number | null;
     imageUrl?: string;
     signupDeadline?: string | null;
@@ -939,15 +961,15 @@ export async function updateEvent(
     title?: string;
     type?: string;
   },
-): Promise<HubEvent> {
-  const data = await requestJson<{ event: HubEvent }>(
-    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    },
-  );
-  return data.event;
+): Promise<{ discordError?: string; event: HubEvent }> {
+  const data = await requestJson<{
+    discordError?: string;
+    event: HubEvent;
+  }>(`/guilds/${guildId}/events/${encodeURIComponent(eventId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return { discordError: data.discordError, event: data.event };
 }
 
 export async function deleteEvent(

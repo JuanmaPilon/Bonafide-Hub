@@ -3118,6 +3118,52 @@ textarea {
   font-size: 0.85rem;
 }
 
+/* Publicación en Discord (editor del form de evento + estado en tarjeta) */
+.event-discord-editor {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(134, 158, 214, 0.22);
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.4);
+}
+
+.event-discord-row {
+  display: grid;
+  gap: 10px;
+}
+
+.form-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.form-check input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.event-discord-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+  margin-top: 2px;
+}
+
+.event-recurrence-badge {
+  color: var(--muted);
+  font-size: 0.78rem;
+  border: 1px solid rgba(134, 158, 214, 0.25);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
 /* Editor de imagen del formulario de eventos (subida + biblioteca) */
 .event-image-editor {
   display: grid;

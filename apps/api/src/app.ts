@@ -587,8 +587,10 @@ async function syncAndStoreEventDiscord(input: {
 
   const event = await setEventDiscordInfo(input.guildId, input.eventId, {
     discordEventConfig: {
+      createScheduledEvent: discordOpts.createScheduledEvent,
       entityType: discordOpts.entityType,
       location: discordOpts.location,
+      publishMessage: discordOpts.publishMessage,
       recurrence:
         discordOpts.recurrence === "none"
           ? undefined

@@ -154,8 +154,10 @@ export type HubEvent = {
 
 // Config guardada de la publicación en Discord de un evento.
 export type EventDiscordConfig = {
+  createScheduledEvent?: boolean;
   entityType?: "voice" | "external";
   location?: string;
+  publishMessage?: boolean;
   recurrence?: string;
 };
 

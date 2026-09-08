@@ -94,6 +94,7 @@ import {
   type XpRoleMultiplier,
   type XpRoleRule,
   type RaidSpec,
+  type EventDiscordOptions,
   type EventSignup,
   type EventImage,
   type HubEvent,
@@ -503,6 +504,34 @@ function RaidLogsList({
 
 // Convierte una fecha a string compatible con <input type="datetime-local">
 // (formato local YYYY-MM-DDTHH:mm, sin zona horaria).
+// Valores por defecto de la sección "Publicar en Discord" del form.
+function defaultEventDiscord() {
+  return {
+    createScheduledEvent: false,
+    entityType: "voice" as const,
+    location: "",
+    publishChannelId: "",
+    publishMessage: false,
+    recurrence: "none" as const,
+    voiceChannelId: "",
+  };
+}
+
+function recurrenceLabel(
+  recurrence?: "none" | "daily" | "weekly" | "biweekly" | string,
+): string | undefined {
+  switch (recurrence) {
+    case "daily":
+      return "Repite todos los días";
+    case "weekly":
+      return "Repite semanal";
+    case "biweekly":
+      return "Repite cada 2 semanas";
+    default:
+      return undefined;
+  }
+}
+
 function toDateTimeLocal(value: Date | string): string {
   const date = new Date(value);
   const pad = (n: number): string => String(n).padStart(2, "0");
@@ -649,6 +678,30 @@ function EventCard({
           📅 {new Date(event.startsAt).toLocaleString()}
           {endAt ? ` → ${endAt.toLocaleTimeString()}` : ""}
         </div>
+        {event.discordEventId ||
+        (event.discordMessageIds?.length ?? 0) > 0 ? (
+          <div className="event-discord-status">
+            {event.discordEventId ? (
+              <a
+                className="raid-log-link"
+                href={`https://discord.com/events/${event.guildId}/${event.discordEventId}`}
+                rel="noreferrer"
+                target="_blank"
+              >
+                📅 Ver evento en Discord
+              </a>
+            ) : (
+              <span className="muted-text">
+                📢 Aviso publicado en Discord
+              </span>
+            )}
+            {recurrenceLabel(event.discordEventConfig?.recurrence) ? (
+              <span className="event-recurrence-badge">
+                🔁 {recurrenceLabel(event.discordEventConfig?.recurrence)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         {event.signupDeadline ? (
           <div className={`event-deadline${signupsClosed ? " closed" : ""}`}>
             {signupsClosed
@@ -785,8 +838,8 @@ function EventCard({
                   </div>
                   {specs.length === 0 ? (
                     <div className="event-signup-no-catalog">
-                      El staff aún no configuró el catálogo de clases/specs
-                      para la guild.
+                      El staff aún no configuró el catálogo de clases/specs para
+                      la guild.
                     </div>
                   ) : catalogClasses.length === 0 ? (
                     <div className="event-signup-no-catalog">
@@ -1617,8 +1670,27 @@ function App() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [eventForm, setEventForm] = useState({
+  const [eventForm, setEventForm] = useState<{
+    description: string;
+    discord: {
+      createScheduledEvent: boolean;
+      entityType: "voice" | "external";
+      location: string;
+      publishChannelId: string;
+      publishMessage: boolean;
+      recurrence: "none" | "daily" | "weekly" | "biweekly";
+      voiceChannelId: string;
+    };
+    durationMinutes: string;
+    imageUrl: string;
+    signupDeadline: string;
+    startsAt: string;
+    status: string;
+    title: string;
+    type: string;
+  }>({
     description: "",
+    discord: defaultEventDiscord(),
     durationMinutes: "",
     imageUrl: "",
     signupDeadline: "",
@@ -2109,6 +2181,50 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
+  // Canales de texto/voz para el editor de publicación en Discord de un
+  // evento (solo staff). Se cargan la primera vez que se abre el form; el
+  // panel Admin usa su propia carga de canales.
+  useEffect(() => {
+    if (
+      !selectedGuildId ||
+      activeTab !== "eventos" ||
+      !showEventForm ||
+      !canAccess("eventos")
+    ) {
+      return;
+    }
+    const missingVoice = voiceChannels.length === 0;
+    const missingText = textChannels.length === 0;
+    if (!missingVoice && !missingText) {
+      return;
+    }
+    let cancelled = false;
+    const fetches: Array<Promise<GuildChannel[]>> = [];
+    if (missingVoice) {
+      fetches.push(getGuildVoiceChannels(selectedGuildId));
+    }
+    if (missingText) {
+      fetches.push(getGuildTextChannels(selectedGuildId));
+    }
+    Promise.all(fetches)
+      .then((lists) => {
+        if (cancelled) {
+          return;
+        }
+        if (missingVoice && lists[0]) {
+          setVoiceChannels(lists[0]);
+        }
+        if (missingText && lists[1]) {
+          setTextChannels(lists[1]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGuildId, activeTab, showEventForm]);
+
   // Emojis custom de la guild, solo cuando se abre el editor de catálogo.
   useEffect(() => {
     if (!selectedGuildId || !showSpecEditor) {
@@ -2315,9 +2431,7 @@ function App() {
       pushToast("Spec agregada al catálogo.", "success");
     } catch (error) {
       pushToast(
-        error instanceof Error
-          ? error.message
-          : "No se pudo guardar la spec.",
+        error instanceof Error ? error.message : "No se pudo guardar la spec.",
         "error",
       );
     }
@@ -2386,6 +2500,7 @@ function App() {
     setEditingEventId(null);
     setEventForm({
       description: "",
+      discord: defaultEventDiscord(),
       durationMinutes: "",
       imageUrl: "",
       signupDeadline: "",
@@ -2400,6 +2515,19 @@ function App() {
     setEditingEventId(event.id);
     setEventForm({
       description: event.description ?? "",
+      discord: {
+        createScheduledEvent:
+          event.discordEventConfig?.createScheduledEvent ??
+          Boolean(event.discordEventId),
+        entityType: event.discordEventConfig?.entityType ?? "voice",
+        location: event.discordEventConfig?.location ?? "",
+        publishChannelId: event.publishChannelId ?? "",
+        publishMessage:
+          event.discordEventConfig?.publishMessage ??
+          (event.discordMessageIds?.length ?? 0) > 0,
+        recurrence: event.discordEventConfig?.recurrence ?? "none",
+        voiceChannelId: event.voiceChannelId ?? "",
+      },
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
@@ -2478,7 +2606,9 @@ function App() {
     }
   }
 
-  // Crea o actualiza un evento desde la web (sin intervención de Discord).
+  // Crea o actualiza un evento, sincronizándolo con Discord si se pidió
+  // (scheduled event y/o aviso en canal). Si Discord falla se avisa, pero
+  // el evento local queda guardado igual.
   async function handleSaveEvent(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -2487,11 +2617,29 @@ function App() {
       pushToast("Faltan título o fecha/hora.", "error");
       return;
     }
+
+    const discordPayload: EventDiscordOptions = {
+      createScheduledEvent: eventForm.discord.createScheduledEvent,
+      entityType: eventForm.discord.entityType,
+      location: eventForm.discord.location.trim() || undefined,
+      publishChannelId: eventForm.discord.publishChannelId || undefined,
+      publishMessage: eventForm.discord.publishMessage,
+      recurrence: eventForm.discord.recurrence,
+      voiceChannelId: eventForm.discord.voiceChannelId || undefined,
+    };
+
+    const notifyDiscordError = (discordError?: string): void => {
+      if (discordError) {
+        pushToast(`⚠️ Evento guardado, pero Discord: ${discordError}`, "error");
+      }
+    };
+
     setCreatingEvent(true);
     try {
       if (editingEventId) {
-        const updated = await updateEvent(selectedGuildId, editingEventId, {
+        const result = await updateEvent(selectedGuildId, editingEventId, {
           description: eventForm.description.trim() || undefined,
+          discord: discordPayload,
           durationMinutes: eventForm.durationMinutes
             ? Number(eventForm.durationMinutes)
             : null,
@@ -2504,16 +2652,21 @@ function App() {
         });
         setEvents((current) =>
           current
-            .map((entry) => (entry.id === updated.id ? updated : entry))
+            .map((entry) =>
+              entry.id === result.event.id ? result.event : entry,
+            )
             .sort(
               (a, b) =>
-                new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+                new Date(a.startsAt).getTime() -
+                new Date(b.startsAt).getTime(),
             ),
         );
         pushToast("Evento actualizado.", "success");
+        notifyDiscordError(result.discordError);
       } else {
-        const created = await createEvent(selectedGuildId, {
+        const result = await createEvent(selectedGuildId, {
           description: eventForm.description.trim() || undefined,
+          discord: discordPayload,
           durationMinutes: eventForm.durationMinutes
             ? Number(eventForm.durationMinutes)
             : undefined,
@@ -2524,12 +2677,14 @@ function App() {
           type: eventForm.type,
         });
         setEvents((current) =>
-          [...current, created].sort(
+          [...current, result.event].sort(
             (a, b) =>
-              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+              new Date(a.startsAt).getTime() -
+              new Date(b.startsAt).getTime(),
           ),
         );
         pushToast("Evento creado.", "success");
+        notifyDiscordError(result.discordError);
       }
       handleCloseEventForm();
     } catch (error) {
@@ -5897,7 +6052,10 @@ function App() {
                         onClick={() => setComunicadoSlug(null)}
                         type="button"
                       >
-                        <span aria-hidden="true" className="comunicado-back-arrow">
+                        <span
+                          aria-hidden="true"
+                          className="comunicado-back-arrow"
+                        >
                           ←
                         </span>
                         Todos los comunicados
@@ -6401,10 +6559,7 @@ function App() {
                             Catálogo de inscripciones (clase/spec + emojis)
                           </h3>
                         </div>
-                        <span
-                          className="admin-acc-chevron"
-                          aria-hidden="true"
-                        >
+                        <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
                         </span>
                       </summary>
@@ -6433,7 +6588,10 @@ function App() {
                                 </strong>
                                 <div className="spec-cat-list">
                                   {roleSpecs.map((spec) => (
-                                    <span className="spec-cat-chip" key={spec.id}>
+                                    <span
+                                      className="spec-cat-chip"
+                                      key={spec.id}
+                                    >
                                       {spec.emojiId ? (
                                         <img
                                           alt=""
@@ -6481,10 +6639,7 @@ function App() {
                                 }
                               >
                                 {COMBAT_ROLES.map((combatRole) => (
-                                  <option
-                                    key={combatRole}
-                                    value={combatRole}
-                                  >
+                                  <option key={combatRole} value={combatRole}>
                                     {roleMeta(combatRole)?.emoji}{" "}
                                     {roleMeta(combatRole)?.label}
                                   </option>
@@ -6812,6 +6967,185 @@ function App() {
                             maxLength={1000}
                           />
                         </label>
+                      </div>
+                      <div className="event-form-wide event-discord-editor">
+                        <span className="event-image-editor-label">
+                          📢 Publicar en Discord
+                        </span>
+                        <label className="form-check">
+                          <input
+                            type="checkbox"
+                            checked={eventForm.discord.createScheduledEvent}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                discord: {
+                                  ...current.discord,
+                                  createScheduledEvent: event.target.checked,
+                                },
+                              }))
+                            }
+                          />
+                          Crear Scheduled Event (aparece en el panel Eventos de
+                          Discord, con RSVP nativo)
+                        </label>
+                        {eventForm.discord.createScheduledEvent ? (
+                          <div className="event-discord-row">
+                            <div className="event-signup-role-row">
+                              <button
+                                className={`event-status-btn role${eventForm.discord.entityType === "voice" ? " active" : ""}`}
+                                onClick={() =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    discord: {
+                                      ...current.discord,
+                                      entityType: "voice",
+                                    },
+                                  }))
+                                }
+                                type="button"
+                              >
+                                🔉 Sala de voz
+                              </button>
+                              <button
+                                className={`event-status-btn role${eventForm.discord.entityType === "external" ? " active" : ""}`}
+                                onClick={() =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    discord: {
+                                      ...current.discord,
+                                      entityType: "external",
+                                    },
+                                  }))
+                                }
+                                type="button"
+                              >
+                                📍 Externo (con ubicación)
+                              </button>
+                            </div>
+                            {eventForm.discord.entityType === "voice" ? (
+                              <label>
+                                <span>Sala de voz del evento</span>
+                                <select
+                                  className="select"
+                                  value={eventForm.discord.voiceChannelId}
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      discord: {
+                                        ...current.discord,
+                                        voiceChannelId: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <option value="">
+                                    Elegí la sala de voz…
+                                  </option>
+                                  {voiceChannels.map((channel) => (
+                                    <option
+                                      key={channel.id}
+                                      value={channel.id}
+                                    >
+                                      {channel.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : (
+                              <label>
+                                <span>Ubicación (ej: en juego, sala de Raid…)</span>
+                                <input
+                                  className="input"
+                                  value={eventForm.discord.location}
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      discord: {
+                                        ...current.discord,
+                                        location: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                  placeholder="Ej: World of Warcraft"
+                                  maxLength={100}
+                                />
+                              </label>
+                            )}
+                            <label>
+                              <span>Repetición</span>
+                              <select
+                                className="select"
+                                value={eventForm.discord.recurrence}
+                                onChange={(event) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    discord: {
+                                      ...current.discord,
+                                      recurrence: event.target
+                                        .value as typeof current.discord.recurrence,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="none">No se repite</option>
+                                <option value="daily">Todos los días</option>
+                                <option value="weekly">Semanal</option>
+                                <option value="biweekly">
+                                  Cada 2 semanas
+                                </option>
+                              </select>
+                            </label>
+                            <span className="muted-text">
+                              Nota: Discord no permite recurrencia "cada X
+                              días" arbitraria; lo máximo es diario, semanal o
+                              cada 2 semanas.
+                            </span>
+                          </div>
+                        ) : null}
+                        <label className="form-check">
+                          <input
+                            type="checkbox"
+                            checked={eventForm.discord.publishMessage}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                discord: {
+                                  ...current.discord,
+                                  publishMessage: event.target.checked,
+                                },
+                              }))
+                            }
+                          />
+                          Publicar un aviso (embed) en un canal de texto
+                        </label>
+                        {eventForm.discord.publishMessage ? (
+                          <label>
+                            <span>Canal donde publicar</span>
+                            <select
+                              className="select"
+                              value={eventForm.discord.publishChannelId}
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  discord: {
+                                    ...current.discord,
+                                    publishChannelId: event.target.value,
+                                  },
+                                }))
+                              }
+                            >
+                              <option value="">
+                                Elegí el canal de texto…
+                              </option>
+                              {textChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
                       </div>
                       <div className="event-form-actions">
                         <button
