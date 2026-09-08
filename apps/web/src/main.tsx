@@ -543,7 +543,7 @@ function EventCard({
     event.status !== "scheduled" ||
     Boolean(
       event.signupDeadline &&
-        new Date(event.signupDeadline).getTime() < Date.now(),
+      new Date(event.signupDeadline).getTime() < Date.now(),
     );
   const endAt = event.durationMinutes
     ? new Date(
@@ -6269,6 +6269,31 @@ function App() {
                                   __html: renderMarkdown(comm.content),
                                 }}
                               />
+                              {canAccess("comunicados") ? (
+                                <div className="comunicado-acc-actions">
+                                  <button
+                                    className="ghost-button"
+                                    onClick={() =>
+                                      setInstanceEditor({
+                                        communicationId: comm.communicationId,
+                                        content: comm.content,
+                                        id: comm.id,
+                                        title: comm.title,
+                                      })
+                                    }
+                                    type="button"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() => requestDeleteInstance(comm)}
+                                    type="button"
+                                  >
+                                    Eliminar mensaje
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                         </article>
@@ -7005,10 +7030,7 @@ function App() {
       ) : null}
 
       {instanceEditor != null ? (
-        <div
-          className="modal-overlay"
-          onClick={() => setInstanceEditor(null)}
-        >
+        <div className="modal-overlay" onClick={() => setInstanceEditor(null)}>
           <div
             className="modal"
             onClick={(event) => event.stopPropagation()}

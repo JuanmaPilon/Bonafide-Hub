@@ -3207,6 +3207,13 @@ input {
   border-top: 1px solid rgba(133, 156, 212, 0.12);
 }
 
+.comunicado-acc-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .comunicado-admin-row {
   display: flex;
   justify-content: space-between;
