@@ -3232,6 +3232,54 @@ textarea {
   margin-top: 14px;
 }
 
+/* Comunicado individual (#/comunicados/<slug>) */
+.comunicado-acc-copy {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.comunicado-detail {
+  display: grid;
+  gap: 12px;
+}
+
+.comunicado-back {
+  justify-self: start;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 0.9rem;
+}
+
+.comunicado-back:hover {
+  color: var(--text);
+}
+
+.comunicado-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.comunicado-detail-head h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--accent, #ffb454);
+}
+
+.comunicado-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
 .comunicado-admin-row {
   display: flex;
   justify-content: space-between;

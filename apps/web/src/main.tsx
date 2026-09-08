@@ -250,11 +250,24 @@ function karutaSectionFromSlug(slug: string): KarutaSection | null {
   return entry ? (entry[0] as KarutaSection) : null;
 }
 
-// Parsea el hash: #/karuta/raras → { tab: "karuta", karutaSection: "raras" }.
-// Las demás tabs ignoran el segmento extra.
+// Convierte un título a slug de URL (p. ej. "Sistema de Loot y Addons" →
+// "sistema-de-loot-y-addons").
+function slugifyTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// Parsea el hash:
+//   #/karuta/raras → tab "karuta", karutaSection "raras"
+//   #/comunicados/sistema-de-loot-y-addons → tab "comunicados" + slug
 function parseLocationHash(): {
   tab: HubTab;
   karutaSection: KarutaSection;
+  comunicadoSlug: string | null;
 } {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
   const parts = raw.split("/").filter(Boolean);
@@ -265,7 +278,9 @@ function parseLocationHash(): {
     tab === "karuta" && parts[1]
       ? (karutaSectionFromSlug(parts[1]) ?? "raras")
       : "raras";
-  return { tab, karutaSection };
+  const comunicadoSlug =
+    tab === "comunicados" && parts[1] ? parts[1] : null;
+  return { tab, karutaSection, comunicadoSlug };
 }
 
 function tabFromHash(): HubTab {
@@ -1452,6 +1467,9 @@ function App() {
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
+  const [comunicadoSlug, setComunicadoSlug] = useState<string | null>(() =>
+    parseLocationHash().comunicadoSlug,
+  );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -2316,6 +2334,23 @@ function App() {
     });
   }
 
+  // Comunicado seleccionado por URL (#/comunicados/<slug>).
+  const currentComunicado = comunicadoSlug
+    ? (published.find(
+        (comm) => slugifyTitle(comm.title) === comunicadoSlug,
+      ) ?? null)
+    : null;
+
+  async function copyComunicadoLink(comm: { title: string }): Promise<void> {
+    const url = `${window.location.origin}${window.location.pathname}#/comunicados/${slugifyTitle(comm.title)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      pushToast("Enlace del comunicado copiado.", "success");
+    } catch {
+      pushToast("No se pudo copiar el enlace.", "error");
+    }
+  }
+
   async function handleSaveCommunication(): Promise<void> {
     if (!selectedGuildId || !commEditor) {
       return;
@@ -2765,10 +2800,7 @@ function App() {
     try {
       await hideRaidLog(selectedGuildId, log.id);
       setRaidLogs((current) => current.filter((entry) => entry.id !== log.id));
-      pushToast(
-        "Log eliminado. No se va a volver a capturar.",
-        "success",
-      );
+      pushToast("Log eliminado. No se va a volver a capturar.", "success");
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al eliminar el log.",
@@ -3330,9 +3362,10 @@ function App() {
 
   useEffect(() => {
     const onHashChange = (): void => {
-      const { tab, karutaSection } = parseLocationHash();
+      const { tab, karutaSection, comunicadoSlug } = parseLocationHash();
       setActiveTab(tab);
       setKarutaSection(karutaSection);
+      setComunicadoSlug(comunicadoSlug);
     };
 
     window.addEventListener("hashchange", onHashChange);
@@ -3345,11 +3378,21 @@ function App() {
     const target =
       activeTab === "karuta"
         ? `#/karuta/${KARUTA_SECTION_SLUGS[karutaSection]}`
-        : `#/${activeTab}`;
+        : activeTab === "comunicados" && comunicadoSlug
+          ? `#/comunicados/${comunicadoSlug}`
+          : `#/${activeTab}`;
     if (window.location.hash !== target) {
       window.location.hash = target;
     }
-  }, [activeTab, karutaSection]);
+  }, [activeTab, karutaSection, comunicadoSlug]);
+
+  // Al salir de Comunicados se limpia el slug: volver a la tab siempre
+  // muestra la lista (no un comunicado puntual anterior).
+  useEffect(() => {
+    if (activeTab !== "comunicados" && comunicadoSlug) {
+      setComunicadoSlug(null);
+    }
+  }, [activeTab, comunicadoSlug]);
 
   useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
@@ -5568,6 +5611,89 @@ function App() {
                 <div className="comunicados-stack">
                   {publishedLoading ? (
                     <LoadingState label="Cargando comunicados…" />
+                  ) : currentComunicado ? (
+                    <div className="comunicado-detail">
+                      <button
+                        className="comunicado-back"
+                        onClick={() => setComunicadoSlug(null)}
+                        type="button"
+                      >
+                        ← Todos los comunicados
+                      </button>
+                      <article className="comunicado-card">
+                        <div className="comunicado-detail-head">
+                          <h3>{currentComunicado.title}</h3>
+                          {currentComunicado.publishedAt ? (
+                            <span className="comunicado-date">
+                              {new Date(
+                                currentComunicado.publishedAt,
+                              ).toLocaleDateString()}
+                            </span>
+                          ) : null}
+                        </div>
+                        {currentComunicado.authorName ? (
+                          <div className="comunicado-author">
+                            Por {currentComunicado.authorName}
+                          </div>
+                        ) : null}
+                        <div
+                          className="comunicado-content comunicado-markdown"
+                          dangerouslySetInnerHTML={{
+                            __html: renderMarkdown(currentComunicado.content),
+                          }}
+                        />
+                        <div className="comunicado-detail-actions">
+                          <button
+                            className="primary-button"
+                            onClick={() =>
+                              void copyComunicadoLink(currentComunicado)
+                            }
+                            type="button"
+                          >
+                            🔗 Copiar enlace
+                          </button>
+                          {canAccess("comunicados") ? (
+                            <>
+                              <button
+                                className="ghost-button"
+                                onClick={() =>
+                                  setInstanceEditor({
+                                    communicationId:
+                                      currentComunicado.communicationId,
+                                    content: currentComunicado.content,
+                                    id: currentComunicado.id,
+                                    title: currentComunicado.title,
+                                  })
+                                }
+                                type="button"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                className="ghost-button danger"
+                                onClick={() =>
+                                  requestDeleteInstance(currentComunicado)
+                                }
+                                type="button"
+                              >
+                                Eliminar mensaje
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      </article>
+                    </div>
+                  ) : comunicadoSlug ? (
+                    <div className="empty-state">
+                      <p>No se encontró ese comunicado.</p>
+                      <button
+                        className="primary-button"
+                        onClick={() => setComunicadoSlug(null)}
+                        type="button"
+                      >
+                        Ver todos los comunicados
+                      </button>
+                    </div>
                   ) : published.length === 0 ? (
                     <div className="empty-state">
                       Todavía no hay comunicados publicados.
@@ -5605,6 +5731,15 @@ function App() {
                           </button>
                           {expanded ? (
                             <div className="comunicado-acc-body">
+                              <div className="comunicado-acc-copy">
+                                <button
+                                  className="ghost-button"
+                                  onClick={() => void copyComunicadoLink(comm)}
+                                  type="button"
+                                >
+                                  🔗 Copiar enlace
+                                </button>
+                              </div>
                               {comm.authorName ? (
                                 <div className="comunicado-author">
                                   Por {comm.authorName}
