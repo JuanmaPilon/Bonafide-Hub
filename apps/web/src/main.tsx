@@ -468,7 +468,7 @@ function RaidLogsList({
                       onClick={() => onHide(log)}
                       type="button"
                     >
-                      Ocultar
+                      Eliminar
                     </button>
                   </div>
                 ) : null}
@@ -2766,12 +2766,12 @@ function App() {
       await hideRaidLog(selectedGuildId, log.id);
       setRaidLogs((current) => current.filter((entry) => entry.id !== log.id));
       pushToast(
-        "Log ocultado. El watcher no lo va a volver a capturar.",
+        "Log eliminado. No se va a volver a capturar.",
         "success",
       );
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Error al ocultar el log.",
+        error instanceof Error ? error.message : "Error al eliminar el log.",
         "error",
       );
     }
@@ -2780,8 +2780,8 @@ function App() {
   function requestHideRaidLog(log: RaidLog): void {
     setConfirmDialog({
       kind: "danger",
-      title: "Ocultar log de raid",
-      message: `¿Ocultar "${log.title || log.reportCode}"? Desaparece de la lista y el watcher no lo vuelve a capturar. Podés restaurarlo desde el panel Admin → Logs de Raid.`,
+      title: "Eliminar log de raid",
+      message: `¿Eliminar "${log.title || log.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Podés recuperarlo desde el panel Admin → Logs de Raid.`,
       onConfirm: () => {
         void handleHideRaidLog(log);
       },
@@ -4894,21 +4894,16 @@ function App() {
                           <div className="hidden-raid-logs">
                             <div className="daily-messages-head">
                               <strong>
-                                Logs ocultos ({hiddenRaidLogs.length})
+                                Eliminados ({hiddenRaidLogs.length})
                               </strong>
                               <span className="muted-text">
-                                No se muestran ni se vuelven a capturar.
+                                Se pueden restaurar o borrar para siempre.
                               </span>
                             </div>
                             {hiddenRaidLogs.map((log) => (
-                              <div
-                                className="daily-message-row"
-                                key={log.id}
-                              >
+                              <div className="daily-message-row" key={log.id}>
                                 <div className="daily-message-content">
-                                  <strong>
-                                    {log.title || log.reportCode}
-                                  </strong>
+                                  <strong>{log.title || log.reportCode}</strong>
                                   <div className="muted-text">
                                     ⚔️ {log.fightCount} · 💀 {log.kills}
                                   </div>
@@ -4919,7 +4914,7 @@ function App() {
                                     onClick={() => requestShowRaidLog(log)}
                                     type="button"
                                   >
-                                    Mostrar
+                                    Restaurar
                                   </button>
                                   <button
                                     className="ghost-button danger"
