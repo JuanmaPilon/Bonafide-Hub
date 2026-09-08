@@ -3246,16 +3246,45 @@ textarea {
 
 .comunicado-back {
   justify-self: start;
-  background: none;
-  border: none;
-  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(12, 18, 33, 0.92);
+  border: 1px solid rgba(148, 172, 228, 0.25);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
   cursor: pointer;
-  padding: 4px 0;
-  font-size: 0.9rem;
+  padding: 9px 16px 9px 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.comunicado-back-arrow {
+  color: var(--accent);
+  font-size: 1.45rem;
+  line-height: 1;
+  transition: transform 0.15s ease;
 }
 
 .comunicado-back:hover {
+  border-color: rgba(148, 172, 228, 0.55);
+  background: rgba(22, 32, 58, 0.95);
   color: var(--text);
+}
+
+.comunicado-back:hover .comunicado-back-arrow {
+  transform: translateX(-2px);
+}
+
+.comunicado-back:active {
+  transform: translateY(1px);
 }
 
 .comunicado-detail-head {

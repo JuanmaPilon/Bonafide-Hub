@@ -278,8 +278,7 @@ function parseLocationHash(): {
     tab === "karuta" && parts[1]
       ? (karutaSectionFromSlug(parts[1]) ?? "raras")
       : "raras";
-  const comunicadoSlug =
-    tab === "comunicados" && parts[1] ? parts[1] : null;
+  const comunicadoSlug = tab === "comunicados" && parts[1] ? parts[1] : null;
   return { tab, karutaSection, comunicadoSlug };
 }
 
@@ -1467,8 +1466,8 @@ function App() {
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
-  const [comunicadoSlug, setComunicadoSlug] = useState<string | null>(() =>
-    parseLocationHash().comunicadoSlug,
+  const [comunicadoSlug, setComunicadoSlug] = useState<string | null>(
+    () => parseLocationHash().comunicadoSlug,
   );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -2336,9 +2335,8 @@ function App() {
 
   // Comunicado seleccionado por URL (#/comunicados/<slug>).
   const currentComunicado = comunicadoSlug
-    ? (published.find(
-        (comm) => slugifyTitle(comm.title) === comunicadoSlug,
-      ) ?? null)
+    ? (published.find((comm) => slugifyTitle(comm.title) === comunicadoSlug) ??
+      null)
     : null;
 
   async function copyComunicadoLink(comm: { title: string }): Promise<void> {
@@ -5618,7 +5616,10 @@ function App() {
                         onClick={() => setComunicadoSlug(null)}
                         type="button"
                       >
-                        ← Todos los comunicados
+                        <span aria-hidden="true" className="comunicado-back-arrow">
+                          ←
+                        </span>
+                        Todos los comunicados
                       </button>
                       <article className="comunicado-card">
                         <div className="comunicado-detail-head">
