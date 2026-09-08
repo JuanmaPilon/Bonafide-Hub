@@ -897,22 +897,31 @@ a:hover {
   align-items: center;
 }
 
-/* Mensajes Diarios (loro de Karpindomo) */
-.daily-actions-row {
+/* Mensajes Karpindomo (loro) */
+.daily-watcher-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(133, 156, 212, 0.22);
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.4);
+}
+
+.daily-watcher-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 16px;
 }
 
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  color: var(--text);
-  font-size: 0.92rem;
+.daily-watcher-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.daily-watcher-head > div span {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .daily-messages-editor {
@@ -3963,6 +3972,11 @@ input {
 :root[data-theme="light"] .karuta-watcher-editor {
   background: rgba(255, 244, 229, 0.72);
   border-color: rgba(180, 98, 0, 0.32);
+}
+
+:root[data-theme="light"] .daily-watcher-editor {
+  background: rgba(232, 239, 250, 0.72);
+  border-color: rgba(60, 85, 130, 0.22);
 }
 
 /* ============================================================

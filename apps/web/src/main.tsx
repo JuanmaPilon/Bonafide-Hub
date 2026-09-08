@@ -4459,86 +4459,103 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="form-grid">
-                          <label>
-                            <span>Canal de publicación</span>
-                            <select
-                              className="select"
-                              value={config.dailyMessagesChannelId ?? ""}
-                              onChange={(event) =>
-                                editConfig(
-                                  (current) => ({
-                                    ...current,
-                                    dailyMessagesChannelId:
-                                      event.target.value || undefined,
-                                  }),
-                                  "daily",
-                                )
-                              }
-                            >
-                              <option value="">Sin canal configurado</option>
-                              {textChannels.map((channel) => (
-                                <option key={channel.id} value={channel.id}>
-                                  {channel.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Intervalo mínimo (min)</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={config.dailyMessagesMinMinutes ?? 15}
-                              onChange={(event) =>
-                                editConfig(
-                                  (current) => ({
-                                    ...current,
-                                    dailyMessagesMinMinutes:
-                                      Number(event.target.value) || 1,
-                                  }),
-                                  "daily",
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            <span>Intervalo máximo (min)</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={config.dailyMessagesMaxMinutes ?? 90}
-                              onChange={(event) =>
-                                editConfig(
-                                  (current) => ({
-                                    ...current,
-                                    dailyMessagesMaxMinutes:
-                                      Number(event.target.value) || 1,
-                                  }),
-                                  "daily",
-                                )
-                              }
-                            />
-                          </label>
-                        </div>
+                        <div className="daily-watcher-editor">
+                          <div className="daily-watcher-head">
+                            <div>
+                              <strong>Loro activado</strong>
+                              <span>
+                                Publica una frase al azar en intervalos
+                                aleatorios
+                              </span>
+                            </div>
+                            <label className="raid-watcher-toggle">
+                              <input
+                                type="checkbox"
+                                checked={config.dailyMessagesEnabled ?? false}
+                                onChange={(event) =>
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      dailyMessagesEnabled:
+                                        event.target.checked,
+                                    }),
+                                    "daily",
+                                  )
+                                }
+                              />
+                              <span
+                                className="raid-watcher-switch"
+                                aria-hidden="true"
+                              />
+                              <span className="sr-only">Activar loro</span>
+                            </label>
+                          </div>
 
-                        <div className="daily-actions-row">
-                          <label className="checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={config.dailyMessagesEnabled ?? false}
-                              onChange={(event) =>
-                                editConfig(
-                                  (current) => ({
-                                    ...current,
-                                    dailyMessagesEnabled: event.target.checked,
-                                  }),
-                                  "daily",
-                                )
-                              }
-                            />
-                            <span>Loro activado</span>
-                          </label>
+                          <div className="form-grid">
+                            <label>
+                              <span>Canal de publicación</span>
+                              <select
+                                className="select"
+                                value={config.dailyMessagesChannelId ?? ""}
+                                onChange={(event) =>
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      dailyMessagesChannelId:
+                                        event.target.value || undefined,
+                                    }),
+                                    "daily",
+                                  )
+                                }
+                              >
+                                <option value="">
+                                  Sin canal configurado
+                                </option>
+                                {textChannels.map((channel) => (
+                                  <option key={channel.id} value={channel.id}>
+                                    {channel.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Intervalo mínimo (min)</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={config.dailyMessagesMinMinutes ?? 15}
+                                onChange={(event) =>
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      dailyMessagesMinMinutes:
+                                        Number(event.target.value) || 1,
+                                    }),
+                                    "daily",
+                                  )
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Intervalo máximo (min)</span>
+                              <input
+                                type="number"
+                                min="1"
+                                value={config.dailyMessagesMaxMinutes ?? 90}
+                                onChange={(event) =>
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      dailyMessagesMaxMinutes:
+                                        Number(event.target.value) || 1,
+                                    }),
+                                    "daily",
+                                  )
+                                }
+                              />
+                            </label>
+                          </div>
+
                           {isDirty("daily") ? (
                             <button
                               className="primary-button"
@@ -4572,10 +4589,9 @@ function App() {
                             onChange={(event) =>
                               setDailyMessageDraft(event.target.value)
                             }
-                            placeholder='Escribí una frase de Karpindomo… ej: "OE, LO MATAS!"'
                           />
                           <button
-                            className="ghost-button"
+                            className="primary-button"
                             onClick={() => void handleCreateDailyMessage()}
                             type="button"
                           >
