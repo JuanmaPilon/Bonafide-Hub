@@ -532,6 +532,18 @@ function recurrenceLabel(
   }
 }
 
+const SIGNUP_OPTIONS: Array<{
+  emoji: string;
+  key: "yes" | "tentative" | "bench" | "late" | "no";
+  label: string;
+}> = [
+  { emoji: "✅", key: "yes", label: "Voy" },
+  { emoji: "🤔", key: "tentative", label: "Quizás" },
+  { emoji: "🪑", key: "bench", label: "Bench" },
+  { emoji: "⏰", key: "late", label: "Tarde" },
+  { emoji: "❌", key: "no", label: "No asisto" },
+];
+
 function toDateTimeLocal(value: Date | string): string {
   const date = new Date(value);
   const pad = (n: number): string => String(n).padStart(2, "0");
@@ -589,6 +601,8 @@ function EventCard({
     EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
 
   const counts = {
+    bench: event.signups.filter((signup) => signup.status === "bench").length,
+    late: event.signups.filter((signup) => signup.status === "late").length,
     no: event.signups.filter((signup) => signup.status === "no").length,
     tentative: event.signups.filter((signup) => signup.status === "tentative")
       .length,
@@ -647,6 +661,38 @@ function EventCard({
     }
   };
 
+  // Render de un miembro del roster (emoji de spec + nombre).
+  const renderMember = (signup: EventSignup) => {
+    const specRow = specs.find(
+      (row) =>
+        row.role === signup.role &&
+        row.className === signup.wowClass &&
+        row.specName === signup.spec,
+    );
+    const specIcon = discordEmojiUrl(specRow?.emojiId, specRow?.animated);
+    const color = specRow ? undefined : classColor(signup.wowClass);
+    return (
+      <span
+        className="event-roster-member"
+        key={signup.id}
+        style={color ? { color } : undefined}
+        title={
+          [signup.wowClass, signup.spec].filter(Boolean).join(" · ") ||
+          undefined
+        }
+      >
+        {specIcon ? (
+          <img alt="" className="signup-spec-emoji" src={specIcon} />
+        ) : (
+          <span aria-hidden="true">{classEmoji(signup.wowClass)}{" "}</span>
+        )}
+        {signup.character
+          ? `${signup.character} (${signup.username})`
+          : signup.username}
+      </span>
+    );
+  };
+
   return (
     <article className="event-card">
       {event.imageUrl ? (
@@ -678,8 +724,7 @@ function EventCard({
           📅 {new Date(event.startsAt).toLocaleString()}
           {endAt ? ` → ${endAt.toLocaleTimeString()}` : ""}
         </div>
-        {event.discordEventId ||
-        (event.discordMessageIds?.length ?? 0) > 0 ? (
+        {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
           <div className="event-discord-status">
             {event.discordEventId ? (
               <a
@@ -691,9 +736,7 @@ function EventCard({
                 📅 Ver evento en Discord
               </a>
             ) : (
-              <span className="muted-text">
-                📢 Aviso publicado en Discord
-              </span>
+              <span className="muted-text">📢 Aviso publicado en Discord</span>
             )}
             {recurrenceLabel(event.discordEventConfig?.recurrence) ? (
               <span className="event-recurrence-badge">
@@ -715,6 +758,8 @@ function EventCard({
         <div className="event-card-counts">
           <span className="event-count yes">✅ {counts.yes}</span>
           <span className="event-count tentative">🤔 {counts.tentative}</span>
+          <span className="event-count bench">🪑 {counts.bench}</span>
+          <span className="event-count late">⏰ {counts.late}</span>
           <span className="event-count no">❌ {counts.no}</span>
         </div>
 
@@ -740,48 +785,28 @@ function EventCard({
                   <span className="event-roster-role">
                     {meta?.emoji} {meta?.label}
                   </span>
-                  {roleSignups.map((signup) => {
-                    const specRow = specs.find(
-                      (row) =>
-                        row.role === signup.role &&
-                        row.className === signup.wowClass &&
-                        row.specName === signup.spec,
-                    );
-                    const specIcon = discordEmojiUrl(
-                      specRow?.emojiId,
-                      specRow?.animated,
-                    );
-                    const color = specRow
-                      ? undefined
-                      : classColor(signup.wowClass);
-                    return (
-                      <span
-                        className="event-roster-member"
-                        key={signup.id}
-                        style={color ? { color } : undefined}
-                        title={
-                          [signup.wowClass, signup.spec]
-                            .filter(Boolean)
-                            .join(" · ") || undefined
-                        }
-                      >
-                        {specIcon ? (
-                          <img
-                            alt=""
-                            className="signup-spec-emoji"
-                            src={specIcon}
-                          />
-                        ) : (
-                          <span aria-hidden="true">
-                            {classEmoji(signup.wowClass)}{" "}
-                          </span>
-                        )}
-                        {signup.character
-                          ? `${signup.character} (${signup.username})`
-                          : signup.username}
-                      </span>
-                    );
-                  })}
+                  {roleSignups.map((signup) => renderMember(signup))}
+                </div>
+              );
+            })}
+            {(
+              [
+                ["bench", "🪑", "Bench"],
+                ["late", "⏰", "Tarde"],
+              ] as const
+            ).map(([statusKey, emoji, label]) => {
+              const members = event.signups.filter(
+                (signup) => signup.status === statusKey,
+              );
+              if (members.length === 0) {
+                return null;
+              }
+              return (
+                <div className="event-roster-group" key={statusKey}>
+                  <span className="event-roster-role">
+                    {emoji} {label}
+                  </span>
+                  {members.map((signup) => renderMember(signup))}
                 </div>
               );
             })}
@@ -800,25 +825,15 @@ function EventCard({
             ) : (
               <>
                 <div className="event-signup-status">
-                  {(["yes", "tentative", "no"] as const).map((value) => (
+                  {SIGNUP_OPTIONS.map((option) => (
                     <button
-                      className={`event-status-btn ${value}${status === value ? " active" : ""}`}
-                      key={value}
-                      onClick={() => setStatus(value)}
-                      title={
-                        value === "yes"
-                          ? "Voy"
-                          : value === "tentative"
-                            ? "Quizás"
-                            : "No voy"
-                      }
+                      className={`event-status-btn ${option.key}${status === option.key ? " active" : ""}`}
+                      key={option.key}
+                      onClick={() => setStatus(option.key)}
+                      title={option.label}
                       type="button"
                     >
-                      {value === "yes"
-                        ? "✅"
-                        : value === "tentative"
-                          ? "🤔"
-                          : "❌"}
+                      {option.emoji}
                     </button>
                   ))}
                 </div>
@@ -2657,8 +2672,7 @@ function App() {
             )
             .sort(
               (a, b) =>
-                new Date(a.startsAt).getTime() -
-                new Date(b.startsAt).getTime(),
+                new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
             ),
         );
         pushToast("Evento actualizado.", "success");
@@ -2679,8 +2693,7 @@ function App() {
         setEvents((current) =>
           [...current, result.event].sort(
             (a, b) =>
-              new Date(a.startsAt).getTime() -
-              new Date(b.startsAt).getTime(),
+              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
           ),
         );
         pushToast("Evento creado.", "success");
@@ -7043,10 +7056,7 @@ function App() {
                                     Elegí la sala de voz…
                                   </option>
                                   {voiceChannels.map((channel) => (
-                                    <option
-                                      key={channel.id}
-                                      value={channel.id}
-                                    >
+                                    <option key={channel.id} value={channel.id}>
                                       {channel.name}
                                     </option>
                                   ))}
@@ -7054,7 +7064,9 @@ function App() {
                               </label>
                             ) : (
                               <label>
-                                <span>Ubicación (ej: en juego, sala de Raid…)</span>
+                                <span>
+                                  Ubicación (ej: en juego, sala de Raid…)
+                                </span>
                                 <input
                                   className="input"
                                   value={eventForm.discord.location}
@@ -7091,15 +7103,13 @@ function App() {
                                 <option value="none">No se repite</option>
                                 <option value="daily">Todos los días</option>
                                 <option value="weekly">Semanal</option>
-                                <option value="biweekly">
-                                  Cada 2 semanas
-                                </option>
+                                <option value="biweekly">Cada 2 semanas</option>
                               </select>
                             </label>
                             <span className="muted-text">
-                              Nota: Discord no permite recurrencia "cada X
-                              días" arbitraria; lo máximo es diario, semanal o
-                              cada 2 semanas.
+                              Nota: Discord no permite recurrencia "cada X días"
+                              arbitraria; lo máximo es diario, semanal o cada 2
+                              semanas.
                             </span>
                           </div>
                         ) : null}
@@ -7135,9 +7145,7 @@ function App() {
                                 }))
                               }
                             >
-                              <option value="">
-                                Elegí el canal de texto…
-                              </option>
+                              <option value="">Elegí el canal de texto…</option>
                               {textChannels.map((channel) => (
                                 <option key={channel.id} value={channel.id}>
                                   {channel.name}

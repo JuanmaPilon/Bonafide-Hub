@@ -2816,6 +2816,14 @@ textarea {
   border-color: rgba(255, 138, 92, 0.4);
 }
 
+.event-count.bench {
+  border-color: rgba(176, 143, 224, 0.45);
+}
+
+.event-count.late {
+  border-color: rgba(255, 180, 84, 0.45);
+}
+
 .event-roster {
   display: grid;
   gap: 8px;
@@ -2889,6 +2897,16 @@ textarea {
 .event-status-btn.no.active {
   border-color: rgba(255, 138, 92, 0.7);
   background: rgba(255, 138, 92, 0.12);
+}
+
+.event-status-btn.bench.active {
+  border-color: rgba(176, 143, 224, 0.75);
+  background: rgba(176, 143, 224, 0.14);
+}
+
+.event-status-btn.late.active {
+  border-color: rgba(255, 180, 84, 0.75);
+  background: rgba(255, 180, 84, 0.14);
 }
 
 .event-signup-fields {
