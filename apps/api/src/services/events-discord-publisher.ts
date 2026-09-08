@@ -48,17 +48,21 @@ function discordWeekday(date: Date): number {
 function buildRecurrenceRule(
   startsAt: Date,
   recurrence: EventRecurrence,
-): { by_weekday?: number[]; frequency: number; interval: number } | undefined {
+):
+  | { by_weekday?: number[]; frequency: number; interval: number; start: string }
+  | undefined {
+  const start = startsAt.toISOString();
   switch (recurrence) {
     case "daily":
       // Todos los días. (Discord no permite interval≠1 en DAILY.)
-      return { frequency: 3, interval: 1 };
+      return { frequency: 3, interval: 1, start };
     case "weekly":
       // Mismo día de la semana que startsAt.
       return {
         by_weekday: [discordWeekday(startsAt)],
         frequency: 2,
         interval: 1,
+        start,
       };
     case "biweekly":
       // Cada dos semanas, mismo día.
@@ -66,6 +70,7 @@ function buildRecurrenceRule(
         by_weekday: [discordWeekday(startsAt)],
         frequency: 2,
         interval: 2,
+        start,
       };
     default:
       return undefined;
@@ -86,10 +91,43 @@ async function discordFetch(
   });
 }
 
+// Formatea el error de Discord incluyendo el detalle por campo, p. ej.
+// "recurrence_rule.start: This field is required". Así el toast muestra
+// exactamente qué parte del payload rechazó.
 async function errorMessage(response: Response): Promise<string> {
   try {
-    const data = (await response.json()) as { message?: string };
-    return data.message ?? `HTTP ${response.status}`;
+    const data = (await response.json()) as {
+      errors?: Record<string, unknown>;
+      message?: string;
+    };
+    const fieldErrors: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (!node || typeof node !== "object") {
+        return;
+      }
+      const record = node as Record<string, unknown>;
+      const errors = record._errors;
+      if (Array.isArray(errors)) {
+        for (const entry of errors) {
+          if (entry && typeof entry === "object") {
+            const message = (entry as { message?: string }).message;
+            if (message) {
+              fieldErrors.push(path ? `${path}: ${message}` : message);
+            }
+          }
+        }
+        return;
+      }
+      for (const [key, value] of Object.entries(record)) {
+        walk(value, path ? `${path}.${key}` : key);
+      }
+    };
+    walk(data.errors, "");
+    const base = data.message ?? `HTTP ${response.status}`;
+    if (fieldErrors.length > 0) {
+      return `${base} (${fieldErrors.slice(0, 3).join(" | ")})`;
+    }
+    return base;
   } catch {
     return `HTTP ${response.status}`;
   }
@@ -205,7 +243,10 @@ function buildEmbed(input: {
   if (input.description?.trim()) {
     embed.description = input.description.trim().slice(0, 4096);
   }
-  if (input.imageUrl?.startsWith("https://") || input.imageUrl?.startsWith("http://")) {
+  if (
+    input.imageUrl?.startsWith("https://") ||
+    input.imageUrl?.startsWith("http://")
+  ) {
     embed.thumbnail = { url: input.imageUrl };
   }
   return embed;
