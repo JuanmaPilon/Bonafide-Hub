@@ -134,17 +134,29 @@ export type HubEvent = {
   createdByUserId?: string;
   createdByUsername?: string;
   description?: string;
+  discordEventConfig?: EventDiscordConfig;
+  discordEventId?: string;
+  discordMessageIds: string[];
   durationMinutes?: number;
   guildId: string;
   id: string;
   imageUrl?: string;
+  publishChannelId?: string;
   signupDeadline?: Date;
   startsAt: Date;
   status: string;
   title: string;
   type: string;
   updatedAt: Date;
+  voiceChannelId?: string;
   signups: EventSignup[];
+};
+
+// Config guardada de la publicación en Discord de un evento.
+export type EventDiscordConfig = {
+  entityType?: "voice" | "external";
+  location?: string;
+  recurrence?: string;
 };
 
 export type EventSignup = {
@@ -167,16 +179,21 @@ type EventRecord = {
   createdByUserId: string | null;
   createdByUsername: string | null;
   description: string | null;
+  discordEventConfig: unknown;
+  discordEventId: string | null;
+  discordMessageIds: string[];
   durationMinutes: number | null;
   guildId: string;
   id: string;
   imageUrl: string | null;
+  publishChannelId: string | null;
   signupDeadline: Date | null;
   startsAt: Date;
   status: string;
   title: string;
   type: string;
   updatedAt: Date;
+  voiceChannelId: string | null;
   signups: SignupRecord[];
 };
 
@@ -218,16 +235,22 @@ function toEvent(record: EventRecord): HubEvent {
     createdByUserId: record.createdByUserId ?? undefined,
     createdByUsername: record.createdByUsername ?? undefined,
     description: record.description ?? undefined,
+    discordEventConfig:
+      (record.discordEventConfig as EventDiscordConfig | null) ?? undefined,
+    discordEventId: record.discordEventId ?? undefined,
+    discordMessageIds: record.discordMessageIds,
     durationMinutes: record.durationMinutes ?? undefined,
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
+    publishChannelId: record.publishChannelId ?? undefined,
     signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
     status: record.status,
     title: record.title,
     type: record.type,
     updatedAt: record.updatedAt,
+    voiceChannelId: record.voiceChannelId ?? undefined,
     signups: record.signups.map(toSignup),
   };
 }
@@ -315,6 +338,46 @@ export async function updateEvent(
       title: input.title,
       type: input.type,
     },
+  });
+  if (record.count === 0) {
+    return null;
+  }
+  return getEvent(guildId, eventId);
+}
+
+// Guarda (o limpia) la info de publicación en Discord de un evento. Se usa
+// después de sincronizar con Discord para persistir los ids resultantes.
+export async function setEventDiscordInfo(
+  guildId: string,
+  eventId: string,
+  input: {
+    discordEventConfig?: EventDiscordConfig | null;
+    discordEventId?: string | null;
+    discordMessageIds?: string[] | null;
+    publishChannelId?: string | null;
+    voiceChannelId?: string | null;
+  },
+): Promise<HubEvent | null> {
+  const data: Record<string, unknown> = {};
+  if (input.discordEventConfig !== undefined) {
+    data.discordEventConfig = input.discordEventConfig;
+  }
+  if (input.discordEventId !== undefined) {
+    data.discordEventId = input.discordEventId;
+  }
+  if (input.discordMessageIds !== undefined) {
+    data.discordMessageIds = input.discordMessageIds ?? [];
+  }
+  if (input.publishChannelId !== undefined) {
+    data.publishChannelId = input.publishChannelId;
+  }
+  if (input.voiceChannelId !== undefined) {
+    data.voiceChannelId = input.voiceChannelId;
+  }
+
+  const record = await prisma.hubEvent.updateMany({
+    where: { id: eventId, guildId },
+    data,
   });
   if (record.count === 0) {
     return null;

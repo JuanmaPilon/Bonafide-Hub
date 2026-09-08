@@ -82,9 +82,16 @@ import {
   listEventImages,
   listEvents,
   listRaidSpecs,
+  setEventDiscordInfo,
   updateEvent,
   upsertSignup,
 } from "./services/events-store.js";
+import {
+  cleanupEventDiscord,
+  syncEventToDiscord,
+  type EventDiscordOptions,
+  type EventRecurrence,
+} from "./services/events-discord-publisher.js";
 import {
   getGuildConfig,
   type GuildConfig,
@@ -495,6 +502,111 @@ function startRaidLogSync(): void {
   raidLogSyncTimer = setInterval(() => {
     void runRaidLogSync();
   }, RAID_LOG_SYNC_INTERVAL_MS);
+}
+
+// ── Publicación de eventos en Discord (Módulo X) ────────────────────
+// Normaliza el bloque "discord" que manda la web a una config tipada.
+function normalizeDiscordOptions(
+  body: Record<string, unknown> | undefined,
+): EventDiscordOptions | null {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+  const recurrenceRaw =
+    typeof body.recurrence === "string" ? body.recurrence : "none";
+  const recurrence: EventRecurrence = [
+    "none",
+    "daily",
+    "weekly",
+    "biweekly",
+  ].includes(recurrenceRaw)
+    ? (recurrenceRaw as EventRecurrence)
+    : "none";
+  return {
+    createScheduledEvent: Boolean(body.createScheduledEvent),
+    entityType: body.entityType === "external" ? "external" : "voice",
+    location:
+      typeof body.location === "string"
+        ? body.location.trim() || undefined
+        : undefined,
+    publishChannelId:
+      typeof body.publishChannelId === "string"
+        ? body.publishChannelId.trim() || undefined
+        : undefined,
+    publishMessage: Boolean(body.publishMessage),
+    recurrence,
+    voiceChannelId:
+      typeof body.voiceChannelId === "string"
+        ? body.voiceChannelId.trim() || undefined
+        : undefined,
+  };
+}
+
+function validateDiscordOptions(options: EventDiscordOptions): string | null {
+  if (options.createScheduledEvent) {
+    if (options.entityType === "voice" && !options.voiceChannelId) {
+      return "Para crear el evento en Discord elegí una sala de voz.";
+    }
+    if (options.entityType === "external" && !options.location) {
+      return "Para crear el evento externo en Discord poné una ubicación.";
+    }
+  }
+  if (options.publishMessage && !options.publishChannelId) {
+    return "Elegí el canal donde publicar el aviso.";
+  }
+  return null;
+}
+
+// Sincroniza el evento hacia Discord y persiste los ids resultantes.
+// Devuelve { event, discordError } para incluir en la respuesta.
+async function syncAndStoreEventDiscord(input: {
+  discordOpts: EventDiscordOptions;
+  eventId: string;
+  guildId: string;
+  imageUrl?: string;
+  description?: string;
+  durationMinutes?: number;
+  startsAt: Date;
+  title: string;
+  type?: string;
+}): Promise<{
+  discordError?: string;
+  event: Awaited<ReturnType<typeof setEventDiscordInfo>>;
+}> {
+  const { discordOpts } = input;
+  const result = await syncEventToDiscord({
+    description: input.description,
+    durationMinutes: input.durationMinutes,
+    guildId: input.guildId,
+    imageUrl: input.imageUrl,
+    options: discordOpts,
+    startsAt: input.startsAt,
+    title: input.title,
+    type: input.type,
+  });
+
+  const event = await setEventDiscordInfo(input.guildId, input.eventId, {
+    discordEventConfig: {
+      entityType: discordOpts.entityType,
+      location: discordOpts.location,
+      recurrence:
+        discordOpts.recurrence === "none"
+          ? undefined
+          : discordOpts.recurrence,
+    },
+    discordEventId: result.discordEventId ?? null,
+    discordMessageIds: result.messageIds,
+    publishChannelId: discordOpts.publishMessage
+      ? discordOpts.publishChannelId ?? null
+      : null,
+    voiceChannelId:
+      discordOpts.createScheduledEvent &&
+      discordOpts.entityType === "voice"
+        ? discordOpts.voiceChannelId ?? null
+        : null,
+  });
+
+  return { discordError: result.error, event };
 }
 
 export function buildApp() {
@@ -2389,6 +2501,15 @@ export function buildApp() {
 
     const body = (request.body ?? {}) as {
       description?: string;
+      discord?: {
+        createScheduledEvent?: boolean;
+        entityType?: string;
+        location?: string;
+        publishChannelId?: string;
+        publishMessage?: boolean;
+        recurrence?: string;
+        voiceChannelId?: string;
+      };
       durationMinutes?: number;
       imageUrl?: string;
       signupDeadline?: string;
@@ -2435,13 +2556,39 @@ export function buildApp() {
       type,
     });
 
+    // Publicación en Discord (scheduled event y/o aviso en canal).
+    const discordOpts = normalizeDiscordOptions(body.discord);
+    let discordError: string | undefined;
+    let savedEvent = event;
+    if (discordOpts) {
+      const validationError = validateDiscordOptions(discordOpts);
+      if (validationError) {
+        return reply.code(400).send({ ok: false, error: validationError });
+      }
+      const synced = await syncAndStoreEventDiscord({
+        description: event.description,
+        discordOpts,
+        durationMinutes: event.durationMinutes,
+        eventId: event.id,
+        guildId: params.guildId,
+        imageUrl: event.imageUrl,
+        startsAt: event.startsAt,
+        title: event.title,
+        type: event.type,
+      });
+      discordError = synced.discordError;
+      if (synced.event) {
+        savedEvent = synced.event;
+      }
+    }
+
     await logAdminAction(session, params.guildId, "event:create", {
-      details: `Evento creado: ${title}`,
+      details: `Evento creado: ${title}`, 
       targetType: "event",
       targetId: event.id,
     });
 
-    return { ok: true, guildId: params.guildId, event };
+    return { ok: true, guildId: params.guildId, event: savedEvent, discordError };
   });
 
   app.patch("/guilds/:guildId/events/:eventId", async (request, reply) => {
@@ -2461,6 +2608,15 @@ export function buildApp() {
 
     const body = (request.body ?? {}) as {
       description?: string;
+      discord?: {
+        createScheduledEvent?: boolean;
+        entityType?: string;
+        location?: string;
+        publishChannelId?: string;
+        publishMessage?: boolean;
+        recurrence?: string;
+        voiceChannelId?: string;
+      };
       durationMinutes?: number | null;
       imageUrl?: string;
       signupDeadline?: string | null;
@@ -2483,6 +2639,25 @@ export function buildApp() {
       });
     }
 
+    // Publicación en Discord: primero limpiamos lo viejo (si la web mandó
+    // el bloque discord) y después sincronizamos según la nueva config.
+    const discordOpts = normalizeDiscordOptions(body.discord);
+    if (discordOpts) {
+      const validationError = validateDiscordOptions(discordOpts);
+      if (validationError) {
+        return reply.code(400).send({ ok: false, error: validationError });
+      }
+      const previous = await getEvent(params.guildId, params.eventId);
+      if (previous) {
+        await cleanupEventDiscord({
+          discordEventId: previous.discordEventId,
+          discordMessageIds: previous.discordMessageIds,
+          guildId: params.guildId,
+          publishChannelId: previous.publishChannelId,
+        });
+      }
+    }
+
     const event = await updateEvent(params.guildId, params.eventId, {
       description: body.description?.trim() || undefined,
       durationMinutes: body.durationMinutes ?? null,
@@ -2502,13 +2677,38 @@ export function buildApp() {
       return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
     }
 
+    let discordError: string | undefined;
+    let savedEvent = event;
+    if (discordOpts) {
+      const synced = await syncAndStoreEventDiscord({
+        description: event.description,
+        discordOpts,
+        durationMinutes: event.durationMinutes,
+        eventId: event.id,
+        guildId: params.guildId,
+        imageUrl: event.imageUrl,
+        startsAt: event.startsAt,
+        title: event.title,
+        type: event.type,
+      });
+      discordError = synced.discordError;
+      if (synced.event) {
+        savedEvent = synced.event;
+      }
+    }
+
     await logAdminAction(session, params.guildId, "event:update", {
       details: `Evento actualizado: ${event.title}`,
       targetType: "event",
       targetId: event.id,
     });
 
-    return { ok: true, guildId: params.guildId, event };
+    return {
+      ok: true,
+      guildId: params.guildId,
+      event: savedEvent,
+      discordError,
+    };
   });
 
   app.delete("/guilds/:guildId/events/:eventId", async (request, reply) => {
@@ -2524,6 +2724,17 @@ export function buildApp() {
 
     if (!(await canManageModule(session, params.guildId, "eventos"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    // Limpiamos en Discord (scheduled event + avisos) antes de borrar.
+    const existing = await getEvent(params.guildId, params.eventId);
+    if (existing) {
+      await cleanupEventDiscord({
+        discordEventId: existing.discordEventId,
+        discordMessageIds: existing.discordMessageIds,
+        guildId: params.guildId,
+        publishChannelId: existing.publishChannelId,
+      });
     }
 
     const deleted = await deleteEvent(params.guildId, params.eventId);
@@ -2594,8 +2805,7 @@ export function buildApp() {
     ) {
       return reply.code(400).send({
         ok: false,
-        error:
-          "Faltan rol (tank/healer/melee/ranged), clase o spec válidos",
+        error: "Faltan rol (tank/healer/melee/ranged), clase o spec válidos",
       });
     }
 

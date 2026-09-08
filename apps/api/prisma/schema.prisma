@@ -156,6 +156,10 @@ model RaidLog {
 // Evento del "Módulo X" (estilo Raid Helper): raids, M+, PvP o social.
 // Configurable: título, descripción, fecha, imagen y tipo. Los signups
 // se gestionan desde la web y, en una próxima iteración, desde Discord.
+//
+// Publicación en Discord: un evento puede crearse como Scheduled Event de
+// Discord (en una sala de voz o externo) y/o publicar un aviso-embed en un
+// canal de texto. Los ids se guardan acá para poder actualizar o limpiar.
 model HubEvent {
   id                String   @id @default(cuid())
   guildId           String
@@ -168,7 +172,17 @@ model HubEvent {
   // Cierre de inscripciones: a partir de acá ya no se puede anotar.
   signupDeadline    DateTime?
   imageUrl          String?
-  channelId         String?
+  // Canal de texto donde se publica el aviso-embed (si aplica).
+  publishChannelId  String?
+  // Sala de voz donde se aloja el Scheduled Event (entity_type VOICE).
+  voiceChannelId    String?
+  // Id del Scheduled Event creado en Discord (si se creó).
+  discordEventId    String?
+  // Ids de los mensajes-aviso publicados en publishChannelId.
+  discordMessageIds String[] @default([])
+  // Config guardada de la publicación (entityType voice|external, location,
+  // recurrence none|daily|weekly|biweekly) para poder re-sincronizar.
+  discordEventConfig Json?
   status            String   @default("scheduled") // scheduled | cancelled | completed
   createdByUserId   String?
   createdByUsername String?
