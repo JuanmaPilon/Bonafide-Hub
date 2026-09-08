@@ -49,7 +49,12 @@ function buildRecurrenceRule(
   startsAt: Date,
   recurrence: EventRecurrence,
 ):
-  | { by_weekday?: number[]; frequency: number; interval: number; start: string }
+  | {
+      by_weekday?: number[];
+      frequency: number;
+      interval: number;
+      start: string;
+    }
   | undefined {
   const start = startsAt.toISOString();
   switch (recurrence) {
@@ -268,8 +273,10 @@ function specMention(spec?: AnnouncementSpec): string {
 }
 
 function signupDisplay(signup: AnnouncementSignup): string {
+  // El nombre de Discord es el principal; el personaje (opcional) va entre
+  // paréntesis.
   return signup.character
-    ? `${signup.character} (${signup.username})`
+    ? `${signup.username} (${signup.character})`
     : signup.username;
 }
 
@@ -339,15 +346,14 @@ export function buildEventAnnouncementEmbeds(input: {
   // Conteo por estado (solo los que tengan al menos uno).
   const counts: string[] = [];
   for (const [status, meta] of Object.entries(STATUS_META)) {
-    const count = input.signups.filter((signup) => signup.status === status)
-      .length;
+    const count = input.signups.filter(
+      (signup) => signup.status === status,
+    ).length;
     if (count > 0) {
       counts.push(`${meta.emoji} ${count}`);
     }
   }
-  lines.push(
-    counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.",
-  );
+  lines.push(counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.");
 
   const fields: Array<{ name: string; value: string }> = [];
   const resolveSpec = (
@@ -434,15 +440,54 @@ export async function updateEventAnnouncement(input: {
   return response.ok;
 }
 
+// Botones que van fijos en el mensaje-aviso (los maneja el bot con el
+// prefijo `eventsign:` en custom_id) para inscribirse desde Discord.
+export function buildEventSignupActionRows(
+  eventId: string,
+): Array<Record<string, unknown>> {
+  const statusButtons = [
+    { customId: "yes", emoji: "✅", label: "Asistir", style: 3 },
+    { customId: "bench", emoji: "🪑", label: "Bench", style: 2 },
+    { customId: "late", emoji: "⏰", label: "Tarde", style: 2 },
+    { customId: "tentative", emoji: "🤔", label: "Quizás", style: 2 },
+    { customId: "no", emoji: "❌", label: "No asisto", style: 2 },
+  ];
+  const actionButtons = [
+    { customId: "pick", emoji: "⚙️", label: "Clase y spec", style: 1 },
+    { customId: "remove", emoji: "🗑️", label: "Quitar inscripción", style: 4 },
+  ];
+  const row = (
+    buttons: Array<{
+      customId: string;
+      emoji: string;
+      label: string;
+      style: number;
+    }>,
+  ) => ({
+    components: buttons.map((button) => ({
+      custom_id: `eventsign:${eventId}:${button.customId}`,
+      emoji: { name: button.emoji },
+      label: button.label,
+      style: button.style,
+      type: 2,
+    })),
+    type: 1,
+  });
+  return [row(statusButtons), row(actionButtons)];
+}
+
 // Publica el aviso-embed en un canal. Devuelve el id del mensaje o error.
-async function postAnnouncement(input: {
-  channelId: string;
-  discordEventId?: string;
-  guildId: string;
-  signupDeadline?: Date;
-  signups: AnnouncementSignup[];
-  specs: AnnouncementSpec[];
-} & Parameters<typeof buildEventAnnouncementEmbeds>[0]): Promise<{
+async function postAnnouncement(
+  input: {
+    channelId: string;
+    discordEventId?: string;
+    eventId: string;
+    guildId: string;
+    signupDeadline?: Date;
+    signups: AnnouncementSignup[];
+    specs: AnnouncementSpec[];
+  } & Parameters<typeof buildEventAnnouncementEmbeds>[0],
+): Promise<{
   error?: string;
   messageId?: string;
 }> {
@@ -453,6 +498,7 @@ async function postAnnouncement(input: {
       method: "POST",
       body: {
         allowed_mentions: { parse: ["users", "roles"] },
+        components: buildEventSignupActionRows(input.eventId),
         embeds,
       },
     },
@@ -471,6 +517,7 @@ export async function syncEventToDiscord(input: {
   description?: string;
   discordEventId?: string;
   durationMinutes?: number;
+  eventId: string;
   guildId: string;
   imageUrl?: string;
   options: EventDiscordOptions;
@@ -511,9 +558,11 @@ export async function syncEventToDiscord(input: {
       description: input.description,
       discordEventId: result.discordEventId ?? input.discordEventId,
       durationMinutes: input.durationMinutes,
+      eventId: input.eventId,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
-      location: options.entityType === "external" ? options.location : undefined,
+      location:
+        options.entityType === "external" ? options.location : undefined,
       recurrence: options.recurrence,
       signupDeadline: input.signupDeadline,
       signups: input.signups ?? [],

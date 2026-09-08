@@ -586,6 +586,7 @@ async function syncAndStoreEventDiscord(input: {
   const result = await syncEventToDiscord({
     description: event.description,
     durationMinutes: event.durationMinutes,
+    eventId: event.id,
     guildId: event.guildId,
     imageUrl: event.imageUrl,
     options: discordOpts,
@@ -3096,6 +3097,139 @@ export function buildApp() {
       // Si el evento está publicado en Discord, actualiza su embed (roster).
       await refreshEventAnnouncement(params.guildId, params.eventId);
 
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
+
+  // ── Inscripciones desde Discord (bot) ──────────────────────────────
+  // El bot llama estos endpoints internos (x-bot-token) cuando un miembro
+  // toca los botones del embed del evento. Reutilizan la misma lógica que
+  // la web y refrescan el aviso publicado en Discord.
+
+  app.get(
+    "/internal/guilds/:guildId/events/specs",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+      const specs = await listRaidSpecs(params.guildId);
+      return { ok: true, guildId: params.guildId, specs };
+    },
+  );
+
+  app.put(
+    "/internal/guilds/:guildId/events/:eventId/signups",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const body = (request.body ?? {}) as {
+        character?: string;
+        role?: string;
+        spec?: string;
+        status?: string;
+        userId?: string;
+        username?: string;
+        wowClass?: string;
+      };
+      if (!body.userId || !body.username?.trim()) {
+        return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+      }
+
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+      if (event.status !== "scheduled") {
+        return reply.code(400).send({
+          ok: false,
+          error: "El evento no está abierto a inscripciones.",
+        });
+      }
+      if (
+        event.signupDeadline &&
+        new Date(event.signupDeadline).getTime() < Date.now()
+      ) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Las inscripciones están cerradas.",
+        });
+      }
+
+      const status = body.status ?? "yes";
+      if (!SIGNUP_STATUSES.includes(status as never)) {
+        return reply.code(400).send({ ok: false, error: "Estado inválido" });
+      }
+      if (body.role && !SIGNUP_ROLES.includes(body.role as never)) {
+        return reply.code(400).send({ ok: false, error: "Rol inválido" });
+      }
+
+      const signup = await upsertSignup({
+        character: body.character?.trim() || undefined,
+        eventId: params.eventId,
+        guildId: params.guildId,
+        role: body.role?.trim() || undefined,
+        spec: body.spec?.trim() || undefined,
+        status,
+        userId: body.userId,
+        username: body.username.trim(),
+        wowClass: body.wowClass?.trim() || undefined,
+      });
+
+      await refreshEventAnnouncement(params.guildId, params.eventId);
+      return { ok: true, guildId: params.guildId, signup };
+    },
+  );
+
+  app.delete(
+    "/internal/guilds/:guildId/events/:eventId/signups",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const body = (request.body ?? {}) as { userId?: string };
+      if (!body.userId) {
+        return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+      }
+
+      const deleted = await deleteSignup(
+        params.guildId,
+        params.eventId,
+        body.userId,
+      );
+      await refreshEventAnnouncement(params.guildId, params.eventId);
       return { ok: true, guildId: params.guildId, deleted };
     },
   );

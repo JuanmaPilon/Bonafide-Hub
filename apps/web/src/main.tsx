@@ -684,10 +684,10 @@ function EventCard({
         {specIcon ? (
           <img alt="" className="signup-spec-emoji" src={specIcon} />
         ) : (
-          <span aria-hidden="true">{classEmoji(signup.wowClass)}{" "}</span>
+          <span aria-hidden="true">{classEmoji(signup.wowClass)} </span>
         )}
         {signup.character
-          ? `${signup.character} (${signup.username})`
+          ? `${signup.username} (${signup.character})`
           : signup.username}
       </span>
     );
