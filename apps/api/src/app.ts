@@ -31,6 +31,7 @@ import {
   createCommunicationInstance,
   deleteCommunicationInstance,
   deleteMessages,
+  editMessages,
   getCommunicationInstance,
   listCommunications,
   listPublishedInstances,
@@ -38,6 +39,7 @@ import {
   postMessages,
   splitForDiscord,
   updateCommunication,
+  updateCommunicationInstance,
   type Communication,
   type CommunicationInstance,
 } from "./services/communications-store.js";
@@ -4234,6 +4236,107 @@ export function buildApp() {
       const deleted = await deleteCommunicationInstance(params.instanceId);
 
       return { ok: true, deleted };
+    },
+  );
+
+  // Edita un mensaje ya publicado (instancia): actualiza el contenido en
+  // Discord (editando el mensaje en su lugar) y en el hub, sin republicar.
+  app.patch(
+    "/guilds/:guildId/communications/:communicationId/instances/:instanceId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        communicationId?: string;
+        guildId?: string;
+        instanceId?: string;
+      };
+      if (!params.guildId || !params.communicationId || !params.instanceId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "comunicados"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const existing = await getCommunication(params.communicationId);
+      if (!existing || existing.guildId !== params.guildId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      const instance = await getCommunicationInstance(params.instanceId);
+      if (!instance || instance.communicationId !== params.communicationId) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+
+      const body = request.body as {
+        content?: string;
+        title?: string;
+      };
+
+      const title = body.title?.trim();
+      const content = body.content?.trim();
+      if (!title || !content) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Faltan title o content" });
+      }
+
+      const token = env.DISCORD_BOT_TOKEN;
+      let discordMessageIds = instance.discordMessageIds;
+
+      // Si tiene mensajes en Discord, los editamos en su lugar (sin crear
+      // mensajes nuevos). Si es solo web, actualizamos únicamente el hub.
+      if (discordMessageIds.length > 0) {
+        if (!token) {
+          return reply.code(502).send({
+            ok: false,
+            error: "DISCORD_BOT_TOKEN no está configurado",
+          });
+        }
+
+        const chunks = splitForDiscord(
+          await resolveMentions(content, params.guildId),
+        );
+        discordMessageIds = await editMessages(
+          token,
+          instance.channelId,
+          instance.discordMessageIds,
+          chunks,
+        );
+
+        if (discordMessageIds.length === 0) {
+          return reply.code(502).send({
+            ok: false,
+            error: "No se pudo editar el mensaje en Discord.",
+          });
+        }
+      }
+
+      const updated = await updateCommunicationInstance({
+        authorName: instance.authorName,
+        content,
+        discordMessageIds,
+        id: instance.id,
+        title,
+      });
+
+      if (!updated) {
+        return reply
+          .code(500)
+          .send({ ok: false, error: "No se pudo actualizar" });
+      }
+
+      await logAdminAction(session, params.guildId, "update:communication", {
+        details: `Mensaje editado: ${title}`,
+        targetType: "communication",
+        targetId: params.communicationId,
+      });
+
+      return { ok: true, instance: updated };
     },
   );
 

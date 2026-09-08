@@ -52,6 +52,7 @@ import {
   saveXpConfig,
   submitSuggestion,
   updateCommunication,
+  updateCommunicationInstance,
   updateDailyMessage,
   updateReactionRolePanel,
   COMBAT_ROLES,
@@ -1517,6 +1518,12 @@ function App() {
   const [commEditor, setCommEditor] = useState<
     (CommunicationInput & { id: string | null }) | null
   >(null);
+  const [instanceEditor, setInstanceEditor] = useState<{
+    communicationId: string;
+    content: string;
+    id: string;
+    title: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   // Tema visual: oscuro por defecto, con persistencia en localStorage.
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -2439,6 +2446,35 @@ function App() {
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al eliminar.",
+        "error",
+      );
+    }
+  }
+
+  async function handleSaveInstance(): Promise<void> {
+    if (!selectedGuildId || !instanceEditor) {
+      return;
+    }
+    if (!instanceEditor.title?.trim() || !instanceEditor.content?.trim()) {
+      pushToast("Faltan título y/o contenido.", "error");
+      return;
+    }
+    try {
+      await updateCommunicationInstance(
+        selectedGuildId,
+        instanceEditor.communicationId,
+        instanceEditor.id,
+        {
+          title: instanceEditor.title,
+          content: instanceEditor.content,
+        },
+      );
+      pushToast("Mensaje editado (Discord + web).", "success");
+      setInstanceEditor(null);
+      await refreshCommunications();
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "Error al editar.",
         "error",
       );
     }
@@ -4765,15 +4801,32 @@ function App() {
                                           minute: "2-digit",
                                         })}
                                       </span>
-                                      <button
-                                        className="ghost-button danger"
-                                        onClick={() =>
-                                          requestDeleteInstance(instance)
-                                        }
-                                        type="button"
-                                      >
-                                        Eliminar mensaje
-                                      </button>
+                                      <div className="comunicado-instance-actions">
+                                        <button
+                                          className="ghost-button"
+                                          onClick={() =>
+                                            setInstanceEditor({
+                                              communicationId:
+                                                instance.communicationId,
+                                              content: instance.content,
+                                              id: instance.id,
+                                              title: instance.title,
+                                            })
+                                          }
+                                          type="button"
+                                        >
+                                          Editar
+                                        </button>
+                                        <button
+                                          className="ghost-button danger"
+                                          onClick={() =>
+                                            requestDeleteInstance(instance)
+                                          }
+                                          type="button"
+                                        >
+                                          Eliminar mensaje
+                                        </button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -6942,6 +6995,72 @@ function App() {
               <button
                 className="primary-button"
                 onClick={() => void handleSaveCommunication()}
+                type="button"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {instanceEditor != null ? (
+        <div
+          className="modal-overlay"
+          onClick={() => setInstanceEditor(null)}
+        >
+          <div
+            className="modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h4>Editar comunicado publicado</h4>
+            <p className="comm-edit-hint">
+              Se actualiza el mensaje en Discord y en la web.
+            </p>
+            <div className="comm-form">
+              <label>
+                <span>Título</span>
+                <input
+                  type="text"
+                  value={instanceEditor.title}
+                  onChange={(event) =>
+                    setInstanceEditor((current) =>
+                      current
+                        ? { ...current, title: event.target.value }
+                        : current,
+                    )
+                  }
+                />
+              </label>
+              <label>
+                <span>Contenido</span>
+                <textarea
+                  className="textarea"
+                  rows={8}
+                  value={instanceEditor.content}
+                  onChange={(event) =>
+                    setInstanceEditor((current) =>
+                      current
+                        ? { ...current, content: event.target.value }
+                        : current,
+                    )
+                  }
+                />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button
+                className="ghost-button"
+                onClick={() => setInstanceEditor(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => void handleSaveInstance()}
                 type="button"
               >
                 Guardar

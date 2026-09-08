@@ -211,6 +211,32 @@ export async function getCommunicationInstance(
   return record ? toCommunicationInstance(record) : null;
 }
 
+// Edita una instancia ya publicada (snapshot): actualiza título, contenido
+// y los IDs de los mensajes de Discord (por si se recrearon al cambiar el
+// número de partes).
+export async function updateCommunicationInstance(input: {
+  authorName?: string;
+  content: string;
+  discordMessageIds: string[];
+  id: string;
+  title: string;
+}): Promise<CommunicationInstance | null> {
+  try {
+    const record = await prisma.communicationInstance.update({
+      where: { id: input.id },
+      data: {
+        authorName: input.authorName?.trim() || null,
+        content: input.content,
+        discordMessageIds: input.discordMessageIds,
+        title: input.title.trim(),
+      },
+    });
+    return toCommunicationInstance(record);
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteCommunicationInstance(
   id: string,
 ): Promise<boolean> {
@@ -314,6 +340,23 @@ async function deleteMessage(
   return response.ok;
 }
 
+async function editMessage(
+  token: string,
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<boolean> {
+  const response = await discordRequest(
+    token,
+    `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: "PATCH",
+      body: { content, allowed_mentions: { parse: ["users", "roles"] } },
+    },
+  );
+  return response.ok;
+}
+
 // Publica mensajes nuevos y devuelve sus IDs en orden.
 export async function postMessages(
   token: string,
@@ -339,4 +382,32 @@ export async function deleteMessages(
   for (const id of messageIds) {
     await deleteMessage(token, channelId, id);
   }
+}
+
+// Edita mensajes existentes en su lugar (sin republicar). Si el número de
+// partes cambió, borra las viejas y publica las nuevas, devolviendo los IDs.
+export async function editMessages(
+  token: string,
+  channelId: string,
+  messageIds: string[],
+  chunks: string[],
+): Promise<string[]> {
+  if (messageIds.length === chunks.length) {
+    const edited: string[] = [];
+    for (let index = 0; index < chunks.length; index += 1) {
+      const ok = await editMessage(
+        token,
+        channelId,
+        messageIds[index],
+        chunks[index],
+      );
+      if (ok) {
+        edited.push(messageIds[index]);
+      }
+    }
+    return edited;
+  }
+
+  await deleteMessages(token, channelId, messageIds);
+  return postMessages(token, channelId, chunks);
 }

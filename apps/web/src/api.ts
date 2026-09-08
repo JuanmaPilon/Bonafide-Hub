@@ -1227,6 +1227,22 @@ export async function deleteCommunicationInstance(
   );
 }
 
+export async function updateCommunicationInstance(
+  guildId: string,
+  communicationId: string,
+  instanceId: string,
+  input: { content: string; title: string },
+): Promise<CommunicationInstance> {
+  const data = await requestJson<{ instance: CommunicationInstance }>(
+    `/guilds/${guildId}/communications/${communicationId}/instances/${instanceId}`,
+    {
+      body: JSON.stringify(input),
+      method: "PATCH",
+    },
+  );
+  return data.instance;
+}
+
 export async function logout(): Promise<void> {
   await requestJson<{ ok: true }>("/auth/logout", {
     method: "POST",
