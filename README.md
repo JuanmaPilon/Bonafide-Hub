@@ -20,8 +20,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 8. Música (`/play`, `/pause`, `/resume`, `/skip`, `/queue`, `/nowplaying`, `/volume`, `/stop`, `/leave`) con player de botones
 9. Estadísticas de miembros/roles (`/memberstats`, `/rolstats`)
 10. Comandos de gestión de XP (`/addlvl`, `/removelvl`, `/setlvl`, `/resetlvl`)
-11. Ejecutor de paneles de reaction roles creados desde la web (job polling ~20s)
-12. Loro de Karpindomo: publica frases aleatorias a intervalos aleatorios
+11. Loro de Karpindomo: publica frases aleatorias a intervalos aleatorios
 
 ### API (`apps/api`)
 
@@ -29,8 +28,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 2. Configuración por guild (canales, rol de entrada, módulos activables, rangos destinatarios de sugerencias)
 3. Config de XP (niveles, roles, multiplicadores, colores)
 4. Leaderboard enriquecido (avatar, nombre, `isBooster`)
-5. Paneles de reaction roles (jobs encolados que ejecuta el bot)
-6. **Registro de auditoría** de cambios del Hub (solo lectura, visible para el owner)
+5. **Registro de auditoría** de cambios del Hub (solo lectura, visible para el owner)
 7. Widget del servidor (conectados, totales, boosts de Nitro)
 8. Boosters de Nitro (lista de quienes boostean)
 9. Comunicados: plantillas + publicación en Discord y en el hub (opción solo web)
@@ -48,7 +46,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 3. Tab Comunicados (publicados desde el admin)
 4. Tab Raids con card colapsable de Logs de Raid (sincronizados con Warcraft Logs)
 5. Tab Sugerencias: form que llega por DM al staff según su rango
-6. Panel Admin: configuración general, módulos, permisos de staff, comunicados, reaction roles, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
+6. Panel Admin: configuración general, módulos, permisos de staff, comunicados, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
 7. **Módulos activables/ocultables** desde Admin → Módulos (inicio y admin siempre visibles)
 8. **Permisos de staff por rango**: tarjetas del Admin coloreadas y ordenadas por tier (owner/admin/officer) y acceso filtrado por rol
 9. Perfil accesible desde el chip de usuario (no es una tab)
@@ -89,8 +87,7 @@ Notas importantes:
 
 1. El bot intenta usar configuración remota en API/DB.
 2. Si la API no responde, usa fallback local en `apps/discord-bot/data/guild-config.json`.
-3. Los paneles de reaction roles se crean desde la web: la API encola un job y el bot lo publica/actualiza/borra en Discord (polling ~20s).
-4. El registro de auditoría es de solo escritura; solo el owner puede leerlo desde el panel Admin.
+3. El registro de auditoría es de solo escritura; solo el owner puede leerlo desde el panel Admin.
 
 ## Quick start local
 
@@ -133,7 +130,7 @@ cd apps/web && npm run build
 ## Base de datos
 
 - Schema: `apps/api/prisma/schema.prisma`
-- Tablas: `guild_configs`, `admin_role_modules`, `reaction_role_rules`, `reaction_role_panels`, `reaction_role_panel_jobs`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`, `communications`, `communication_instances`, `daily_messages`, `raid_logs`
+- Tablas: `guild_configs`, `admin_role_modules`, `xp_configs`, `xp_profiles`, `audit_log_entries`, `discord_sessions`, `oauth_states`, `communications`, `communication_instances`, `daily_messages`, `raid_logs`
 - Al agregar tablas al schema: `cd apps/api && npx prisma db push --skip-generate` (pre-deploy en Railway)
 
 Campos destacados de `guild_configs`:

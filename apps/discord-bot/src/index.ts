@@ -36,22 +36,11 @@ import {
 } from "./services/reminders-store.js";
 import {
   addTemporaryVoiceChannelId,
-  findReactionRoleRule,
   getGuildConfig,
   isTemporaryVoiceChannel,
-  listReactionRoleRules,
-  type ReactionRoleMode,
-  removeReactionRoleRulesForMessage,
   removeTemporaryVoiceChannelId,
   setXpSyncRequested,
-  upsertReactionRoleRule,
 } from "./services/guild-config-store.js";
-import {
-  completeReactionRoleJob,
-  fetchPendingReactionRoleJobs,
-  type PendingReactionRoleJob,
-  type ReactionRolePair,
-} from "./services/reaction-roles-service.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
 import {
   addRemoteXp,
@@ -71,11 +60,10 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent,
   ],
-  partials: [Partials.Message, Partials.Channel, Partials.Reaction],
+  partials: [Partials.Message, Partials.Channel],
 });
 
 process.on("unhandledRejection", (reason) => {
@@ -86,38 +74,6 @@ process.on("uncaughtException", (error) => {
 });
 
 const xpCooldowns = new Map<string, number>();
-
-function normalizeEmojiKey(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const customEmojiMatch = trimmed.match(/^<a?:\w+:(\d+)>$/);
-  if (customEmojiMatch) {
-    return `custom:${customEmojiMatch[1]}`;
-  }
-
-  if (/^\d+$/.test(trimmed)) {
-    return `custom:${trimmed}`;
-  }
-
-  return `unicode:${trimmed}`;
-}
-
-function reactionEmojiKey(reaction: {
-  emoji: { id: string | null; name: string | null };
-}): string | null {
-  if (reaction.emoji.id) {
-    return `custom:${reaction.emoji.id}`;
-  }
-
-  if (reaction.emoji.name) {
-    return `unicode:${reaction.emoji.name}`;
-  }
-
-  return null;
-}
 
 async function sendMemberLog(
   guildId: string,
@@ -338,18 +294,6 @@ function countConnectedMembersInChannel(
     .size;
 }
 
-function isReactionRoleTextChannelLike(value: unknown): value is {
-  id: string;
-  messages: { fetch: (messageId: string) => Promise<unknown> };
-} {
-  return (
-    isObjectRecord(value) &&
-    typeof value.id === "string" &&
-    isObjectRecord(value.messages) &&
-    typeof value.messages.fetch === "function"
-  );
-}
-
 function isSendableTextChannelLike(value: unknown): value is {
   id: string;
   send: (content: string) => Promise<unknown>;
@@ -359,28 +303,6 @@ function isSendableTextChannelLike(value: unknown): value is {
     typeof value.id === "string" &&
     typeof value.send === "function"
   );
-}
-
-function isReactableMessageLike(value: unknown): value is {
-  id: string;
-  react: (emoji: string) => Promise<unknown>;
-} {
-  return (
-    isObjectRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.react === "function"
-  );
-}
-
-function parseEmojiForReaction(input: string): string {
-  const trimmed = input.trim();
-  const customEmojiMatch = trimmed.match(/^<a?:\w+:(\d+)>$/);
-
-  if (customEmojiMatch) {
-    return customEmojiMatch[1];
-  }
-
-  return trimmed;
 }
 
 function pickRandom<T>(items: readonly T[]): T {
@@ -932,320 +854,11 @@ function startXpSyncChecker(): void {
   }, XP_SYNC_POLL_INTERVAL_MS);
 }
 
-const REACTION_ROLE_JOB_POLL_INTERVAL_MS = 20_000;
-let reactionRoleJobTimer: NodeJS.Timeout | null = null;
-
-function buildReactionPanelText(input: {
-  description?: string | null;
-  pairs: ReactionRolePair[];
-}): string {
-  // La descripción es el encabezado del mensaje (en negrita); las parejas
-  // emoji+rol van consecutivas en una sola línea para no apilar roles.
-  const roleRow = input.pairs
-    .map((pair) => `${pair.emoji} <@&${pair.roleId}>`)
-    .join("   ");
-  return [input.description ? `**${input.description}**` : "", roleRow]
-    .filter((line) => Boolean(line))
-    .join("\n");
-}
-
-function resolveReactionEmoji(
-  guild: {
-    emojis?: {
-      cache?: {
-        find: (
-          predicate: (emoji: {
-            animated: boolean;
-            id: string;
-            name: string;
-          }) => boolean,
-        ) => { animated: boolean; id: string; name: string } | undefined;
-      };
-    };
-  },
-  raw: string,
-): string {
-  const trimmed = raw.trim();
-  if (
-    /^<a?:\w+:\d+>$/.test(trimmed) ||
-    /^\d+$/.test(trimmed) ||
-    /[^\x00-\x7F]/.test(trimmed)
-  ) {
-    return trimmed;
-  }
-  const bare = trimmed.replace(/^:+/u, "").replace(/:+$/u, "");
-  const found = guild.emojis?.cache?.find((emoji) => emoji.name === bare);
-  return found
-    ? found.animated
-      ? `<a:${found.name}:${found.id}>`
-      : `<:${found.name}:${found.id}>`
-    : bare;
-}
-
-async function processReactionRoleJob(
-  job: PendingReactionRoleJob,
-): Promise<void> {
-  const guild = await client.guilds.fetch(job.guildId).catch(() => null);
-  if (!guild) {
-    await completeReactionRoleJob(job.guildId, job.id, {
-      error: "No se pudo obtener la guild",
-    });
-    return;
-  }
-
-  try {
-    if (job.action === "create") {
-      if (!job.channelId) {
-        await completeReactionRoleJob(job.guildId, job.id, {
-          error: "Falta canal",
-        });
-        return;
-      }
-
-      const channel = await guild.channels
-        .fetch(job.channelId)
-        .catch(() => null);
-      if (!isSendableTextChannelLike(channel)) {
-        await completeReactionRoleJob(job.guildId, job.id, {
-          error: "Canal invalido",
-        });
-        return;
-      }
-
-      const resolvedRules = job.rules.map((pair) => ({
-        emoji: resolveReactionEmoji(guild, pair.emoji),
-        roleId: pair.roleId,
-      }));
-
-      const panelText = buildReactionPanelText({
-        description: job.description,
-        pairs: resolvedRules,
-      });
-      const sentMessage = await channel.send(panelText).catch(() => null);
-      if (!isReactableMessageLike(sentMessage)) {
-        await completeReactionRoleJob(job.guildId, job.id, {
-          error: "No se pudo publicar el panel",
-        });
-        return;
-      }
-
-      for (const pair of resolvedRules) {
-        const emojiKey = normalizeEmojiKey(pair.emoji);
-        if (!emojiKey) {
-          continue;
-        }
-
-        await sentMessage
-          .react(parseEmojiForReaction(pair.emoji))
-          .catch(() => undefined);
-        await upsertReactionRoleRule(job.guildId, {
-          channelId: job.channelId ?? undefined,
-          emojiKey,
-          messageId: sentMessage.id,
-          mode: (job.mode as ReactionRoleMode) || "multiple",
-          roleId: pair.roleId,
-        });
-      }
-
-      await completeReactionRoleJob(job.guildId, job.id, {
-        messageId: sentMessage.id,
-        panel: {
-          channelId: job.channelId ?? undefined,
-          description: job.description ?? undefined,
-          mode: job.mode,
-          title: job.title ?? undefined,
-        },
-      });
-      return;
-    }
-
-    if (job.action === "update") {
-      const existingRules = await listReactionRoleRules(job.guildId);
-      const oldChannelId =
-        existingRules.find((rule) => rule.messageId === job.messageId)
-          ?.channelId ?? null;
-      const channelId = job.channelId ?? oldChannelId;
-
-      if (!job.messageId || !channelId) {
-        await completeReactionRoleJob(job.guildId, job.id, {
-          error: "No se pudo resolver el mensaje del panel",
-        });
-        return;
-      }
-
-      const channel = await guild.channels.fetch(channelId).catch(() => null);
-      if (!isReactionRoleTextChannelLike(channel)) {
-        await completeReactionRoleJob(job.guildId, job.id, {
-          error: "Canal invalido",
-        });
-        return;
-      }
-
-      const resolvedRules = job.rules.map((pair) => ({
-        emoji: resolveReactionEmoji(guild, pair.emoji),
-        roleId: pair.roleId,
-      }));
-      const panelText = buildReactionPanelText({
-        description: job.description,
-        pairs: resolvedRules,
-      });
-
-      // Buscamos el mensaje primero en el canal objetivo y, si el canal
-      // cambió, también en el canal donde vivía antes.
-      let message = await channel.messages
-        .fetch(job.messageId)
-        .catch(() => null);
-      if (!message && oldChannelId && oldChannelId !== channelId) {
-        const oldChannel = await guild.channels
-          .fetch(oldChannelId)
-          .catch(() => null);
-        if (isReactionRoleTextChannelLike(oldChannel)) {
-          message = await oldChannel.messages
-            .fetch(job.messageId)
-            .catch(() => null);
-        }
-      }
-
-      let targetMessageId = job.messageId;
-
-      if (!message) {
-        // El mensaje original ya no existe (fue borrado o el canal
-        // cambió): lo volvemos a publicar para no dejar el panel huérfano.
-        const republished = await channel.send(panelText).catch(() => null);
-        if (!isReactableMessageLike(republished)) {
-          await completeReactionRoleJob(job.guildId, job.id, {
-            error: "No se pudo republicar el panel",
-          });
-          return;
-        }
-        message = republished;
-        targetMessageId = republished.id;
-      } else if (hasEditMethod(message)) {
-        await message.edit(panelText).catch(() => undefined);
-      }
-
-      if (isReactableMessageLike(message)) {
-        const reactions = (
-          message as {
-            reactions?: {
-              cache?: Map<unknown, { remove: () => Promise<unknown> }>;
-            };
-          }
-        ).reactions?.cache;
-
-        if (reactions) {
-          for (const reaction of Array.from(reactions.values())) {
-            await reaction.remove().catch(() => undefined);
-          }
-        }
-
-        for (const pair of resolvedRules) {
-          const emojiKey = normalizeEmojiKey(pair.emoji);
-          if (!emojiKey) {
-            continue;
-          }
-          await message
-            .react(parseEmojiForReaction(pair.emoji))
-            .catch(() => undefined);
-        }
-      }
-
-      await removeReactionRoleRulesForMessage(job.guildId, job.messageId);
-      for (const pair of resolvedRules) {
-        const emojiKey = normalizeEmojiKey(pair.emoji);
-        if (!emojiKey) {
-          continue;
-        }
-        await upsertReactionRoleRule(job.guildId, {
-          channelId: channelId,
-          emojiKey,
-          messageId: targetMessageId,
-          mode: (job.mode as ReactionRoleMode) || "multiple",
-          roleId: pair.roleId,
-        });
-      }
-
-      await completeReactionRoleJob(job.guildId, job.id, {
-        deletePanelMessageId:
-          targetMessageId !== job.messageId ? job.messageId : undefined,
-        messageId: targetMessageId,
-        panel: {
-          channelId,
-          description: job.description ?? undefined,
-          mode: job.mode,
-          title: job.title ?? undefined,
-        },
-      });
-      return;
-    }
-
-    if (job.action === "delete") {
-      const rules = await listReactionRoleRules(job.guildId);
-      const messageRules = rules.filter(
-        (rule) => rule.messageId === job.messageId,
-      );
-      const channelId = messageRules[0]?.channelId;
-
-      if (channelId && job.messageId) {
-        const channel = await guild.channels.fetch(channelId).catch(() => null);
-        if (isReactionRoleTextChannelLike(channel)) {
-          const message = await channel.messages
-            .fetch(job.messageId)
-            .catch(() => null);
-          if (hasDeleteMethod(message)) {
-            await message.delete().catch(() => undefined);
-          }
-        }
-      }
-
-      await removeReactionRoleRulesForMessage(job.guildId, job.messageId ?? "");
-      await completeReactionRoleJob(job.guildId, job.id, {});
-      return;
-    }
-
-    await completeReactionRoleJob(job.guildId, job.id, {
-      error: `Accion desconocida: ${job.action}`,
-    });
-  } catch (error: unknown) {
-    await completeReactionRoleJob(job.guildId, job.id, {
-      error: getErrorMessage(error),
-    });
-  }
-}
-
-async function processPendingReactionRoleJobs(): Promise<void> {
-  for (const guild of client.guilds.cache.values()) {
-    try {
-      const jobs = await fetchPendingReactionRoleJobs(guild.id);
-      for (const job of jobs) {
-        await processReactionRoleJob(job);
-      }
-    } catch (error: unknown) {
-      console.warn(
-        `[discord-bot] Failed to process reaction role jobs for guild ${guild.id}: ${getErrorMessage(error)}`,
-      );
-    }
-  }
-}
-
-function startReactionRoleJobProcessor(): void {
-  if (reactionRoleJobTimer) {
-    return;
-  }
-
-  reactionRoleJobTimer = setInterval(() => {
-    void processPendingReactionRoleJobs();
-  }, REACTION_ROLE_JOB_POLL_INTERVAL_MS);
-
-  void processPendingReactionRoleJobs();
-}
-
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`[discord-bot] Online as ${readyClient.user.tag}`);
   startReminderScheduler();
   startVoiceXpTracker();
   startXpSyncChecker();
-  startReactionRoleJobProcessor();
   startDailyMessagesProcessor(readyClient);
 });
 
@@ -4173,124 +3786,6 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
   if (involvedChannel && newState.id !== botId && oldState.id !== botId) {
     checkMusicChannelEmpty(involvedChannel);
   }
-});
-
-client.on(Events.MessageReactionAdd, async (reaction, user) => {
-  if (user.bot) {
-    return;
-  }
-
-  const guildId = reaction.message.guildId;
-  if (!guildId) {
-    return;
-  }
-
-  const emojiKey = reactionEmojiKey(reaction);
-  if (!emojiKey) {
-    return;
-  }
-
-  const rule = await findReactionRoleRule(
-    guildId,
-    reaction.message.id,
-    emojiKey,
-  );
-  if (!rule) {
-    return;
-  }
-
-  const guild = reaction.message.guild;
-  if (!guild) {
-    return;
-  }
-
-  const member = await guild.members.fetch(user.id).catch(() => null);
-  if (!member) {
-    return;
-  }
-
-  const mode = rule.mode ?? "multiple";
-
-  if (mode === "unique") {
-    const panelRules = await listReactionRoleRules(guildId);
-    const siblingRoleIds = Array.from(
-      new Set(
-        panelRules
-          .filter((entry) => entry.messageId === reaction.message.id)
-          .map((entry) => entry.roleId)
-          .filter((roleId) => roleId !== rule.roleId),
-      ),
-    );
-
-    if (siblingRoleIds.length > 0) {
-      await member.roles.remove(siblingRoleIds).catch((error: unknown) => {
-        console.error("[discord-bot] Failed to enforce unique reaction role", {
-          guildId,
-          userId: user.id,
-          roleIds: siblingRoleIds,
-          error,
-        });
-      });
-    }
-  }
-
-  await member.roles.add(rule.roleId).catch((error: unknown) => {
-    console.error("[discord-bot] Failed to add reaction role", {
-      guildId,
-      userId: user.id,
-      roleId: rule.roleId,
-      error,
-    });
-  });
-});
-
-client.on(Events.MessageReactionRemove, async (reaction, user) => {
-  if (user.bot) {
-    return;
-  }
-
-  const guildId = reaction.message.guildId;
-  if (!guildId) {
-    return;
-  }
-
-  const emojiKey = reactionEmojiKey(reaction);
-  if (!emojiKey) {
-    return;
-  }
-
-  const rule = await findReactionRoleRule(
-    guildId,
-    reaction.message.id,
-    emojiKey,
-  );
-  if (!rule) {
-    return;
-  }
-
-  const guild = reaction.message.guild;
-  if (!guild) {
-    return;
-  }
-
-  const member = await guild.members.fetch(user.id).catch(() => null);
-  if (!member) {
-    return;
-  }
-
-  const mode = rule.mode ?? "multiple";
-  if (mode === "additive") {
-    return;
-  }
-
-  await member.roles.remove(rule.roleId).catch((error: unknown) => {
-    console.error("[discord-bot] Failed to remove reaction role", {
-      guildId,
-      userId: user.id,
-      roleId: rule.roleId,
-      error,
-    });
-  });
 });
 
 if (env.BOT_DISABLED) {

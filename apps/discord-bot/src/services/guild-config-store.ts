@@ -18,20 +18,9 @@ type GuildConfig = {
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
-  reactionRoles?: ReactionRoleRule[];
   temporaryVoiceChannelIds?: string[];
   xpSyncRequested?: boolean;
 };
-
-export type ReactionRoleRule = {
-  channelId?: string;
-  emojiKey: string;
-  messageId: string;
-  mode?: ReactionRoleMode;
-  roleId: string;
-};
-
-export type ReactionRoleMode = "multiple" | "unique" | "additive";
 
 type GuildConfigStore = Record<string, GuildConfig>;
 
@@ -70,7 +59,6 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     memberLogChannelId: input.memberLogChannelId,
     musicEnabled: input.musicEnabled ?? true,
     musicRoleIds: input.musicRoleIds ?? [],
-    reactionRoles: input.reactionRoles ?? [],
     temporaryVoiceChannelIds: input.temporaryVoiceChannelIds ?? [],
     xpSyncRequested: input.xpSyncRequested ?? false,
   };
@@ -83,7 +71,6 @@ function hasAnyConfigData(config: GuildConfig): boolean {
     config.karutaChannelId ||
     config.karutaWatchEnabled ||
     config.memberLogChannelId ||
-    (config.reactionRoles?.length ?? 0) > 0 ||
     (config.temporaryVoiceChannelIds?.length ?? 0) > 0,
   );
 }
@@ -341,122 +328,4 @@ export async function isTemporaryVoiceChannel(
 ): Promise<boolean> {
   const config = await getGuildConfig(guildId);
   return config.temporaryVoiceChannelIds?.includes(channelId) ?? false;
-}
-
-export async function upsertReactionRoleRule(
-  guildId: string,
-  rule: ReactionRoleRule,
-): Promise<void> {
-  await mutateGuildConfig(guildId, (current) => {
-    const existingRules = current.reactionRoles ?? [];
-    const filteredRules = existingRules.filter(
-      (existingRule) =>
-        !(
-          existingRule.messageId === rule.messageId &&
-          existingRule.emojiKey === rule.emojiKey
-        ),
-    );
-
-    return {
-      ...current,
-      reactionRoles: [...filteredRules, rule],
-    };
-  });
-}
-
-export async function removeReactionRoleRule(
-  guildId: string,
-  messageId: string,
-  emojiKey: string,
-): Promise<boolean> {
-  const current = await getGuildConfig(guildId);
-  const existingRules = current.reactionRoles ?? [];
-  const updatedRules = existingRules.filter(
-    (rule) => !(rule.messageId === messageId && rule.emojiKey === emojiKey),
-  );
-
-  if (updatedRules.length === existingRules.length) {
-    return false;
-  }
-
-  await mutateGuildConfig(guildId, (draft) => ({
-    ...draft,
-    reactionRoles: updatedRules,
-  }));
-
-  return true;
-}
-
-export async function listReactionRoleRules(
-  guildId: string,
-): Promise<ReactionRoleRule[]> {
-  const config = await getGuildConfig(guildId);
-  return config.reactionRoles ?? [];
-}
-
-export async function removeReactionRoleRulesForMessage(
-  guildId: string,
-  messageId: string,
-): Promise<number> {
-  const current = await getGuildConfig(guildId);
-  const existingRules = current.reactionRoles ?? [];
-  const updatedRules = existingRules.filter(
-    (rule) => rule.messageId !== messageId,
-  );
-  const removedCount = existingRules.length - updatedRules.length;
-
-  if (removedCount === 0) {
-    return 0;
-  }
-
-  await mutateGuildConfig(guildId, (draft) => ({
-    ...draft,
-    reactionRoles: updatedRules,
-  }));
-
-  return removedCount;
-}
-
-export async function findReactionRoleRule(
-  guildId: string,
-  messageId: string,
-  emojiKey: string,
-): Promise<ReactionRoleRule | null> {
-  const rules = await listReactionRoleRules(guildId);
-  const rule = rules.find(
-    (entry) => entry.messageId === messageId && entry.emojiKey === emojiKey,
-  );
-
-  return rule ?? null;
-}
-
-export async function updateReactionRoleModeForMessage(
-  guildId: string,
-  messageId: string,
-  mode: ReactionRoleMode,
-): Promise<number> {
-  const current = await getGuildConfig(guildId);
-  const existingRules = current.reactionRoles ?? [];
-  let updatedCount = 0;
-
-  const updatedRules = existingRules.map((rule) => {
-    if (rule.messageId !== messageId) {
-      return rule;
-    }
-
-    updatedCount += 1;
-    return {
-      ...rule,
-      mode,
-    };
-  });
-
-  if (updatedCount > 0) {
-    await mutateGuildConfig(guildId, (draft) => ({
-      ...draft,
-      reactionRoles: updatedRules,
-    }));
-  }
-
-  return updatedCount;
 }

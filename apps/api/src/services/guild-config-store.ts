@@ -1,17 +1,7 @@
 import { prisma } from "../db/prisma.js";
 
-export type ReactionRoleMode = "multiple" | "unique" | "additive";
-
-export type ReactionRoleRule = {
-  channelId?: string;
-  emojiKey: string;
-  messageId: string;
-  mode?: ReactionRoleMode;
-  roleId: string;
-};
-
 // Permiso de staff: un rol de Discord tiene acceso a ciertos módulos del
-// panel Admin. Claves: config, comunicados, raids, daily, reaction, xp.
+// panel Admin.
 export type AdminRoleRule = {
   roleId: string;
   modules: string[];
@@ -40,8 +30,6 @@ export type GuildConfig = {
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
-  reactionRoles?: ReactionRoleRule[];
-  reactionRolesChannelId?: string;
   suggestionsDmUserId?: string;
   suggestionsDmTiers?: string[];
   temporaryVoiceChannelIds?: string[];
@@ -71,19 +59,16 @@ function toGuildConfig(
     memberLogChannelId: string | null;
     musicEnabled: boolean;
     musicRoleIds: string[];
-    reactionRolesChannelId: string | null;
     suggestionsDmUserId: string | null;
     suggestionsDmTiers: string[];
     temporaryVoiceChannelIds: string[];
     xpSyncRequested: boolean;
   } | null,
-  reactionRoles: ReactionRoleRule[],
   adminRoleModules: AdminRoleRule[],
 ): GuildConfig {
   if (!record) {
     return {
       adminRoleModules,
-      reactionRoles,
       temporaryVoiceChannelIds: [],
     };
   }
@@ -112,35 +97,10 @@ function toGuildConfig(
     memberLogChannelId: record.memberLogChannelId ?? undefined,
     musicEnabled: record.musicEnabled,
     musicRoleIds: record.musicRoleIds,
-    reactionRoles,
-    reactionRolesChannelId: record.reactionRolesChannelId ?? undefined,
     suggestionsDmUserId: record.suggestionsDmUserId ?? undefined,
     suggestionsDmTiers: record.suggestionsDmTiers,
     temporaryVoiceChannelIds: record.temporaryVoiceChannelIds,
     xpSyncRequested: record.xpSyncRequested,
-  };
-}
-
-function normalizeReactionRoleRule(
-  rule: ReactionRoleRule,
-): ReactionRoleRule | null {
-  const messageId = rule.messageId.trim();
-  const emojiKey = rule.emojiKey.trim();
-  const roleId = rule.roleId.trim();
-
-  if (!messageId || !emojiKey || !roleId) {
-    return null;
-  }
-
-  const channelId = rule.channelId?.trim();
-  const mode = rule.mode?.trim();
-
-  return {
-    channelId: channelId || undefined,
-    emojiKey,
-    messageId,
-    mode: mode ? (mode as ReactionRoleMode) : undefined,
-    roleId,
   };
 }
 
@@ -167,8 +127,6 @@ type NormalizedGuildConfig = {
   memberLogChannelId?: string;
   musicEnabled: boolean;
   musicRoleIds: string[];
-  reactionRoles: ReactionRoleRule[];
-  reactionRolesChannelId?: string;
   suggestionsDmUserId?: string;
   suggestionsDmTiers: string[];
   temporaryVoiceChannelIds: string[];
@@ -176,10 +134,6 @@ type NormalizedGuildConfig = {
 };
 
 function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
-  const normalizedRules = (config.reactionRoles ?? [])
-    .map((rule) => normalizeReactionRoleRule(rule))
-    .filter((rule): rule is ReactionRoleRule => Boolean(rule));
-
   const minMinutes = Math.max(
     1,
     Math.floor(config.dailyMessagesMinMinutes ?? 15),
@@ -215,8 +169,6 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     memberLogChannelId: config.memberLogChannelId,
     musicEnabled: config.musicEnabled ?? true,
     musicRoleIds: config.musicRoleIds ?? [],
-    reactionRoles: normalizedRules,
-    reactionRolesChannelId: config.reactionRolesChannelId,
     suggestionsDmUserId: config.suggestionsDmUserId,
     suggestionsDmTiers: config.suggestionsDmTiers ?? [],
     temporaryVoiceChannelIds: config.temporaryVoiceChannelIds ?? [],
@@ -225,13 +177,9 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
 }
 
 export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
-  const [record, reactionRoleRecords, adminRoleRecords] = await Promise.all([
+  const [record, adminRoleRecords] = await Promise.all([
     prisma.guildConfig.findUnique({
       where: { guildId },
-    }),
-    prisma.reactionRoleRule.findMany({
-      where: { guildId },
-      orderBy: [{ messageId: "asc" }, { emojiKey: "asc" }],
     }),
     prisma.adminRoleModule.findMany({
       where: { guildId },
@@ -239,20 +187,12 @@ export async function getGuildConfig(guildId: string): Promise<GuildConfig> {
     }),
   ]);
 
-  const reactionRoles: ReactionRoleRule[] = reactionRoleRecords.map((rule) => ({
-    channelId: rule.channelId ?? undefined,
-    emojiKey: rule.emojiKey,
-    messageId: rule.messageId,
-    mode: rule.mode ? (rule.mode as ReactionRoleMode) : undefined,
-    roleId: rule.roleId,
-  }));
-
   const adminRoleModules: AdminRoleRule[] = adminRoleRecords.map((rule) => ({
     modules: rule.modules,
     roleId: rule.roleId,
   }));
 
-  return toGuildConfig(record, reactionRoles, adminRoleModules);
+  return toGuildConfig(record, adminRoleModules);
 }
 
 export async function replaceGuildConfig(
@@ -278,7 +218,6 @@ export async function replaceGuildConfig(
         logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
-        reactionRolesChannelId: normalized.reactionRolesChannelId,
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
@@ -306,7 +245,6 @@ export async function replaceGuildConfig(
         logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
-        reactionRolesChannelId: normalized.reactionRolesChannelId,
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
@@ -321,10 +259,6 @@ export async function replaceGuildConfig(
         karutaRareWishlistMin: normalized.karutaRareWishlistMin,
         karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
-    });
-
-    await tx.reactionRoleRule.deleteMany({
-      where: { guildId },
     });
 
     // Los permisos de staff tienen su propia actualización lógica. Si el
@@ -344,19 +278,6 @@ export async function replaceGuildConfig(
           })),
         });
       }
-    }
-
-    if (normalized.reactionRoles.length > 0) {
-      await tx.reactionRoleRule.createMany({
-        data: normalized.reactionRoles.map((rule) => ({
-          channelId: rule.channelId,
-          emojiKey: rule.emojiKey,
-          guildId,
-          messageId: rule.messageId,
-          mode: rule.mode,
-          roleId: rule.roleId,
-        })),
-      });
     }
   });
 

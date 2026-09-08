@@ -6,18 +6,14 @@ import {
   createCommunication,
   createDailyMessage,
   createRaidLog,
-  createReactionRolePanel,
   deleteCommunication,
   deleteCommunicationInstance,
   deleteDailyMessage,
   deleteRaidLog,
-  deleteReactionRoleJob,
-  deleteReactionRolePanel,
   exportXpData,
   getAuditLogs,
   getGuildBoosters,
   getGuildConfig,
-  getGuildEmojis,
   getGuildRoles,
   getGuilds,
   getGuildTextChannels,
@@ -39,13 +35,10 @@ import {
   listDailyMessages,
   listPublishedCommunications,
   listRaidLogs,
-  listReactionRoleJobs,
-  listReactionRolePanels,
   loginUrl,
   logout,
   getAdminAccess,
   publishCommunication,
-  publishReactionRolePanel,
   requestXpSync,
   resetAllXp,
   saveGuildConfig,
@@ -54,7 +47,6 @@ import {
   updateCommunication,
   updateCommunicationInstance,
   updateDailyMessage,
-  updateReactionRolePanel,
   COMBAT_ROLES,
   EVENT_TYPES,
   WOW_CLASSES,
@@ -80,7 +72,6 @@ import {
   type GuildBooster,
   type GuildChannel,
   type GuildConfig,
-  type GuildEmoji,
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
@@ -90,9 +81,6 @@ import {
   type KarutaDrop,
   type KarutaCard,
   type KarutaAlbum,
-  type ReactionRoleJob,
-  type ReactionRolePairInput,
-  type ReactionRolePanel,
   type XpConfig,
   type XpImportEntry,
   type XpRoleMultiplier,
@@ -109,16 +97,6 @@ function renderMarkdown(text: string): string {
   const html = marked.parse(text, { async: false, breaks: true });
   return DOMPurify.sanitize(typeof html === "string" ? html : "");
 }
-
-type RrEditorState = {
-  channelId: string;
-  description: string;
-  messageId: string;
-  mode: "multiple" | "unique" | "additive";
-  pairs: ReactionRolePairInput[];
-  status: "draft" | "published";
-  title: string;
-};
 
 type HubTab =
   | "home"
@@ -202,13 +180,12 @@ const STAFF_TIERS: Record<
   admin: {
     label: "Admin",
     description:
-      "Casi todo: configuración, comunicados, raids, loro, reaction roles, XP, Karuta y eventos.",
+      "Casi todo: configuración, comunicados, raids, loro, XP, Karuta y eventos.",
     modules: [
       "config",
       "comunicados",
       "raids",
       "daily",
-      "reaction",
       "xp",
       "karuta",
       "eventos",
@@ -217,8 +194,8 @@ const STAFF_TIERS: Record<
   officer: {
     label: "Officer",
     description:
-      "Operativo: comunicados, raids/logs, reaction roles, mensajes diarios, Karuta y eventos.",
-    modules: ["comunicados", "raids", "daily", "reaction", "karuta", "eventos"],
+      "Operativo: comunicados, raids/logs, mensajes diarios, Karuta y eventos.",
+    modules: ["comunicados", "raids", "daily", "karuta", "eventos"],
   },
 };
 
@@ -1459,20 +1436,6 @@ function App() {
   const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
-  const [reactionPanels, setReactionPanels] = useState<ReactionRolePanel[]>([]);
-  const [rrChannelId, setRrChannelId] = useState("");
-  const [rrTitle, setRrTitle] = useState("");
-  const [rrDescription, setRrDescription] = useState("");
-  const [rrMode, setRrMode] = useState<"multiple" | "unique" | "additive">(
-    "multiple",
-  );
-  const [rrPairs, setRrPairs] = useState<ReactionRolePairInput[]>([
-    { emoji: "", roleId: "" },
-  ]);
-  const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
-  const [rrEditor, setRrEditor] = useState<RrEditorState | null>(null);
-  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
-  const [rrJobs, setRrJobs] = useState<ReactionRoleJob[]>([]);
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
   const [dailyMessageDraft, setDailyMessageDraft] = useState("");
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
@@ -3054,96 +3017,6 @@ function App() {
     }
   }
 
-  function updateRrPair(
-    index: number,
-    patch: Partial<ReactionRolePairInput>,
-  ): void {
-    setRrPairs((current) =>
-      current.map((pair, pairIndex) =>
-        pairIndex === index ? { ...pair, ...patch } : pair,
-      ),
-    );
-  }
-
-  function addRrPair(): void {
-    setRrPairs((current) => [...current, { emoji: "", roleId: "" }]);
-  }
-
-  function removeRrPair(index: number): void {
-    setRrPairs((current) =>
-      current.length === 1
-        ? current
-        : current.filter((_, pairIndex) => pairIndex !== index),
-    );
-  }
-
-  function emojiKeyToEditable(emojiKey: string): string {
-    if (emojiKey.startsWith("custom:")) {
-      const id = emojiKey.slice("custom:".length);
-      const found = guildEmojis.find((emoji) => emoji.id === id);
-      return found
-        ? found.animated
-          ? `<a:${found.name}:${found.id}>`
-          : `<:${found.name}:${found.id}>`
-        : id;
-    }
-    if (emojiKey.startsWith("unicode:")) {
-      return emojiKey.slice("unicode:".length);
-    }
-    return emojiKey;
-  }
-
-  function normalizeEmoji(emoji: string): string {
-    const trimmed = emoji.trim();
-    if (!trimmed) {
-      return trimmed;
-    }
-    if (/^<a?:\w+:\d+>$/.test(trimmed) || /^\d+$/.test(trimmed)) {
-      return trimmed;
-    }
-    if (/[^\x00-\x7F]/.test(trimmed)) {
-      return trimmed;
-    }
-    const bare = trimmed.replace(/^:+/u, "").replace(/:+$/u, "");
-    const found = guildEmojis.find((entry) => entry.name === bare);
-    if (found) {
-      return found.animated
-        ? `<a:${found.name}:${found.id}>`
-        : `<:${found.name}:${found.id}>`;
-    }
-    // Si no lo encontramos localmente, devolvemos el nombre sin dos
-    // puntos para que el bot lo resuelva contra su caché de emojis.
-    return bare;
-  }
-
-  function formatEmojiKey(emojiKey: string): string {
-    if (emojiKey.startsWith("custom:")) {
-      const id = emojiKey.slice("custom:".length);
-      const found = guildEmojis.find((emoji) => emoji.id === id);
-      return found ? `:${found.name}:` : emojiKey;
-    }
-    if (emojiKey.startsWith("unicode:")) {
-      return emojiKey.slice("unicode:".length);
-    }
-    return emojiKey;
-  }
-
-  // Las reglas de una plantilla guardan el emoji directo; las de paneles
-  // viejos pueden venir como emojiKey (custom:/unicode:).
-  function reactionRuleEmojiToEditable(emoji: string): string {
-    if (emoji.startsWith("custom:") || emoji.startsWith("unicode:")) {
-      return emojiKeyToEditable(emoji);
-    }
-    return emoji;
-  }
-
-  function formatReactionRuleEmoji(emoji: string): string {
-    if (emoji.startsWith("custom:") || emoji.startsWith("unicode:")) {
-      return formatEmojiKey(emoji);
-    }
-    return emoji;
-  }
-
   function levelColorFor(level: number): string | undefined {
     if (!xpConfig) {
       return undefined;
@@ -3171,59 +3044,6 @@ function App() {
       : undefined;
   }
 
-  function rrPreviewLines(): string[] {
-    const roleRow = rrPairs
-      .filter((pair) => pair.emoji.trim() && pair.roleId)
-      .map((pair) => {
-        const emoji = normalizeEmoji(pair.emoji);
-        const roleName =
-          guildRoles.find((role) => role.id === pair.roleId)?.name ?? "Rol";
-        return `${emoji} ${roleName}`;
-      })
-      .join("   ");
-
-    return [
-      rrDescription.trim() ? `**${rrDescription.trim()}**` : "",
-      roleRow,
-    ].filter((line) => line.length > 0);
-  }
-
-  async function refreshRrJobs(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    try {
-      const jobs = await listReactionRoleJobs(selectedGuildId);
-      setRrJobs(jobs);
-    } catch {
-      // fallo silencioso: se puede reintentar con el icono de refrescar
-    }
-  }
-
-  async function dismissReactionRoleJob(jobId: string): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    try {
-      await deleteReactionRoleJob(selectedGuildId, jobId);
-      setRrJobs((current) => current.filter((job) => job.id !== jobId));
-    } catch {
-      pushToast("No se pudo quitar el trabajo de la lista.", "error");
-    }
-  }
-
-  async function refreshReactionPanels(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    try {
-      const panels = await listReactionRolePanels(selectedGuildId);
-      setReactionPanels(panels);
-    } catch {
-      // fallo silencioso
-    }
-  }
-
   async function refreshAuditLogs(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -3233,220 +3053,6 @@ function App() {
       setAuditLogs(logs);
     } catch {
       // silencioso: puede fallar si el usuario no es owner
-    }
-  }
-
-  // Abre el modal de edición con los datos de la plantilla.
-  function startEditReactionTemplate(panel: ReactionRolePanel): void {
-    setRrEditor({
-      channelId: panel.channelId ?? "",
-      description: panel.description ?? "",
-      messageId: panel.messageId,
-      mode: (panel.mode === "unique" || panel.mode === "additive"
-        ? panel.mode
-        : "multiple") as "multiple" | "unique" | "additive",
-      pairs: panel.rules.map((rule) => ({
-        emoji: reactionRuleEmojiToEditable(rule.emoji),
-        roleId: rule.roleId,
-      })),
-      status: panel.status,
-      title: panel.title ?? "",
-    });
-  }
-
-  // El formulario superior siempre crea una plantilla nueva (borrador).
-  async function handleSaveReactionPanel(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-
-    const validPairs = rrPairs
-      .filter((pair) => pair.emoji.trim() && pair.roleId)
-      .map((pair) => ({
-        emoji: normalizeEmoji(pair.emoji),
-        roleId: pair.roleId,
-      }));
-
-    const input = {
-      channelId: rrChannelId || undefined,
-      description: rrDescription.trim() || undefined,
-      mode: rrMode,
-      pairs: validPairs,
-      title: rrTitle.trim() || undefined,
-    };
-
-    setSavingAction("panel");
-    try {
-      await createReactionRolePanel(selectedGuildId, input);
-      pushToast("Plantilla guardada (borrador).", "success");
-
-      setRrChannelId("");
-      setRrTitle("");
-      setRrDescription("");
-      setRrPairs([{ emoji: "", roleId: "" }]);
-      void refreshRrJobs();
-      void refreshReactionPanels();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Error desconocido";
-      pushToast(`No se pudo guardar la plantilla: ${message}`, "error");
-    } finally {
-      setSavingAction(null);
-    }
-  }
-
-  // ── Edición en modal ──────────────────────────────────────────────
-  function updateRrEditorField<K extends keyof RrEditorState>(
-    field: K,
-    value: RrEditorState[K],
-  ): void {
-    setRrEditor((current) =>
-      current ? { ...current, [field]: value } : current,
-    );
-  }
-
-  function updateRrEditorPair(
-    index: number,
-    patch: Partial<ReactionRolePairInput>,
-  ): void {
-    setRrEditor((current) => {
-      if (!current) {
-        return current;
-      }
-      const pairs = current.pairs.map((pair, i) =>
-        i === index ? { ...pair, ...patch } : pair,
-      );
-      return { ...current, pairs };
-    });
-  }
-
-  function addRrEditorPair(): void {
-    setRrEditor((current) =>
-      current
-        ? { ...current, pairs: [...current.pairs, { emoji: "", roleId: "" }] }
-        : current,
-    );
-  }
-
-  function removeRrEditorPair(index: number): void {
-    setRrEditor((current) =>
-      current
-        ? {
-            ...current,
-            pairs: current.pairs.filter((_, i) => i !== index),
-          }
-        : current,
-    );
-  }
-
-  async function handleSaveRrEditor(): Promise<void> {
-    if (!selectedGuildId || !rrEditor) {
-      return;
-    }
-
-    const validPairs = rrEditor.pairs
-      .filter((pair) => pair.emoji.trim() && pair.roleId)
-      .map((pair) => ({
-        emoji: normalizeEmoji(pair.emoji),
-        roleId: pair.roleId,
-      }));
-
-    setSavingAction("panel");
-    try {
-      const result = await updateReactionRolePanel(
-        selectedGuildId,
-        rrEditor.messageId,
-        {
-          channelId: rrEditor.channelId || undefined,
-          description: rrEditor.description.trim() || undefined,
-          mode: rrEditor.mode,
-          pairs: validPairs,
-          title: rrEditor.title.trim() || undefined,
-        },
-      );
-      if (result.jobId) {
-        pushToast(
-          "Plantilla guardada. El mensaje en Discord se va a actualizar en unos segundos.",
-          "success",
-        );
-        void refreshRrJobs();
-      } else {
-        pushToast("Plantilla guardada.", "success");
-      }
-      setRrEditor(null);
-      void refreshReactionPanels();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Error desconocido";
-      pushToast(`No se pudo guardar la plantilla: ${message}`, "error");
-    } finally {
-      setSavingAction(null);
-    }
-  }
-
-  function requestDeleteReactionPanel(panel: ReactionRolePanel): void {
-    if (!selectedGuildId) {
-      return;
-    }
-
-    setConfirmDialog({
-      kind: "danger",
-      title: "Eliminar panel de reaction roles",
-      message:
-        "Se va a eliminar este panel: se borra el mensaje en Discord y sus reglas.",
-      onConfirm: () => {
-        void performDeleteReactionPanel(panel);
-      },
-    });
-  }
-
-  async function performDeleteReactionPanel(
-    panel: ReactionRolePanel,
-  ): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-
-    setReactionPanels((current) =>
-      current.filter((entry) => entry.messageId !== panel.messageId),
-    );
-    setExpandedPanelId((current) =>
-      current === panel.messageId ? null : current,
-    );
-    setLoadingGuildData(true);
-    try {
-      await deleteReactionRolePanel(selectedGuildId, panel.messageId);
-      pushToast("Plantilla eliminada.", "success");
-      void refreshRrJobs();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Error desconocido";
-      pushToast(`No se pudo eliminar el panel: ${message}`, "error");
-    } finally {
-      setLoadingGuildData(false);
-    }
-  }
-
-  // Publica/re-publica una plantilla (crea o actualiza el mensaje en Discord).
-  async function handlePublishReactionPanel(
-    panel: ReactionRolePanel,
-  ): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    try {
-      await publishReactionRolePanel(selectedGuildId, panel.messageId);
-      pushToast(
-        "Publicación encolada. El bot la aplicará en unos segundos.",
-        "success",
-      );
-      void refreshRrJobs();
-      void refreshReactionPanels();
-    } catch (error) {
-      pushToast(
-        error instanceof Error ? error.message : "Error al publicar.",
-        "error",
-      );
     }
   }
 
@@ -3673,9 +3279,6 @@ function App() {
       setVoiceChannels([]);
       setTextChannels([]);
       setGuildRoles([]);
-      setReactionPanels([]);
-      setGuildEmojis([]);
-      setRrJobs([]);
       setDailyMessages([]);
       setAuditLogs([]);
       return;
@@ -3686,12 +3289,9 @@ function App() {
       getGuildVoiceChannels(selectedGuildId),
       getGuildTextChannels(selectedGuildId),
       getGuildRoles(selectedGuildId),
-      listReactionRolePanels(selectedGuildId),
-      getGuildEmojis(selectedGuildId),
-      listReactionRoleJobs(selectedGuildId),
       listDailyMessages(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, panels, emojis, jobs, daily]) => {
+      .then(([channels, textCh, roles, daily]) => {
         if (cancelled) {
           return;
         }
@@ -3699,9 +3299,6 @@ function App() {
         setVoiceChannels(channels);
         setTextChannels(textCh);
         setGuildRoles(roles);
-        setReactionPanels(panels);
-        setGuildEmojis(emojis);
-        setRrJobs(jobs);
         setDailyMessages(daily);
       })
       .catch((error: unknown) => {
@@ -3710,9 +3307,6 @@ function App() {
           setVoiceChannels([]);
           setTextChannels([]);
           setGuildRoles([]);
-          setReactionPanels([]);
-          setGuildEmojis([]);
-          setRrJobs([]);
           setDailyMessages([]);
           pushToast(
             "No se pudieron cargar los datos del panel Admin.",
@@ -3765,23 +3359,6 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, selectedGuildId]);
-
-  useEffect(() => {
-    if (activeTab !== "admin" || !selectedGuildId) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void listReactionRoleJobs(selectedGuildId)
-        .then(setRrJobs)
-        .catch(() => undefined);
-      void listReactionRolePanels(selectedGuildId)
-        .then(setReactionPanels)
-        .catch(() => undefined);
-    }, 20_000);
-
-    return () => window.clearInterval(timer);
   }, [activeTab, selectedGuildId]);
 
   // Carrusel de la landing: nombres reales del leaderboard público.
@@ -4862,368 +4439,6 @@ function App() {
                             </div>
                           ))
                         )}
-                      </div>
-                    </details>
-                  ) : null}
-
-                  {canAccess("reaction") ? (
-                    <details className="admin-card admin-card-acc admin-card--officer">
-                      <summary className="admin-card-header admin-acc-header">
-                        <div>
-                          <h3>
-                            Reaction Roles{" "}
-                            <span className="admin-tier-badge tier-officer">
-                              Officer
-                            </span>
-                          </h3>
-                        </div>
-                        <span className="admin-acc-chevron" aria-hidden="true">
-                          ▸
-                        </span>
-                      </summary>
-                      <div className="admin-card-body">
-                        <div className="form-grid">
-                          <label>
-                            <span>Canal de texto</span>
-                            <select
-                              className="select"
-                              value={rrChannelId}
-                              onChange={(event) =>
-                                setRrChannelId(event.target.value)
-                              }
-                            >
-                              <option value="">Sin canal configurado</option>
-                              {textChannels.map((channel) => (
-                                <option key={channel.id} value={channel.id}>
-                                  {channel.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Título del panel</span>
-                            <input
-                              value={rrTitle}
-                              onChange={(event) =>
-                                setRrTitle(event.target.value)
-                              }
-                              placeholder="Título"
-                            />
-                          </label>
-                          <label>
-                            <span>Descripción</span>
-                            <input
-                              value={rrDescription}
-                              onChange={(event) =>
-                                setRrDescription(event.target.value)
-                              }
-                              placeholder="Descripción"
-                            />
-                          </label>
-                          <label>
-                            <span>Modo</span>
-                            <select
-                              className="select"
-                              value={rrMode}
-                              onChange={(event) =>
-                                setRrMode(
-                                  event.target.value as
-                                    | "multiple"
-                                    | "unique"
-                                    | "additive",
-                                )
-                              }
-                            >
-                              <option value="multiple">
-                                Multiple (se puede tener varios)
-                              </option>
-                              <option value="unique">
-                                Único (solo uno del panel)
-                              </option>
-                              <option value="additive">
-                                Aditivo (solo agrega, no quita)
-                              </option>
-                            </select>
-                          </label>
-                        </div>
-
-                        <div className="rr-pairs">
-                          {rrPairs.map((pair, index) => (
-                            <div className="rr-pair" key={index}>
-                              <input
-                                type="text"
-                                list="guild-emojis"
-                                value={pair.emoji}
-                                onChange={(event) =>
-                                  updateRrPair(index, {
-                                    emoji: event.target.value,
-                                  })
-                                }
-                                placeholder="Emoji del servidor"
-                              />
-                              <select
-                                className="select"
-                                value={pair.roleId}
-                                onChange={(event) =>
-                                  updateRrPair(index, {
-                                    roleId: event.target.value,
-                                  })
-                                }
-                              >
-                                <option value="">Adjuntar rol</option>
-                                {guildRoles.map((role) => (
-                                  <option key={role.id} value={role.id}>
-                                    {role.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                className="ghost-button danger"
-                                onClick={() => removeRrPair(index)}
-                                type="button"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            className="ghost-button"
-                            onClick={addRrPair}
-                            type="button"
-                          >
-                            + Agregar par emoji/rol
-                          </button>
-                        </div>
-
-                        <datalist id="guild-emojis">
-                          {guildEmojis.map((emoji) => (
-                            <option
-                              key={emoji.id}
-                              value={
-                                emoji.animated
-                                  ? `<a:${emoji.name}:${emoji.id}>`
-                                  : `<:${emoji.name}:${emoji.id}>`
-                              }
-                            >
-                              {emoji.name}
-                            </option>
-                          ))}
-                        </datalist>
-
-                        <div className="rr-preview">
-                          <div className="rr-preview-label">
-                            Vista previa del mensaje
-                          </div>
-                          {rrPreviewLines().length > 0 ? (
-                            rrPreviewLines().map((line, index) =>
-                              line.startsWith("**") && line.endsWith("**") ? (
-                                <div className="rr-preview-title" key={index}>
-                                  {line.slice(2, -2)}
-                                </div>
-                              ) : (
-                                <div className="rr-preview-line" key={index}>
-                                  {line}
-                                </div>
-                              ),
-                            )
-                          ) : (
-                            <div className="rr-preview-line muted">
-                              Sin contenido para previsualizar.
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="rr-jobs">
-                          {rrJobs.length > 0 ? (
-                            <>
-                              <div className="rr-jobs-head">
-                                <strong>Estado de publicación</strong>
-                                <button
-                                  className="icon-button"
-                                  onClick={() => void refreshRrJobs()}
-                                  title="Refrescar estado"
-                                  aria-label="Refrescar estado"
-                                  type="button"
-                                >
-                                  <RefreshIcon />
-                                </button>
-                              </div>
-                              <div className="rr-jobs-list">
-                                {rrJobs.filter((job) => job.status !== "done")
-                                  .length > 0 ? (
-                                  rrJobs
-                                    .filter((job) => job.status !== "done")
-                                    .slice(0, 5)
-                                    .map((job) => (
-                                      <div
-                                        className={`rr-job rr-job-${job.status}`}
-                                        key={job.id}
-                                      >
-                                        <div className="rr-job-line">
-                                          <span>
-                                            {job.status === "pending"
-                                              ? "En cola"
-                                              : "Error"}{" "}
-                                            · {job.action}
-                                            {job.title ? ` · ${job.title}` : ""}
-                                            {job.status !== "pending"
-                                              ? ` · ${new Date(
-                                                  job.createdAt,
-                                                ).toLocaleString()}`
-                                              : ""}
-                                          </span>
-                                          <button
-                                            className="rr-job-dismiss"
-                                            onClick={() =>
-                                              void dismissReactionRoleJob(
-                                                job.id,
-                                              )
-                                            }
-                                            title="Quitar de la lista"
-                                            aria-label="Quitar de la lista"
-                                            type="button"
-                                          >
-                                            ✕
-                                          </button>
-                                        </div>
-                                        {job.error ? (
-                                          <span className="rr-job-error">
-                                            {job.error}
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    ))
-                                ) : (
-                                  <div className="rr-job-ok">
-                                    Todo publicado. Sin trabajos pendientes.
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          ) : null}
-                        </div>
-
-                        {reactionPanels.length > 0 ? (
-                          <div className="rr-panels-list">
-                            <div className="rr-panels-head">
-                              <h4>Plantillas ({reactionPanels.length})</h4>
-                              <button
-                                className="icon-button"
-                                onClick={() => void refreshReactionPanels()}
-                                title="Refrescar paneles"
-                                aria-label="Refrescar paneles"
-                                type="button"
-                              >
-                                <RefreshIcon />
-                              </button>
-                            </div>
-                            {reactionPanels.map((panel) => {
-                              const channelName =
-                                textChannels.find(
-                                  (channel) => channel.id === panel.channelId,
-                                )?.name ?? "?";
-                              const expanded =
-                                expandedPanelId === panel.messageId;
-                              return (
-                                <div
-                                  className="rr-panel-card"
-                                  key={panel.messageId}
-                                >
-                                  <button
-                                    className="rr-panel-header"
-                                    onClick={() =>
-                                      setExpandedPanelId(
-                                        expanded ? null : panel.messageId,
-                                      )
-                                    }
-                                    type="button"
-                                  >
-                                    <span className="rr-panel-title">
-                                      {panel.title || "Plantilla sin título"}
-                                    </span>
-                                    <span className="rr-panel-meta">
-                                      {panel.status === "draft"
-                                        ? "Borrador"
-                                        : `#${channelName}`}{" "}
-                                      · {panel.rules.length} rol/es
-                                    </span>
-                                    <span className="rr-caret">
-                                      {expanded ? "▴" : "▾"}
-                                    </span>
-                                  </button>
-                                  {expanded ? (
-                                    <div className="rr-panel-body">
-                                      <div className="rr-rules">
-                                        {panel.rules.map((rule, index) => {
-                                          const roleName =
-                                            guildRoles.find(
-                                              (role) => role.id === rule.roleId,
-                                            )?.name ?? rule.roleId;
-                                          return (
-                                            <span
-                                              className="rr-rule"
-                                              key={`${rule.emoji}-${index}`}
-                                            >
-                                              {formatReactionRuleEmoji(
-                                                rule.emoji,
-                                              )}{" "}
-                                              → {roleName}
-                                            </span>
-                                          );
-                                        })}
-                                      </div>
-                                      <div className="rr-panel-actions">
-                                        <button
-                                          className="ghost-button"
-                                          onClick={() =>
-                                            startEditReactionTemplate(panel)
-                                          }
-                                          type="button"
-                                        >
-                                          Editar
-                                        </button>
-                                        <button
-                                          className="primary-button"
-                                          onClick={() =>
-                                            void handlePublishReactionPanel(
-                                              panel,
-                                            )
-                                          }
-                                          type="button"
-                                        >
-                                          {panel.status === "published"
-                                            ? "Republicar"
-                                            : "Publicar"}
-                                        </button>
-                                        <button
-                                          className="danger-button"
-                                          onClick={() =>
-                                            requestDeleteReactionPanel(panel)
-                                          }
-                                          type="button"
-                                        >
-                                          Eliminar plantilla
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="admin-card-footer">
-                        <button
-                          className="primary-button"
-                          onClick={() => void handleSaveReactionPanel()}
-                          disabled={savingAction !== null}
-                          type="button"
-                        >
-                          {savingAction === "panel"
-                            ? "Guardando…"
-                            : "Guardar plantilla"}
-                        </button>
                       </div>
                     </details>
                   ) : null}
@@ -7082,159 +6297,6 @@ function App() {
                 type="button"
               >
                 Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {rrEditor != null ? (
-        <div className="modal-overlay" onClick={() => setRrEditor(null)}>
-          <div
-            className="modal"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <h4>Editar plantilla de reaction roles</h4>
-            <div className="comm-form">
-              <label>
-                <span>Título</span>
-                <input
-                  type="text"
-                  value={rrEditor.title}
-                  onChange={(event) =>
-                    updateRrEditorField("title", event.target.value)
-                  }
-                  placeholder="Título"
-                />
-              </label>
-              <label>
-                <span>Descripción</span>
-                <input
-                  type="text"
-                  value={rrEditor.description}
-                  onChange={(event) =>
-                    updateRrEditorField("description", event.target.value)
-                  }
-                  placeholder="Descripción"
-                />
-              </label>
-              <label>
-                <span>Canal de texto</span>
-                <select
-                  className="select"
-                  value={rrEditor.channelId}
-                  onChange={(event) =>
-                    updateRrEditorField("channelId", event.target.value)
-                  }
-                >
-                  <option value="">Sin canal configurado</option>
-                  {textChannels.map((channel) => (
-                    <option key={channel.id} value={channel.id}>
-                      {channel.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Modo</span>
-                <select
-                  className="select"
-                  value={rrEditor.mode}
-                  onChange={(event) =>
-                    updateRrEditorField(
-                      "mode",
-                      event.target.value as "multiple" | "unique" | "additive",
-                    )
-                  }
-                >
-                  <option value="multiple">
-                    Multiple (se puede tener varios)
-                  </option>
-                  <option value="unique">Único (solo uno del panel)</option>
-                  <option value="additive">
-                    Aditivo (solo agrega, no quita)
-                  </option>
-                </select>
-              </label>
-            </div>
-
-            <div className="rr-pairs">
-              {rrEditor.pairs.map((pair, index) => (
-                <div className="rr-pair" key={index}>
-                  <input
-                    type="text"
-                    list="guild-emojis"
-                    value={pair.emoji}
-                    onChange={(event) =>
-                      updateRrEditorPair(index, {
-                        emoji: event.target.value,
-                      })
-                    }
-                    placeholder="Emoji del servidor"
-                  />
-                  <select
-                    className="select"
-                    value={pair.roleId}
-                    onChange={(event) =>
-                      updateRrEditorPair(index, {
-                        roleId: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">Adjuntar rol</option>
-                    {guildRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="ghost-button danger"
-                    onClick={() => removeRrEditorPair(index)}
-                    type="button"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                className="ghost-button"
-                onClick={addRrEditorPair}
-                type="button"
-              >
-                + Agregar par emoji/rol
-              </button>
-            </div>
-
-            {rrEditor.status === "published" ? (
-              <p className="meta-text">
-                Plantilla ya publicada: al guardar, el mensaje en Discord se
-                actualiza automáticamente.
-              </p>
-            ) : null}
-
-            <div className="form-actions">
-              <button
-                className="ghost-button"
-                onClick={() => setRrEditor(null)}
-                disabled={savingAction !== null}
-                type="button"
-              >
-                Cancelar
-              </button>
-              <button
-                className="primary-button"
-                onClick={() => void handleSaveRrEditor()}
-                disabled={savingAction !== null}
-                type="button"
-              >
-                {savingAction === "panel"
-                  ? "Guardando…"
-                  : rrEditor.status === "published"
-                    ? "Guardar y actualizar"
-                    : "Guardar cambios"}
               </button>
             </div>
           </div>

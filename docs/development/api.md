@@ -95,15 +95,6 @@ XP:
 6. `POST /guilds/:guildId/xp/reset-all`
 7. `POST /guilds/:guildId/xp/sync`
 
-Reaction roles (jobs que ejecuta el bot):
-
-1. `GET /guilds/:guildId/reaction-roles/panels`
-2. `POST /guilds/:guildId/reaction-roles/panels`
-3. `PATCH /guilds/:guildId/reaction-roles/panels/:messageId`
-4. `DELETE /guilds/:guildId/reaction-roles/panels/:messageId`
-5. `GET /guilds/:guildId/reaction-roles/jobs`
-6. `DELETE /guilds/:guildId/reaction-roles/jobs/:jobId`
-
 Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`
@@ -121,14 +112,12 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 3. `POST /internal/guilds/:guildId/xp/add`
 4. `POST /internal/guilds/:guildId/xp/level`
 5. `GET /internal/guilds/:guildId/xp/profiles`
-6. `GET /internal/guilds/:guildId/reaction-roles/jobs`
-7. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
-8. `GET /internal/guilds/:guildId/daily-messages` (solo frases habilitadas)
-9. `POST /internal/guilds/:guildId/karuta/drops` (detector de drops raros de Karuta; idempotente por `sourceMessageId`)
+6. `GET /internal/guilds/:guildId/daily-messages` (solo frases habilitadas)
+7. `POST /internal/guilds/:guildId/karuta/drops` (detector de drops raros de Karuta; idempotente por `sourceMessageId`)
 
 Drops de Karuta (público para miembros de la guild): `GET /guilds/:guildId/karuta/drops`
 
-> **Merge selectivo en el PUT de config**: el bot no conoce todos los campos que administra el hub (módulos, sugerencias, permisos de staff, logs de raid). El PUT interno **solo fusiona los campos propios del bot** (`reactionRoles`, `temporaryVoiceChannelIds`, canales del loro, `defaultRoleId`, `musicRoleIds`, etc.) sobre la config actual. Los campos del hub se preservan y el bot nunca los resetea.
+> **Merge selectivo en el PUT de config**: el bot no conoce todos los campos que administra el hub (módulos, sugerencias, permisos de staff, logs de raid). El PUT interno **solo fusiona los campos propios del bot** (`temporaryVoiceChannelIds`, canales del loro, `defaultRoleId`, `musicRoleIds`, etc.) sobre la config actual. Los campos del hub se preservan y el bot nunca los resetea.
 
 ## 5. Auditoría
 
@@ -145,14 +134,11 @@ Tablas:
 
 1. `guild_configs` — config por guild (canales, rol de entrada, módulos, sugerencias, XP sync, salas temporales, loro, logs)
 2. `admin_role_modules` — permisos de staff por rol de Discord (módulos del Admin que ve cada rol)
-3. `reaction_role_rules` — reglas por `guildId + messageId + emojiKey`
-4. `reaction_role_panels` — metadata de paneles (título, descripción, modo, canal)
-5. `reaction_role_panel_jobs` — jobs encolados (create/update/delete)
-6. `xp_configs` — config de XP (niveles, multiplicadores, colores)
-7. `xp_profiles` — XP/nivel/contadores por usuario
-8. `audit_log_entries` — registro de auditoría
-9. `discord_sessions` / `oauth_states` — OAuth
-10. `communications` / `communication_instances` — comunicados y sus publicaciones
+3. `xp_configs` — config de XP (niveles, multiplicadores, colores)
+4. `xp_profiles` — XP/nivel/contadores por usuario
+5. `audit_log_entries` — registro de auditoría
+6. `discord_sessions` / `oauth_states` — OAuth
+7. `communications` / `communication_instances` — comunicados y sus publicaciones
 11. `daily_messages` — frases del loro de Karpindomo
 12. `raid_logs` — logs de raid sincronizados con Warcraft Logs
 

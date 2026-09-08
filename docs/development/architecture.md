@@ -8,7 +8,6 @@ Este documento resume cómo se conectan bot, API, web y base de datos.
 
 - Runtime de Discord (discord.js)
 - Eventos, comandos slash, XP, voz dinámica, timers
-- Ejecuta los jobs de reaction roles encolados por la web
 - Scheduler del loro: publica frases aleatorias a intervalos aleatorios
 
 2. `apps/api`
@@ -29,7 +28,7 @@ Este documento resume cómo se conectan bot, API, web y base de datos.
 
 4. `PostgreSQL`
 
-- Fuente principal de verdad (config, XP, reaction roles, auditoría, sesiones)
+- Fuente principal de verdad (config, XP, auditoría, sesiones)
 
 ## 2. Flujo de alto nivel
 
@@ -73,22 +72,7 @@ El bot usa dos modos para guild config:
 > campos del bot sobre la config actual y preserva los del hub; el bot nunca
 > los resetea.
 
-## 4. Patrón de jobs (web -> bot)
-
-Los paneles de reaction roles se administran desde la web:
-
-```text
-Web -> POST /guilds/:guildId/reaction-roles/panels
-        -> crea job en DB (reaction_role_panel_jobs, status=pending)
-Bot (cada ~20s) -> GET /internal/guilds/:guildId/reaction-roles/jobs
-        -> ejecuta create/update/delete en Discord
-        -> POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete
-        -> actualiza reglas + metadata + status (done/failed)
-```
-
-El mismo patrón se usa para la sincronización de roles de XP (`xpSyncRequested`).
-
-## 5. Sistema de XP
+## 4. Sistema de XP
 
 ```text
 Mensaje / Voz (Discord)
@@ -127,10 +111,8 @@ Endpoints:
 4. `POST /internal/guilds/:guildId/xp/add`
 5. `POST /internal/guilds/:guildId/xp/level`
 6. `GET /internal/guilds/:guildId/xp/profiles`
-7. `GET /internal/guilds/:guildId/reaction-roles/jobs`
-8. `POST /internal/guilds/:guildId/reaction-roles/jobs/:jobId/complete`
-9. `GET /internal/guilds/:guildId/daily-messages` (frases habilitadas del loro)
-10. `POST /internal/guilds/:guildId/karuta/drops` (drops raros detectados por el bot; idempotente)
+7. `GET /internal/guilds/:guildId/daily-messages` (frases habilitadas del loro)
+8. `POST /internal/guilds/:guildId/karuta/drops` (drops raros detectados por el bot; idempotente)
 
 ## 8. Persistencia actual
 
@@ -138,11 +120,8 @@ Tablas:
 
 1. `guild_configs` — config por guild (canales, rol de entrada, `enabledModules`, `suggestionsDm*`, `xpSyncRequested`, salas temporales, loro, logs)
 2. `admin_role_modules` — permisos de staff: qué módulos del Admin ve cada rol de Discord
-3. `reaction_role_rules` — reglas por `guildId + messageId + emojiKey`
-4. `reaction_role_panels` — metadata de paneles (título, descripción, modo, canal)
-5. `reaction_role_panel_jobs` — jobs encolados (create/update/delete)
-6. `xp_configs` — config de XP (niveles, multiplicadores, colores)
-7. `xp_profiles` — XP/nivel/contadores por usuario
+3. `xp_configs` — config de XP (niveles, multiplicadores, colores)
+4. `xp_profiles` — XP/nivel/contadores por usuario
 8. `audit_log_entries` — registro de auditoría
 9. `discord_sessions` / `oauth_states` — OAuth
 10. `communications` / `communication_instances` — comunicados y sus publicaciones
@@ -198,7 +177,7 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
 1. `enabledModules` (guild_configs) decide qué tabs se muestran en la web.
    Vacío/ausente = todos visibles. Solo el owner lo edita.
 2. `admin_role_modules` asocia roles de Discord a módulos del Admin
-   (config, comunicados, raids, daily, reaction, xp).
+   (config, comunicados, raids, daily, xp, karuta, eventos).
 3. La UI agrupa el staff en tiers para mostrar quién tiene qué:
    owner (naranja) > admin (dorado) > officer (verde).
 4. Los guardados parciales de configuración y los del bot no modifican

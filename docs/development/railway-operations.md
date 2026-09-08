@@ -49,7 +49,7 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 ### API
 
 1. Pre-deploy: `npx prisma db push`
-   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `reaction_role_panels`, `reaction_role_panel_jobs`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`).
+   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`).
 2. Build: `npm ci --include=dev && npm run build`
 3. Start: `npm run start`
 

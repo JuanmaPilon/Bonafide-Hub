@@ -40,8 +40,6 @@ Guía técnica y funcional del bot de Discord.
 3. `/setlvl usuario:<usuario> nivel:<n>` (Manage Server)
 4. `/resetlvl usuario:<usuario>` (Manage Server)
 
-> Los comandos de reaction roles por Discord fueron retirados: los paneles se administran desde la web (Admin → Reaction Roles) y el bot los publica vía jobs encolados.
-
 ### Música
 
 1. `/play cancion:<texto o URL> [fuente:youtube|soundcloud]` — reproduce o encola un tema (YouTube por defecto; SoundCloud funciona desde IPs de datacenter, YouTube no)
@@ -73,12 +71,10 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 2. `GuildMemberRemove` → log de salida
 3. `MessageCreate` → XP por mensaje (cooldown anti-spam)
 4. `VoiceStateUpdate` → XP por tiempo en voz + salas de voz dinámicas
-5. `MessageReactionAdd/Remove` → asigna/quita roles de reaction roles
-6. Polling de jobs de reaction roles (~20s) → crea/edita/borra paneles pedidos desde la web
-7. Polling de `xpSyncRequested` → re-sincroniza roles/nicknames por nivel
-8. Scheduler de timers → avisa por DM al vencer (con opción de repetir)
-9. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
-10. `MessageCreate` (Karuta) → detecta drops raros del bot Karuta en el canal vigilado, los guarda en la API y los anuncia
+5. Polling de `xpSyncRequested` → re-sincroniza roles/nicknames por nivel
+6. Scheduler de timers → avisa por DM al vencer (con opción de repetir)
+7. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
+8. `MessageCreate` (Karuta) → detecta drops raros del bot Karuta en el canal vigilado, los guarda en la API y los anuncia
 
 ## 4. Sistema de XP
 
@@ -110,11 +106,10 @@ Archivo ejemplo: `apps/discord-bot/.env.example`
 1. View Channels
 2. Send Messages
 3. Read Message History
-4. Add Reactions
-5. Manage Channels (voz dinámica)
-6. Move Members (voz dinámica)
-7. Connect / Speak (voz)
-8. Manage Roles (roles por nivel, reaction roles, rol de entrada)
+4. Manage Channels (voz dinámica)
+5. Move Members (voz dinámica)
+6. Connect / Speak (voz)
+7. Manage Roles (roles por nivel, rol de entrada)
 
 Notas:
 
@@ -127,7 +122,7 @@ Notas:
 2. Fallback: `apps/discord-bot/data/guild-config.json`.
 3. Los timers se guardan en `apps/discord-bot/data/reminders.json`.
 
-> El bot **solo escribe sus propios campos** de config (reaction roles, salas
+> El bot **solo escribe sus propios campos** de config (salas
 > temporales, canales del loro, rol de entrada, etc.). Los campos del hub
 > (módulos activables, sugerencias, permisos de staff, logs de raid) se
 > preservan: el PUT interno de config es un merge selectivo y el bot no los
