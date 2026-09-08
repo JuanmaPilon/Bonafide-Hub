@@ -15,6 +15,7 @@ export type RaidLog = {
   fightCount: number;
   firstFightAt?: Date;
   guildId: string;
+  hidden: boolean;
   id: string;
   kills: number;
   lastSyncedAt?: Date;
@@ -60,6 +61,7 @@ function toRaidLog(record: {
   fightCount: number;
   firstFightAt: Date | null;
   guildId: string;
+  hidden: boolean;
   id: string;
   kills: number;
   lastSyncedAt: Date | null;
@@ -88,6 +90,7 @@ function toRaidLog(record: {
     fightCount: record.fightCount,
     firstFightAt: record.firstFightAt ?? undefined,
     guildId: record.guildId,
+    hidden: record.hidden,
     id: record.id,
     kills: record.kills,
     lastSyncedAt: record.lastSyncedAt ?? undefined,
@@ -163,7 +166,16 @@ function summarize(report: WclReport): {
 
 export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
   const records = await prisma.raidLog.findMany({
-    where: { guildId },
+    where: { guildId, hidden: false },
+    orderBy: { createdAt: "desc" },
+  });
+  return records.map(toRaidLog);
+}
+
+// Logs que el usuario ocultó (para poder restaurarlos o borrarlos de verdad).
+export async function listHiddenRaidLogs(guildId: string): Promise<RaidLog[]> {
+  const records = await prisma.raidLog.findMany({
+    where: { guildId, hidden: true },
     orderBy: { createdAt: "desc" },
   });
   return records.map(toRaidLog);
@@ -172,7 +184,7 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
 // Logs que todavía no se publicaron en Discord (para el scheduler del API).
 export async function listUnpostedRaidLogs(): Promise<RaidLog[]> {
   const records = await prisma.raidLog.findMany({
-    where: { discordPosted: false },
+    where: { discordPosted: false, hidden: false },
     orderBy: { createdAt: "asc" },
   });
   return records.map(toRaidLog);
@@ -204,6 +216,39 @@ export async function deleteRaidLog(
 ): Promise<boolean> {
   try {
     const result = await prisma.raidLog.deleteMany({ where: { guildId, id } });
+    return result.count > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Ocultar (soft-delete): saca el log de la lista pero conserva la fila para
+// que el watcher no lo vuelva a crear.
+export async function hideRaidLog(
+  guildId: string,
+  id: string,
+): Promise<boolean> {
+  try {
+    const result = await prisma.raidLog.updateMany({
+      where: { guildId, id },
+      data: { hidden: true },
+    });
+    return result.count > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Restaurar un log oculto (vuelve a aparecer en la lista).
+export async function showRaidLog(
+  guildId: string,
+  id: string,
+): Promise<boolean> {
+  try {
+    const result = await prisma.raidLog.updateMany({
+      where: { guildId, id },
+      data: { hidden: false },
+    });
     return result.count > 0;
   } catch {
     return false;

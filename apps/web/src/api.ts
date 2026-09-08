@@ -60,6 +60,7 @@ export type RaidLog = {
   fightCount: number;
   firstFightAt?: string;
   guildId: string;
+  hidden?: boolean;
   id: string;
   kills: number;
   lastSyncedAt?: string;
@@ -690,14 +691,44 @@ export async function createRaidLog(
   );
 }
 
-export async function deleteRaidLog(
+export async function hideRaidLog(
+  guildId: string,
+  logId: string,
+): Promise<{ hidden: boolean }> {
+  return requestJson<{ hidden: boolean }>(
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function restoreRaidLog(
+  guildId: string,
+  logId: string,
+): Promise<{ shown: boolean }> {
+  return requestJson<{ shown: boolean }>(
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}/restore`,
+    { method: "POST" },
+  );
+}
+
+export async function deleteRaidLogPermanent(
   guildId: string,
   logId: string,
 ): Promise<{ deleted: boolean }> {
   return requestJson<{ deleted: boolean }>(
-    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}`,
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}/permanent`,
     { method: "DELETE" },
   );
+}
+
+export async function listHiddenRaidLogs(
+  guildId: string,
+): Promise<RaidLog[]> {
+  const data = await requestJson<{ logs: RaidLog[] }>(
+    `/guilds/${guildId}/raid-logs/hidden`,
+    { method: "GET" },
+  );
+  return data.logs;
 }
 
 export async function saveGuildConfig(

@@ -9,7 +9,7 @@ import {
   deleteCommunication,
   deleteCommunicationInstance,
   deleteDailyMessage,
-  deleteRaidLog,
+  deleteRaidLogPermanent,
   exportXpData,
   getAuditLogs,
   getGuildBoosters,
@@ -30,11 +30,14 @@ import {
   getKarutaCards,
   getKarutaAlbums,
   deleteKarutaAlbum,
+  hideRaidLog,
   importXpData,
   listCommunications,
   listDailyMessages,
+  listHiddenRaidLogs,
   listPublishedCommunications,
   listRaidLogs,
+  restoreRaidLog,
   loginUrl,
   logout,
   getAdminAccess,
@@ -362,10 +365,10 @@ function KarpindomoWidget({
 // Cada log es un acordeón: el detalle se expande solo al hacer click.
 function RaidLogsList({
   logs,
-  onDelete,
+  onHide,
 }: {
   logs: RaidLog[];
-  onDelete?: (log: RaidLog) => void;
+  onHide?: (log: RaidLog) => void;
 }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -458,14 +461,14 @@ function RaidLogsList({
                 >
                   Ver en Warcraft Logs ↗
                 </a>
-                {onDelete ? (
+                {onHide ? (
                   <div className="comunicado-acc-actions">
                     <button
                       className="ghost-button danger"
-                      onClick={() => onDelete(log)}
+                      onClick={() => onHide(log)}
                       type="button"
                     >
-                      Eliminar
+                      Ocultar
                     </button>
                   </div>
                 ) : null}
@@ -1441,6 +1444,7 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [raidLogsLoading, setRaidLogsLoading] = useState(false);
   const [raidLogUrl, setRaidLogUrl] = useState("");
+  const [hiddenRaidLogs, setHiddenRaidLogs] = useState<RaidLog[]>([]);
   const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
   const [karutaAlbums, setKarutaAlbums] = useState<KarutaAlbum[]>([]);
@@ -2754,29 +2758,102 @@ function App() {
     }
   }
 
-  async function handleDeleteRaidLog(log: RaidLog): Promise<void> {
+  async function handleHideRaidLog(log: RaidLog): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     try {
-      await deleteRaidLog(selectedGuildId, log.id);
+      await hideRaidLog(selectedGuildId, log.id);
       setRaidLogs((current) => current.filter((entry) => entry.id !== log.id));
-      pushToast("Log de raid eliminado.", "success");
+      pushToast(
+        "Log ocultado. El watcher no lo va a volver a capturar.",
+        "success",
+      );
     } catch (error) {
       pushToast(
-        error instanceof Error ? error.message : "Error al eliminar el log.",
+        error instanceof Error ? error.message : "Error al ocultar el log.",
         "error",
       );
     }
   }
 
-  function requestDeleteRaidLog(log: RaidLog): void {
+  function requestHideRaidLog(log: RaidLog): void {
     setConfirmDialog({
       kind: "danger",
-      title: "Eliminar log de raid",
-      message: `¿Eliminar "${log.title || log.reportCode}"? Esta acción no se puede deshacer.`,
+      title: "Ocultar log de raid",
+      message: `¿Ocultar "${log.title || log.reportCode}"? Desaparece de la lista y el watcher no lo vuelve a capturar. Podés restaurarlo desde el panel Admin → Logs de Raid.`,
       onConfirm: () => {
-        void handleDeleteRaidLog(log);
+        void handleHideRaidLog(log);
+      },
+    });
+  }
+
+  // ── Logs ocultos: restaurar o borrar definitivamente ─────────────
+  async function refreshHiddenRaidLogs(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const logs = await listHiddenRaidLogs(selectedGuildId);
+      setHiddenRaidLogs(logs);
+    } catch {
+      setHiddenRaidLogs([]);
+    }
+  }
+
+  function requestShowRaidLog(log: RaidLog): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "default",
+      title: "Restaurar log",
+      message: `¿Volver a mostrar "${log.title || log.reportCode}" en la lista de logs?`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await restoreRaidLog(selectedGuildId, log.id);
+            setHiddenRaidLogs((current) =>
+              current.filter((entry) => entry.id !== log.id),
+            );
+            pushToast("Log restaurado.", "success");
+            void refreshRaidLogs();
+          } catch (error) {
+            pushToast(
+              error instanceof Error ? error.message : "Error al restaurar.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
+  }
+
+  function requestPermanentDeleteRaidLog(log: RaidLog): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Borrar definitivamente",
+      message: `¿Borrar "${log.title || log.reportCode}" para siempre? Ya no podrás recuperarlo y, si el raid sigue en Warcraft Logs, el watcher lo volverá a capturar.`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await deleteRaidLogPermanent(selectedGuildId, log.id);
+            setHiddenRaidLogs((current) =>
+              current.filter((entry) => entry.id !== log.id),
+            );
+            pushToast("Log borrado definitivamente.", "success");
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "Error al borrar el log.",
+              "error",
+            );
+          }
+        })();
       },
     });
   }
@@ -3280,6 +3357,7 @@ function App() {
       setTextChannels([]);
       setGuildRoles([]);
       setDailyMessages([]);
+      setHiddenRaidLogs([]);
       setAuditLogs([]);
       return;
     }
@@ -3314,6 +3392,12 @@ function App() {
           );
         }
       });
+
+    if (canAccess("raids")) {
+      void refreshHiddenRaidLogs();
+    } else {
+      setHiddenRaidLogs([]);
+    }
 
     const isOwner = guilds.some(
       (guild) => guild.id === selectedGuildId && guild.owner,
@@ -4805,6 +4889,52 @@ function App() {
                             + Agregar log de raid
                           </button>
                         </div>
+
+                        {hiddenRaidLogs.length > 0 ? (
+                          <div className="hidden-raid-logs">
+                            <div className="daily-messages-head">
+                              <strong>
+                                Logs ocultos ({hiddenRaidLogs.length})
+                              </strong>
+                              <span className="muted-text">
+                                No se muestran ni se vuelven a capturar.
+                              </span>
+                            </div>
+                            {hiddenRaidLogs.map((log) => (
+                              <div
+                                className="daily-message-row"
+                                key={log.id}
+                              >
+                                <div className="daily-message-content">
+                                  <strong>
+                                    {log.title || log.reportCode}
+                                  </strong>
+                                  <div className="muted-text">
+                                    ⚔️ {log.fightCount} · 💀 {log.kills}
+                                  </div>
+                                </div>
+                                <div className="daily-message-actions">
+                                  <button
+                                    className="ghost-button"
+                                    onClick={() => requestShowRaidLog(log)}
+                                    type="button"
+                                  >
+                                    Mostrar
+                                  </button>
+                                  <button
+                                    className="ghost-button danger"
+                                    onClick={() =>
+                                      requestPermanentDeleteRaidLog(log)
+                                    }
+                                    type="button"
+                                  >
+                                    Borrar definitivamente
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </details>
                   ) : null}
@@ -5321,9 +5451,9 @@ function App() {
                         ) : (
                           <RaidLogsList
                             logs={raidLogs}
-                            onDelete={
+                            onHide={
                               canAccess("raids")
-                                ? requestDeleteRaidLog
+                                ? requestHideRaidLog
                                 : undefined
                             }
                           />

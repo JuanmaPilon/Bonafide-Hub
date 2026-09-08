@@ -974,6 +974,13 @@ a:hover {
   flex-shrink: 0;
 }
 
+.hidden-raid-logs {
+  display: grid;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+}
+
 /* Logs de Raid (Warcraft Logs) */
 .raid-log-badge {
   flex-shrink: 0;

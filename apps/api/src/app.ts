@@ -43,11 +43,14 @@ import {
   createRaidLog,
   deleteRaidLog,
   extractReportCode,
+  hideRaidLog,
+  listHiddenRaidLogs,
   listRaidLogs,
   listUnpostedRaidLogs,
   listWatchGuildConfigs,
   markRaidLogPosted,
   refreshRaidLog,
+  showRaidLog,
   syncGuildWatch,
 } from "./services/raid-logs-store.js";
 import {
@@ -2209,6 +2212,34 @@ export function buildApp() {
     };
   });
 
+  // Logs ocultos: para restaurarlos o borrarlos definitivamente (staff).
+  app.get("/guilds/:guildId/raid-logs/hidden", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const logs = await listHiddenRaidLogs(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      logs,
+    };
+  });
+
+  // DELETE ahora OCULTA el log (soft-delete): desaparece de la lista y el
+  // watcher no lo vuelve a crear. Para borrarlo para siempre existe
+  // DELETE /raid-logs/:logId/permanent.
   app.delete("/guilds/:guildId/raid-logs/:logId", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -2227,10 +2258,10 @@ export function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const deleted = await deleteRaidLog(params.guildId, params.logId);
+    const hidden = await hideRaidLog(params.guildId, params.logId);
 
-    await logAdminAction(session, params.guildId, "raid-log:delete", {
-      details: "Log de raid eliminado.",
+    await logAdminAction(session, params.guildId, "raid-log:hide", {
+      details: "Log de raid ocultado (no se vuelve a capturar).",
       targetType: "raid-log",
       targetId: params.logId,
     });
@@ -2238,9 +2269,84 @@ export function buildApp() {
     return {
       ok: true,
       guildId: params.guildId,
-      deleted,
+      hidden,
     };
   });
+
+  // Restaurar un log oculto para que vuelva a aparecer.
+  app.post(
+    "/guilds/:guildId/raid-logs/:logId/restore",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        logId?: string;
+      };
+      if (!params.guildId || !params.logId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "raids"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const shown = await showRaidLog(params.guildId, params.logId);
+
+      await logAdminAction(session, params.guildId, "raid-log:restore", {
+        details: "Log de raid restaurado.",
+        targetType: "raid-log",
+        targetId: params.logId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        shown,
+      };
+    },
+  );
+
+  // Borrar definitivamente (no se puede recuperar; el watcher lo vuelve a
+  // crear si el raid sigue en Warcraft Logs).
+  app.delete(
+    "/guilds/:guildId/raid-logs/:logId/permanent",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        logId?: string;
+      };
+      if (!params.guildId || !params.logId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "raids"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteRaidLog(params.guildId, params.logId);
+
+      await logAdminAction(session, params.guildId, "raid-log:delete", {
+        details: "Log de raid borrado definitivamente.",
+        targetType: "raid-log",
+        targetId: params.logId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        deleted,
+      };
+    },
+  );
 
   // ── Módulo X: eventos estilo Raid Helper ──────────────────────────
   app.get("/guilds/:guildId/events", async (request, reply) => {

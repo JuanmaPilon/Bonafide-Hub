@@ -135,6 +135,9 @@ model RaidLog {
   status             String    @default("new") // new | live | synced | failed
   error              String?
   discordPosted      Boolean   @default(false)
+  // Oculto (soft-delete): el usuario lo sacó de la lista. Se conserva la
+  // fila para que el watcher NO lo vuelva a crear (reportCode presente).
+  hidden             Boolean   @default(false)
   firstFightAt       DateTime?
   lastSyncedAt       DateTime?
   // Detectan si el report todavía está "en vivo" (WCL sigue agregando
