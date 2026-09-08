@@ -3280,25 +3280,34 @@ function parseKarutaKv(
     return null;
   }
 
-  // El NOMBRE siempre va en negrita (**...**); la SERIE es texto plano. El
-  // orden entre ambos puede variar, así que usamos la negrita para ubicar
-  // el nombre y el resto es la serie.
+  // El NOMBRE va en negrita (**...**); la SERIE es texto plano. El orden
+  // entre ambos puede variar. En algunas cartas Karuta repite el code en
+  // negrita al final del resumen; si tomáramos el último bold sin filtrar,
+  // guardaríamos el code como nombre y la serie quedaría con el nombre real.
+  const code = summaryMatch[1];
   const rest = summaryMatch[5].trim();
-  const boldMatches = [...rest.matchAll(/\*\*(.+?)\*\*/g)];
-  let cardName: string | undefined;
-  let series: string | undefined;
-  if (boldMatches.length > 0) {
-    const lastBold = boldMatches[boldMatches.length - 1];
-    cardName = stripKarutaMarkdown(lastBold[1]) || undefined;
-    const seriesRaw = rest.slice(0, lastBold.index);
-    series = seriesRaw
-      ? stripKarutaMarkdown(seriesRaw)
-          .replace(/[·\s—–-]+$/, "")
-          .trim() || undefined
+  const boldTexts = [...rest.matchAll(/\*\*(.+?)\*\*/g)].map((match) =>
+    stripKarutaMarkdown(match[1]),
+  );
+
+  // Texto plano del resumen: sin segmentos en negrita ni el code repetido.
+  const plainText = stripKarutaMarkdown(rest.replace(/\*\*.+?\*\*/g, ""))
+    .replace(new RegExp(`\\b${code}\\b`, "gi"), "")
+    .replace(/^[·\s—–-]+|[·\s—–-]+$/g, "")
+    .trim();
+
+  // Nombre = segmento en negrita que NO es el code. Si no hay ninguno
+  // (o solo está el code en negrita), el nombre es el texto plano.
+  const nameBold = boldTexts.find(
+    (text) => text && text.toLowerCase() !== code.toLowerCase(),
+  );
+  const cardName = nameBold || plainText || undefined;
+
+  // Serie = texto plano del resumen; si coincide con el nombre, no hay.
+  const series =
+    plainText && cardName && plainText.toLowerCase() !== cardName.toLowerCase()
+      ? plainText
       : undefined;
-  } else {
-    cardName = stripKarutaMarkdown(rest) || undefined;
-  }
 
   return {
     cardName,
