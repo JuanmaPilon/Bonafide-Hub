@@ -442,6 +442,25 @@ export async function getGuildRoles(guildId: string): Promise<GuildRole[]> {
   return data.roles;
 }
 
+export type GuildEmoji = {
+  animated: boolean;
+  id: string;
+  name: string;
+};
+
+// Emojis custom del servidor (para elegir el emoji de cada spec). Lo usa
+// el staff desde el panel de catálogo de inscripciones.
+export async function getGuildEmojis(guildId: string): Promise<GuildEmoji[]> {
+  const data = await requestJson<{ emojis: GuildEmoji[] }>(
+    `/guilds/${guildId}/emojis`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.emojis;
+}
+
 export type GuildMember = {
   displayName: string;
   id: string;
@@ -765,7 +784,11 @@ export const WOW_CLASSES = [
   "Warrior",
 ] as const;
 
-export const COMBAT_ROLES = ["tank", "healer", "dps"] as const;
+// Roles de combate estilo Raid Helper (4 ejes). Antes era tank/healer/dps;
+// "dps" queda como valor legacy en inscripciones viejas.
+export const RAID_ROLES = ["tank", "healer", "melee", "ranged"] as const;
+
+export const COMBAT_ROLES = RAID_ROLES;
 
 export const WOW_CLASS_META: Array<{
   color: string;
@@ -794,8 +817,32 @@ export const ROLE_META: Array<{
 }> = [
   { key: "tank", emoji: "🛡️", label: "Tank" },
   { key: "healer", emoji: "💚", label: "Healer" },
-  { key: "dps", emoji: "⚔️", label: "DPS" },
+  { key: "melee", emoji: "⚔️", label: "Melee" },
+  { key: "ranged", emoji: "🏹", label: "Ranged" },
 ];
+
+export function roleMeta(
+  role?: string,
+): { emoji: string; key: string; label: string } | undefined {
+  if (role === "dps") {
+    // Valor legacy previo a los 4 ejes.
+    return { emoji: "⚔️", key: "dps", label: "DPS" };
+  }
+  return ROLE_META.find((entry) => entry.key === role);
+}
+
+// URL del CDN de Discord para un emoji custom (por id). Los emojis del
+// servidor se sirven desde cdn.discordapp.com sin requerir autenticación.
+export function discordEmojiUrl(
+  emojiId?: string,
+  animated?: boolean,
+  size = 40,
+): string | undefined {
+  if (!emojiId) {
+    return undefined;
+  }
+  return `https://cdn.discordapp.com/emojis/${emojiId}.${animated ? "gif" : "png"}?size=${size}&quality=lossless`;
+}
 
 export function classEmoji(wowClass?: string): string {
   return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.emoji ?? "❔";
@@ -803,12 +850,6 @@ export function classEmoji(wowClass?: string): string {
 
 export function classColor(wowClass?: string): string | undefined {
   return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.color;
-}
-
-export function roleMeta(
-  role?: string,
-): { emoji: string; key: string; label: string } | undefined {
-  return ROLE_META.find((entry) => entry.key === role);
 }
 
 export const EVENT_TYPES: Array<{
@@ -847,6 +888,7 @@ export type EventSignup = {
   id: string;
   note?: string;
   role?: string;
+  spec?: string;
   status: string;
   updatedAt: string;
   userId: string;
@@ -925,6 +967,7 @@ export async function upsertEventSignup(
     character?: string;
     note?: string;
     role?: string;
+    spec?: string;
     status: string;
     wowClass?: string;
   },
@@ -945,6 +988,61 @@ export async function deleteMyEventSignup(
 ): Promise<{ deleted: boolean }> {
   return requestJson<{ deleted: boolean }>(
     `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/me`,
+    { method: "DELETE" },
+  );
+}
+
+// ── Catálogo de specs de inscripción (estilo Raid Helper) ───────────
+
+export type RaidSpec = {
+  animated: boolean;
+  className: string;
+  createdAt: string;
+  emojiId?: string;
+  emojiName?: string;
+  guildId: string;
+  id: string;
+  position: number;
+  role: string;
+  specName: string;
+  updatedAt: string;
+};
+
+export async function getEventSpecs(guildId: string): Promise<RaidSpec[]> {
+  const data = await requestJson<{ specs: RaidSpec[] }>(
+    `/guilds/${guildId}/events/specs`,
+    { method: "GET" },
+  );
+  return data.specs;
+}
+
+export async function createEventSpec(
+  guildId: string,
+  input: {
+    animated?: boolean;
+    className: string;
+    emojiId?: string;
+    emojiName?: string;
+    role: string;
+    specName: string;
+  },
+): Promise<RaidSpec> {
+  const data = await requestJson<{ spec: RaidSpec }>(
+    `/guilds/${guildId}/events/specs`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.spec;
+}
+
+export async function deleteEventSpec(
+  guildId: string,
+  specId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/events/specs/${encodeURIComponent(specId)}`,
     { method: "DELETE" },
   );
 }

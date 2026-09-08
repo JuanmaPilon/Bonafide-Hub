@@ -52,15 +52,19 @@ import {
   updateDailyMessage,
   COMBAT_ROLES,
   EVENT_TYPES,
-  WOW_CLASSES,
   classColor,
   classEmoji,
   createEvent,
+  createEventSpec,
   deleteEvent,
   deleteEventImage,
+  deleteEventSpec,
   deleteMyEventSignup,
+  discordEmojiUrl,
   getEventImages,
+  getEventSpecs,
   getEvents,
+  getGuildEmojis,
   roleMeta,
   updateEvent,
   uploadEventImage,
@@ -75,6 +79,7 @@ import {
   type GuildBooster,
   type GuildChannel,
   type GuildConfig,
+  type GuildEmoji,
   type GuildRole,
   type GuildWidgetStatus,
   type LeaderboardEntry,
@@ -88,6 +93,7 @@ import {
   type XpImportEntry,
   type XpRoleMultiplier,
   type XpRoleRule,
+  type RaidSpec,
   type EventSignup,
   type EventImage,
   type HubEvent,
@@ -513,6 +519,7 @@ function EventCard({
   onEdit,
   onRemoveSignup,
   onSignup,
+  specs,
 }: {
   canManage: boolean;
   event: HubEvent;
@@ -525,10 +532,12 @@ function EventCard({
     input: {
       character?: string;
       role?: string;
+      spec?: string;
       status: string;
       wowClass?: string;
     },
   ) => Promise<void>;
+  specs: RaidSpec[];
 }) {
   const mySignup = meId
     ? event.signups.find((signup) => signup.userId === meId)
@@ -536,6 +545,13 @@ function EventCard({
 
   const [wowClass, setWowClass] = useState(mySignup?.wowClass ?? "");
   const [role, setRole] = useState(mySignup?.role ?? "");
+  const [spec, setSpec] = useState(mySignup?.spec ?? "");
+  // Rol que se está explorando en el selector (empieza por el actual).
+  const [catalogRole, setCatalogRole] = useState<string>(
+    mySignup?.role && COMBAT_ROLES.includes(mySignup.role as never)
+      ? mySignup.role
+      : "tank",
+  );
   const [character, setCharacter] = useState(mySignup?.character ?? "");
   const [status, setStatus] = useState(mySignup?.status ?? "yes");
   const [submitting, setSubmitting] = useState(false);
@@ -562,12 +578,38 @@ function EventCard({
       )
     : undefined;
 
+  // Clases presentes en el rol que se está explorando (con sus specs).
+  const catalogClasses = useMemo(() => {
+    const rows = specs.filter((entry) => entry.role === catalogRole);
+    const classes = new Map<string, RaidSpec[]>();
+    for (const row of rows) {
+      const list = classes.get(row.className) ?? [];
+      list.push(row);
+      classes.set(row.className, list);
+    }
+    return [...classes.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [catalogRole, specs]);
+
+  // Spec actualmente elegido en el formulario (para mostrar su emoji).
+  const currentSpecRow = specs.find(
+    (row) =>
+      row.role === role && row.className === wowClass && row.specName === spec,
+  );
+
+  function chooseSpec(row: RaidSpec): void {
+    setRole(row.role);
+    setWowClass(row.className);
+    setSpec(row.specName);
+    setCatalogRole(row.role);
+  }
+
   const submit = async (): Promise<void> => {
     setSubmitting(true);
     try {
       await onSignup(event.id, {
         character: character.trim() || undefined,
         role: role || undefined,
+        spec: spec || undefined,
         status,
         wowClass: wowClass || undefined,
       });
@@ -625,35 +667,68 @@ function EventCard({
 
         {event.signups.length > 0 ? (
           <div className="event-roster">
-            {(["tank", "healer", "dps"] as const).map((combatRole) => {
+            {([...COMBAT_ROLES, "legacy"] as const).map((groupKey) => {
               const roleSignups = event.signups.filter(
                 (signup) =>
-                  signup.role === combatRole && signup.status === "yes",
+                  signup.status === "yes" &&
+                  (groupKey === "legacy"
+                    ? !COMBAT_ROLES.includes(signup.role as never)
+                    : signup.role === groupKey),
               );
               if (roleSignups.length === 0) {
                 return null;
               }
+              const meta =
+                groupKey === "legacy"
+                  ? { emoji: "⭐", label: "Otros" }
+                  : roleMeta(groupKey);
               return (
-                <div className="event-roster-group" key={combatRole}>
+                <div className="event-roster-group" key={groupKey}>
                   <span className="event-roster-role">
-                    {roleMeta(combatRole)?.emoji} {roleMeta(combatRole)?.label}
+                    {meta?.emoji} {meta?.label}
                   </span>
-                  {roleSignups.map((signup) => (
-                    <span
-                      className="event-roster-member"
-                      key={signup.id}
-                      style={
-                        signup.wowClass
-                          ? { color: classColor(signup.wowClass) }
-                          : undefined
-                      }
-                    >
-                      {classEmoji(signup.wowClass)}{" "}
-                      {signup.character
-                        ? `${signup.character} (${signup.username})`
-                        : signup.username}
-                    </span>
-                  ))}
+                  {roleSignups.map((signup) => {
+                    const specRow = specs.find(
+                      (row) =>
+                        row.role === signup.role &&
+                        row.className === signup.wowClass &&
+                        row.specName === signup.spec,
+                    );
+                    const specIcon = discordEmojiUrl(
+                      specRow?.emojiId,
+                      specRow?.animated,
+                    );
+                    const color = specRow
+                      ? undefined
+                      : classColor(signup.wowClass);
+                    return (
+                      <span
+                        className="event-roster-member"
+                        key={signup.id}
+                        style={color ? { color } : undefined}
+                        title={
+                          [signup.wowClass, signup.spec]
+                            .filter(Boolean)
+                            .join(" · ") || undefined
+                        }
+                      >
+                        {specIcon ? (
+                          <img
+                            alt=""
+                            className="signup-spec-emoji"
+                            src={specIcon}
+                          />
+                        ) : (
+                          <span aria-hidden="true">
+                            {classEmoji(signup.wowClass)}{" "}
+                          </span>
+                        )}
+                        {signup.character
+                          ? `${signup.character} (${signup.username})`
+                          : signup.username}
+                      </span>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -694,32 +769,101 @@ function EventCard({
                     </button>
                   ))}
                 </div>
-                <div className="event-signup-fields">
-                  <select
-                    className="select"
-                    value={wowClass}
-                    onChange={(event) => setWowClass(event.target.value)}
-                  >
-                    <option value="">Clase (opcional)</option>
-                    {WOW_CLASSES.map((cls) => (
-                      <option key={cls} value={cls}>
-                        {classEmoji(cls)} {cls}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="select"
-                    value={role}
-                    onChange={(event) => setRole(event.target.value)}
-                  >
-                    <option value="">Rol (opcional)</option>
+                <div className="event-signup-picker">
+                  <div className="event-signup-role-row">
                     {COMBAT_ROLES.map((combatRole) => (
-                      <option key={combatRole} value={combatRole}>
-                        {roleMeta(combatRole)?.emoji}{" "}
-                        {roleMeta(combatRole)?.label}
-                      </option>
+                      <button
+                        className={`event-status-btn role${catalogRole === combatRole ? " active" : ""}`}
+                        key={combatRole}
+                        onClick={() => setCatalogRole(combatRole)}
+                        title={roleMeta(combatRole)?.label}
+                        type="button"
+                      >
+                        {roleMeta(combatRole)?.emoji}
+                      </button>
                     ))}
-                  </select>
+                  </div>
+                  {specs.length === 0 ? (
+                    <div className="event-signup-no-catalog">
+                      El staff aún no configuró el catálogo de clases/specs
+                      para la guild.
+                    </div>
+                  ) : catalogClasses.length === 0 ? (
+                    <div className="event-signup-no-catalog">
+                      Todavía no hay specs cargados para ese rol.
+                    </div>
+                  ) : (
+                    <div className="event-signup-specs">
+                      {catalogClasses.map(([className, rows]) => (
+                        <div className="event-signup-class" key={className}>
+                          <span className="event-signup-class-name">
+                            {className}
+                          </span>
+                          <div className="event-signup-spec-row">
+                            {rows.map((row) => {
+                              const selected =
+                                role === row.role &&
+                                wowClass === row.className &&
+                                spec === row.specName;
+                              const emojiUrl = discordEmojiUrl(
+                                row.emojiId,
+                                row.animated,
+                                24,
+                              );
+                              return (
+                                <button
+                                  className={`event-signup-spec${selected ? " active" : ""}`}
+                                  key={row.id}
+                                  onClick={() => chooseSpec(row)}
+                                  title={`${row.specName} — ${row.className} (${roleMeta(row.role)?.label ?? row.role})`}
+                                  type="button"
+                                >
+                                  {emojiUrl ? (
+                                    <img
+                                      alt=""
+                                      className="signup-spec-emoji"
+                                      src={emojiUrl}
+                                    />
+                                  ) : null}
+                                  <span>{row.specName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {role && wowClass && spec ? (
+                    <div className="event-signup-selected">
+                      {currentSpecRow?.emojiId ? (
+                        <img
+                          alt=""
+                          className="signup-spec-emoji"
+                          src={discordEmojiUrl(
+                            currentSpecRow.emojiId,
+                            currentSpecRow.animated,
+                          )}
+                        />
+                      ) : (
+                        <span aria-hidden="true">{classEmoji(wowClass)} </span>
+                      )}
+                      <span>
+                        {roleMeta(role)?.label ?? role} · {wowClass} · {spec}
+                      </span>
+                      <button
+                        className="ghost-button small"
+                        onClick={() => {
+                          setRole("");
+                          setWowClass("");
+                          setSpec("");
+                        }}
+                        type="button"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ) : null}
                   <input
                     className="input"
                     value={character}
@@ -1487,6 +1631,20 @@ function App() {
   const [eventImages, setEventImages] = useState<EventImage[]>([]);
   const [eventImagesLoading, setEventImagesLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  // Catálogo de specs de inscripción (estilo Raid Helper) + editor.
+  const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
+  const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
+  const [showSpecEditor, setShowSpecEditor] = useState(false);
+  const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
+  const [guildEmojisLoading, setGuildEmojisLoading] = useState(false);
+  const [specDraft, setSpecDraft] = useState<{
+    animated?: boolean;
+    className: string;
+    emojiId?: string;
+    emojiName?: string;
+    role: string;
+    specName: string;
+  }>({ className: "", role: "tank", specName: "" });
   const [savingAction, setSavingAction] = useState<
     | "config"
     | "xp"
@@ -1924,6 +2082,61 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
+  // El catálogo de specs se carga junto con los eventos (lo usa el selector
+  // de inscripción y el roster para resolver emojis custom).
+  useEffect(() => {
+    if (!selectedGuildId || activeTab !== "eventos") {
+      setEventSpecs([]);
+      setEventSpecsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setEventSpecsLoading(true);
+    getEventSpecs(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setEventSpecs(list);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setEventSpecsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
+  // Emojis custom de la guild, solo cuando se abre el editor de catálogo.
+  useEffect(() => {
+    if (!selectedGuildId || !showSpecEditor) {
+      return;
+    }
+    let cancelled = false;
+    setGuildEmojisLoading(true);
+    getGuildEmojis(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setGuildEmojis(list);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGuildEmojis([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setGuildEmojisLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGuildId, showSpecEditor]);
+
   // Borra un drop de Karuta (admin/owner) y lo saca del feed local.
   function handleDeleteKarutaDrop(drop: KarutaDrop): void {
     if (!selectedGuildId) {
@@ -2018,6 +2231,7 @@ function App() {
     input: {
       character?: string;
       role?: string;
+      spec?: string;
       status: string;
       wowClass?: string;
     },
@@ -2069,6 +2283,73 @@ function App() {
         "error",
       );
     }
+  }
+
+  // Agrega una spec (rol/clase/spec + emoji) al catálogo de la guild.
+  async function handleSaveEventSpec(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    if (!specDraft.className.trim() || !specDraft.specName.trim()) {
+      pushToast("Faltan clase o spec.", "error");
+      return;
+    }
+    try {
+      await createEventSpec(selectedGuildId, {
+        animated: specDraft.animated,
+        className: specDraft.className.trim(),
+        emojiId: specDraft.emojiId,
+        emojiName: specDraft.emojiName,
+        role: specDraft.role,
+        specName: specDraft.specName.trim(),
+      });
+      setEventSpecs(await getEventSpecs(selectedGuildId));
+      setSpecDraft((current) => ({
+        animated: false,
+        className: "",
+        emojiId: undefined,
+        emojiName: undefined,
+        role: current.role,
+        specName: "",
+      }));
+      pushToast("Spec agregada al catálogo.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la spec.",
+        "error",
+      );
+    }
+  }
+
+  function handleDeleteEventSpec(spec: RaidSpec): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Quitar spec del catálogo",
+      message: `¿Quitar "${spec.specName}" (${spec.className}) del catálogo? Las inscripciones existentes conservan su texto pero pierden el emoji.`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            await deleteEventSpec(selectedGuildId, spec.id);
+            setEventSpecs((current) =>
+              current.filter((entry) => entry.id !== spec.id),
+            );
+            pushToast("Spec quitada del catálogo.", "success");
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "No se pudo quitar la spec.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
   }
 
   function handleDeleteEvent(event: HubEvent): void {
@@ -6097,7 +6378,222 @@ function App() {
                       >
                         {showEventForm ? "Cancelar" : "+ Nuevo evento"}
                       </button>
+                      <button
+                        className="ghost-button"
+                        onClick={() => setShowSpecEditor((current) => !current)}
+                        type="button"
+                      >
+                        {showSpecEditor
+                          ? "Cerrar catálogo"
+                          : "⚙️ Catálogo de specs"}
+                      </button>
                     </div>
+                  ) : null}
+
+                  {showSpecEditor && canAccess("eventos") ? (
+                    <details
+                      className="admin-card admin-card-acc admin-card--officer"
+                      open
+                    >
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>
+                            Catálogo de inscripciones (clase/spec + emojis)
+                          </h3>
+                        </div>
+                        <span
+                          className="admin-acc-chevron"
+                          aria-hidden="true"
+                        >
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        {eventSpecsLoading ? (
+                          <span className="muted-text">Cargando…</span>
+                        ) : eventSpecs.length === 0 ? (
+                          <div className="event-signup-no-catalog">
+                            Todavía no hay specs cargadas. Agregá rol, clase y
+                            spec abajo; cada spec puede llevar un emoji custom
+                            del servidor (ej: spec_devourer).
+                          </div>
+                        ) : (
+                          COMBAT_ROLES.map((combatRole) => {
+                            const roleSpecs = eventSpecs.filter(
+                              (entry) => entry.role === combatRole,
+                            );
+                            if (roleSpecs.length === 0) {
+                              return null;
+                            }
+                            return (
+                              <div className="spec-cat-role" key={combatRole}>
+                                <strong>
+                                  {roleMeta(combatRole)?.emoji}{" "}
+                                  {roleMeta(combatRole)?.label}
+                                </strong>
+                                <div className="spec-cat-list">
+                                  {roleSpecs.map((spec) => (
+                                    <span className="spec-cat-chip" key={spec.id}>
+                                      {spec.emojiId ? (
+                                        <img
+                                          alt=""
+                                          className="signup-spec-emoji"
+                                          src={discordEmojiUrl(
+                                            spec.emojiId,
+                                            spec.animated,
+                                            20,
+                                          )}
+                                        />
+                                      ) : (
+                                        <span aria-hidden="true">❔ </span>
+                                      )}
+                                      {spec.className} · {spec.specName}
+                                      <button
+                                        className="spec-cat-chip-delete"
+                                        onClick={() =>
+                                          handleDeleteEventSpec(spec)
+                                        }
+                                        title="Quitar del catálogo"
+                                        type="button"
+                                      >
+                                        ✕
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                        <div className="spec-cat-form">
+                          <strong>Agregar spec</strong>
+                          <div className="form-grid">
+                            <label>
+                              <span>Rol</span>
+                              <select
+                                className="select"
+                                value={specDraft.role}
+                                onChange={(event) =>
+                                  setSpecDraft((current) => ({
+                                    ...current,
+                                    role: event.target.value,
+                                  }))
+                                }
+                              >
+                                {COMBAT_ROLES.map((combatRole) => (
+                                  <option
+                                    key={combatRole}
+                                    value={combatRole}
+                                  >
+                                    {roleMeta(combatRole)?.emoji}{" "}
+                                    {roleMeta(combatRole)?.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              <span>Clase</span>
+                              <input
+                                className="input"
+                                value={specDraft.className}
+                                onChange={(event) =>
+                                  setSpecDraft((current) => ({
+                                    ...current,
+                                    className: event.target.value,
+                                  }))
+                                }
+                                placeholder="Ej: Demon Hunter"
+                                maxLength={40}
+                              />
+                            </label>
+                            <label>
+                              <span>Spec</span>
+                              <input
+                                className="input"
+                                value={specDraft.specName}
+                                onChange={(event) =>
+                                  setSpecDraft((current) => ({
+                                    ...current,
+                                    specName: event.target.value,
+                                  }))
+                                }
+                                placeholder="Ej: Devourer"
+                                maxLength={40}
+                              />
+                            </label>
+                          </div>
+                          <div className="spec-emoji-picker">
+                            <span className="label">
+                              Emoji custom (opcional, de este servidor)
+                            </span>
+                            {guildEmojisLoading ? (
+                              <span className="muted-text">Cargando…</span>
+                            ) : guildEmojis.length === 0 ? (
+                              <span className="muted-text">
+                                No hay emojis custom disponibles.
+                              </span>
+                            ) : (
+                              <div className="spec-emoji-grid">
+                                {guildEmojis.map((emoji) => {
+                                  const selected =
+                                    specDraft.emojiId === emoji.id;
+                                  return (
+                                    <button
+                                      className={`spec-emoji-option${selected ? " active" : ""}`}
+                                      key={emoji.id}
+                                      onClick={() =>
+                                        setSpecDraft((current) =>
+                                          current.emojiId === emoji.id
+                                            ? {
+                                                ...current,
+                                                animated: false,
+                                                emojiId: undefined,
+                                                emojiName: undefined,
+                                              }
+                                            : {
+                                                ...current,
+                                                animated: emoji.animated,
+                                                emojiId: emoji.id,
+                                                emojiName: emoji.name,
+                                              },
+                                        )
+                                      }
+                                      title={`:${emoji.name}:`}
+                                      type="button"
+                                    >
+                                      <img
+                                        alt={emoji.name}
+                                        src={discordEmojiUrl(
+                                          emoji.id,
+                                          emoji.animated,
+                                          24,
+                                        )}
+                                      />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {specDraft.emojiId ? (
+                              <span className="spec-emoji-selected muted-text">
+                                Emoji elegido: :{specDraft.emojiName}:
+                              </span>
+                            ) : (
+                              <span className="muted-text">
+                                Sin emoji (se muestra el genérico).
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveEventSpec()}
+                            type="button"
+                          >
+                            Agregar al catálogo
+                          </button>
+                        </div>
+                      </div>
+                    </details>
                   ) : null}
 
                   {showEventForm ? (
@@ -6355,6 +6851,7 @@ function App() {
                           onEdit={handleEditEvent}
                           onRemoveSignup={handleRemoveEventSignup}
                           onSignup={handleEventSignup}
+                          specs={eventSpecs}
                         />
                       ))}
                     </div>
