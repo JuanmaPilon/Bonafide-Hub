@@ -383,7 +383,13 @@ function KarpindomoWidget({
 
 // Lista reutilizable de logs de raid (se usa en la tab Logs y en Raids).
 // Cada log es un acordeón: el detalle se expande solo al hacer click.
-function RaidLogsList({ logs }: { logs: RaidLog[] }) {
+function RaidLogsList({
+  logs,
+  onDelete,
+}: {
+  logs: RaidLog[];
+  onDelete?: (log: RaidLog) => void;
+}) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleLog = (logId: string): void => {
@@ -475,6 +481,17 @@ function RaidLogsList({ logs }: { logs: RaidLog[] }) {
                 >
                   Ver en Warcraft Logs ↗
                 </a>
+                {onDelete ? (
+                  <div className="comunicado-acc-actions">
+                    <button
+                      className="ghost-button danger"
+                      onClick={() => onDelete(log)}
+                      type="button"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </article>
@@ -2788,6 +2805,17 @@ function App() {
         "error",
       );
     }
+  }
+
+  function requestDeleteRaidLog(log: RaidLog): void {
+    setConfirmDialog({
+      kind: "danger",
+      title: "Eliminar log de raid",
+      message: `¿Eliminar "${log.title || log.reportCode}"? Esta acción no se puede deshacer.`,
+      onConfirm: () => {
+        void handleDeleteRaidLog(log);
+      },
+    });
   }
 
   async function handleSaveLogsConfig(): Promise<void> {
@@ -6104,7 +6132,14 @@ function App() {
                         {raidLogsLoading ? (
                           <LoadingState label="Cargando logs de raid…" />
                         ) : (
-                          <RaidLogsList logs={raidLogs} />
+                          <RaidLogsList
+                            logs={raidLogs}
+                            onDelete={
+                              canAccess("raids")
+                                ? requestDeleteRaidLog
+                                : undefined
+                            }
+                          />
                         )}
                       </div>
                     </div>
