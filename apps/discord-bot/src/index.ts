@@ -24,6 +24,7 @@ import {
   handleMusicButton,
   handleMusicCommand,
 } from "./services/music-service.js";
+import { handleEventSignupInteraction } from "./services/events-signup-service.js";
 import {
   cancelReminder,
   createReminder,
@@ -1870,6 +1871,17 @@ async function handleVoiceLockCommand(
 }
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // Botones/selects de inscripción a eventos (embed del Módulo X).
+  if (
+    (interaction.isButton() || interaction.isStringSelectMenu()) &&
+    interaction.customId.startsWith("eventsign:")
+  ) {
+    await handleEventSignupInteraction(interaction).catch((error) => {
+      console.error("[event-signup] error al procesar interacción", error);
+    });
+    return;
+  }
+
   if (interaction.isButton()) {
     // Botones del player de música (estilo Rythm).
     if (interaction.customId.startsWith("music:")) {

@@ -3127,6 +3127,34 @@ export function buildApp() {
     },
   );
 
+  // El bot necesita el evento (con sus signups) para decidir si abre el
+  // asistente de rol/spec o aplica el estado directo.
+  app.get(
+    "/internal/guilds/:guildId/events/:eventId",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+      return { ok: true, guildId: params.guildId, event };
+    },
+  );
+
   app.put(
     "/internal/guilds/:guildId/events/:eventId/signups",
     async (request, reply) => {
