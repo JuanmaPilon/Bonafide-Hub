@@ -651,6 +651,109 @@ function toDateTimeLocal(value: Date | string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+// ── Tag de comunicados ──────────────────────────────────────────────
+// Un comunicado puede llevar una etiqueta corta con color libre (hex).
+// Normaliza el color a #rrggbb (acepta #rgb, "abc" o "#aabbcc").
+function normalizeTagColor(
+  value: string | undefined,
+  fallback = "#ff7043",
+): string {
+  let hex = (value ?? "").trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(hex)) {
+    hex = hex
+      .split("")
+      .map((char) => char + char)
+      .join("");
+  }
+  return /^[0-9a-f]{6}$/i.test(hex) ? `#${hex.toLowerCase()}` : fallback;
+}
+
+// Texto legible sobre el color del tag (blanco u oscuro según luminancia).
+function tagTextColor(hex: string): string {
+  const h = normalizeTagColor(hex).replace("#", "");
+  const r = Number.parseInt(h.slice(0, 2), 16);
+  const g = Number.parseInt(h.slice(2, 4), 16);
+  const b = Number.parseInt(h.slice(4, 6), 16);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 150 ? "#141b2b" : "#ffffff";
+}
+
+// Chip del tag: si no hay etiqueta no renderiza nada (uso seguro en cards).
+function ComunicadoTag({
+  color,
+  label,
+}: {
+  color?: string;
+  label?: string;
+}) {
+  const text = label?.trim();
+  if (!text) {
+    return null;
+  }
+  const background = normalizeTagColor(color);
+  return (
+    <span
+      className="comunicado-tag"
+      style={{ backgroundColor: background, color: tagTextColor(background) }}
+      title={text}
+    >
+      {text}
+    </span>
+  );
+}
+
+// Campos del editor de tag (texto + color + vista previa). Se usa en el
+// modal de plantilla y en el de mensaje publicado para no duplicar markup.
+function ComunicadoTagFields({
+  color,
+  label,
+  onColor,
+  onLabel,
+}: {
+  color: string;
+  label: string;
+  onColor: (value: string) => void;
+  onLabel: (value: string) => void;
+}) {
+  return (
+    <div className="comm-tag-editor">
+      <label>
+        <span>Tag (opcional)</span>
+        <input
+          type="text"
+          value={label}
+          onChange={(event) => onLabel(event.target.value)}
+          placeholder="Ej: Raid"
+          maxLength={24}
+        />
+      </label>
+      <div className="comm-tag-color">
+        <span>Color del tag</span>
+        <span className="comm-tag-color-row">
+          <input
+            type="color"
+            className="comm-tag-swatch"
+            value={normalizeTagColor(color)}
+            onChange={(event) => onColor(event.target.value)}
+          />
+          <input
+            type="text"
+            className="comm-tag-hex"
+            value={color}
+            onChange={(event) => onColor(event.target.value)}
+            placeholder="#ff7043"
+            maxLength={7}
+          />
+        </span>
+      </div>
+      <div className="comm-tag-preview">
+        <span>Vista previa:</span>
+        <ComunicadoTag color={color} label={label} />
+      </div>
+    </div>
+  );
+}
+
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
 function EventCard({
@@ -1864,6 +1967,8 @@ function App() {
     communicationId: string;
     content: string;
     id: string;
+    tagColor?: string;
+    tagLabel?: string;
     title: string;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
@@ -2924,13 +3029,19 @@ function App() {
     try {
       if (commEditor.id) {
         await updateCommunication(selectedGuildId, commEditor.id, {
+          tagColor: commEditor.tagColor ?? "",
+          tagLabel: commEditor.tagLabel ?? "",
           title: commEditor.title,
           content: commEditor.content,
           channelId: commEditor.channelId,
         });
         pushToast("Plantilla actualizada.", "success");
       } else {
-        await createCommunication(selectedGuildId, commEditor);
+        await createCommunication(selectedGuildId, {
+          ...commEditor,
+          tagColor: commEditor.tagColor ?? "",
+          tagLabel: commEditor.tagLabel ?? "",
+        });
         pushToast("Plantilla creada.", "success");
       }
       setCommEditor(null);
@@ -3046,6 +3157,8 @@ function App() {
         instanceEditor.communicationId,
         instanceEditor.id,
         {
+          tagColor: instanceEditor.tagColor ?? "",
+          tagLabel: instanceEditor.tagLabel ?? "",
           title: instanceEditor.title,
           content: instanceEditor.content,
         },
@@ -5005,6 +5118,8 @@ function App() {
                                 title: "",
                                 content: "",
                                 channelId: "",
+                                tagColor: "",
+                                tagLabel: "",
                               })
                             }
                             type="button"
@@ -5025,6 +5140,10 @@ function App() {
                               <div className="comunicado-admin-row">
                                 <div className="comunicado-admin-info">
                                   <strong>{comm.title}</strong>
+                                  <ComunicadoTag
+                                    color={comm.tagColor}
+                                    label={comm.tagLabel}
+                                  />
                                   <span
                                     className={`comunicado-status comunicado-status-${comm.instances.length > 0 ? "published" : "draft"}`}
                                   >
@@ -5042,6 +5161,8 @@ function App() {
                                         title: comm.title,
                                         content: comm.content,
                                         channelId: comm.channelId ?? "",
+                                        tagColor: comm.tagColor ?? "",
+                                        tagLabel: comm.tagLabel ?? "",
                                       })
                                     }
                                     type="button"
@@ -6420,6 +6541,10 @@ function App() {
                       <article className="comunicado-card">
                         <div className="comunicado-detail-head">
                           <h3>{currentComunicado.title}</h3>
+                          <ComunicadoTag
+                            color={currentComunicado.tagColor}
+                            label={currentComunicado.tagLabel}
+                          />
                           {currentComunicado.publishedAt ? (
                             <span className="comunicado-date">
                               {new Date(
@@ -6460,6 +6585,8 @@ function App() {
                                     content: currentComunicado.content,
                                     id: currentComunicado.id,
                                     title: currentComunicado.title,
+                                    tagColor: currentComunicado.tagColor ?? "",
+                                    tagLabel: currentComunicado.tagLabel ?? "",
                                   })
                                 }
                                 type="button"
@@ -6511,6 +6638,10 @@ function App() {
                           >
                             <span className="comunicado-acc-heading">
                               <strong>{comm.title}</strong>
+                              <ComunicadoTag
+                                color={comm.tagColor}
+                                label={comm.tagLabel}
+                              />
                               {comm.publishedAt ? (
                                 <span className="comunicado-date">
                                   {new Date(
@@ -6558,6 +6689,8 @@ function App() {
                                         content: comm.content,
                                         id: comm.id,
                                         title: comm.title,
+                                        tagColor: comm.tagColor ?? "",
+                                        tagLabel: comm.tagLabel ?? "",
                                       })
                                     }
                                     type="button"
@@ -7402,6 +7535,20 @@ function App() {
                   ))}
                 </select>
               </label>
+              <ComunicadoTagFields
+                color={commEditor.tagColor ?? ""}
+                label={commEditor.tagLabel ?? ""}
+                onColor={(tagColor) =>
+                  setCommEditor((current) =>
+                    current ? { ...current, tagColor } : current,
+                  )
+                }
+                onLabel={(tagLabel) =>
+                  setCommEditor((current) =>
+                    current ? { ...current, tagLabel } : current,
+                  )
+                }
+              />
             </div>
             <div className="form-actions">
               <button
@@ -7465,6 +7612,20 @@ function App() {
                   }
                 />
               </label>
+              <ComunicadoTagFields
+                color={instanceEditor.tagColor ?? ""}
+                label={instanceEditor.tagLabel ?? ""}
+                onColor={(tagColor) =>
+                  setInstanceEditor((current) =>
+                    current ? { ...current, tagColor } : current,
+                  )
+                }
+                onLabel={(tagLabel) =>
+                  setInstanceEditor((current) =>
+                    current ? { ...current, tagLabel } : current,
+                  )
+                }
+              />
             </div>
             <div className="form-actions">
               <button

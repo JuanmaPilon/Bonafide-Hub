@@ -4294,6 +4294,8 @@ export function buildApp() {
       authorName?: string;
       channelId?: string;
       content?: string;
+      tagColor?: string;
+      tagLabel?: string;
       title?: string;
     };
 
@@ -4310,6 +4312,8 @@ export function buildApp() {
       channelId: body.channelId,
       content,
       guildId: params.guildId,
+      tagColor: body.tagColor,
+      tagLabel: body.tagLabel,
       title,
     });
 
@@ -4351,6 +4355,8 @@ export function buildApp() {
         authorName?: string;
         channelId?: string;
         content?: string;
+        tagColor?: string;
+        tagLabel?: string;
         title?: string;
       };
 
@@ -4359,6 +4365,8 @@ export function buildApp() {
         channelId: body.channelId,
         content: body.content?.trim(),
         id: params.communicationId,
+        tagColor: body.tagColor,
+        tagLabel: body.tagLabel,
         title: body.title?.trim(),
       });
 
@@ -4499,6 +4507,8 @@ export function buildApp() {
 
       const body = request.body as {
         content?: string;
+        tagColor?: string;
+        tagLabel?: string;
         title?: string;
       };
 
@@ -4546,6 +4556,8 @@ export function buildApp() {
         content,
         discordMessageIds,
         id: instance.id,
+        tagColor: body.tagColor,
+        tagLabel: body.tagLabel,
         title,
       });
 
@@ -4627,6 +4639,8 @@ export function buildApp() {
         content: existing.content,
         discordMessageIds: messageIds,
         guildId: existing.guildId,
+        tagColor: existing.tagColor,
+        tagLabel: existing.tagLabel,
         title: existing.title,
       });
 

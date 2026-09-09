@@ -14,6 +14,8 @@ export type CommunicationInstance = {
   guildId: string;
   id: string;
   publishedAt: Date;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
 };
 
@@ -26,6 +28,8 @@ export type Communication = {
   id: string;
   instances: CommunicationInstance[];
   status: CommunicationStatus;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
   updatedAt: Date;
 };
@@ -39,6 +43,8 @@ function toCommunicationInstance(record: {
   guildId: string;
   id: string;
   publishedAt: Date;
+  tagColor: string | null;
+  tagLabel: string | null;
   title: string;
 }): CommunicationInstance {
   return {
@@ -50,6 +56,8 @@ function toCommunicationInstance(record: {
     guildId: record.guildId,
     id: record.id,
     publishedAt: record.publishedAt,
+    tagColor: record.tagColor ?? undefined,
+    tagLabel: record.tagLabel ?? undefined,
     title: record.title,
   };
 }
@@ -70,9 +78,13 @@ function toCommunication(record: {
     guildId: string;
     id: string;
     publishedAt: Date;
+    tagColor: string | null;
+    tagLabel: string | null;
     title: string;
   }>;
   status: string;
+  tagColor: string | null;
+  tagLabel: string | null;
   title: string;
   updatedAt: Date;
 }): Communication {
@@ -87,6 +99,8 @@ function toCommunication(record: {
     status: (record.status === "published"
       ? "published"
       : "draft") as CommunicationStatus,
+    tagColor: record.tagColor ?? undefined,
+    tagLabel: record.tagLabel ?? undefined,
     title: record.title,
     updatedAt: record.updatedAt,
   };
@@ -129,6 +143,8 @@ export async function createCommunication(input: {
   channelId?: string;
   content: string;
   guildId: string;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
 }): Promise<Communication> {
   const record = await prisma.communication.create({
@@ -137,6 +153,8 @@ export async function createCommunication(input: {
       channelId: input.channelId?.trim() || null,
       content: input.content,
       guildId: input.guildId,
+      tagColor: input.tagColor?.trim() || null,
+      tagLabel: input.tagLabel?.trim() || null,
       title: input.title.trim(),
     },
     include: { instances: { orderBy: { publishedAt: "desc" } } },
@@ -149,6 +167,8 @@ export async function updateCommunication(input: {
   channelId?: string;
   content?: string;
   id: string;
+  tagColor?: string;
+  tagLabel?: string;
   title?: string;
 }): Promise<Communication | null> {
   const record = await prisma.communication.update({
@@ -161,10 +181,40 @@ export async function updateCommunication(input: {
         ? { channelId: input.channelId.trim() || null }
         : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
+      ...(input.tagColor !== undefined
+        ? { tagColor: input.tagColor.trim() || null }
+        : {}),
+      ...(input.tagLabel !== undefined
+        ? { tagLabel: input.tagLabel.trim() || null }
+        : {}),
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
     },
     include: { instances: { orderBy: { publishedAt: "desc" } } },
   });
+
+  // El tag es una etiqueta web del comunicado: al guardarlo en la plantilla
+  // lo propagamos a sus instancias (cartas del hub) para que se refleje en
+  // mensajes ya publicados sin tener que republicar. Editar una instancia
+  // puntual después puede sobreescribirlo (snapshot propio).
+  if (input.tagLabel !== undefined || input.tagColor !== undefined) {
+    await prisma.communicationInstance.updateMany({
+      where: { communicationId: input.id },
+      data: {
+        tagColor: record.tagColor,
+        tagLabel: record.tagLabel,
+      },
+    });
+
+    // Re-consultamos para devolver las instancias ya actualizadas.
+    const refreshed = await prisma.communication.findUnique({
+      where: { id: input.id },
+      include: { instances: { orderBy: { publishedAt: "desc" } } },
+    });
+    if (refreshed) {
+      return toCommunication(refreshed);
+    }
+  }
+
   return toCommunication(record);
 }
 
@@ -186,6 +236,8 @@ export async function createCommunicationInstance(input: {
   content: string;
   discordMessageIds: string[];
   guildId: string;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
 }): Promise<CommunicationInstance> {
   const record = await prisma.communicationInstance.create({
@@ -196,6 +248,8 @@ export async function createCommunicationInstance(input: {
       content: input.content,
       discordMessageIds: input.discordMessageIds,
       guildId: input.guildId,
+      tagColor: input.tagColor?.trim() || null,
+      tagLabel: input.tagLabel?.trim() || null,
       title: input.title.trim(),
     },
   });
@@ -219,6 +273,8 @@ export async function updateCommunicationInstance(input: {
   content: string;
   discordMessageIds: string[];
   id: string;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
 }): Promise<CommunicationInstance | null> {
   try {
@@ -228,6 +284,8 @@ export async function updateCommunicationInstance(input: {
         authorName: input.authorName?.trim() || null,
         content: input.content,
         discordMessageIds: input.discordMessageIds,
+        tagColor: input.tagColor?.trim() || null,
+        tagLabel: input.tagLabel?.trim() || null,
         title: input.title.trim(),
       },
     });

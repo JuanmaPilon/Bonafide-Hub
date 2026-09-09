@@ -3754,6 +3754,88 @@ textarea {
   line-height: 1.5;
 }
 
+/* ── Tag de comunicados ─────────────────────────────────────────── */
+
+.comunicado-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+}
+
+.comunicado-acc-heading .comunicado-tag {
+  align-self: center;
+  font-size: 0.7rem;
+}
+
+.comm-tag-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.comm-tag-editor label {
+  display: grid;
+  gap: 7px;
+}
+
+.comm-tag-editor label > span,
+.comm-tag-color > span {
+  color: #bdd8d2;
+  font-size: 0.84rem;
+}
+
+.comm-tag-color {
+  display: grid;
+  gap: 7px;
+}
+
+.comm-tag-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comm-form input.comm-tag-swatch {
+  width: 46px;
+  height: 42px;
+  flex: 0 0 auto;
+  padding: 3px;
+  cursor: pointer;
+}
+
+.comm-form input.comm-tag-hex {
+  width: 130px;
+  flex: 0 0 auto;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.comm-tag-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+:root[data-theme="light"] .comm-tag-editor label > span,
+:root[data-theme="light"] .comm-tag-color > span {
+  color: #33415c;
+}
+
+:root[data-theme="light"] .comm-tag-preview {
+  color: #3f4f6b;
+}
+
 /* ---------- Módulos activos (toggles del panel Admin) ---------- */
 
 .modules-grid {

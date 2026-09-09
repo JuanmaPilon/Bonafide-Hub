@@ -80,6 +80,9 @@ model Communication {
   authorName String?
   channelId  String?
   status     String    @default("draft")
+  // Tag visible en la web: etiqueta corta (ej: "Raid") con color hex libre.
+  tagLabel   String?
+  tagColor   String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   instances  CommunicationInstance[]
@@ -99,6 +102,9 @@ model CommunicationInstance {
   title             String
   content           String
   authorName        String?
+  // Snapshot del tag de la plantilla al publicar (visible en la web).
+  tagLabel          String?
+  tagColor          String?
   publishedAt       DateTime @default(now())
   communication     Communication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
 

@@ -189,6 +189,8 @@ export type CommunicationInstance = {
   discordMessageIds: string[];
   id: string;
   publishedAt: string;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
 };
 
@@ -201,6 +203,8 @@ export type Communication = {
   id: string;
   instances: CommunicationInstance[];
   status: "draft" | "published";
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
   updatedAt: string;
 };
@@ -209,6 +213,8 @@ export type CommunicationInput = {
   authorName?: string;
   channelId?: string;
   content?: string;
+  tagColor?: string;
+  tagLabel?: string;
   title?: string;
 };
 
@@ -1244,7 +1250,12 @@ export async function updateCommunicationInstance(
   guildId: string,
   communicationId: string,
   instanceId: string,
-  input: { content: string; title: string },
+  input: {
+    content: string;
+    tagColor?: string;
+    tagLabel?: string;
+    title: string;
+  },
 ): Promise<CommunicationInstance> {
   const data = await requestJson<{ instance: CommunicationInstance }>(
     `/guilds/${guildId}/communications/${communicationId}/instances/${instanceId}`,
