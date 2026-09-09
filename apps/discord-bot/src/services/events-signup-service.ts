@@ -2,10 +2,14 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ModalBuilder,
   StringSelectMenuBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from "discord.js";
 import type {
   ButtonInteraction,
+  ModalSubmitInteraction,
   StringSelectMenuInteraction,
 } from "discord.js";
 import { env } from "../config/env.js";
@@ -221,6 +225,105 @@ async function removeSignup(input: {
   return { ok: true };
 }
 
+// ── Personaje del jugador (modal) ───────────────────────────────────
+// Botón "Personaje" del embed: abre un modal para poner/editar el nombre
+// del personaje con el que el usuario está anotado (igual que en la web).
+
+async function openCharacterModal(
+  interaction: ButtonInteraction,
+  guildId: string,
+  eventId: string,
+): Promise<void> {
+  const event = await fetchEvent(guildId, eventId);
+  const mine = event?.signups?.find(
+    (signup) => signup.userId === interaction.user.id,
+  );
+  const input = new TextInputBuilder()
+    .setCustomId("character")
+    .setLabel("Personaje (opcional)")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(false)
+    .setMaxLength(40)
+    .setPlaceholder("Ej: Ruidia");
+  if (mine?.character) {
+    input.setValue(mine.character);
+  }
+  const row = new ActionRowBuilder<TextInputBuilder>().addComponents(input);
+  const modal = new ModalBuilder()
+    .setCustomId(`eventsign:${eventId}:characterset`)
+    .setTitle("Tu personaje en este evento")
+    .addComponents(row);
+  try {
+    await interaction.showModal(modal);
+  } catch {
+    // Sin respuesta posible.
+  }
+}
+
+// Recibe el envío del modal y guarda/limpia el personaje del usuario.
+export async function handleEventSignupCharacterSubmit(
+  interaction: ModalSubmitInteraction,
+): Promise<void> {
+  const parsed = parseCustomId(interaction.customId);
+  if (!parsed?.eventId || parsed.action !== "characterset") {
+    return;
+  }
+  if (!interaction.inGuild() || !interaction.guildId) {
+    await interaction.reply({
+      content: "Este evento solo funciona dentro del servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const guildId = interaction.guildId;
+  const userId = interaction.user.id;
+  const member = interaction.member as { displayName?: string } | null;
+  const username = member?.displayName?.trim() || interaction.user.username;
+  const character = interaction.fields.getTextInputValue("character").trim();
+
+  const event = await fetchEvent(guildId, parsed.eventId);
+  if (!event) {
+    await interaction.reply({
+      content: "No encontré ese evento.",
+      ephemeral: true,
+    });
+    return;
+  }
+  const mine = event.signups?.find((signup) => signup.userId === userId);
+  if (!mine) {
+    await interaction.reply({
+      content: "Primero anotate con los botones del evento (✅ / 🪑 / ⏰ / ❌).",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const result = await putSignup({
+    character: character || undefined,
+    guildId,
+    eventId: parsed.eventId,
+    role: mine.role,
+    spec: mine.spec,
+    status: mine.status,
+    userId,
+    username,
+    wowClass: mine.wowClass,
+  });
+  if (!result.ok) {
+    await interaction.reply({
+      content: `No se pudo actualizar tu personaje: ${result.error}`,
+      ephemeral: true,
+    });
+    return;
+  }
+  await interaction.reply({
+    content: character
+      ? `Personaje guardado: **${character}**. ✅`
+      : "Personaje quitado. ✅",
+    ephemeral: true,
+  });
+}
+
 function roleSelectRow(
   guildId: string,
   eventId: string,
@@ -424,6 +527,14 @@ export async function handleEventSignupInteraction(
       `Te ${STATUS_LABEL[status] ?? "anotaste"} como **${meta?.emoji ?? ""} ${className} — ${specName}**. ✅`,
       [],
     );
+    return;
+  }
+
+  if (action === "character") {
+    if (!interaction.isButton()) {
+      return;
+    }
+    await openCharacterModal(interaction, guildId, eventId);
     return;
   }
 

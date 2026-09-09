@@ -24,7 +24,10 @@ import {
   handleMusicButton,
   handleMusicCommand,
 } from "./services/music-service.js";
-import { handleEventSignupInteraction } from "./services/events-signup-service.js";
+import {
+  handleEventSignupCharacterSubmit,
+  handleEventSignupInteraction,
+} from "./services/events-signup-service.js";
 import {
   cancelReminder,
   createReminder,
@@ -1882,6 +1885,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // Modal para poner/editar el personaje de una inscripción (Módulo X).
+  if (
+    interaction.isModalSubmit() &&
+    interaction.customId.startsWith("eventsign:")
+  ) {
+    await handleEventSignupCharacterSubmit(interaction).catch((error) => {
+      console.error("[event-signup] error al procesar modal", error);
+    });
+    return;
+  }
+
   if (interaction.isButton()) {
     // Botones del player de música (estilo Rythm).
     if (interaction.customId.startsWith("music:")) {
@@ -2712,9 +2726,7 @@ function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
     const heartMatch = line.match(/♡\s*(\d+)/);
     if (heartMatch) {
       const wishlistCount = Number(heartMatch[1]);
-      const tail = line.slice(
-        (heartMatch.index ?? 0) + heartMatch[0].length,
-      );
+      const tail = line.slice((heartMatch.index ?? 0) + heartMatch[0].length);
       const text = tail.replace(/^[\s:·|>]+/, "").trim();
       if (text) {
         const sepMatch =

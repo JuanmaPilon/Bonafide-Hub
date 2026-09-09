@@ -317,7 +317,12 @@ function resolveEmbedImageUrl(
     return imageUrl;
   }
   if (imageUrl.startsWith("data:image/")) {
-    const base = (env.PUBLIC_API_URL ?? "").trim().replace(/\/+$/, "");
+    // URL pública del API. En Railway el dominio público llega por
+    // RAILWAY_PUBLIC_DOMAIN si no se configuró PUBLIC_API_URL a mano.
+    const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+    const configured = env.PUBLIC_API_URL?.trim();
+    const base = (configured || (railwayDomain ? `https://${railwayDomain}` : ""))
+      .replace(/\/+$/, "");
     if (!base || !eventId) {
       return undefined;
     }
@@ -484,6 +489,7 @@ export function buildEventSignupActionRows(
   ];
   const actionButtons = [
     { customId: "pick", emoji: "⚙️", label: "Clase y spec", style: 1 },
+    { customId: "character", emoji: "✏️", label: "Personaje", style: 2 },
     { customId: "remove", emoji: "🗑️", label: "Quitar inscripción", style: 4 },
   ];
   const row = (
