@@ -2666,13 +2666,15 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  /* Es la cabecera principal de la tab Eventos (sin título genérico encima):
+     dejamos aire arriba y abajo para que no quede pegado al panel. */
+  margin: 2px 0 16px;
   flex-wrap: wrap;
 }
 
 .event-list-header h2 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.5rem;
 }
 
 .event-form-card {

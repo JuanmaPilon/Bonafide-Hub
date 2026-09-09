@@ -371,9 +371,7 @@ function KarutaAlbumCard({
               aria-label="Página anterior"
               className="karuta-album-nav-btn"
               disabled={pageIndex === 0}
-              onClick={() =>
-                setPageIndex((index) => Math.max(0, index - 1))
-              }
+              onClick={() => setPageIndex((index) => Math.max(0, index - 1))}
               type="button"
             >
               ‹
@@ -635,13 +633,12 @@ function recurrenceLabel(
 
 const SIGNUP_OPTIONS: Array<{
   emoji: string;
-  key: "yes" | "tentative" | "bench" | "late" | "no";
+  key: "yes" | "late" | "bench" | "no";
   label: string;
 }> = [
   { emoji: "✅", key: "yes", label: "Voy" },
-  { emoji: "🤔", key: "tentative", label: "Quizás" },
-  { emoji: "🪑", key: "bench", label: "Bench" },
   { emoji: "⏰", key: "late", label: "Tarde" },
+  { emoji: "🪑", key: "bench", label: "Bench" },
   { emoji: "❌", key: "no", label: "No asisto" },
 ];
 
@@ -679,13 +676,7 @@ function tagTextColor(hex: string): string {
 }
 
 // Chip del tag: si no hay etiqueta no renderiza nada (uso seguro en cards).
-function ComunicadoTag({
-  color,
-  label,
-}: {
-  color?: string;
-  label?: string;
-}) {
+function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
   const text = label?.trim();
   if (!text) {
     return null;
@@ -808,8 +799,6 @@ function EventCard({
     bench: event.signups.filter((signup) => signup.status === "bench").length,
     late: event.signups.filter((signup) => signup.status === "late").length,
     no: event.signups.filter((signup) => signup.status === "no").length,
-    tentative: event.signups.filter((signup) => signup.status === "tentative")
-      .length,
     yes: event.signups.filter((signup) => signup.status === "yes").length,
   };
 
@@ -957,11 +946,14 @@ function EventCard({
           </div>
         ) : null}
         <div className="event-card-counts">
-          <span className="event-count yes">✅ {counts.yes}</span>
-          <span className="event-count tentative">🤔 {counts.tentative}</span>
-          <span className="event-count bench">🪑 {counts.bench}</span>
-          <span className="event-count late">⏰ {counts.late}</span>
-          <span className="event-count no">❌ {counts.no}</span>
+          {SIGNUP_OPTIONS.map((option) => (
+            <span
+              className={`event-count ${option.key}`}
+              key={option.key}
+            >
+              {option.emoji} {counts[option.key]}
+            </span>
+          ))}
         </div>
 
         {event.signups.length > 0 ? (
@@ -990,10 +982,13 @@ function EventCard({
                 </div>
               );
             })}
+            {/* Grupos por estado: Bench, Tarde y los que no asisten. En todos
+                los grupos cada miembro muestra nombre + spec (renderMember). */}
             {(
               [
                 ["bench", "🪑", "Bench"],
                 ["late", "⏰", "Tarde"],
+                ["no", "❌", "No asisten"],
               ] as const
             ).map(([statusKey, emoji, label]) => {
               const members = event.signups.filter(
@@ -1404,7 +1399,9 @@ function panelDescription(tab: HubTab): string {
   }
 
   if (tab === "eventos") {
-    return "Calendario, estados de asistencia y sincronización con Discord.";
+    // La cabecera de Eventos es propia (título + botón nuevo evento); no
+    // queremos descripción genérica.
+    return "";
   }
 
   if (tab === "memes") {
@@ -4394,12 +4391,17 @@ function App() {
             </section>
 
             <section className="panel content-panel">
-              <div className="section-header">
-                <div>
-                  <h2>{panelTitle(activeTab)}</h2>
-                  {panelDesc ? <p>{panelDesc}</p> : null}
+              {/* La tab Eventos arma su propia cabecera (título + botón de
+                  nuevo evento): no mostramos el título/descripción genérico
+                  para evitar duplicar "Eventos" y descentrar el contenido. */}
+              {activeTab === "eventos" ? null : (
+                <div className="section-header">
+                  <div>
+                    <h2>{panelTitle(activeTab)}</h2>
+                    {panelDesc ? <p>{panelDesc}</p> : null}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {activeTab === "dashboard" ? (
                 <div className="dashboard-stack">

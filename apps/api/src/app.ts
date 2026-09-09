@@ -216,6 +216,7 @@ type DiscordGuildMember = {
   premium_since?: string | null;
   user?: {
     avatar?: string | null;
+    global_name?: string | null;
     id: string;
     username: string;
   } | null;
@@ -327,6 +328,42 @@ async function fetchAllGuildMembers(
   }
 
   return members;
+}
+
+// Nick de un miembro puntual (GET /guilds/:gid/members/:uid con el token
+// del bot). Se usa al inscribirse desde la web para guardar el NICK DE
+// SERVIDOR en el signup (y no el nombre global), consistente con lo que
+// registra el bot cuando alguien se anota desde Discord.
+async function fetchGuildMemberNick(
+  guildId: string,
+  userId: string,
+): Promise<string | null> {
+  if (!env.DISCORD_BOT_TOKEN) {
+    return null;
+  }
+  try {
+    const response = await fetchWithDiscordRetry(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        },
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const member = (await response.json()) as DiscordGuildMember;
+    const nick = member.nick?.trim();
+    if (nick) {
+      return nick;
+    }
+    const name =
+      member.user?.global_name?.trim() ?? member.user?.username?.trim();
+    return name || null;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchGuildMembersForLeaderboard(
@@ -3107,6 +3144,9 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
+      // Guardamos el nick de servidor (o global_name/username como fallback)
+      // para que el roster muestre cómo se llama la persona en Discord.
+      const nick = await fetchGuildMemberNick(params.guildId, user.id);
       const signup = await upsertSignup({
         character: body.character?.trim() || undefined,
         eventId: params.eventId,
@@ -3116,7 +3156,7 @@ export function buildApp() {
         spec: body.spec?.trim() || undefined,
         status,
         userId: user.id,
-        username: user.global_name ?? user.username ?? "Miembro",
+        username: nick ?? user.global_name ?? user.username ?? "Miembro",
         wowClass: body.wowClass?.trim() || undefined,
       });
 
