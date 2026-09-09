@@ -745,6 +745,28 @@ function ComunicadoTagFields({
   );
 }
 
+// Arte de una carta de Karuta: si la imagen falla (URL caída o sin arte),
+// muestra el placeholder con el nombre en vez de un cuadro vacío "roto".
+function KarutaCardArt({ name, url }: { name?: string; url?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) {
+    return (
+      <div className="karuta-drop-image karuta-drop-image-placeholder">
+        {name ?? "Carta"}
+      </div>
+    );
+  }
+  return (
+    <img
+      alt={name ?? "Carta"}
+      className="karuta-drop-image"
+      loading="lazy"
+      onError={() => setBroken(true)}
+      src={url}
+    />
+  );
+}
+
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
 function EventCard({
@@ -1094,152 +1116,155 @@ function EventCard({
                   <>
                     <div className="event-signup-status">
                       {SIGNUP_OPTIONS.map((option) => (
-                    <button
-                      className={`event-status-btn ${option.key}${status === option.key ? " active" : ""}`}
-                      key={option.key}
-                      onClick={() => setStatus(option.key)}
-                      title={option.label}
-                      type="button"
-                    >
-                      {option.emoji}
-                    </button>
-                  ))}
-                </div>
-                <div className="event-signup-picker">
-                  <div className="event-signup-role-row">
-                    {COMBAT_ROLES.map((combatRole) => (
-                      <button
-                        className={`event-status-btn role${catalogRole === combatRole ? " active" : ""}`}
-                        key={combatRole}
-                        onClick={() => setCatalogRole(combatRole)}
-                        title={roleMeta(combatRole)?.label}
-                        type="button"
-                      >
-                        {roleMeta(combatRole)?.emoji}
-                      </button>
-                    ))}
-                  </div>
-                  {specs.length === 0 ? (
-                    <div className="event-signup-no-catalog">
-                      El staff todavía no configuró los roles de evento (Admin →
-                      Configuración de roles).
-                    </div>
-                  ) : catalogClasses.length === 0 ? (
-                    <div className="event-signup-no-catalog">
-                      Todavía no hay specs cargados para ese rol.
-                    </div>
-                  ) : (
-                    <div className="event-signup-specs">
-                      {catalogClasses.map(([className, rows]) => (
-                        <div className="event-signup-class" key={className}>
-                          <span className="event-signup-class-name">
-                            {className}
-                          </span>
-                          <div className="event-signup-spec-row">
-                            {rows.map((row) => {
-                              const selected =
-                                role === row.role &&
-                                wowClass === row.className &&
-                                spec === row.specName;
-                              const emojiUrl = discordEmojiUrl(
-                                row.emojiId,
-                                row.animated,
-                                24,
-                              );
-                              return (
-                                <button
-                                  className={`event-signup-spec${selected ? " active" : ""}`}
-                                  key={row.id}
-                                  onClick={() => chooseSpec(row)}
-                                  title={`${row.specName} — ${row.className} (${roleMeta(row.role)?.label ?? row.role})`}
-                                  type="button"
-                                >
-                                  {emojiUrl ? (
-                                    <img
-                                      alt=""
-                                      className="signup-spec-emoji"
-                                      src={emojiUrl}
-                                    />
-                                  ) : null}
-                                  <span>{row.specName}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {role && wowClass && spec ? (
-                    <div className="event-signup-selected">
-                      {currentSpecRow?.emojiId ? (
-                        <img
-                          alt=""
-                          className="signup-spec-emoji"
-                          src={discordEmojiUrl(
-                            currentSpecRow.emojiId,
-                            currentSpecRow.animated,
-                          )}
-                        />
-                      ) : (
-                        <span aria-hidden="true">{classEmoji(wowClass)} </span>
-                      )}
-                      <span>
-                        {roleMeta(role)?.label ?? role} · {wowClass} · {spec}
-                      </span>
-                      <button
-                        className="ghost-button small"
-                        onClick={() => {
-                          setRole("");
-                          setWowClass("");
-                          setSpec("");
-                        }}
-                        type="button"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  ) : null}
-                  <input
-                    className="input"
-                    value={character}
-                    onChange={(event) => setCharacter(event.target.value)}
-                    maxLength={40}
-                    placeholder="Nombre de tu personaje (opcional)"
-                  />
-                </div>
-                <div className="event-signup-actions">
-                  <button
-                    className="primary-button"
-                    onClick={() => void submit()}
-                    disabled={
-                      submitting || (Boolean(mySignup) && !signupDirty)
-                    }
-                    type="button"
-                  >
-                    {submitting ? "Guardando…" : "Guardar inscripción"}
-                  </button>
-                  {mySignup ? (
-                    <>
-                      {hasFullSignup ? (
                         <button
-                          className="ghost-button"
-                          onClick={() => setEditingSignup(false)}
+                          className={`event-status-btn ${option.key}${status === option.key ? " active" : ""}`}
+                          key={option.key}
+                          onClick={() => setStatus(option.key)}
+                          title={option.label}
                           type="button"
                         >
-                          Cancelar
+                          {option.emoji}
                         </button>
+                      ))}
+                    </div>
+                    <div className="event-signup-picker">
+                      <div className="event-signup-role-row">
+                        {COMBAT_ROLES.map((combatRole) => (
+                          <button
+                            className={`event-status-btn role${catalogRole === combatRole ? " active" : ""}`}
+                            key={combatRole}
+                            onClick={() => setCatalogRole(combatRole)}
+                            title={roleMeta(combatRole)?.label}
+                            type="button"
+                          >
+                            {roleMeta(combatRole)?.emoji}
+                          </button>
+                        ))}
+                      </div>
+                      {specs.length === 0 ? (
+                        <div className="event-signup-no-catalog">
+                          El staff todavía no configuró los roles de evento
+                          (Admin → Configuración de roles).
+                        </div>
+                      ) : catalogClasses.length === 0 ? (
+                        <div className="event-signup-no-catalog">
+                          Todavía no hay specs cargados para ese rol.
+                        </div>
+                      ) : (
+                        <div className="event-signup-specs">
+                          {catalogClasses.map(([className, rows]) => (
+                            <div className="event-signup-class" key={className}>
+                              <span className="event-signup-class-name">
+                                {className}
+                              </span>
+                              <div className="event-signup-spec-row">
+                                {rows.map((row) => {
+                                  const selected =
+                                    role === row.role &&
+                                    wowClass === row.className &&
+                                    spec === row.specName;
+                                  const emojiUrl = discordEmojiUrl(
+                                    row.emojiId,
+                                    row.animated,
+                                    24,
+                                  );
+                                  return (
+                                    <button
+                                      className={`event-signup-spec${selected ? " active" : ""}`}
+                                      key={row.id}
+                                      onClick={() => chooseSpec(row)}
+                                      title={`${row.specName} — ${row.className} (${roleMeta(row.role)?.label ?? row.role})`}
+                                      type="button"
+                                    >
+                                      {emojiUrl ? (
+                                        <img
+                                          alt=""
+                                          className="signup-spec-emoji"
+                                          src={emojiUrl}
+                                        />
+                                      ) : null}
+                                      <span>{row.specName}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {role && wowClass && spec ? (
+                        <div className="event-signup-selected">
+                          {currentSpecRow?.emojiId ? (
+                            <img
+                              alt=""
+                              className="signup-spec-emoji"
+                              src={discordEmojiUrl(
+                                currentSpecRow.emojiId,
+                                currentSpecRow.animated,
+                              )}
+                            />
+                          ) : (
+                            <span aria-hidden="true">
+                              {classEmoji(wowClass)}{" "}
+                            </span>
+                          )}
+                          <span>
+                            {roleMeta(role)?.label ?? role} · {wowClass} ·{" "}
+                            {spec}
+                          </span>
+                          <button
+                            className="ghost-button small"
+                            onClick={() => {
+                              setRole("");
+                              setWowClass("");
+                              setSpec("");
+                            }}
+                            type="button"
+                          >
+                            Quitar
+                          </button>
+                        </div>
                       ) : null}
+                      <input
+                        className="input"
+                        value={character}
+                        onChange={(event) => setCharacter(event.target.value)}
+                        maxLength={40}
+                        placeholder="Nombre de tu personaje (opcional)"
+                      />
+                    </div>
+                    <div className="event-signup-actions">
                       <button
-                        className="ghost-button danger"
-                        onClick={() => void onRemoveSignup(event.id)}
+                        className="primary-button"
+                        onClick={() => void submit()}
+                        disabled={
+                          submitting || (Boolean(mySignup) && !signupDirty)
+                        }
                         type="button"
                       >
-                        Quitar inscripción
+                        {submitting ? "Guardando…" : "Guardar inscripción"}
                       </button>
-                    </>
-                  ) : null}
-                </div>
+                      {mySignup ? (
+                        <>
+                          {hasFullSignup ? (
+                            <button
+                              className="ghost-button"
+                              onClick={() => setEditingSignup(false)}
+                              type="button"
+                            >
+                              Cancelar
+                            </button>
+                          ) : null}
+                          <button
+                            className="ghost-button danger"
+                            onClick={() => void onRemoveSignup(event.id)}
+                            type="button"
+                          >
+                            Quitar inscripción
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                   </>
                 )}
               </>
@@ -6943,17 +6968,10 @@ function App() {
                         <div className="karuta-drops-grid">
                           {karutaDrops.map((drop) => (
                             <article className="karuta-drop-card" key={drop.id}>
-                              {drop.imageUrl ? (
-                                <img
-                                  className="karuta-drop-image"
-                                  src={drop.imageUrl}
-                                  alt={drop.cardName ?? "Carta"}
-                                />
-                              ) : (
-                                <div className="karuta-drop-image karuta-drop-image-placeholder">
-                                  {drop.cardName ?? "Carta"}
-                                </div>
-                              )}
+                              <KarutaCardArt
+                                name={drop.cardName}
+                                url={drop.imageUrl}
+                              />
                               <div className="karuta-drop-body">
                                 <strong>{drop.cardName ?? "Carta"}</strong>
                                 {drop.series ? (
@@ -7007,17 +7025,10 @@ function App() {
                         <div className="karuta-drops-grid">
                           {karutaCards.map((card) => (
                             <article className="karuta-drop-card" key={card.id}>
-                              {card.imageUrl ? (
-                                <img
-                                  className="karuta-drop-image"
-                                  src={card.imageUrl}
-                                  alt={card.cardName ?? "Carta"}
-                                />
-                              ) : (
-                                <div className="karuta-drop-image karuta-drop-image-placeholder">
-                                  {card.cardName ?? "Carta"}
-                                </div>
-                              )}
+                              <KarutaCardArt
+                                name={card.cardName}
+                                url={card.imageUrl}
+                              />
                               <div className="karuta-drop-body">
                                 <strong>{card.cardName ?? "Carta"}</strong>
                                 {card.series ? (

@@ -3484,6 +3484,17 @@ async function processKarutaKv(
     kv.ownerUsername = member.displayName;
   }
 
+  // Karuta a veces postea primero el embed SIN la imagen y la agrega al
+  // EDITAR el mensaje (que procesamos en MessageUpdate). Si esta vista no
+  // trae imagen todavía, no registramos/actualizamos la carta: así no se
+  // crean tarjetas "sin imagen" ni se pisa una imagen buena con nada.
+  if (!kv.imageUrl) {
+    console.log(
+      `[discord-bot] Karuta kv sin imagen, se espera el edit: ${kv.code}`,
+    );
+    return true;
+  }
+
   const saved = await postKarutaCard(message.guildId, kv);
   if (saved) {
     console.log(
