@@ -2698,22 +2698,44 @@ type ParsedCardCompanionLine = {
 // nombre va antes de la serie (separador ·, : o " - " según el formato).
 function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
   const lines: ParsedCardCompanionLine[] = [];
+
+  // ── Formato con backticks (el actual y el histórico) ──
+  //   `♡` `N` · **Nombre** · Serie
+  // Card Companion cambió el layout varias veces: a veces cada carta va en su
+  // propia línea y a veces TODAS van en una sola línea (separadas por un
+  // espacio, que Discord muestra envueltas visualmente). Antes iterábamos por
+  // líneas y, si todo venía en una sola línea, solo se parseaba la primera
+  // carta y el resto quedaba pegado como "serie" (con lo que se perdían las
+  // cartas raras de posiciones posteriores). Por eso ahora buscamos TODOS los
+  // segmentos con un regex global sobre el contenido completo (unimos líneas
+  // en un espacio, así da igual si vienen separadas o juntas). La serie de una
+  // carta termina donde empieza la siguiente: su marcador de posición
+  // `:no_N:` / `<:no_N:id>` (precedido del icono de rareza) o el trailer
+  // "Drop expires".
+  const flatContent = content.replace(/\r?\n/g, " ");
+  const backtickSegmentRe =
+    /`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.*?)(?=\s*(?:\p{Extended_Pictographic}\s*)?(?:<a?:no_\d+:\d+>|:no_\d+:)\s*`♡`|\s*Drop expires|$)/gu;
+
+  for (const match of flatContent.matchAll(backtickSegmentRe)) {
+    const cardName = match[2].trim();
+    if (!cardName) {
+      continue;
+    }
+    lines.push({
+      cardName,
+      series: match[3].trim() || undefined,
+      wishlistCount: Number(match[1]),
+    });
+  }
+
+  if (lines.length > 0) {
+    return lines;
+  }
+
+  // Fallback: formatos legacy SIN backticks, procesados por línea.
   for (const rawLine of content.split("\n")) {
     const line = rawLine.trim();
     if (!line) {
-      continue;
-    }
-
-    // Formato markdown viejo: `♡` `N` · **Nombre** · Serie
-    const oldMatch = line.match(
-      /`♡`\s*`(\d+)`\s*·\s*\*\*(.+?)\*\*\s*·\s*(.+)$/,
-    );
-    if (oldMatch) {
-      lines.push({
-        wishlistCount: Number(oldMatch[1]),
-        cardName: oldMatch[2].trim(),
-        series: oldMatch[3].trim() || undefined,
-      });
       continue;
     }
 
@@ -2755,9 +2777,10 @@ function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
     }
   }
 
-  // Diagnóstico: un mensaje de bot con "♡" que no matchea NINGÚN formato
-  // probablemente significa que Card Companion cambió el suyo otra vez.
-  // Lo volcamos (recortado) para poder adaptar el parser sin adivinar.
+  // Diagnóstico: un mensaje de bot con indicios de wishlist ("♡", con o sin
+  // backticks) que no matchea NINGÚN formato probablemente significa que
+  // Card Companion cambió el suyo otra vez. Lo volcamos (recortado) para
+  // poder adaptar el parser sin adivinar.
   if (lines.length === 0 && content.includes("♡")) {
     console.warn(
       `[discord-bot] Card Companion sin parsear (formato nuevo?): ${content.slice(0, 500).replace(/\n/g, " ⏎ ")}`,
