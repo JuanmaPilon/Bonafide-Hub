@@ -4153,7 +4153,7 @@ textarea {
 
 .karuta-album-images {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 8px 0;
 }
 
@@ -4162,6 +4162,8 @@ textarea {
   grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
   gap: 18px;
   margin-top: 14px;
+  /* Evita que una tarjeta con más contenido estire a las vecinas de la fila. */
+  align-items: start;
 }
 
 .karuta-album-image {
@@ -4169,6 +4171,63 @@ textarea {
   height: auto;
   display: block;
   border-radius: 8px;
+  background: rgba(8, 13, 24, 0.35);
+}
+
+.karuta-album-image-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  background: rgba(8, 13, 24, 0.6);
+}
+
+/* Navegación de páginas dentro de un álbum (una imagen por vez). */
+.karuta-album-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 2px 0 4px;
+}
+
+.karuta-album-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(134, 158, 214, 0.28);
+  background: rgba(134, 158, 214, 0.12);
+  color: var(--text, #e6edf7);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.karuta-album-nav-btn:hover:not(:disabled) {
+  border-color: var(--accent, #6aa8ff);
+  background: rgba(106, 168, 255, 0.18);
+}
+
+.karuta-album-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.karuta-album-nav-counter {
+  min-width: 52px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .karuta-drop-body {

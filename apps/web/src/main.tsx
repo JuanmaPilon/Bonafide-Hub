@@ -324,6 +324,106 @@ function LoadingState({ label = "Cargando…" }: { label?: string }) {
   );
 }
 
+// Tarjeta de álbum de Karuta (Colección). Un álbum de Karuta tiene una
+// imagen por página (ka muestra "Showing page N of M"), así que mostrarlas
+// todas apiladas hacía la tarjeta enorme y deformaba la grilla. Esta tarjeta
+// muestra UNA página por vez con flechas para navegar (‹ ›). El estado de la
+// página visible es local de la tarjeta y se reinicia al cambiar de álbum
+// (React lo hace solo porque usamos key={album.id} en el map).
+function KarutaAlbumCard({
+  album,
+  canDelete,
+  onDelete,
+}: {
+  album: KarutaAlbum;
+  canDelete: boolean;
+  onDelete: (album: KarutaAlbum) => void;
+}) {
+  const urls =
+    album.images.length > 0
+      ? album.images.map((image) => image.url)
+      : album.imageUrl
+        ? [album.imageUrl]
+        : [];
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageCount = urls.length;
+  const pageNumber = pageCount > 0 ? pageIndex + 1 : 0;
+  const currentUrl = pageCount > 0 ? urls[pageIndex] : undefined;
+
+  return (
+    <article className="karuta-drop-card">
+      <div className="karuta-album-images">
+        {currentUrl ? (
+          <img
+            className="karuta-album-image"
+            src={currentUrl}
+            alt={`${album.albumName ?? "Álbum"} · página ${pageNumber}`}
+            loading="lazy"
+          />
+        ) : (
+          <div className="karuta-album-image karuta-album-image-empty">
+            Sin imagen
+          </div>
+        )}
+        {pageCount > 1 ? (
+          <div className="karuta-album-nav">
+            <button
+              aria-label="Página anterior"
+              className="karuta-album-nav-btn"
+              disabled={pageIndex === 0}
+              onClick={() =>
+                setPageIndex((index) => Math.max(0, index - 1))
+              }
+              type="button"
+            >
+              ‹
+            </button>
+            <span className="karuta-album-nav-counter">
+              {pageNumber} / {pageCount}
+            </span>
+            <button
+              aria-label="Página siguiente"
+              className="karuta-album-nav-btn"
+              disabled={pageIndex >= pageCount - 1}
+              onClick={() =>
+                setPageIndex((index) => Math.min(pageCount - 1, index + 1))
+              }
+              type="button"
+            >
+              ›
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <div className="karuta-drop-body">
+        <strong>{album.albumName ?? "Álbum"}</strong>
+        {album.background ? (
+          <span className="karuta-drop-series">{album.background}</span>
+        ) : null}
+        <span className="karuta-drop-user">
+          {album.ownerUsername ?? "Desconocido"}
+        </span>
+        {album.totalPages != null ? (
+          <div className="karuta-drop-reasons">
+            <span className="karuta-drop-badge">
+              {album.totalPages} página{album.totalPages === 1 ? "" : "s"}
+            </span>
+          </div>
+        ) : null}
+        {canDelete ? (
+          <button
+            className="ghost-button danger"
+            onClick={() => onDelete(album)}
+            type="button"
+          >
+            Quitar
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 // Frases random de Karpindomo en el widget flotante (humor "anuncios").
 const KARPINDOMO_LINES: string[] = [
   "Señor, hay karpinchos calientes en su zona",
@@ -851,8 +951,8 @@ function EventCard({
                   </div>
                   {specs.length === 0 ? (
                     <div className="event-signup-no-catalog">
-                      El staff todavía no configuró los roles de evento
-                      (Admin → Configuración de roles).
+                      El staff todavía no configuró los roles de evento (Admin →
+                      Configuración de roles).
                     </div>
                   ) : catalogClasses.length === 0 ? (
                     <div className="event-signup-no-catalog">
@@ -5942,9 +6042,9 @@ function App() {
                       </summary>
                       <div className="admin-card-body">
                         <p className="admin-card-hint">
-                          Estos roles alimentan las inscripciones de los
-                          eventos (web y Discord): rol, clase y spec con su
-                          emoji custom del servidor.
+                          Estos roles alimentan las inscripciones de los eventos
+                          (web y Discord): rol, clase y spec con su emoji custom
+                          del servidor.
                         </p>
                         {eventSpecsLoading ? (
                           <span className="muted-text">Cargando…</span>
@@ -6693,57 +6793,12 @@ function App() {
                       ) : (
                         <div className="karuta-albums-grid">
                           {karutaAlbums.map((album) => (
-                            <article
-                              className="karuta-drop-card"
+                            <KarutaAlbumCard
+                              album={album}
+                              canDelete={canAccess("config")}
                               key={album.id}
-                            >
-                              <div className="karuta-album-images">
-                                {(album.images.length > 0
-                                  ? album.images.map((image) => image.url)
-                                  : album.imageUrl
-                                    ? [album.imageUrl]
-                                    : []
-                                ).map((url, index) => (
-                                  <img
-                                    key={`${album.id}-${index}`}
-                                    className="karuta-album-image"
-                                    src={url}
-                                    alt={`${album.albumName ?? "Álbum"} página ${index + 1}`}
-                                    loading="lazy"
-                                  />
-                                ))}
-                              </div>
-                              <div className="karuta-drop-body">
-                                <strong>{album.albumName ?? "Álbum"}</strong>
-                                {album.background ? (
-                                  <span className="karuta-drop-series">
-                                    {album.background}
-                                  </span>
-                                ) : null}
-                                <span className="karuta-drop-user">
-                                  {album.ownerUsername ?? "Desconocido"}
-                                </span>
-                                {album.totalPages != null ? (
-                                  <div className="karuta-drop-reasons">
-                                    <span className="karuta-drop-badge">
-                                      {album.totalPages} página
-                                      {album.totalPages === 1 ? "" : "s"}
-                                    </span>
-                                  </div>
-                                ) : null}
-                                {canAccess("config") ? (
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() =>
-                                      handleDeleteKarutaAlbum(album)
-                                    }
-                                    type="button"
-                                  >
-                                    Quitar
-                                  </button>
-                                ) : null}
-                              </div>
-                            </article>
+                              onDelete={handleDeleteKarutaAlbum}
+                            />
                           ))}
                         </div>
                       )}
