@@ -2673,10 +2673,14 @@ type ParsedCardCompanionLine = {
 };
 
 // Card Companion, al droppear, postea una lista con la wishlist de cada
-// carta. Soporta dos formatos:
+// carta. El formato fue cambiando con el tiempo; soportamos los que se han
+// visto en producción:
 //   - Markdown viejo: ![🃏](icono) ![:no_N:](emoji) `♡` `N` · **Nombre** · Serie
-//   - Plano actual:   1 ⭐ 1 🃏 124 - Caesar King - Zenless Zone Zero
-// En ambos, la wishlist es el número; el nombre va antes de la serie.
+//   - Plano (2025):   1 ⭐ 1 🃏 124 - Caesar King - Zenless Zone Zero
+//   - Actual (2026):  🃏 :no_1: ♡ 0 · Nabuo Tanaka · Memories
+//                     ⭐ :no_3: ♡ 191 · Kuromi · Onegai My Melody Sukkiri
+// En todos, la wishlist es el número (tras `♡` o antes de " - ") y el
+// nombre va antes de la serie. El prefijo 🃏/⭐ marca la rareza del slot.
 function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
   const lines: ParsedCardCompanionLine[] = [];
   for (const rawLine of content.split("\n")) {
@@ -2698,7 +2702,21 @@ function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
       continue;
     }
 
-    // Formato plano actual: "N [estrellas] 🃏 <wishlist> - <nombre> - <serie>".
+    // Formato actual (2026): "🃏 :no_1: ♡ 0 · Name · Series". El marcador
+    // :no_N: es el slot del drop (aparece literal o como <:no_N:id>).
+    if (/:no_\d+:/i.test(line)) {
+      const heartMatch = line.match(/♡\s*(\d+)\s*·\s*(.+?)(?:\s*·\s*(.+))?$/);
+      if (heartMatch) {
+        lines.push({
+          wishlistCount: Number(heartMatch[1]),
+          cardName: heartMatch[2].trim(),
+          series: heartMatch[3]?.trim() || undefined,
+        });
+        continue;
+      }
+    }
+
+    // Formato plano (2025): "N [estrellas] 🃏 <wishlist> - <nombre> - <serie>".
     // La wishlist es el último número antes del primer " - ".
     const plainMatch = line.match(
       /^\d+\s+.*\s(\d+)\s*-\s*([^-]+?)\s*-\s*(.+)$/,
@@ -2711,6 +2729,16 @@ function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
       });
     }
   }
+
+  // Diagnóstico: un mensaje de bot con "♡" que no matchea NINGÚN formato
+  // probablemente significa que Card Companion cambió el suyo otra vez.
+  // Lo volcamos (recortado) para poder adaptar el parser sin adivinar.
+  if (lines.length === 0 && content.includes("♡")) {
+    console.warn(
+      `[discord-bot] Card Companion sin parsear (formato nuevo?): ${content.slice(0, 500).replace(/\n/g, " ⏎ ")}`,
+    );
+  }
+
   return lines;
 }
 
