@@ -917,6 +917,13 @@ function EventCard({
           📅 {new Date(event.startsAt).toLocaleString()}
           {endAt ? ` → ${endAt.toLocaleTimeString()}` : ""}
         </div>
+        {event.signupDeadline ? (
+          <div className={`event-deadline${signupsClosed ? " closed" : ""}`}>
+            {signupsClosed
+              ? "🔒 Inscripciones cerradas"
+              : `⏳ Cierre de inscripciones: ${new Date(event.signupDeadline).toLocaleString()}`}
+          </div>
+        ) : null}
         {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
           <div className="event-discord-status">
             {event.discordEventId ? (
@@ -938,19 +945,9 @@ function EventCard({
             ) : null}
           </div>
         ) : null}
-        {event.signupDeadline ? (
-          <div className={`event-deadline${signupsClosed ? " closed" : ""}`}>
-            {signupsClosed
-              ? "🔒 Inscripciones cerradas"
-              : `⏳ Cierre de inscripciones: ${new Date(event.signupDeadline).toLocaleString()}`}
-          </div>
-        ) : null}
         <div className="event-card-counts">
           {SIGNUP_OPTIONS.map((option) => (
-            <span
-              className={`event-count ${option.key}`}
-              key={option.key}
-            >
+            <span className={`event-count ${option.key}`} key={option.key}>
               {option.emoji} {counts[option.key]}
             </span>
           ))}

@@ -32,7 +32,6 @@ const STATUS_LABEL: Record<string, string> = {
   bench: "anotarte de bench",
   late: "avisar que llegás tarde",
   no: "marcar que no asistís",
-  tentative: "quedar como quizás",
   yes: "anotarte como asistente",
 };
 
@@ -451,7 +450,6 @@ export async function handleEventSignupInteraction(
     action === "yes" ||
     action === "bench" ||
     action === "late" ||
-    action === "tentative" ||
     action === "no"
   ) {
     await handleQuickStatus(interaction, guildId, eventId, action);

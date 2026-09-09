@@ -680,6 +680,7 @@ async function refreshEventAnnouncement(
       description: event.description,
       discordEventId: event.discordEventId,
       durationMinutes: event.durationMinutes,
+      eventId: event.id,
       guildId,
       imageUrl: event.imageUrl,
       location:
@@ -2991,6 +2992,38 @@ export function buildApp() {
     }
     return { ok: true, guildId: params.guildId, spec };
   });
+
+  // Imagen de un evento por URL pública (sin sesión): Discord la necesita
+  // para renderizar la imagen subida a la web (data URL) dentro del embed.
+  // El id del evento ya es un identificador difícil de adivinar (cuid).
+  app.get(
+    "/public/guilds/:guildId/events/:eventId/image",
+    async (request, reply) => {
+      const params = request.params as {
+        eventId?: string;
+        guildId?: string;
+      };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const event = await getEvent(params.guildId, params.eventId);
+      const imageUrl = event?.imageUrl;
+      if (!imageUrl?.startsWith("data:image/")) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+      const match = imageUrl.match(
+        /^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/,
+      );
+      if (!match) {
+        return reply.code(400).send({ ok: false, error: "Imagen inválida" });
+      }
+      const buffer = Buffer.from(match[2], "base64");
+      return reply
+        .header("Content-Type", match[1])
+        .header("Cache-Control", "public, max-age=86400")
+        .send(buffer);
+    },
+  );
 
   // ── Biblioteca de imágenes de eventos ─────────────────────────────
   app.get("/guilds/:guildId/events/images", async (request, reply) => {

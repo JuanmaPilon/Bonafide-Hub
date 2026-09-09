@@ -242,7 +242,6 @@ const ROLE_META: Record<string, { emoji: string; label: string }> = {
 
 const STATUS_META: Record<string, { emoji: string; label: string }> = {
   yes: { emoji: "✅", label: "Voy" },
-  tentative: { emoji: "🤔", label: "Quizás" },
   bench: { emoji: "🪑", label: "Bench" },
   late: { emoji: "⏰", label: "Tarde" },
   no: { emoji: "❌", label: "No asiste" },
@@ -303,11 +302,36 @@ function pushField(
   }
 }
 
+// URL que Discord puede mostrar para la imagen del evento. Si la imagen es
+// una data URL (la que sube la web a la biblioteca), la exponemos por una
+// ruta pública del API (PUBLIC_API_URL) para que Discord pueda renderizarla.
+function resolveEmbedImageUrl(
+  guildId: string,
+  eventId: string | undefined,
+  imageUrl: string | undefined,
+): string | undefined {
+  if (!imageUrl) {
+    return undefined;
+  }
+  if (/^https?:\/\//i.test(imageUrl)) {
+    return imageUrl;
+  }
+  if (imageUrl.startsWith("data:image/")) {
+    const base = (env.PUBLIC_API_URL ?? "").trim().replace(/\/+$/, "");
+    if (!base || !eventId) {
+      return undefined;
+    }
+    return `${base}/public/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}/image`;
+  }
+  return undefined;
+}
+
 // Construye el/los embeds del aviso con info del evento + roster.
 export function buildEventAnnouncementEmbeds(input: {
   description?: string;
   discordEventId?: string;
   durationMinutes?: number;
+  eventId?: string;
   guildId: string;
   imageUrl?: string;
   location?: string;
@@ -403,6 +427,11 @@ export function buildEventAnnouncementEmbeds(input: {
   if (late.length > 0) {
     pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late));
   }
+  // Igual que en la web: los que marcaron "no asisto" también se listan.
+  const absent = input.signups.filter((signup) => signup.status === "no");
+  if (absent.length > 0) {
+    pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
+  }
 
   const embed: Record<string, unknown> = {
     title: `${EVENT_TYPE_EMOJI[input.type ?? ""] ?? "📅"} ${input.title.slice(0, 250)}`,
@@ -417,11 +446,13 @@ export function buildEventAnnouncementEmbeds(input: {
   if (input.description?.trim()) {
     embed.description = `${lines.join("\n")}\n\n${input.description.trim().slice(0, 1024)}`;
   }
-  if (
-    input.imageUrl?.startsWith("https://") ||
-    input.imageUrl?.startsWith("http://")
-  ) {
-    embed.thumbnail = { url: input.imageUrl };
+  const image = resolveEmbedImageUrl(
+    input.guildId,
+    input.eventId,
+    input.imageUrl,
+  );
+  if (image) {
+    embed.image = { url: image };
   }
   return [embed];
 }
@@ -447,9 +478,8 @@ export function buildEventSignupActionRows(
 ): Array<Record<string, unknown>> {
   const statusButtons = [
     { customId: "yes", emoji: "✅", label: "Asistir", style: 3 },
-    { customId: "bench", emoji: "🪑", label: "Bench", style: 2 },
     { customId: "late", emoji: "⏰", label: "Tarde", style: 2 },
-    { customId: "tentative", emoji: "🤔", label: "Quizás", style: 2 },
+    { customId: "bench", emoji: "🪑", label: "Bench", style: 2 },
     { customId: "no", emoji: "❌", label: "No asisto", style: 2 },
   ];
   const actionButtons = [

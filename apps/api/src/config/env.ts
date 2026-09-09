@@ -25,6 +25,9 @@ const envSchema = z.object({
     .string()
     .url("FRONTEND_APP_URL must be a valid URL")
     .default("http://localhost:5173"),
+  // URL pública por la que Discord puede alcanzar este API. Se usa para
+  // servir la imagen subida de un evento (data URL) dentro del embed.
+  PUBLIC_API_URL: z.string().url("PUBLIC_API_URL must be a valid URL").optional(),
   PORT: z.coerce.number().int().positive().default(3001),
   HOST: z.string().min(1).default("0.0.0.0"),
   NODE_ENV: z
