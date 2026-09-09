@@ -4120,7 +4120,10 @@ textarea {
 }
 
 .karuta-drop-card {
-  display: grid;
+  /* Columna para que el cuerpo (con flex:1) llene la tarjeta y el botón
+     quede abajo alineado, aunque la grilla estire la fila por otra carta. */
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   border-radius: 16px;
   overflow: hidden;
@@ -4130,11 +4133,17 @@ textarea {
 
 .karuta-drop-image {
   width: 100%;
+  flex: 0 0 auto;
   aspect-ratio: 3 / 4;
   object-fit: cover;
+  background: rgba(8, 13, 24, 0.35);
 }
 
 .karuta-drop-image-placeholder {
+  /* Misma proporción que una imagen real: si una carta no tiene imagen, la
+     tarjeta igual reserva el alto 3:4 y no desalinea la fila. */
+  flex: 0 0 auto;
+  aspect-ratio: 3 / 4;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4231,9 +4240,18 @@ textarea {
 }
 
 .karuta-drop-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  flex: 1;
   padding: 0 12px 12px;
+}
+
+/* Acción de la tarjeta (Quitar/Eliminar) anclada al borde inferior para que
+   quede alineada entre tarjetas aunque el contenido varíe de alto. */
+.karuta-drop-body .ghost-button {
+  margin-top: auto;
+  align-self: flex-start;
 }
 
 .karuta-drop-series {
