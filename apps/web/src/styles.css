@@ -2895,7 +2895,9 @@ textarea {
 }
 
 /* En los grupos por estado los nombres se separan con coma. */
-.event-roster-group-members .event-roster-member + .event-roster-member::before {
+.event-roster-group-members
+  .event-roster-member
+  + .event-roster-member::before {
   content: ", ";
 }
 
@@ -4905,4 +4907,59 @@ textarea {
 :root[data-theme="light"] .karpindomo-bubble,
 :root[data-theme="light"] .karpindomo-bubble p {
   color: #fff;
+}
+
+/* ── Eventos: orden del form (debajo de la grilla) ──────────────────
+   El form de crear/editar evento se muestra ABAJO de la lista de eventos
+   (no arriba) para no empujar la tarjeta que se está editando. */
+.event-list-header {
+  order: 1;
+}
+
+.events-grid {
+  order: 2;
+}
+
+.event-form-card {
+  order: 3;
+}
+
+/* ── Eventos: tema claro ────────────────────────────────────────────
+   Las tarjetas/paneles usaban fondos navy fijos; en claro quedaban casi
+   negras con texto oscuro. Las aclaramos manteniendo el estilo. */
+:root[data-theme="light"] .event-card,
+:root[data-theme="light"] .event-form-card,
+:root[data-theme="light"] .event-signup-summary {
+  background: linear-gradient(160deg, #ffffff 0%, #f1f5fc 100%);
+  border-color: rgba(60, 85, 130, 0.22);
+}
+
+:root[data-theme="light"] .event-card-image-placeholder {
+  background: linear-gradient(135deg, #dbe6f6 0%, #cbddf3 100%);
+}
+
+:root[data-theme="light"] .event-roster-column,
+:root[data-theme="light"] .event-roster-group,
+:root[data-theme="light"] .event-discord-editor {
+  background: rgba(223, 233, 246, 0.55);
+}
+
+:root[data-theme="light"] .event-roster-column .event-roster-role {
+  color: #1b2a45;
+}
+
+:root[data-theme="light"] .event-signup-status .event-status-btn,
+:root[data-theme="light"] .event-signup-role-row .event-status-btn.role {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(60, 85, 130, 0.28);
+}
+
+:root[data-theme="light"] .event-signup-spec {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="light"] .event-signup-selected,
+:root[data-theme="light"] .event-image-library-item,
+:root[data-theme="light"] .event-image-preview {
+  background: rgba(255, 255, 255, 0.75);
 }

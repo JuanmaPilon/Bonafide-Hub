@@ -895,14 +895,27 @@ function EventCard({
     }
   };
 
-  // Render de un miembro del roster: estilo Raid Helper, solo el nick (y su
-  // personaje entre paréntesis si lo cargó). Sin emojis de clase/spec.
-  const renderMember = (signup: EventSignup) => (
-    <span className="event-roster-member" key={signup.id}>
-      {signup.username}
-      {signup.character ? ` (${signup.character})` : ""}
-    </span>
-  );
+  // Render de un miembro del roster: nick + personaje (si lo cargó) y, si la
+  // spec tiene emoji custom configurado, el emoji de la spec adelante (sin
+  // fallback a emoji de clase).
+  const renderMember = (signup: EventSignup) => {
+    const specRow = specs.find(
+      (row) =>
+        row.role === signup.role &&
+        row.className === signup.wowClass &&
+        row.specName === signup.spec,
+    );
+    const emojiUrl = discordEmojiUrl(specRow?.emojiId, specRow?.animated);
+    return (
+      <span className="event-roster-member" key={signup.id}>
+        {emojiUrl ? (
+          <img alt="" className="signup-spec-emoji" src={emojiUrl} />
+        ) : null}
+        {signup.username}
+        {signup.character ? ` (${signup.character})` : ""}
+      </span>
+    );
+  };
 
   return (
     <article className="event-card">
@@ -7282,9 +7295,6 @@ function App() {
                               </option>
                             ))}
                           </select>
-                          <small className="event-required-role-hint">
-                            Quien marque "Voy" sin este rol quedará como Bench.
-                          </small>
                         </label>
                         <div className="event-form-wide event-image-editor">
                           <span className="event-image-editor-label">
