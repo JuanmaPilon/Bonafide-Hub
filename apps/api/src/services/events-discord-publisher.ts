@@ -372,7 +372,8 @@ export function buildEventAnnouncementEmbeds(input: {
     lines.push(`📍 ${input.location}`);
   }
 
-  // Conteo por estado (solo los que tengan al menos uno).
+  // Conteo por estado (solo los que tengan al menos uno). Se muestra aparte
+  // (con aire) para que el embed no quede todo junto.
   const counts: string[] = [];
   for (const [status, meta] of Object.entries(STATUS_META)) {
     const count = input.signups.filter(
@@ -382,7 +383,6 @@ export function buildEventAnnouncementEmbeds(input: {
       counts.push(`${meta.emoji} ${count}`);
     }
   }
-  lines.push(counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.");
 
   const fields: Array<{ name: string; value: string }> = [];
   const resolveSpec = (
@@ -438,18 +438,30 @@ export function buildEventAnnouncementEmbeds(input: {
     pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
   }
 
+  // Descripción separada en bloques (con línea en blanco entre ellos) para
+  // que el embed respire y no se vea todo junto. Al final, link a la web.
+  const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
+  const descriptionParts = [
+    lines.join("\n"),
+    counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.",
+  ];
+  if (webBase) {
+    descriptionParts.push(`[🌐 Ver el evento en la web](${webBase}/#/eventos)`);
+  }
+  let descriptionText = descriptionParts.join("\n\n");
+  if (input.description?.trim()) {
+    descriptionText += `\n\n${input.description.trim().slice(0, 1024)}`;
+  }
+
   const embed: Record<string, unknown> = {
     title: `${EVENT_TYPE_EMOJI[input.type ?? ""] ?? "📅"} ${input.title.slice(0, 250)}`,
     color: 0x6aa8ff,
-    description: lines.join("\n"),
+    description: descriptionText,
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
   };
   if (input.discordEventId) {
     embed.url = `https://discord.com/events/${encodeURIComponent(input.guildId)}/${encodeURIComponent(input.discordEventId)}`;
-  }
-  if (input.description?.trim()) {
-    embed.description = `${lines.join("\n")}\n\n${input.description.trim().slice(0, 1024)}`;
   }
   const image = resolveEmbedImageUrl(
     input.guildId,
