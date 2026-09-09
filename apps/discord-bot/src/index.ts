@@ -2677,10 +2677,11 @@ type ParsedCardCompanionLine = {
 // visto en producción:
 //   - Markdown viejo: ![🃏](icono) ![:no_N:](emoji) `♡` `N` · **Nombre** · Serie
 //   - Plano (2025):   1 ⭐ 1 🃏 124 - Caesar King - Zenless Zone Zero
-//   - Actual (2026):  🃏 :no_1: ♡ 0 · Nabuo Tanaka · Memories
+//   - Con ♡ (2026):   🃏 :no_1: ♡ 0 · Nabuo Tanaka · Memories
 //                     ⭐ :no_3: ♡ 191 · Kuromi · Onegai My Melody Sukkiri
-// En todos, la wishlist es el número (tras `♡` o antes de " - ") y el
-// nombre va antes de la serie. El prefijo 🃏/⭐ marca la rareza del slot.
+//                     [icono] 3 ♡ 17 : Aria Kisaki - 2.5 Dimensional Seduction
+// En todos, la wishlist es el número tras `♡` (o antes de " - ") y el
+// nombre va antes de la serie (separador ·, : o " - " según el formato).
 function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
   const lines: ParsedCardCompanionLine[] = [];
   for (const rawLine of content.split("\n")) {
@@ -2702,15 +2703,27 @@ function parseCardCompanionDrop(content: string): ParsedCardCompanionLine[] {
       continue;
     }
 
-    // Formato actual (2026): "🃏 :no_1: ♡ 0 · Name · Series". El marcador
-    // :no_N: es el slot del drop (aparece literal o como <:no_N:id>).
-    if (/:no_\d+:/i.test(line)) {
-      const heartMatch = line.match(/♡\s*(\d+)\s*·\s*(.+?)(?:\s*·\s*(.+))?$/);
-      if (heartMatch) {
+    // Línea con wishlist (♡). Card Companion cambió el layout varias veces:
+    //   "🃏 :no_1: ♡ 0 · Nabuo Tanaka · Memories"
+    //   "⭐ :no_3: ♡ 191 · Kuromi · Onegai My Melody Sukkiri"
+    //   "3 ♡ 17 : Aria Kisaki - 2.5 Dimensional Seduction"
+    // En todas la wishlist es el número tras ♡ y el nombre va antes de la
+    // serie (separada por ·, : o " - " según el formato de turno).
+    const heartMatch = line.match(/♡\s*(\d+)/);
+    if (heartMatch) {
+      const wishlistCount = Number(heartMatch[1]);
+      const tail = line.slice(
+        (heartMatch.index ?? 0) + heartMatch[0].length,
+      );
+      const text = tail.replace(/^[\s:·|>]+/, "").trim();
+      if (text) {
+        const sepMatch =
+          text.match(/^(.*?)\s+(?:·|:)\s+(.*)$/) ??
+          text.match(/^(.*?)\s+[-–—]\s+(.*)$/);
         lines.push({
-          wishlistCount: Number(heartMatch[1]),
-          cardName: heartMatch[2].trim(),
-          series: heartMatch[3]?.trim() || undefined,
+          cardName: (sepMatch?.[1] ?? text).trim(),
+          series: sepMatch?.[2]?.trim() || undefined,
+          wishlistCount,
         });
         continue;
       }
