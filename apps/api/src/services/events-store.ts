@@ -190,6 +190,7 @@ export async function updateRaidSpec(
 }
 
 export type HubEvent = {
+  completedAt?: Date;
   createdAt: Date;
   createdByUserId?: string;
   createdByUsername?: string;
@@ -202,9 +203,12 @@ export type HubEvent = {
   id: string;
   imageUrl?: string;
   publishChannelId?: string;
+  reminderHours: number[];
+  reminderSentHours: number[];
   // Rol de Discord mínimo para entrar al roster principal: quien no lo tiene
   // y marca "Voy" se guarda como Bench (estilo Raid Helper).
   requiredRoleId?: string;
+  reportSentAt?: Date;
   signupDeadline?: Date;
   startsAt: Date;
   status: string;
@@ -240,6 +244,7 @@ export type EventSignup = {
 };
 
 type EventRecord = {
+  completedAt: Date | null;
   createdAt: Date;
   createdByUserId: string | null;
   createdByUsername: string | null;
@@ -252,6 +257,9 @@ type EventRecord = {
   id: string;
   imageUrl: string | null;
   publishChannelId: string | null;
+  reminderHours: number[];
+  reminderSentHours: number[];
+  reportSentAt: Date | null;
   requiredRoleId: string | null;
   signupDeadline: Date | null;
   startsAt: Date;
@@ -297,6 +305,7 @@ function toSignup(record: SignupRecord): EventSignup {
 
 function toEvent(record: EventRecord): HubEvent {
   return {
+    completedAt: record.completedAt ?? undefined,
     createdAt: record.createdAt,
     createdByUserId: record.createdByUserId ?? undefined,
     createdByUsername: record.createdByUsername ?? undefined,
@@ -310,6 +319,9 @@ function toEvent(record: EventRecord): HubEvent {
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
     publishChannelId: record.publishChannelId ?? undefined,
+    reminderHours: record.reminderHours,
+    reminderSentHours: record.reminderSentHours,
+    reportSentAt: record.reportSentAt ?? undefined,
     requiredRoleId: record.requiredRoleId ?? undefined,
     signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
@@ -331,6 +343,66 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
   return records.map((record) => toEvent(record));
 }
 
+// Eventos próximos que ya tienen un recordatorio "vencido" por enviar (falta
+// X horas para startsAt y ese aviso todavía no se mandó). El bot los consume
+// periódicamente para avisar en el canal del aviso a quienes tienen el rol
+// requerido y no se anotaron. Devuelve evento + las horas vencidas a enviar.
+export async function listReminderDueEvents(
+  guildId: string,
+  now: Date = new Date(),
+): Promise<Array<{ dueHours: number[]; event: HubEvent }>> {
+  const records = await prisma.hubEvent.findMany({
+    where: { guildId, status: "scheduled" },
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+  });
+  const nowMs = now.getTime();
+  const due: Array<{ dueHours: number[]; event: HubEvent }> = [];
+  for (const record of records) {
+    const event = toEvent(record);
+    if (!event.requiredRoleId || !event.publishChannelId) {
+      continue;
+    }
+    if (event.reminderHours.length === 0) {
+      continue;
+    }
+    const startsMs = event.startsAt.getTime();
+    if (startsMs <= nowMs) {
+      continue;
+    }
+    // Si hay cierre de inscripciones, no tiene sentido avisar después de que
+    // ya no se puede anotar.
+    const deadlineMs = event.signupDeadline?.getTime();
+    if (deadlineMs !== undefined && nowMs > deadlineMs) {
+      continue;
+    }
+    const dueHours = event.reminderHours.filter((hours) => {
+      if (event.reminderSentHours.includes(hours)) {
+        return false;
+      }
+      const dueAtMs = startsMs - hours * 60 * 60 * 1000;
+      return nowMs >= dueAtMs && nowMs < startsMs;
+    });
+    if (dueHours.length > 0) {
+      due.push({ event, dueHours });
+    }
+  }
+  return due;
+}
+
+// Eventos completados a los que todavía no se les mandó el informe de
+// asistencia (quienes tenían el rol requerido y no se anotaron).
+export async function listReportPendingEvents(
+  guildId: string,
+): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    where: { guildId, status: "completed", reportSentAt: null },
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+  });
+  return records
+    .filter((record) => record.completedAt !== null && record.requiredRoleId)
+    .map((record) => toEvent(record));
+}
+
 export async function getEvent(
   guildId: string,
   eventId: string,
@@ -349,6 +421,7 @@ export async function createEvent(input: {
   durationMinutes?: number;
   guildId: string;
   imageUrl?: string;
+  reminderHours?: number[];
   requiredRoleId?: string | null;
   signupDeadline?: string;
   startsAt: string;
@@ -363,6 +436,7 @@ export async function createEvent(input: {
       durationMinutes: input.durationMinutes,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
+      reminderHours: input.reminderHours ?? [],
       requiredRoleId: input.requiredRoleId ?? null,
       signupDeadline: input.signupDeadline
         ? new Date(input.signupDeadline)
@@ -383,6 +457,7 @@ export async function updateEvent(
     description?: string;
     durationMinutes?: number | null;
     imageUrl?: string;
+    reminderHours?: number[];
     requiredRoleId?: string | null;
     signupDeadline?: string | null;
     startsAt?: string;
@@ -394,9 +469,11 @@ export async function updateEvent(
   const record = await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
     data: {
+      completedAt: input.status === "completed" ? new Date() : undefined,
       description: input.description,
       durationMinutes: input.durationMinutes,
       imageUrl: input.imageUrl,
+      reminderHours: input.reminderHours,
       requiredRoleId:
         input.requiredRoleId === undefined
           ? undefined
@@ -412,6 +489,45 @@ export async function updateEvent(
       title: input.title,
       type: input.type,
     },
+  });
+  if (record.count === 0) {
+    return null;
+  }
+  return getEvent(guildId, eventId);
+}
+
+// Marca como enviados ciertos recordatorios (horas) de un evento. Devuelve
+// el evento actualizado o null si no existe.
+export async function markEventRemindersSent(
+  guildId: string,
+  eventId: string,
+  hours: number[],
+): Promise<HubEvent | null> {
+  const current = await prisma.hubEvent.findFirst({
+    where: { id: eventId, guildId },
+    select: { reminderSentHours: true },
+  });
+  if (!current) {
+    return null;
+  }
+  const merged = Array.from(
+    new Set([...current.reminderSentHours, ...hours]),
+  );
+  await prisma.hubEvent.updateMany({
+    where: { id: eventId, guildId },
+    data: { reminderSentHours: merged },
+  });
+  return getEvent(guildId, eventId);
+}
+
+// Marca como enviado el informe de asistencia de un evento completado.
+export async function markEventReportSent(
+  guildId: string,
+  eventId: string,
+): Promise<HubEvent | null> {
+  const record = await prisma.hubEvent.updateMany({
+    where: { id: eventId, guildId },
+    data: { reportSentAt: new Date() },
   });
   if (record.count === 0) {
     return null;

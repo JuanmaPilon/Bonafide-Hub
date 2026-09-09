@@ -46,6 +46,7 @@ import {
   setXpSyncRequested,
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
+import { startEventControlScheduler } from "./services/event-control-service.js";
 import {
   addRemoteXp,
   computeXpMultiplier,
@@ -864,6 +865,7 @@ client.once(Events.ClientReady, (readyClient) => {
   startVoiceXpTracker();
   startXpSyncChecker();
   startDailyMessagesProcessor(readyClient);
+  startEventControlScheduler(readyClient);
 });
 
 async function handleXpLevelCommand(

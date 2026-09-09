@@ -189,6 +189,16 @@ model HubEvent {
   discordEventId    String?
   // Ids de los mensajes-aviso publicados en publishChannelId.
   discordMessageIds String[] @default([])
+  // Recordatorios de asistencia: horas antes de startsAt en las que el bot
+  // avisa a quienes tienen el rol requerido y todavía no se anotaron
+  // (p. ej. [48, 24, 2]). Vacío = sin recordatorios.
+  reminderHours       Int[]    @default([])
+  // Cuáles de reminderHours ya se enviaron (evita re-envíos tras reinicios).
+  reminderSentHours   Int[]    @default([])
+  // Control de asistencia: cuándo se marcó el evento como completado y si ya
+  // se mandó el informe al creador con los que no se anotaron.
+  completedAt         DateTime?
+  reportSentAt        DateTime?
   // Config guardada de la publicación (entityType voice|external, location,
   // recurrence none|daily|weekly|biweekly) para poder re-sincronizar.
   discordEventConfig Json?

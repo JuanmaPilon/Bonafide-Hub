@@ -642,6 +642,15 @@ const SIGNUP_OPTIONS: Array<{
   { emoji: "❌", key: "no", label: "No asisto" },
 ];
 
+// Horas de recordatorio de asistencia configurables por evento (antes del
+// inicio). Con rol mínimo elegido, el bot menciona en el canal del aviso a
+// quienes tienen el rol y todavía no se anotaron.
+const REMINDER_HOUR_OPTIONS: Array<{ hours: number; label: string }> = [
+  { hours: 48, label: "48 h antes" },
+  { hours: 24, label: "24 h antes" },
+  { hours: 2, label: "2 h antes" },
+];
+
 function toDateTimeLocal(value: Date | string): string {
   const date = new Date(value);
   const pad = (n: number): string => String(n).padStart(2, "0");
@@ -963,6 +972,15 @@ function EventCard({
             {signupsClosed
               ? "🔒 Inscripciones cerradas"
               : `⏳ Cierre de inscripciones: ${new Date(event.signupDeadline).toLocaleString()}`}
+          </div>
+        ) : null}
+        {event.reminderHours && event.reminderHours.length > 0 ? (
+          <div className="event-reminder-badge">
+            ⏰ Recordatorio:{" "}
+            {[...event.reminderHours]
+              .sort((a, b) => b - a)
+              .map((hours) => `${hours} h antes`)
+              .join(" · ")}
           </div>
         ) : null}
         {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
@@ -2005,6 +2023,7 @@ function App() {
     };
     durationMinutes: string;
     imageUrl: string;
+    reminderHours: number[];
     requiredRoleId: string;
     signupDeadline: string;
     startsAt: string;
@@ -2015,6 +2034,7 @@ function App() {
     discord: defaultEventDiscord(),
     durationMinutes: "",
     imageUrl: "",
+    reminderHours: [],
     requiredRoleId: "",
     signupDeadline: "",
     startsAt: "",
@@ -2897,6 +2917,7 @@ function App() {
       discord: defaultEventDiscord(),
       durationMinutes: "",
       imageUrl: "",
+      reminderHours: [],
       requiredRoleId: "",
       signupDeadline: "",
       startsAt: "",
@@ -2926,6 +2947,7 @@ function App() {
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: event.signupDeadline
         ? toDateTimeLocal(event.signupDeadline)
@@ -2962,6 +2984,7 @@ function App() {
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: "",
       startsAt: toDateTimeLocal(event.startsAt),
@@ -3073,6 +3096,7 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : null,
           imageUrl: eventForm.imageUrl || undefined,
+          reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || null,
           startsAt: eventForm.startsAt,
@@ -3099,6 +3123,7 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : undefined,
           imageUrl: eventForm.imageUrl || undefined,
+          reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || undefined,
           startsAt: eventForm.startsAt,
@@ -7396,6 +7421,52 @@ function App() {
                             ))}
                           </select>
                         </label>
+                        <div className="event-form-wide event-reminders">
+                          <span className="event-reminders-title">
+                            Recordatorios de asistencia
+                          </span>
+                          <div className="event-reminders-options">
+                            {REMINDER_HOUR_OPTIONS.map((option) => {
+                              const checked =
+                                eventForm.reminderHours.includes(option.hours);
+                              const disabled =
+                                !eventForm.requiredRoleId.trim();
+                              return (
+                                <label
+                                  className={`event-reminder-option${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
+                                  key={option.hours}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    disabled={disabled}
+                                    onChange={() =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        reminderHours: checked
+                                          ? current.reminderHours.filter(
+                                              (hours) =>
+                                                hours !== option.hours,
+                                            )
+                                          : [
+                                              ...current.reminderHours,
+                                              option.hours,
+                                            ],
+                                      }))
+                                    }
+                                  />
+                                  ⏰ {option.label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="muted-text event-reminders-help">
+                            El bot mencionará en el canal del aviso a quienes
+                            tengan el rol y no se hayan anotado en ese
+                            momento, y al completar el evento te manda por DM
+                            un informe de quiénes no se anotaron.
+                          </p>
+                        </div>
                         <div className="event-form-wide event-image-editor">
                           <span className="event-image-editor-label">
                             Imagen

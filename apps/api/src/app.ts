@@ -83,6 +83,10 @@ import {
   listEventImages,
   listEvents,
   listRaidSpecs,
+  listReminderDueEvents,
+  listReportPendingEvents,
+  markEventRemindersSent,
+  markEventReportSent,
   setEventDiscordInfo,
   updateEvent,
   updateRaidSpec,
@@ -733,6 +737,24 @@ async function refreshEventAnnouncement(
       error,
     );
   }
+}
+
+// Horas de recordatorio válidas (p. ej. 48, 24, 2). Normaliza: números
+// finitos entre 1 y 720 (30 días), sin duplicados y ordenados.
+function normalizeReminderHours(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const hours = new Set<number>();
+  for (const item of value) {
+    if (typeof item !== "number" || !Number.isFinite(item)) {
+      continue;
+    }
+    if (item >= 1 && item <= 720) {
+      hours.add(Math.round(item));
+    }
+  }
+  return Array.from(hours).sort((a, b) => a - b);
 }
 
 export function buildApp() {
@@ -2638,6 +2660,7 @@ export function buildApp() {
       };
       durationMinutes?: number;
       imageUrl?: string;
+      reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string;
       startsAt?: string;
@@ -2677,6 +2700,7 @@ export function buildApp() {
       durationMinutes: body.durationMinutes,
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
+      reminderHours: normalizeReminderHours(body.reminderHours),
       requiredRoleId: body.requiredRoleId?.trim() || null,
       signupDeadline: body.signupDeadline?.trim() || undefined,
       startsAt,
@@ -2742,6 +2766,7 @@ export function buildApp() {
       };
       durationMinutes?: number | null;
       imageUrl?: string;
+      reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string | null;
       startsAt?: string;
@@ -2786,6 +2811,10 @@ export function buildApp() {
       description: body.description?.trim() || undefined,
       durationMinutes: body.durationMinutes ?? null,
       imageUrl: body.imageUrl?.trim() || undefined,
+      reminderHours:
+        body.reminderHours === undefined
+          ? undefined
+          : normalizeReminderHours(body.reminderHours),
       requiredRoleId:
         body.requiredRoleId === undefined
           ? undefined
@@ -3318,6 +3347,97 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
       const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+      return { ok: true, guildId: params.guildId, event };
+    },
+  );
+
+  // Control de asistencia (lo consume el bot periódicamente): eventos que ya
+  // tienen un recordatorio por enviar (con las horas vencidas) y eventos
+  // completados con informe de "no se anotaron" pendiente.
+  app.get(
+    "/internal/guilds/:guildId/events/control",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+      const [reminders, reports] = await Promise.all([
+        listReminderDueEvents(params.guildId),
+        listReportPendingEvents(params.guildId),
+      ]);
+      return {
+        ok: true,
+        guildId: params.guildId,
+        reports,
+        reminders,
+      };
+    },
+  );
+
+  // El bot avisa que ya envió los recordatorios indicados (horas) del evento.
+  app.post(
+    "/internal/guilds/:guildId/events/:eventId/reminders-sent",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const body = (request.body ?? {}) as { hours?: number[] };
+      const event = await markEventRemindersSent(
+        params.guildId,
+        params.eventId,
+        normalizeReminderHours(body.hours),
+      );
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+      return { ok: true, guildId: params.guildId, event };
+    },
+  );
+
+  // El bot avisa que ya envió el informe de asistencia del evento completado.
+  app.post(
+    "/internal/guilds/:guildId/events/:eventId/report-sent",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const event = await markEventReportSent(params.guildId, params.eventId);
       if (!event) {
         return reply
           .code(404)
