@@ -2947,6 +2947,22 @@ textarea {
   font-size: 0.82rem;
 }
 
+.event-required-role {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.event-required-role strong {
+  color: var(--accent, #ffb454);
+  font-weight: 700;
+}
+
+.event-required-role-hint {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .event-deadline.closed {
   color: #ff8a5c;
   font-weight: 600;

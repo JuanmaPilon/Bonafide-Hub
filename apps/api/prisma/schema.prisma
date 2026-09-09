@@ -178,6 +178,9 @@ model HubEvent {
   // Cierre de inscripciones: a partir de acá ya no se puede anotar.
   signupDeadline    DateTime?
   imageUrl          String?
+  // Rol de Discord mínimo para entrar al roster principal: quien no lo tiene
+  // y marca "Voy" se guarda como Bench (estilo Raid Helper).
+  requiredRoleId    String?
   // Canal de texto donde se publica el aviso-embed (si aplica).
   publishChannelId  String?
   // Sala de voz donde se aloja el Scheduled Event (entity_type VOICE).

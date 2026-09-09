@@ -750,6 +750,7 @@ function ComunicadoTagFields({
 function EventCard({
   canManage,
   event,
+  guildRoles,
   meId,
   onDelete,
   onDuplicate,
@@ -760,6 +761,7 @@ function EventCard({
 }: {
   canManage: boolean;
   event: HubEvent;
+  guildRoles: GuildRole[];
   meId?: string;
   onDelete: (event: HubEvent) => void;
   onDuplicate: (event: HubEvent) => void;
@@ -919,6 +921,16 @@ function EventCard({
           📅 {new Date(event.startsAt).toLocaleString()}
           {endAt ? ` → ${endAt.toLocaleTimeString()}` : ""}
         </div>
+        {event.requiredRoleId ? (
+          <div className="event-required-role">
+            🛡️ Requiere{" "}
+            <strong>
+              {guildRoles.find((role) => role.id === event.requiredRoleId)
+                ?.name ?? "un rol"}
+            </strong>{" "}
+            para entrar al roster principal.
+          </div>
+        ) : null}
         {event.signupDeadline ? (
           <div className={`event-deadline${signupsClosed ? " closed" : ""}`}>
             {signupsClosed
@@ -1902,6 +1914,7 @@ function App() {
     };
     durationMinutes: string;
     imageUrl: string;
+    requiredRoleId: string;
     signupDeadline: string;
     startsAt: string;
     status: string;
@@ -1911,6 +1924,7 @@ function App() {
     discord: defaultEventDiscord(),
     durationMinutes: "",
     imageUrl: "",
+    requiredRoleId: "",
     signupDeadline: "",
     startsAt: "",
     status: "scheduled",
@@ -2579,10 +2593,17 @@ function App() {
       return;
     }
     try {
-      await upsertEventSignup(selectedGuildId, eventId, input);
+      const signup = await upsertEventSignup(selectedGuildId, eventId, input);
       const list = await getEvents(selectedGuildId);
       setEvents(list);
-      pushToast("Inscripción guardada.", "success");
+      if (input.status === "yes" && signup.status === "bench") {
+        pushToast(
+          "No tenés el rol requerido: quedaste como Bench (fuera del roster principal).",
+          "success",
+        );
+      } else {
+        pushToast("Inscripción guardada.", "success");
+      }
     } catch (error) {
       pushToast(
         error instanceof Error
@@ -2747,6 +2768,7 @@ function App() {
       discord: defaultEventDiscord(),
       durationMinutes: "",
       imageUrl: "",
+      requiredRoleId: "",
       signupDeadline: "",
       startsAt: "",
       status: "scheduled",
@@ -2775,6 +2797,7 @@ function App() {
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: event.signupDeadline
         ? toDateTimeLocal(event.signupDeadline)
         : "",
@@ -2810,6 +2833,7 @@ function App() {
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: "scheduled",
@@ -2920,6 +2944,7 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : null,
           imageUrl: eventForm.imageUrl || undefined,
+          requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || null,
           startsAt: eventForm.startsAt,
           status: eventForm.status,
@@ -2945,6 +2970,7 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : undefined,
           imageUrl: eventForm.imageUrl || undefined,
+          requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || undefined,
           startsAt: eventForm.startsAt,
           title: eventForm.title.trim(),
@@ -7135,6 +7161,33 @@ function App() {
                             }
                           />
                         </label>
+                        <label>
+                          <span>
+                            Rol mínimo para el roster (opcional)
+                          </span>
+                          <select
+                            className="select"
+                            value={eventForm.requiredRoleId}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                requiredRoleId: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">
+                              Sin requisito: todos entran al roster
+                            </option>
+                            {guildRoles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                          <small className="event-required-role-hint">
+                            Quien marque "Voy" sin este rol quedará como Bench.
+                          </small>
+                        </label>
                         <div className="event-form-wide event-image-editor">
                           <span className="event-image-editor-label">
                             Imagen
@@ -7435,6 +7488,7 @@ function App() {
                         <EventCard
                           canManage={canAccess("eventos")}
                           event={event}
+                          guildRoles={guildRoles}
                           key={event.id}
                           meId={me?.id}
                           onDelete={handleDeleteEvent}

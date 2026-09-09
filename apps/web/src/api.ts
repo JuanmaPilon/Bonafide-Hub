@@ -897,6 +897,8 @@ export type HubEvent = {
   id: string;
   imageUrl?: string;
   publishChannelId?: string;
+  // Rol de Discord mínimo para entrar al roster principal (yes sin rol→bench).
+  requiredRoleId?: string;
   signupDeadline?: string;
   startsAt: string;
   status: string;
@@ -937,6 +939,7 @@ export async function createEvent(
     discord?: EventDiscordOptions;
     durationMinutes?: number;
     imageUrl?: string;
+    requiredRoleId?: string;
     signupDeadline?: string;
     startsAt: string;
     title: string;
@@ -961,6 +964,7 @@ export async function updateEvent(
     discord?: EventDiscordOptions;
     durationMinutes?: number | null;
     imageUrl?: string;
+    requiredRoleId?: string;
     signupDeadline?: string | null;
     startsAt?: string;
     status?: string;

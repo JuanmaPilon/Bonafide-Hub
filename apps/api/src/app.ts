@@ -214,6 +214,7 @@ type DiscordGuildMember = {
   avatar?: string | null;
   nick?: string | null;
   premium_since?: string | null;
+  roles?: string[];
   user?: {
     avatar?: string | null;
     global_name?: string | null;
@@ -330,14 +331,13 @@ async function fetchAllGuildMembers(
   return members;
 }
 
-// Nick de un miembro puntual (GET /guilds/:gid/members/:uid con el token
-// del bot). Se usa al inscribirse desde la web para guardar el NICK DE
-// SERVIDOR en el signup (y no el nombre global), consistente con lo que
-// registra el bot cuando alguien se anota desde Discord.
-async function fetchGuildMemberNick(
+// Miembro puntual (GET /guilds/:gid/members/:uid con el token del bot).
+// Devuelve el miembro (nick + roles) para guardar el nick de servidor en el
+// signup y para evaluar el rol mínimo requerido del evento.
+async function fetchGuildMemberRecord(
   guildId: string,
   userId: string,
-): Promise<string | null> {
+): Promise<DiscordGuildMember | null> {
   if (!env.DISCORD_BOT_TOKEN) {
     return null;
   }
@@ -353,17 +353,43 @@ async function fetchGuildMemberNick(
     if (!response.ok) {
       return null;
     }
-    const member = (await response.json()) as DiscordGuildMember;
-    const nick = member.nick?.trim();
-    if (nick) {
-      return nick;
-    }
-    const name =
-      member.user?.global_name?.trim() ?? member.user?.username?.trim();
-    return name || null;
+    return (await response.json()) as DiscordGuildMember;
   } catch {
     return null;
   }
+}
+
+// Nombre para mostrar de un miembro: nick de servidor, si no global_name,
+// si no username.
+function memberDisplayName(member: DiscordGuildMember | null): string | null {
+  if (!member) {
+    return null;
+  }
+  const nick = member.nick?.trim();
+  if (nick) {
+    return nick;
+  }
+  return (
+    member.user?.global_name?.trim() ?? member.user?.username?.trim() ?? null
+  );
+}
+
+// Si el evento exige un rol mínimo y la persona NO lo tiene, un "Voy" (yes)
+// pasa a bench (no entra al roster principal), estilo Raid Helper. Tarde y
+// No asisto se mantienen igual.
+function applyRequiredRoleStatus(
+  status: string,
+  member: DiscordGuildMember | null,
+  requiredRoleId: string | undefined,
+): string {
+  if (
+    status === "yes" &&
+    requiredRoleId &&
+    !(member?.roles ?? []).includes(requiredRoleId)
+  ) {
+    return "bench";
+  }
+  return status;
 }
 
 async function fetchGuildMembersForLeaderboard(
@@ -2612,6 +2638,7 @@ export function buildApp() {
       };
       durationMinutes?: number;
       imageUrl?: string;
+      requiredRoleId?: string;
       signupDeadline?: string;
       startsAt?: string;
       title?: string;
@@ -2650,6 +2677,7 @@ export function buildApp() {
       durationMinutes: body.durationMinutes,
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
+      requiredRoleId: body.requiredRoleId?.trim() || null,
       signupDeadline: body.signupDeadline?.trim() || undefined,
       startsAt,
       title,
@@ -2714,6 +2742,7 @@ export function buildApp() {
       };
       durationMinutes?: number | null;
       imageUrl?: string;
+      requiredRoleId?: string;
       signupDeadline?: string | null;
       startsAt?: string;
       status?: string;
@@ -2757,6 +2786,10 @@ export function buildApp() {
       description: body.description?.trim() || undefined,
       durationMinutes: body.durationMinutes ?? null,
       imageUrl: body.imageUrl?.trim() || undefined,
+      requiredRoleId:
+        body.requiredRoleId === undefined
+          ? undefined
+          : body.requiredRoleId.trim() || null,
       signupDeadline: body.signupDeadline ?? null,
       startsAt: body.startsAt,
       status: body.status,
@@ -3178,8 +3211,19 @@ export function buildApp() {
       }
 
       // Guardamos el nick de servidor (o global_name/username como fallback)
-      // para que el roster muestre cómo se llama la persona en Discord.
-      const nick = await fetchGuildMemberNick(params.guildId, user.id);
+      // para que el roster muestre cómo se llama la persona en Discord. De
+      // paso usamos sus roles para aplicar el rol mínimo requerido (yes→bench).
+      const member = await fetchGuildMemberRecord(params.guildId, user.id);
+      const displayName =
+        memberDisplayName(member) ??
+        user.global_name ??
+        user.username ??
+        "Miembro";
+      const effectiveStatus = applyRequiredRoleStatus(
+        status,
+        member,
+        event.requiredRoleId,
+      );
       const signup = await upsertSignup({
         character: body.character?.trim() || undefined,
         eventId: params.eventId,
@@ -3187,9 +3231,9 @@ export function buildApp() {
         note: body.note?.trim() || undefined,
         role: body.role?.trim() || undefined,
         spec: body.spec?.trim() || undefined,
-        status,
+        status: effectiveStatus,
         userId: user.id,
-        username: nick ?? user.global_name ?? user.username ?? "Miembro",
+        username: displayName,
         wowClass: body.wowClass?.trim() || undefined,
       });
 
@@ -3342,13 +3386,21 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
+      // Aplicamos el rol mínimo requerido del evento (yes sin rol → bench).
+      const member = await fetchGuildMemberRecord(params.guildId, body.userId);
+      const effectiveStatus = applyRequiredRoleStatus(
+        status,
+        member,
+        event.requiredRoleId,
+      );
+
       const signup = await upsertSignup({
         character: body.character?.trim() || undefined,
         eventId: params.eventId,
         guildId: params.guildId,
         role: body.role?.trim() || undefined,
         spec: body.spec?.trim() || undefined,
-        status,
+        status: effectiveStatus,
         userId: body.userId,
         username: body.username.trim(),
         wowClass: body.wowClass?.trim() || undefined,

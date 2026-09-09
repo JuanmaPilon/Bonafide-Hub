@@ -202,6 +202,9 @@ export type HubEvent = {
   id: string;
   imageUrl?: string;
   publishChannelId?: string;
+  // Rol de Discord mínimo para entrar al roster principal: quien no lo tiene
+  // y marca "Voy" se guarda como Bench (estilo Raid Helper).
+  requiredRoleId?: string;
   signupDeadline?: Date;
   startsAt: Date;
   status: string;
@@ -249,6 +252,7 @@ type EventRecord = {
   id: string;
   imageUrl: string | null;
   publishChannelId: string | null;
+  requiredRoleId: string | null;
   signupDeadline: Date | null;
   startsAt: Date;
   status: string;
@@ -306,6 +310,7 @@ function toEvent(record: EventRecord): HubEvent {
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
     publishChannelId: record.publishChannelId ?? undefined,
+    requiredRoleId: record.requiredRoleId ?? undefined,
     signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
     status: record.status,
@@ -344,6 +349,7 @@ export async function createEvent(input: {
   durationMinutes?: number;
   guildId: string;
   imageUrl?: string;
+  requiredRoleId?: string | null;
   signupDeadline?: string;
   startsAt: string;
   title: string;
@@ -357,6 +363,7 @@ export async function createEvent(input: {
       durationMinutes: input.durationMinutes,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
+      requiredRoleId: input.requiredRoleId ?? null,
       signupDeadline: input.signupDeadline
         ? new Date(input.signupDeadline)
         : null,
@@ -376,6 +383,7 @@ export async function updateEvent(
     description?: string;
     durationMinutes?: number | null;
     imageUrl?: string;
+    requiredRoleId?: string | null;
     signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
@@ -389,6 +397,10 @@ export async function updateEvent(
       description: input.description,
       durationMinutes: input.durationMinutes,
       imageUrl: input.imageUrl,
+      requiredRoleId:
+        input.requiredRoleId === undefined
+          ? undefined
+          : input.requiredRoleId || null,
       signupDeadline:
         input.signupDeadline === null
           ? null
