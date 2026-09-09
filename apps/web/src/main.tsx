@@ -752,6 +752,7 @@ function EventCard({
   event,
   meId,
   onDelete,
+  onDuplicate,
   onEdit,
   onRemoveSignup,
   onSignup,
@@ -761,6 +762,7 @@ function EventCard({
   event: HubEvent;
   meId?: string;
   onDelete: (event: HubEvent) => void;
+  onDuplicate: (event: HubEvent) => void;
   onEdit: (event: HubEvent) => void;
   onRemoveSignup: (eventId: string) => Promise<void>;
   onSignup: (
@@ -1164,6 +1166,13 @@ function EventCard({
               type="button"
             >
               Editar
+            </button>
+            <button
+              className="ghost-button"
+              onClick={() => onDuplicate(event)}
+              type="button"
+            >
+              Duplicar
             </button>
             <button
               className="ghost-button danger"
@@ -1879,6 +1888,8 @@ function App() {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  // Indica que el form abrió en modo "duplicar" (para el título del form).
+  const [duplicatingEvent, setDuplicatingEvent] = useState(false);
   const [eventForm, setEventForm] = useState<{
     discord: {
       createScheduledEvent: boolean;
@@ -2731,6 +2742,7 @@ function App() {
   function handleCloseEventForm(): void {
     setShowEventForm(false);
     setEditingEventId(null);
+    setDuplicatingEvent(false);
     setEventForm({
       discord: defaultEventDiscord(),
       durationMinutes: "",
@@ -2745,6 +2757,7 @@ function App() {
 
   function handleEditEvent(event: HubEvent): void {
     setEditingEventId(event.id);
+    setDuplicatingEvent(false);
     setEventForm({
       discord: {
         createScheduledEvent:
@@ -2767,6 +2780,39 @@ function App() {
         : "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: event.status,
+      title: event.title,
+      type: event.type,
+    });
+    setShowEventForm(true);
+  }
+
+  // Duplica la configuración de un evento como uno NUEVO (sin inscripciones)
+  // para "re-publicarlo": se abre el form en modo creación con los datos
+  // copiados (fecha editable, inscripciones abiertas, mismo canal/imagen).
+  function handleDuplicateEvent(event: HubEvent): void {
+    setEditingEventId(null);
+    setDuplicatingEvent(true);
+    setEventForm({
+      discord: {
+        createScheduledEvent:
+          event.discordEventConfig?.createScheduledEvent ??
+          Boolean(event.discordEventId),
+        entityType: event.discordEventConfig?.entityType ?? "voice",
+        location: event.discordEventConfig?.location ?? "",
+        publishChannelId: event.publishChannelId ?? "",
+        publishMessage:
+          event.discordEventConfig?.publishMessage ??
+          (event.discordMessageIds?.length ?? 0) > 0,
+        // La recurrencia de Discord no se copia: cada corrida se arma aparte.
+        recurrence: "none",
+        voiceChannelId: event.voiceChannelId ?? "",
+      },
+      durationMinutes:
+        event.durationMinutes != null ? String(event.durationMinutes) : "",
+      imageUrl: event.imageUrl ?? "",
+      signupDeadline: "",
+      startsAt: toDateTimeLocal(event.startsAt),
+      status: "scheduled",
       title: event.title,
       type: event.type,
     });
@@ -6987,7 +7033,11 @@ function App() {
                   {showEventForm ? (
                     <div className="event-form-card">
                       <h3 className="event-form-title">
-                        {editingEventId ? "Editar evento" : "Nuevo evento"}
+                        {editingEventId
+                          ? "Editar evento"
+                          : duplicatingEvent
+                            ? "Duplicar evento"
+                            : "Nuevo evento"}
                       </h3>
                       <div className="form-grid">
                         <label>
@@ -7001,7 +7051,6 @@ function App() {
                                 title: event.target.value,
                               }))
                             }
-                            placeholder="Ej: Raid Heroico — Torre del Brujo"
                             maxLength={120}
                           />
                         </label>
@@ -7070,7 +7119,6 @@ function App() {
                                 durationMinutes: event.target.value,
                               }))
                             }
-                            placeholder="Ej: 180"
                           />
                         </label>
                         <label>
@@ -7129,7 +7177,7 @@ function App() {
                                   imageUrl: event.target.value,
                                 }))
                               }
-                              placeholder="O pegá una URL https://…"
+                              placeholder="URL o imagen"
                             />
                             <label className="primary-button event-upload-button">
                               {uploadingImage ? "Subiendo…" : "Subir imagen"}
@@ -7189,22 +7237,37 @@ function App() {
                         <span className="event-image-editor-label">
                           📢 Publicar en Discord
                         </span>
-                        <label className="form-check">
-                          <input
-                            type="checkbox"
-                            checked={eventForm.discord.createScheduledEvent}
-                            onChange={(event) =>
-                              setEventForm((current) => ({
-                                ...current,
-                                discord: {
-                                  ...current.discord,
-                                  createScheduledEvent: event.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          Crear Scheduled Event (aparece en el panel Eventos de
-                          Discord, con RSVP nativo)
+                        <label
+                          className={`module-toggle event-discord-toggle${eventForm.discord.createScheduledEvent ? " checked" : ""}`}
+                        >
+                          <span className="module-toggle-text">
+                            <strong>Crear Scheduled Event</strong>
+                            <small>
+                              Aparece en el panel Eventos de Discord, con RSVP
+                              nativo.
+                            </small>
+                          </span>
+                          <span className="module-switch">
+                            <input
+                              type="checkbox"
+                              checked={eventForm.discord.createScheduledEvent}
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  discord: {
+                                    ...current.discord,
+                                    createScheduledEvent: event.target.checked,
+                                  },
+                                }))
+                              }
+                            />
+                            <span
+                              className="module-switch-track"
+                              aria-hidden="true"
+                            >
+                              <span className="module-switch-thumb" />
+                            </span>
+                          </span>
                         </label>
                         {eventForm.discord.createScheduledEvent ? (
                           <div className="event-discord-row">
@@ -7288,50 +7351,38 @@ function App() {
                                 />
                               </label>
                             )}
-                            <label>
-                              <span>Repetición</span>
-                              <select
-                                className="select"
-                                value={eventForm.discord.recurrence}
-                                onChange={(event) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    discord: {
-                                      ...current.discord,
-                                      recurrence: event.target
-                                        .value as typeof current.discord.recurrence,
-                                    },
-                                  }))
-                                }
-                              >
-                                <option value="none">No se repite</option>
-                                <option value="daily">Todos los días</option>
-                                <option value="weekly">Semanal</option>
-                                <option value="biweekly">Cada 2 semanas</option>
-                              </select>
-                            </label>
-                            <span className="muted-text">
-                              Nota: Discord no permite recurrencia "cada X días"
-                              arbitraria; lo máximo es diario, semanal o cada 2
-                              semanas.
-                            </span>
                           </div>
                         ) : null}
-                        <label className="form-check">
-                          <input
-                            type="checkbox"
-                            checked={eventForm.discord.publishMessage}
-                            onChange={(event) =>
-                              setEventForm((current) => ({
-                                ...current,
-                                discord: {
-                                  ...current.discord,
-                                  publishMessage: event.target.checked,
-                                },
-                              }))
-                            }
-                          />
-                          Publicar un aviso (embed) en un canal de texto
+                        <label
+                          className={`module-toggle event-discord-toggle${eventForm.discord.publishMessage ? " checked" : ""}`}
+                        >
+                          <span className="module-toggle-text">
+                            <strong>Publicar un aviso</strong>
+                            <small>
+                              Publica un embed del evento en un canal de texto.
+                            </small>
+                          </span>
+                          <span className="module-switch">
+                            <input
+                              type="checkbox"
+                              checked={eventForm.discord.publishMessage}
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  discord: {
+                                    ...current.discord,
+                                    publishMessage: event.target.checked,
+                                  },
+                                }))
+                              }
+                            />
+                            <span
+                              className="module-switch-track"
+                              aria-hidden="true"
+                            >
+                              <span className="module-switch-thumb" />
+                            </span>
+                          </span>
                         </label>
                         {eventForm.discord.publishMessage ? (
                           <label>
@@ -7378,13 +7429,6 @@ function App() {
 
                   {eventsLoading ? (
                     <LoadingState label="Cargando eventos…" />
-                  ) : events.length === 0 ? (
-                    <div className="empty-state">
-                      Todavía no hay eventos.
-                      {canAccess("eventos")
-                        ? " Creá el primero con «+ Nuevo evento»."
-                        : ""}
-                    </div>
                   ) : (
                     <div className="events-grid">
                       {events.map((event) => (
@@ -7394,6 +7438,7 @@ function App() {
                           key={event.id}
                           meId={me?.id}
                           onDelete={handleDeleteEvent}
+                          onDuplicate={handleDuplicateEvent}
                           onEdit={handleEditEvent}
                           onRemoveSignup={handleRemoveEventSignup}
                           onSignup={handleEventSignup}
