@@ -2976,6 +2976,47 @@ textarea {
   font-size: 0.88rem;
 }
 
+/* Resumen de la inscripción cuando ya está completa (spec + estado). */
+.event-signup-summary {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(134, 158, 214, 0.22);
+  background: rgba(12, 19, 37, 0.45);
+}
+
+.event-signup-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.event-signup-summary-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.32);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.event-signup-summary-spec {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.88rem;
+  min-width: 0;
+}
+
+.event-signup-summary-line {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 /* Selector rol → clase → spec estilo Raid Helper */
 .event-signup-picker {
   display: grid;

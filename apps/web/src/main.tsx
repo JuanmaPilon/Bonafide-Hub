@@ -795,6 +795,19 @@ function EventCard({
   const [character, setCharacter] = useState(mySignup?.character ?? "");
   const [status, setStatus] = useState(mySignup?.status ?? "yes");
   const [submitting, setSubmitting] = useState(false);
+  // Si ya elegí spec y estado muestro un resumen en vez del editor completo;
+  // "Cambiar" vuelve a abrir el editor.
+  const [editingSignup, setEditingSignup] = useState(false);
+  const hasFullSignup = Boolean(
+    mySignup?.status && mySignup?.wowClass && mySignup?.spec,
+  );
+  const showSignupSummary = hasFullSignup && !editingSignup;
+  const signupDirty =
+    status !== (mySignup?.status ?? "yes") ||
+    role !== (mySignup?.role ?? "") ||
+    wowClass !== (mySignup?.wowClass ?? "") ||
+    spec !== (mySignup?.spec ?? "") ||
+    character.trim() !== (mySignup?.character ?? "");
 
   const typeMeta =
     EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
@@ -853,6 +866,8 @@ function EventCard({
         status,
         wowClass: wowClass || undefined,
       });
+      // Si ya quedó completa, volvemos al resumen (no al editor abierto).
+      setEditingSignup(false);
     } finally {
       setSubmitting(false);
     }
@@ -1031,8 +1046,54 @@ function EventCard({
               </div>
             ) : (
               <>
-                <div className="event-signup-status">
-                  {SIGNUP_OPTIONS.map((option) => (
+                {showSignupSummary ? (
+                  <div className="event-signup-summary">
+                    <div className="event-signup-summary-row">
+                      <span className="event-signup-summary-status">
+                        {SIGNUP_OPTIONS.find(
+                          (option) => option.key === mySignup?.status,
+                        )?.emoji ?? "❔"}{" "}
+                        {SIGNUP_OPTIONS.find(
+                          (option) => option.key === mySignup?.status,
+                        )?.label ?? mySignup?.status}
+                      </span>
+                      <strong className="event-signup-summary-spec">
+                        {mySignup?.wowClass ? (
+                          <span aria-hidden="true">
+                            {classEmoji(mySignup.wowClass)}{" "}
+                          </span>
+                        ) : null}
+                        {[mySignup?.role, mySignup?.wowClass, mySignup?.spec]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </strong>
+                    </div>
+                    {mySignup?.character ? (
+                      <div className="event-signup-summary-line">
+                        🎭 Personaje: {mySignup.character}
+                      </div>
+                    ) : null}
+                    <div className="event-signup-actions">
+                      <button
+                        className="ghost-button"
+                        onClick={() => setEditingSignup(true)}
+                        type="button"
+                      >
+                        Cambiar
+                      </button>
+                      <button
+                        className="ghost-button danger"
+                        onClick={() => void onRemoveSignup(event.id)}
+                        type="button"
+                      >
+                        Quitar inscripción
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="event-signup-status">
+                      {SIGNUP_OPTIONS.map((option) => (
                     <button
                       className={`event-status-btn ${option.key}${status === option.key ? " active" : ""}`}
                       key={option.key}
@@ -1144,27 +1205,43 @@ function EventCard({
                     value={character}
                     onChange={(event) => setCharacter(event.target.value)}
                     maxLength={40}
+                    placeholder="Nombre de tu personaje (opcional)"
                   />
                 </div>
                 <div className="event-signup-actions">
                   <button
                     className="primary-button"
                     onClick={() => void submit()}
-                    disabled={submitting}
+                    disabled={
+                      submitting || (Boolean(mySignup) && !signupDirty)
+                    }
                     type="button"
                   >
                     {submitting ? "Guardando…" : "Guardar inscripción"}
                   </button>
                   {mySignup ? (
-                    <button
-                      className="ghost-button"
-                      onClick={() => void onRemoveSignup(event.id)}
-                      type="button"
-                    >
-                      Quitar inscripción
-                    </button>
+                    <>
+                      {hasFullSignup ? (
+                        <button
+                          className="ghost-button"
+                          onClick={() => setEditingSignup(false)}
+                          type="button"
+                        >
+                          Cancelar
+                        </button>
+                      ) : null}
+                      <button
+                        className="ghost-button danger"
+                        onClick={() => void onRemoveSignup(event.id)}
+                        type="button"
+                      >
+                        Quitar inscripción
+                      </button>
+                    </>
                   ) : null}
                 </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -7162,9 +7239,7 @@ function App() {
                           />
                         </label>
                         <label>
-                          <span>
-                            Rol mínimo para el roster (opcional)
-                          </span>
+                          <span>Rol mínimo para el roster (opcional)</span>
                           <select
                             className="select"
                             value={eventForm.requiredRoleId}
