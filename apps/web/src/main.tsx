@@ -2456,7 +2456,8 @@ function App() {
   }, [activeTab, selectedGuildId]);
 
   useEffect(() => {
-    if (!selectedGuildId || activeTab !== "eventos") {
+    const adminEvents = activeTab === "admin" && canAccess("eventos");
+    if (!selectedGuildId || (activeTab !== "eventos" && !adminEvents)) {
       setEvents([]);
       setEventsLoading(false);
       return;
@@ -2478,6 +2479,7 @@ function App() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, selectedGuildId]);
 
   // El catálogo de roles/specs se carga donde se usa: en la tab Eventos
@@ -6565,6 +6567,104 @@ function App() {
                             ) : null}
                           </div>
                         </div>
+                      </div>
+                    </details>
+                  ) : null}
+                  {canAccess("eventos") ? (
+                    <details className="admin-card admin-card-acc admin-card--officer">
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>
+                            Historial de eventos{" "}
+                            <span className="admin-tier-badge tier-officer">
+                              Officer
+                            </span>
+                          </h3>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        {events.filter((entry) => entry.status === "completed")
+                          .length === 0 ? (
+                          <p className="muted-text">
+                            Todavía no hay eventos completados. Cuando un evento
+                            se marca como "Completado" queda archivado acá con
+                            su roster final.
+                          </p>
+                        ) : (
+                          <div className="event-history-list">
+                            {events
+                              .filter((entry) => entry.status === "completed")
+                              .sort(
+                                (a, b) =>
+                                  new Date(b.startsAt).getTime() -
+                                  new Date(a.startsAt).getTime(),
+                              )
+                              .map((finished) => (
+                                <details
+                                  className="event-history-item"
+                                  key={finished.id}
+                                >
+                                  <summary className="event-history-head">
+                                    <strong>{finished.title}</strong>
+                                    <span className="event-history-date">
+                                      {new Date(
+                                        finished.startsAt,
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  </summary>
+                                  <div className="event-history-body">
+                                    {finished.signups.length === 0 ? (
+                                      <p className="muted-text">
+                                        Sin inscripciones.
+                                      </p>
+                                    ) : (
+                                      (
+                                        [
+                                          ["yes", "✅", "Asistieron"],
+                                          ["bench", "🪑", "Bench"],
+                                          ["late", "⏰", "Tarde"],
+                                          ["no", "❌", "No asistieron"],
+                                        ] as const
+                                      ).map(([st, emoji, label]) => {
+                                        const members = finished.signups.filter(
+                                          (signup) => signup.status === st,
+                                        );
+                                        if (members.length === 0) {
+                                          return null;
+                                        }
+                                        return (
+                                          <div
+                                            className="event-history-group"
+                                            key={st}
+                                          >
+                                            <span className="event-roster-role">
+                                              {emoji} {label} ({members.length})
+                                            </span>
+                                            <span className="event-history-names">
+                                              {members.map((signup) => (
+                                                <span
+                                                  className="event-roster-member"
+                                                  key={signup.id}
+                                                >
+                                                  {signup.username}
+                                                  {signup.character
+                                                    ? ` (${signup.character})`
+                                                    : ""}
+                                                </span>
+                                              ))}
+                                            </span>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                </details>
+                              ))}
+                          </div>
+                        )}
                       </div>
                     </details>
                   ) : null}

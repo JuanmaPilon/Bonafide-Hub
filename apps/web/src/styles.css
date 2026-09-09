@@ -4963,3 +4963,69 @@ textarea {
 :root[data-theme="light"] .event-image-preview {
   background: rgba(255, 255, 255, 0.75);
 }
+
+/* Historial de eventos (Admin) */
+.event-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.event-history-item {
+  border: 1px solid rgba(134, 158, 214, 0.18);
+  border-radius: 10px;
+  background: rgba(12, 19, 37, 0.35);
+}
+
+.event-history-item > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.event-history-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.event-history-head strong {
+  color: var(--text);
+}
+
+.event-history-date {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.event-history-body {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.event-history-group {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.event-history-names {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.event-history-names .event-roster-member + .event-roster-member::before {
+  content: ", ";
+}
+
+:root[data-theme="light"] .event-history-item {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(60, 85, 130, 0.2);
+}
