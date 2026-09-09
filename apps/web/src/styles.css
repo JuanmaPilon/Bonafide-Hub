@@ -2661,6 +2661,20 @@ textarea {
   flex-wrap: wrap;
 }
 
+.event-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.event-list-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
 .event-form-card {
   margin-bottom: 18px;
   padding: 16px;
@@ -3134,6 +3148,19 @@ textarea {
 
 .spec-emoji-selected {
   font-size: 0.85rem;
+}
+
+.admin-card-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.spec-cat-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Publicación en Discord (editor del form de evento + estado en tarjeta) */

@@ -1069,6 +1069,28 @@ export async function deleteEventSpec(
   );
 }
 
+export async function updateEventSpec(
+  guildId: string,
+  specId: string,
+  input: {
+    animated?: boolean;
+    className?: string;
+    emojiId?: string | null;
+    emojiName?: string | null;
+    role?: string;
+    specName?: string;
+  },
+): Promise<RaidSpec> {
+  const data = await requestJson<{ spec: RaidSpec }>(
+    `/guilds/${guildId}/events/specs/${encodeURIComponent(specId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.spec;
+}
+
 export type EventImage = {
   createdAt: string;
   dataUrl: string;

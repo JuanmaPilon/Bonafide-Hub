@@ -85,6 +85,7 @@ import {
   listRaidSpecs,
   setEventDiscordInfo,
   updateEvent,
+  updateRaidSpec,
   upsertSignup,
 } from "./services/events-store.js";
 import {
@@ -2897,6 +2898,63 @@ export function buildApp() {
     },
   );
 
+  // Edición de una spec del catálogo.
+  app.patch("/guilds/:guildId/events/specs/:specId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; specId?: string };
+    if (!params.guildId || !params.specId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      animated?: boolean;
+      className?: string;
+      emojiId?: string;
+      emojiName?: string;
+      role?: string;
+      specName?: string;
+    };
+    const role = body.role?.trim().toLowerCase();
+    const className = body.className?.trim();
+    const specName = body.specName?.trim();
+    if (role && !RAID_ROLES.includes(role as never)) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Rol inválido (tank/healer/melee/ranged)",
+      });
+    }
+    if (className !== undefined && !className) {
+      return reply.code(400).send({ ok: false, error: "Falta la clase" });
+    }
+    if (specName !== undefined && !specName) {
+      return reply.code(400).send({ ok: false, error: "Falta la spec" });
+    }
+
+    const spec = await updateRaidSpec(params.guildId, params.specId, {
+      animated: body.animated,
+      className: className || undefined,
+      emojiId: body.emojiId?.trim() || null,
+      emojiName: body.emojiName?.trim() || null,
+      role: role || undefined,
+      specName: specName || undefined,
+    });
+    if (!spec) {
+      return reply.code(409).send({
+        ok: false,
+        error: "No se pudo actualizar: puede que esa rol/clase/spec ya exista",
+      });
+    }
+    return { ok: true, guildId: params.guildId, spec };
+  });
+
   // ── Biblioteca de imágenes de eventos ─────────────────────────────
   app.get("/guilds/:guildId/events/images", async (request, reply) => {
     const session = await requireSession(request);
@@ -3106,26 +3164,23 @@ export function buildApp() {
   // toca los botones del embed del evento. Reutilizan la misma lógica que
   // la web y refrescan el aviso publicado en Discord.
 
-  app.get(
-    "/internal/guilds/:guildId/events/specs",
-    async (request, reply) => {
-      if (!env.BOT_API_TOKEN) {
-        return reply.code(503).send({
-          ok: false,
-          error: "BOT_API_TOKEN is not configured",
-        });
-      }
-      if (!isAuthorizedBotRequest(request)) {
-        return reply.code(401).send({ ok: false, error: "Unauthorized" });
-      }
-      const params = request.params as { guildId?: string };
-      if (!params.guildId) {
-        return reply.code(400).send({ ok: false, error: "Missing guildId" });
-      }
-      const specs = await listRaidSpecs(params.guildId);
-      return { ok: true, guildId: params.guildId, specs };
-    },
-  );
+  app.get("/internal/guilds/:guildId/events/specs", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+    const specs = await listRaidSpecs(params.guildId);
+    return { ok: true, guildId: params.guildId, specs };
+  });
 
   // El bot necesita el evento (con sus signups) para decidir si abre el
   // asistente de rol/spec o aplica el estado directo.

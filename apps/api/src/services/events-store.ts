@@ -139,6 +139,56 @@ export async function deleteRaidSpec(
   return result.count > 0;
 }
 
+// Edita una spec del catálogo (rol, clase, spec y/o emoji). Devuelve null si
+// no existe o si el cambio choca con otra fila (rol+clase+spec duplicados).
+export async function updateRaidSpec(
+  guildId: string,
+  specId: string,
+  input: {
+    animated?: boolean;
+    className?: string;
+    emojiId?: string | null;
+    emojiName?: string | null;
+    role?: string;
+    specName?: string;
+  },
+): Promise<RaidSpec | null> {
+  const data: Record<string, unknown> = {};
+  if (input.animated !== undefined) {
+    data.animated = input.animated;
+  }
+  if (input.className !== undefined) {
+    data.className = input.className;
+  }
+  if (input.emojiId !== undefined) {
+    data.emojiId = input.emojiId;
+  }
+  if (input.emojiName !== undefined) {
+    data.emojiName = input.emojiName;
+  }
+  if (input.role !== undefined) {
+    data.role = input.role;
+  }
+  if (input.specName !== undefined) {
+    data.specName = input.specName;
+  }
+  try {
+    const updated = await prisma.raidSpec.updateMany({
+      where: { id: specId, guildId },
+      data,
+    });
+    if (updated.count === 0) {
+      return null;
+    }
+    const fresh = await prisma.raidSpec.findFirst({
+      where: { id: specId, guildId },
+    });
+    return fresh ? toRaidSpec(fresh) : null;
+  } catch {
+    return null;
+  }
+}
+
 export type HubEvent = {
   createdAt: Date;
   createdByUserId?: string;
