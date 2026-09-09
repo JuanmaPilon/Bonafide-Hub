@@ -895,37 +895,14 @@ function EventCard({
     }
   };
 
-  // Render de un miembro del roster (emoji de spec + nombre).
-  const renderMember = (signup: EventSignup) => {
-    const specRow = specs.find(
-      (row) =>
-        row.role === signup.role &&
-        row.className === signup.wowClass &&
-        row.specName === signup.spec,
-    );
-    const specIcon = discordEmojiUrl(specRow?.emojiId, specRow?.animated);
-    const color = specRow ? undefined : classColor(signup.wowClass);
-    return (
-      <span
-        className="event-roster-member"
-        key={signup.id}
-        style={color ? { color } : undefined}
-        title={
-          [signup.wowClass, signup.spec].filter(Boolean).join(" · ") ||
-          undefined
-        }
-      >
-        {specIcon ? (
-          <img alt="" className="signup-spec-emoji" src={specIcon} />
-        ) : (
-          <span aria-hidden="true">{classEmoji(signup.wowClass)} </span>
-        )}
-        {signup.character
-          ? `${signup.username} (${signup.character})`
-          : signup.username}
-      </span>
-    );
-  };
+  // Render de un miembro del roster: estilo Raid Helper, solo el nick (y su
+  // personaje entre paréntesis si lo cargó). Sin emojis de clase/spec.
+  const renderMember = (signup: EventSignup) => (
+    <span className="event-roster-member" key={signup.id}>
+      {signup.username}
+      {signup.character ? ` (${signup.character})` : ""}
+    </span>
+  );
 
   return (
     <article className="event-card">
@@ -1006,54 +983,63 @@ function EventCard({
 
         {event.signups.length > 0 ? (
           <div className="event-roster">
-            {([...COMBAT_ROLES, "legacy"] as const).map((groupKey) => {
-              const roleSignups = event.signups.filter(
-                (signup) =>
-                  signup.status === "yes" &&
-                  (groupKey === "legacy"
-                    ? !COMBAT_ROLES.includes(signup.role as never)
-                    : signup.role === groupKey),
-              );
-              if (roleSignups.length === 0) {
-                return null;
-              }
-              const meta =
-                groupKey === "legacy"
-                  ? { emoji: "⭐", label: "Otros" }
-                  : roleMeta(groupKey);
-              return (
-                <div className="event-roster-group" key={groupKey}>
-                  <span className="event-roster-role">
-                    {meta?.emoji} {meta?.label}
-                  </span>
-                  {roleSignups.map((signup) => renderMember(signup))}
-                </div>
-              );
-            })}
-            {/* Grupos por estado: Bench, Tarde y los que no asisten. En todos
-                los grupos cada miembro muestra nombre + spec (renderMember). */}
-            {(
-              [
-                ["bench", "🪑", "Bench"],
-                ["late", "⏰", "Tarde"],
-                ["no", "❌", "No asisten"],
-              ] as const
-            ).map(([statusKey, emoji, label]) => {
-              const members = event.signups.filter(
-                (signup) => signup.status === statusKey,
-              );
-              if (members.length === 0) {
-                return null;
-              }
-              return (
-                <div className="event-roster-group" key={statusKey}>
-                  <span className="event-roster-role">
-                    {emoji} {label}
-                  </span>
-                  {members.map((signup) => renderMember(signup))}
-                </div>
-              );
-            })}
+            {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
+                con sus confirmados (solo nombres). */}
+            <div className="event-roster-columns">
+              {([...COMBAT_ROLES, "legacy"] as const).map((groupKey) => {
+                const roleSignups = event.signups.filter(
+                  (signup) =>
+                    signup.status === "yes" &&
+                    (groupKey === "legacy"
+                      ? !COMBAT_ROLES.includes(signup.role as never)
+                      : signup.role === groupKey),
+                );
+                if (roleSignups.length === 0) {
+                  return null;
+                }
+                const meta =
+                  groupKey === "legacy"
+                    ? { emoji: "⭐", label: "Otros" }
+                    : roleMeta(groupKey);
+                return (
+                  <div className="event-roster-column" key={groupKey}>
+                    <span className="event-roster-role">
+                      {meta?.emoji} {meta?.label} ({roleSignups.length})
+                    </span>
+                    <div className="event-roster-members">
+                      {roleSignups.map((signup) => renderMember(signup))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Grupos por estado: Bench, Tarde y los que no asisten. */}
+            <div className="event-roster-statuses">
+              {(
+                [
+                  ["bench", "🪑", "Bench"],
+                  ["late", "⏰", "Tarde"],
+                  ["no", "❌", "No asisten"],
+                ] as const
+              ).map(([statusKey, emoji, label]) => {
+                const members = event.signups.filter(
+                  (signup) => signup.status === statusKey,
+                );
+                if (members.length === 0) {
+                  return null;
+                }
+                return (
+                  <div className="event-roster-group" key={statusKey}>
+                    <span className="event-roster-role">
+                      {emoji} {label} ({members.length})
+                    </span>
+                    <span className="event-roster-group-members">
+                      {members.map((signup) => renderMember(signup))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="event-roster-empty">Sin inscripciones todavía.</div>
@@ -1079,32 +1065,22 @@ function EventCard({
                           (option) => option.key === mySignup?.status,
                         )?.label ?? mySignup?.status}
                       </span>
-                      <strong className="event-signup-summary-spec">
-                        {mySignup?.wowClass ? (
-                          <span aria-hidden="true">
-                            {classEmoji(mySignup.wowClass)}{" "}
-                          </span>
-                        ) : null}
-                        {[mySignup?.role, mySignup?.wowClass, mySignup?.spec]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </strong>
                     </div>
                     {mySignup?.character ? (
                       <div className="event-signup-summary-line">
-                        🎭 Personaje: {mySignup.character}
+                        Personaje: {mySignup.character}
                       </div>
                     ) : null}
                     <div className="event-signup-actions">
                       <button
-                        className="ghost-button"
+                        className="primary-button"
                         onClick={() => setEditingSignup(true)}
                         type="button"
                       >
                         Cambiar
                       </button>
                       <button
-                        className="ghost-button danger"
+                        className="danger-button"
                         onClick={() => void onRemoveSignup(event.id)}
                         type="button"
                       >
@@ -1256,7 +1232,7 @@ function EventCard({
                             </button>
                           ) : null}
                           <button
-                            className="ghost-button danger"
+                            className="danger-button"
                             onClick={() => void onRemoveSignup(event.id)}
                             type="button"
                           >
@@ -1275,21 +1251,21 @@ function EventCard({
         {canManage ? (
           <div className="event-card-actions">
             <button
-              className="ghost-button"
+              className="primary-button"
               onClick={() => onEdit(event)}
               type="button"
             >
               Editar
             </button>
             <button
-              className="ghost-button"
+              className="primary-button"
               onClick={() => onDuplicate(event)}
               type="button"
             >
               Duplicar
             </button>
             <button
-              className="ghost-button danger"
+              className="danger-button"
               onClick={() => onDelete(event)}
               type="button"
             >
@@ -2534,10 +2510,21 @@ function App() {
     }
     const missingVoice = voiceChannels.length === 0;
     const missingText = textChannels.length === 0;
-    if (!missingVoice && !missingText) {
+    const missingRoles = guildRoles.length === 0;
+    if (!missingVoice && !missingText && !missingRoles) {
       return;
     }
     let cancelled = false;
+    // Roles de la guild para el campo "Rol mínimo" del evento.
+    if (missingRoles) {
+      getGuildRoles(selectedGuildId)
+        .then((roles) => {
+          if (!cancelled) {
+            setGuildRoles(roles);
+          }
+        })
+        .catch(() => {});
+    }
     const fetches: Array<Promise<GuildChannel[]>> = [];
     if (missingVoice) {
       fetches.push(getGuildVoiceChannels(selectedGuildId));
@@ -2563,6 +2550,31 @@ function App() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGuildId, activeTab, showEventForm]);
+
+  // Roles de la guild: si hay eventos con rol requerido, cargamos los roles
+  // para poder mostrar el nombre del rol en la tarjeta (y no "un rol").
+  useEffect(() => {
+    if (
+      activeTab !== "eventos" ||
+      !selectedGuildId ||
+      guildRoles.length > 0 ||
+      !events.some((entry) => entry.requiredRoleId)
+    ) {
+      return;
+    }
+    let cancelled = false;
+    getGuildRoles(selectedGuildId)
+      .then((roles) => {
+        if (!cancelled) {
+          setGuildRoles(roles);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedGuildId, events, guildRoles.length]);
 
   // Emojis custom de la guild, solo cuando se abre el editor de catálogo.
   useEffect(() => {

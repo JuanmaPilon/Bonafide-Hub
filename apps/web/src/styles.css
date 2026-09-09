@@ -2468,8 +2468,16 @@ a:hover {
 }
 
 .ghost-button.danger {
-  border-color: rgba(252, 165, 165, 0.35);
-  color: var(--danger);
+  border-color: #e5484d;
+  background: #e5484d;
+  color: #fff;
+  font-weight: 700;
+}
+
+.ghost-button.danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+  border-color: #e5484d;
+  background: #e5484d;
 }
 
 .primary-button:disabled,
@@ -2842,7 +2850,33 @@ textarea {
 
 .event-roster {
   display: grid;
+  gap: 10px;
+}
+
+/* Columnas por rol (estilo Raid Helper). */
+.event-roster-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 8px;
+}
+
+.event-roster-column {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(134, 158, 214, 0.07);
+}
+
+.event-roster-column .event-roster-role {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.event-roster-members {
+  display: grid;
+  gap: 3px;
 }
 
 .event-roster-group {
@@ -2853,6 +2887,16 @@ textarea {
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(134, 158, 214, 0.07);
+}
+
+.event-roster-group-members {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* En los grupos por estado los nombres se separan con coma. */
+.event-roster-group-members .event-roster-member + .event-roster-member::before {
+  content: ", ";
 }
 
 .event-roster-role {
