@@ -321,8 +321,9 @@ function resolveEmbedImageUrl(
     // RAILWAY_PUBLIC_DOMAIN si no se configuró PUBLIC_API_URL a mano.
     const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
     const configured = env.PUBLIC_API_URL?.trim();
-    const base = (configured || (railwayDomain ? `https://${railwayDomain}` : ""))
-      .replace(/\/+$/, "");
+    const base = (
+      configured || (railwayDomain ? `https://${railwayDomain}` : "")
+    ).replace(/\/+$/, "");
     if (!base || !eventId) {
       return undefined;
     }
@@ -351,6 +352,13 @@ export function buildEventAnnouncementEmbeds(input: {
   const typeLabel = input.type ?? "evento";
   const timestamp = Math.floor(input.startsAt.getTime() / 1000);
 
+  // ¿Ya cerró la inscripción? Si hay cierre y ya pasó, el aviso se pinta en
+  // rojo, avisa bien visible que no se puede anotar (banner arriba) y los
+  // botones del mensaje quedan deshabilitados.
+  const signupsClosed =
+    input.signupDeadline !== undefined &&
+    input.signupDeadline.getTime() <= Date.now();
+
   const lines: string[] = [`🕒 <t:${timestamp}:F> (<t:${timestamp}:R>)`];
   const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
   if (recurrenceLabel) {
@@ -364,9 +372,9 @@ export function buildEventAnnouncementEmbeds(input: {
       `⏱️ Duración: ${input.durationMinutes} min (hasta <t:${end}:t>)`,
     );
   }
-  if (input.signupDeadline) {
+  if (input.signupDeadline && !signupsClosed) {
     const dl = Math.floor(input.signupDeadline.getTime() / 1000);
-    lines.push(`🔒 Cierre de inscripciones: <t:${dl}:F>`);
+    lines.push(`⏳ Inscripciones abiertas hasta <t:${dl}:F> (<t:${dl}:R>)`);
   }
   if (input.location) {
     lines.push(`📍 ${input.location}`);
@@ -441,10 +449,17 @@ export function buildEventAnnouncementEmbeds(input: {
   // Descripción separada en bloques (con línea en blanco entre ellos) para
   // que el embed respire y no se vea todo junto. Al final, link a la web.
   const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
-  const descriptionParts = [
-    lines.join("\n"),
+  const descriptionParts: string[] = [];
+  if (signupsClosed && input.signupDeadline) {
+    const dl = Math.floor(input.signupDeadline.getTime() / 1000);
+    descriptionParts.push(
+      `🔒 **INSCRIPCIONES CERRADAS** — ya no se puede anotar (cerró <t:${dl}:R>).`,
+    );
+  }
+  descriptionParts.push(lines.join("\n"));
+  descriptionParts.push(
     counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.",
-  ];
+  );
   if (webBase) {
     descriptionParts.push(`[🌐 Ver el evento en la web](${webBase}/#/eventos)`);
   }
@@ -455,7 +470,8 @@ export function buildEventAnnouncementEmbeds(input: {
 
   const embed: Record<string, unknown> = {
     title: `${EVENT_TYPE_EMOJI[input.type ?? ""] ?? "📅"} ${input.title.slice(0, 250)}`,
-    color: 0x6aa8ff,
+    // Rojo (Danger) cuando ya no se puede anotar; azul el resto del tiempo.
+    color: signupsClosed ? 0xe5484d : 0x6aa8ff,
     description: descriptionText,
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
@@ -478,42 +494,100 @@ export function buildEventAnnouncementEmbeds(input: {
 // roster cuando cambian las inscripciones). Devuelve si Discord lo aceptó.
 export async function updateEventAnnouncement(input: {
   channelId: string;
+  // Si se pasa, reemplaza los botones del mensaje (p. ej. deshabilitados
+  // cuando ya cerró la inscripción). Si se omite, no toca los componentes.
+  components?: Array<Record<string, unknown>>;
   embeds: Array<Record<string, unknown>>;
   messageId: string;
 }): Promise<boolean> {
+  const body: Record<string, unknown> = { embeds: input.embeds };
+  if (input.components) {
+    body.components = input.components;
+  }
   const response = await discordFetch(
     `/channels/${encodeURIComponent(input.channelId)}/messages/${encodeURIComponent(input.messageId)}`,
-    { method: "PATCH", body: { embeds: input.embeds } },
+    { method: "PATCH", body },
   );
   return response.ok;
 }
 
 // Botones que van fijos en el mensaje-aviso (los maneja el bot con el
 // prefijo `eventsign:` en custom_id) para inscribirse desde Discord.
+// `disableSignup` los deja grises cuando ya cerró la inscripción (seguimos
+// permitiendo "Quitar inscripción", que sirve hasta para avisar que no va).
+type ButtonSpec = {
+  customId: string;
+  disableWhenClosed: boolean;
+  emoji: string;
+  label: string;
+  style: number;
+};
+
 export function buildEventSignupActionRows(
   eventId: string,
+  options?: { disableSignup?: boolean },
 ): Array<Record<string, unknown>> {
-  const statusButtons = [
-    { customId: "yes", emoji: "✅", label: "Asistir", style: 3 },
-    { customId: "late", emoji: "⏰", label: "Tarde", style: 2 },
-    { customId: "bench", emoji: "🪑", label: "Bench", style: 2 },
-    { customId: "no", emoji: "❌", label: "No asisto", style: 2 },
+  const disableSignup = options?.disableSignup ?? false;
+  // disableWhenClosed: los botones de inscripción se grisan al cerrar; el de
+  // "Quitar inscripción" sigue activo (sirve para avisar que no vas).
+  const statusButtons: ButtonSpec[] = [
+    {
+      customId: "yes",
+      disableWhenClosed: true,
+      emoji: "✅",
+      label: "Asistir",
+      style: 3,
+    },
+    {
+      customId: "late",
+      disableWhenClosed: true,
+      emoji: "⏰",
+      label: "Tarde",
+      style: 2,
+    },
+    {
+      customId: "bench",
+      disableWhenClosed: true,
+      emoji: "🪑",
+      label: "Bench",
+      style: 2,
+    },
+    {
+      customId: "no",
+      disableWhenClosed: true,
+      emoji: "❌",
+      label: "No asisto",
+      style: 2,
+    },
   ];
-  const actionButtons = [
-    { customId: "pick", emoji: "⚙️", label: "Clase y spec", style: 1 },
-    { customId: "character", emoji: "✏️", label: "Personaje", style: 2 },
-    { customId: "remove", emoji: "🗑️", label: "Quitar inscripción", style: 4 },
+  const actionButtons: ButtonSpec[] = [
+    {
+      customId: "pick",
+      disableWhenClosed: true,
+      emoji: "⚙️",
+      label: "Clase y spec",
+      style: 1,
+    },
+    // Personaje con color (Primary) para que no quede gris entre los demás.
+    {
+      customId: "character",
+      disableWhenClosed: true,
+      emoji: "✏️",
+      label: "Personaje",
+      style: 1,
+    },
+    {
+      customId: "remove",
+      disableWhenClosed: false,
+      emoji: "🗑️",
+      label: "Quitar inscripción",
+      style: 4,
+    },
   ];
-  const row = (
-    buttons: Array<{
-      customId: string;
-      emoji: string;
-      label: string;
-      style: number;
-    }>,
-  ) => ({
+  const row = (buttons: ButtonSpec[]) => ({
     components: buttons.map((button) => ({
       custom_id: `eventsign:${eventId}:${button.customId}`,
+      ...(disableSignup && button.disableWhenClosed ? { disabled: true } : {}),
       emoji: { name: button.emoji },
       label: button.label,
       style: button.style,
@@ -546,7 +620,11 @@ async function postAnnouncement(
       method: "POST",
       body: {
         allowed_mentions: { parse: ["users", "roles"] },
-        components: buildEventSignupActionRows(input.eventId),
+        components: buildEventSignupActionRows(input.eventId, {
+          disableSignup:
+            input.signupDeadline !== undefined &&
+            input.signupDeadline.getTime() <= Date.now(),
+        }),
         embeds,
       },
     },

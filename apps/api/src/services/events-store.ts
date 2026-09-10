@@ -209,6 +209,7 @@ export type HubEvent = {
   // y marca "Voy" se guarda como Bench (estilo Raid Helper).
   requiredRoleId?: string;
   reportSentAt?: Date;
+  signupClosedAt?: Date;
   signupDeadline?: Date;
   startsAt: Date;
   status: string;
@@ -261,6 +262,7 @@ type EventRecord = {
   reminderSentHours: number[];
   reportSentAt: Date | null;
   requiredRoleId: string | null;
+  signupClosedAt: Date | null;
   signupDeadline: Date | null;
   startsAt: Date;
   status: string;
@@ -323,6 +325,7 @@ function toEvent(record: EventRecord): HubEvent {
     reminderSentHours: record.reminderSentHours,
     reportSentAt: record.reportSentAt ?? undefined,
     requiredRoleId: record.requiredRoleId ?? undefined,
+    signupClosedAt: record.signupClosedAt ?? undefined,
     signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
     status: record.status,
@@ -478,6 +481,11 @@ export async function updateEvent(
         input.requiredRoleId === undefined
           ? undefined
           : input.requiredRoleId || null,
+      // Si cambia (o se limpia) el cierre de inscripciones, reseteamos el
+      // marcador de "aviso ya actualizado por cierre": si vuelve a ser
+      // futuro se re-abre, y si vuelve a pasar se re-renderiza de nuevo.
+      signupClosedAt:
+        input.signupDeadline !== undefined ? null : undefined,
       signupDeadline:
         input.signupDeadline === null
           ? null
@@ -510,9 +518,7 @@ export async function markEventRemindersSent(
   if (!current) {
     return null;
   }
-  const merged = Array.from(
-    new Set([...current.reminderSentHours, ...hours]),
-  );
+  const merged = Array.from(new Set([...current.reminderSentHours, ...hours]));
   await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
     data: { reminderSentHours: merged },
@@ -533,6 +539,38 @@ export async function markEventReportSent(
     return null;
   }
   return getEvent(guildId, eventId);
+}
+
+// Eventos publicados cuyo cierre de inscripciones ya pasó y a los que todavía
+// no se les re-renderizó el aviso (embed rojo + botones deshabilitados).
+// Solo miramos cierres de las últimas 24 h para no perseguir eventos viejos.
+export async function listEventsPendingCloseAnnouncement(
+  now: Date = new Date(),
+): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    where: {
+      publishChannelId: { not: null },
+      signupClosedAt: null,
+      signupDeadline: {
+        gte: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        lte: now,
+      },
+      status: "scheduled",
+    },
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+  });
+  return records.map((record) => toEvent(record));
+}
+
+// Marca que el aviso ya fue actualizado por cierre de inscripciones.
+export async function markEventSignupClosed(
+  guildId: string,
+  eventId: string,
+): Promise<void> {
+  await prisma.hubEvent.updateMany({
+    where: { id: eventId, guildId },
+    data: { signupClosedAt: new Date() },
+  });
 }
 
 // Guarda (o limpia) la info de publicación en Discord de un evento. Se usa

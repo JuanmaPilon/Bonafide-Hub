@@ -82,11 +82,13 @@ import {
   getEvent,
   listEventImages,
   listEvents,
+  listEventsPendingCloseAnnouncement,
   listRaidSpecs,
   listReminderDueEvents,
   listReportPendingEvents,
   markEventRemindersSent,
   markEventReportSent,
+  markEventSignupClosed,
   setEventDiscordInfo,
   updateEvent,
   updateRaidSpec,
@@ -94,6 +96,7 @@ import {
 } from "./services/events-store.js";
 import {
   buildEventAnnouncementEmbeds,
+  buildEventSignupActionRows,
   cleanupEventDiscord,
   syncEventToDiscord,
   updateEventAnnouncement,
@@ -576,6 +579,50 @@ function startRaidLogSync(): void {
   }, RAID_LOG_SYNC_INTERVAL_MS);
 }
 
+// ── Cierre de inscripciones de eventos ──────────────────────────────
+// Cuando a un evento publicado le pasa el cierre de inscripciones, hay que
+// re-renderizar el aviso en Discord (embed rojo + botones deshabilitados).
+// Nada dispara ese refresh por sí solo (ya no se puede anotar), así que lo
+// revisamos cada minuto. El marcador signupClosedAt evita repetirlo.
+const EVENT_CLOSE_SYNC_INTERVAL_MS = 60 * 1000;
+let eventCloseSyncTimer: NodeJS.Timeout | null = null;
+// Para avisar una sola vez por evento si el refresh falla (si no, el
+// reintento por minuto llenaría el log).
+const closeSyncWarned = new Set<string>();
+
+async function runEventCloseSync(): Promise<void> {
+  try {
+    const pending = await listEventsPendingCloseAnnouncement();
+    for (const event of pending) {
+      const refreshed = await refreshEventAnnouncement(event.guildId, event.id);
+      if (refreshed) {
+        closeSyncWarned.delete(event.id);
+        await markEventSignupClosed(event.guildId, event.id);
+        console.log(
+          `[eventos] inscripciones cerradas: aviso actualizado (${event.title})`,
+        );
+      } else if (!closeSyncWarned.has(event.id)) {
+        closeSyncWarned.add(event.id);
+        console.warn(
+          `[eventos] no se pudo actualizar el aviso por cierre de "${event.title}"; se reintenta.`,
+        );
+      }
+    }
+  } catch (error) {
+    console.error("[eventos] close sync failed", error);
+  }
+}
+
+function startEventCloseSync(): void {
+  if (eventCloseSyncTimer) {
+    return;
+  }
+  void runEventCloseSync();
+  eventCloseSyncTimer = setInterval(() => {
+    void runEventCloseSync();
+  }, EVENT_CLOSE_SYNC_INTERVAL_MS);
+}
+
 // ── Publicación de eventos en Discord (Módulo X) ────────────────────
 // Normaliza el bloque "discord" que manda la web a una config tipada.
 function normalizeDiscordOptions(
@@ -689,21 +736,24 @@ async function syncAndStoreEventDiscord(input: {
   return { discordError: result.error, event: updated };
 }
 
-// Re-renderiza el aviso-embed de un evento publicado (roster al día). Se
-// usa cuando cambia una inscripción. Best-effort: falla silenciosa si el
-// mensaje ya no existe o Discord no responde.
+// Re-renderiza el aviso-embed de un evento publicado (roster al día + estado
+// de inscripción: al cerrarse queda rojo y con los botones deshabilitados).
+// Se usa al cambiar una inscripción y al pasar el cierre de inscripciones.
+// Devuelve true si el aviso quedó al día (false = conviene reintentar).
 async function refreshEventAnnouncement(
   guildId: string,
   eventId: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const event = await getEvent(guildId, eventId);
     if (!event || !event.publishChannelId) {
-      return;
+      return false;
     }
     const messageId = (event.discordMessageIds ?? [])[0];
     if (!messageId) {
-      return;
+      // Publicado sin mensaje-aviso (p. ej. solo scheduled event): nada que
+      // refrescar.
+      return true;
     }
     const specs = await listRaidSpecs(guildId);
     const embeds = buildEventAnnouncementEmbeds({
@@ -726,8 +776,14 @@ async function refreshEventAnnouncement(
       title: event.title,
       type: event.type,
     });
-    await updateEventAnnouncement({
+    const signupsClosed = event.signupDeadline
+      ? event.signupDeadline.getTime() <= Date.now()
+      : false;
+    return await updateEventAnnouncement({
       channelId: event.publishChannelId,
+      components: buildEventSignupActionRows(event.id, {
+        disableSignup: signupsClosed,
+      }),
       embeds,
       messageId,
     });
@@ -736,6 +792,7 @@ async function refreshEventAnnouncement(
       `[eventos] no se pudo refrescar el aviso del evento ${eventId} en Discord`,
       error,
     );
+    return false;
   }
 }
 
@@ -5041,6 +5098,7 @@ export function buildApp() {
   });
 
   startRaidLogSync();
+  startEventCloseSync();
 
   return app;
 }
