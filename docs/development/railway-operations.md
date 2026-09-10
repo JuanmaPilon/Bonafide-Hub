@@ -48,15 +48,9 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 
 ### API
 
-1. Pre-deploy: `npx prisma db push`
-   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`).
-   - ⚠️ **Si el schema quitó columnas/tablas** (p. ej. eliminar un módulo), `prisma db push` **falla** en CI porque exige confirmar pérdida de datos. Hay que correr el pre-deploy con `--accept-data-loss`:
-
-     ```bash
-     npx prisma db push --accept-data-loss
-     ```
-
-     Se puede dejar fijo en el comando pre-deploy del servicio API en Railway (no hay riesgo extra: borra solo lo que ya no está en `schema.prisma`).
+1. Pre-deploy: `npx prisma db push --accept-data-loss`
+   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`, `karuta_album_pages`).
+   - ⚠️ **Usar `--accept-data-loss`**: cuando el schema quita columnas/tablas (p. ej. al eliminar un módulo, como se hizo con `karuta_drops` y `karuta_debug_events`), un `prisma db push` pelado **falla** y el deploy de la API no avanza. Con el flag, borra solo lo que ya no está en `schema.prisma`.
 2. Build: `npm ci --include=dev && npm run build`
 3. Start: `npm run start`
 

@@ -74,7 +74,7 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 5. Polling de `xpSyncRequested` → re-sincroniza roles/nicknames por nivel
 6. Scheduler de timers → avisa por DM al vencer (con opción de repetir)
 7. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
-8. `MessageCreate` (Karuta) → detecta drops raros del bot Karuta en el canal vigilado, los guarda en la API y los anuncia
+8. `MessageCreate`/`MessageUpdate` (Karuta) → detecta cartas raras (`kv`), su colección (`ka`) y transferencias (`kg`/grab) en el canal vigilado y las guarda en la API
 
 ## 4. Sistema de XP
 

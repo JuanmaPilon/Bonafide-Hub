@@ -14,6 +14,8 @@ type GuildConfig = {
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
   karutaRareWishlistMin?: number;
+  karutaSuperRarePrintMax?: number;
+  karutaSuperRareWishlistMin?: number;
   karutaWatchEnabled?: boolean;
   memberLogChannelId?: string;
   musicEnabled?: boolean;
@@ -55,6 +57,8 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     karutaChannelId: input.karutaChannelId,
     karutaRarePrintMax: input.karutaRarePrintMax ?? 10,
     karutaRareWishlistMin: input.karutaRareWishlistMin ?? 3,
+    karutaSuperRarePrintMax: input.karutaSuperRarePrintMax ?? 3,
+    karutaSuperRareWishlistMin: input.karutaSuperRareWishlistMin ?? 10,
     karutaWatchEnabled: input.karutaWatchEnabled ?? false,
     memberLogChannelId: input.memberLogChannelId,
     musicEnabled: input.musicEnabled ?? true,

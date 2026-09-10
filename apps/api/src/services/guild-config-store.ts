@@ -21,6 +21,8 @@ export type GuildConfig = {
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
   karutaRareWishlistMin?: number;
+  karutaSuperRarePrintMax?: number;
+  karutaSuperRareWishlistMin?: number;
   karutaWatchEnabled?: boolean;
   logsChannelId?: string;
   logsWatchEnabled?: boolean;
@@ -50,6 +52,8 @@ function toGuildConfig(
     karutaChannelId: string | null;
     karutaRarePrintMax: number;
     karutaRareWishlistMin: number;
+    karutaSuperRarePrintMax: number;
+    karutaSuperRareWishlistMin: number;
     karutaWatchEnabled: boolean;
     logsChannelId: string | null;
     logsWatchEnabled: boolean;
@@ -88,6 +92,8 @@ function toGuildConfig(
     karutaChannelId: record.karutaChannelId ?? undefined,
     karutaRarePrintMax: record.karutaRarePrintMax,
     karutaRareWishlistMin: record.karutaRareWishlistMin,
+    karutaSuperRarePrintMax: record.karutaSuperRarePrintMax,
+    karutaSuperRareWishlistMin: record.karutaSuperRareWishlistMin,
     karutaWatchEnabled: record.karutaWatchEnabled,
     logsChannelId: record.logsChannelId ?? undefined,
     logsWatchEnabled: record.logsWatchEnabled,
@@ -118,6 +124,8 @@ type NormalizedGuildConfig = {
   karutaChannelId?: string;
   karutaRarePrintMax: number;
   karutaRareWishlistMin: number;
+  karutaSuperRarePrintMax: number;
+  karutaSuperRareWishlistMin: number;
   karutaWatchEnabled: boolean;
   logsChannelId?: string;
   logsWatchEnabled: boolean;
@@ -160,6 +168,8 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     karutaChannelId: config.karutaChannelId,
     karutaRarePrintMax: config.karutaRarePrintMax ?? 10,
     karutaRareWishlistMin: config.karutaRareWishlistMin ?? 3,
+    karutaSuperRarePrintMax: config.karutaSuperRarePrintMax ?? 3,
+    karutaSuperRareWishlistMin: config.karutaSuperRareWishlistMin ?? 10,
     karutaWatchEnabled: config.karutaWatchEnabled ?? false,
     logsChannelId: config.logsChannelId,
     logsWatchEnabled: config.logsWatchEnabled ?? false,
@@ -230,6 +240,8 @@ export async function replaceGuildConfig(
         karutaChannelId: normalized.karutaChannelId,
         karutaRarePrintMax: normalized.karutaRarePrintMax,
         karutaRareWishlistMin: normalized.karutaRareWishlistMin,
+        karutaSuperRarePrintMax: normalized.karutaSuperRarePrintMax,
+        karutaSuperRareWishlistMin: normalized.karutaSuperRareWishlistMin,
         karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
       update: {
@@ -257,6 +269,8 @@ export async function replaceGuildConfig(
         karutaChannelId: normalized.karutaChannelId,
         karutaRarePrintMax: normalized.karutaRarePrintMax,
         karutaRareWishlistMin: normalized.karutaRareWishlistMin,
+        karutaSuperRarePrintMax: normalized.karutaSuperRarePrintMax,
+        karutaSuperRareWishlistMin: normalized.karutaSuperRareWishlistMin,
         karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
     });

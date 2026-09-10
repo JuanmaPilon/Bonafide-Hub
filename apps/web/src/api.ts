@@ -25,6 +25,8 @@ export type GuildConfig = {
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
   karutaRareWishlistMin?: number;
+  karutaSuperRarePrintMax?: number;
+  karutaSuperRareWishlistMin?: number;
   karutaWatchEnabled?: boolean;
   logsChannelId?: string;
   logsWatchEnabled?: boolean;
@@ -76,41 +78,6 @@ export type RaidLog = {
   updatedAt: string;
   zone?: number | null;
 };
-
-export type KarutaDrop = {
-  cardName?: string;
-  code?: string;
-  createdAt: string;
-  dropperUsername?: string;
-  guildId: string;
-  id: string;
-  imageUrl?: string;
-  printNumber?: number;
-  reasons: string[];
-  series?: string;
-  sourceMessageId: string;
-  userId?: string;
-  username?: string;
-  wishlistCount?: number;
-};
-
-export async function getKarutaDrops(guildId: string): Promise<KarutaDrop[]> {
-  const data = await requestJson<{ drops: KarutaDrop[] }>(
-    `/guilds/${guildId}/karuta/drops`,
-    { method: "GET" },
-  );
-  return data.drops;
-}
-
-export async function deleteKarutaDrop(
-  guildId: string,
-  dropId: string,
-): Promise<{ deleted: boolean }> {
-  return requestJson<{ deleted: boolean }>(
-    `/guilds/${guildId}/karuta/drops/${encodeURIComponent(dropId)}`,
-    { method: "DELETE" },
-  );
-}
 
 export type KarutaCard = {
   cardName?: string;
@@ -179,30 +146,6 @@ export async function deleteKarutaAlbum(
     `/guilds/${guildId}/karuta/albums/${encodeURIComponent(albumId)}`,
     { method: "DELETE" },
   );
-}
-
-// Diagnóstico del detector de drops: qué mensajes vio el bot en el canal
-// vigilado y qué decidió con cada uno.
-export type KarutaDebugEvent = {
-  authorId?: string;
-  authorName?: string;
-  channelId?: string;
-  createdAt: string;
-  decision: string;
-  detail?: string;
-  guildId: string;
-  id: string;
-  kind: string;
-};
-
-export async function getKarutaDebugEvents(
-  guildId: string,
-): Promise<KarutaDebugEvent[]> {
-  const data = await requestJson<{ events: KarutaDebugEvent[] }>(
-    `/guilds/${guildId}/karuta/debug`,
-    { method: "GET" },
-  );
-  return data.events;
 }
 
 export type CommunicationInstance = {

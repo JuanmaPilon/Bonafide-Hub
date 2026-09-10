@@ -55,21 +55,15 @@ import {
 } from "./services/raid-logs-store.js";
 import {
   burnKarutaCard,
-  createKarutaDrop,
   deleteKarutaAlbum,
   deleteKarutaCard,
-  deleteKarutaDrop,
-  createKarutaDebugEvent,
   getKarutaAlbumPageImage,
   listAllKarutaAlbums,
   listCachedKarutaAlbumPages,
   listKarutaAlbums,
-  listKarutaDebugEvents,
   listOwnedKarutaCards,
-  listRecentKarutaDrops,
   processKarutaGrab,
   processKarutaTransfer,
-  pruneKarutaDebugEvents,
   saveKarutaAlbumPageImage,
   upsertKarutaAlbum,
   upsertKarutaCard,
@@ -4094,200 +4088,6 @@ export function buildApp() {
     },
   );
 
-  // Feed de drops raros de Karuta detectados por el bot (lectura pública
-  // para cualquier miembro; la config de vigilado vive en /guilds/:id/config).
-  app.get("/guilds/:guildId/karuta/drops", async (request, reply) => {
-    const session = await requireSession(request);
-    if (!session) {
-      return reply.code(401).send({ ok: false, error: "Unauthorized" });
-    }
-
-    const params = request.params as { guildId?: string };
-    if (!params.guildId) {
-      return reply.code(400).send({ ok: false, error: "Missing guildId" });
-    }
-
-    if (!isGuildMember(session, params.guildId)) {
-      return reply.code(403).send({ ok: false, error: "Forbidden" });
-    }
-
-    const drops = await listRecentKarutaDrops(params.guildId);
-
-    return {
-      ok: true,
-      guildId: params.guildId,
-      drops,
-    };
-  });
-
-  // Borrar un drop de Karuta (admin/owner; la config del módulo vive bajo
-  // el módulo "config" del panel Admin). Útil para limpiar falsos positivos
-  // (p. ej. una carta vista con `kv` que se registró por error).
-  app.delete(
-    "/guilds/:guildId/karuta/drops/:dropId",
-    async (request, reply) => {
-      const session = await requireSession(request);
-      if (!session) {
-        return reply.code(401).send({ ok: false, error: "Unauthorized" });
-      }
-
-      const params = request.params as {
-        dropId?: string;
-        guildId?: string;
-      };
-      if (!params.guildId || !params.dropId) {
-        return reply.code(400).send({ ok: false, error: "Missing params" });
-      }
-
-      if (!(await canManageModule(session, params.guildId, "config"))) {
-        return reply.code(403).send({ ok: false, error: "Forbidden" });
-      }
-
-      const deleted = await deleteKarutaDrop(params.guildId, params.dropId);
-
-      await logAdminAction(session, params.guildId, "karuta-drop:delete", {
-        details: "Drop de Karuta eliminado.",
-        targetId: params.dropId,
-        targetType: "karuta-drop",
-      });
-
-      return { ok: true, guildId: params.guildId, deleted };
-    },
-  );
-
-  // El bot llama esto cuando detecta un grab raro de Karuta en el canal
-  // vigilado. Idempotente por sourceMessageId (evita duplicados si el bot
-  // reprocesa el mismo mensaje).
-  app.post("/internal/guilds/:guildId/karuta/drops", async (request, reply) => {
-    if (!env.BOT_API_TOKEN) {
-      return reply.code(503).send({
-        ok: false,
-        error: "BOT_API_TOKEN is not configured",
-      });
-    }
-
-    if (!isAuthorizedBotRequest(request)) {
-      return reply.code(401).send({ ok: false, error: "Unauthorized" });
-    }
-
-    const params = request.params as { guildId?: string };
-    if (!params.guildId) {
-      return reply.code(400).send({ ok: false, error: "Missing guildId" });
-    }
-
-    const body = (request.body ?? {}) as {
-      cardName?: string;
-      imageUrl?: string;
-      printNumber?: number;
-      reasons?: string[];
-      series?: string;
-      sourceMessageId?: string;
-      userId?: string;
-      username?: string;
-      wishlistCount?: number;
-    };
-
-    if (!body.sourceMessageId) {
-      return reply.code(400).send({
-        ok: false,
-        error: "Missing sourceMessageId",
-      });
-    }
-
-    const result = await createKarutaDrop({
-      cardName: body.cardName,
-      guildId: params.guildId,
-      imageUrl: body.imageUrl,
-      printNumber: body.printNumber,
-      reasons: body.reasons ?? [],
-      series: body.series,
-      sourceMessageId: body.sourceMessageId,
-      userId: body.userId,
-      username: body.username,
-      wishlistCount: body.wishlistCount,
-    });
-
-    return {
-      ok: true,
-      guildId: params.guildId,
-      created: result.created,
-    };
-  });
-
-  // Diagnóstico del detector de drops: el bot manda acá cada mensaje que vio
-  // en el canal vigilado y qué decidió con él (registrado, ignorado por
-  // umbral, formato no reconocido, etc.).
-  app.post(
-    "/internal/guilds/:guildId/karuta/debug",
-    async (request, reply) => {
-      if (!env.BOT_API_TOKEN) {
-        return reply.code(503).send({
-          ok: false,
-          error: "BOT_API_TOKEN is not configured",
-        });
-      }
-
-      if (!isAuthorizedBotRequest(request)) {
-        return reply.code(401).send({ ok: false, error: "Unauthorized" });
-      }
-
-      const params = request.params as { guildId?: string };
-      if (!params.guildId) {
-        return reply.code(400).send({ ok: false, error: "Missing guildId" });
-      }
-
-      const body = (request.body ?? {}) as {
-        authorId?: string;
-        authorName?: string;
-        channelId?: string;
-        decision?: string;
-        detail?: string;
-        kind?: string;
-      };
-
-      if (!body.kind || !body.decision) {
-        return reply
-          .code(400)
-          .send({ ok: false, error: "Missing kind or decision" });
-      }
-
-      await createKarutaDebugEvent({
-        authorId: body.authorId,
-        authorName: body.authorName,
-        channelId: body.channelId,
-        decision: body.decision,
-        detail: body.detail,
-        guildId: params.guildId,
-        kind: body.kind,
-      });
-      void pruneKarutaDebugEvents().catch(() => undefined);
-
-      return { ok: true };
-    },
-  );
-
-  // Últimos eventos de diagnóstico (solo admin de config): sirve para ver qué
-  // está mandando Karuta/Card Companion cuando un drop no se detecta.
-  app.get("/guilds/:guildId/karuta/debug", async (request, reply) => {
-    const session = await requireSession(request);
-    if (!session) {
-      return reply.code(401).send({ ok: false, error: "Unauthorized" });
-    }
-
-    const params = request.params as { guildId?: string };
-    if (!params.guildId) {
-      return reply.code(400).send({ ok: false, error: "Missing guildId" });
-    }
-
-    if (!(await canManageModule(session, params.guildId, "config"))) {
-      return reply.code(403).send({ ok: false, error: "Forbidden" });
-    }
-
-    const events = await listKarutaDebugEvents(params.guildId);
-
-    return { ok: true, guildId: params.guildId, events };
-  });
-
   // Registro de posesión de cartas raras (alimentado por `kv` del bot).
   // Lectura pública para miembros.
   app.get("/guilds/:guildId/karuta/cards", async (request, reply) => {
@@ -4445,9 +4245,7 @@ export function buildApp() {
   );
 
   // Grab de una carta ya registrada (mensaje "@X took the <name> card `<code>`!").
-  // Si el code está en la colección: registra el drop (grabber + dropper =
-  // dueño anterior) y transfiere la posesión al grabber. Idempotente por
-  // sourceMessageId.
+  // Si el code está en la colección, transfiere la posesión al grabber.
   app.post("/internal/guilds/:guildId/karuta/grabs", async (request, reply) => {
     if (!env.BOT_API_TOKEN) {
       return reply.code(503).send({
@@ -4483,11 +4281,9 @@ export function buildApp() {
     }
 
     const result = await processKarutaGrab({
-      cardName: body.cardName,
       code: body.code,
       grabberUsername: body.grabberUsername,
       guildId: params.guildId,
-      sourceMessageId: body.sourceMessageId,
       wishlistCount: body.wishlistCount,
     });
 
@@ -4860,6 +4656,14 @@ export function buildApp() {
 
     if (body.karutaRareWishlistMin !== undefined) {
       allowedBody.karutaRareWishlistMin = body.karutaRareWishlistMin;
+    }
+
+    if (body.karutaSuperRarePrintMax !== undefined) {
+      allowedBody.karutaSuperRarePrintMax = body.karutaSuperRarePrintMax;
+    }
+
+    if (body.karutaSuperRareWishlistMin !== undefined) {
+      allowedBody.karutaSuperRareWishlistMin = body.karutaSuperRareWishlistMin;
     }
 
     if (body.dailyMessagesChannelId !== undefined) {

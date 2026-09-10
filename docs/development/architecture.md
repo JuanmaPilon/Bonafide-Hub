@@ -112,7 +112,8 @@ Endpoints:
 5. `POST /internal/guilds/:guildId/xp/level`
 6. `GET /internal/guilds/:guildId/xp/profiles`
 7. `GET /internal/guilds/:guildId/daily-messages` (frases habilitadas del loro)
-8. `POST /internal/guilds/:guildId/karuta/drops` (drops raros detectados por el bot; idempotente)
+8. `POST /internal/guilds/:guildId/karuta/grabs` (transferencia de posesión de una carta rara)
+9. `POST /internal/guilds/:guildId/karuta/cards|cards/burn|transfers|albums` (colección de cartas raras)
 
 ## 8. Persistencia actual
 

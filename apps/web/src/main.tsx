@@ -24,8 +24,6 @@ import {
   getMemberProfile,
   getPublicLeaderboard,
   getXpConfig,
-  deleteKarutaDrop,
-  getKarutaDrops,
   deleteKarutaCard,
   getKarutaCards,
   getKarutaAlbums,
@@ -66,7 +64,6 @@ import {
   getEventSpecs,
   getEvents,
   getGuildEmojis,
-  getKarutaDebugEvents,
   roleMeta,
   updateEvent,
   updateEventSpec,
@@ -89,10 +86,8 @@ import {
   type MemberProfile,
   type PublicLeaderboardEntry,
   type RaidLog,
-  type KarutaDrop,
   type KarutaCard,
   type KarutaAlbum,
-  type KarutaDebugEvent,
   type XpConfig,
   type XpImportEntry,
   type XpRoleMultiplier,
@@ -244,11 +239,10 @@ function isModuleEnabled(config: GuildConfig, moduleKey: string): boolean {
   return enabled.includes(moduleKey);
 }
 
-type KarutaSection = "drops" | "raras" | "coleccion" | "guia";
+type KarutaSection = "raras" | "coleccion" | "guia";
 
 // Slugs de URL para cada sección de Karuta.
 const KARUTA_SECTION_SLUGS: Record<KarutaSection, string> = {
-  drops: "drops-raros",
   raras: "raras",
   coleccion: "coleccion",
   guia: "guia-de-comandos",
@@ -809,6 +803,27 @@ function KarutaCardArt({ name, url }: { name?: string; url?: string }) {
       src={url}
     />
   );
+}
+
+// Umbrales del segundo nivel de rareza (config del módulo Karuta). Una carta
+// es "súper rara" si tiene un print muy bajo O mucha wishlist; en la grilla se
+// pinta con un brillo tipo carta shiny.
+const DEFAULT_SUPER_RARE_PRINT_MAX = 3;
+const DEFAULT_SUPER_RARE_WISHLIST_MIN = 10;
+
+function isSuperRareCard(
+  card: { printNumber?: number; wishlistCount?: number },
+  config: GuildConfig,
+): boolean {
+  const printMax =
+    config.karutaSuperRarePrintMax ?? DEFAULT_SUPER_RARE_PRINT_MAX;
+  const wishlistMin =
+    config.karutaSuperRareWishlistMin ?? DEFAULT_SUPER_RARE_WISHLIST_MIN;
+
+  if (card.printNumber != null && card.printNumber <= printMax) {
+    return true;
+  }
+  return card.wishlistCount != null && card.wishlistCount >= wishlistMin;
 }
 
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
@@ -2028,14 +2043,9 @@ function App() {
   const [raidLogsLoading, setRaidLogsLoading] = useState(false);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [hiddenRaidLogs, setHiddenRaidLogs] = useState<RaidLog[]>([]);
-  const [karutaDrops, setKarutaDrops] = useState<KarutaDrop[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
   const [karutaAlbums, setKarutaAlbums] = useState<KarutaAlbum[]>([]);
   const [karutaLoading, setKarutaLoading] = useState(false);
-  const [karutaDebugEvents, setKarutaDebugEvents] = useState<
-    KarutaDebugEvent[]
-  >([]);
-  const [karutaDebugLoading, setKarutaDebugLoading] = useState(false);
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
@@ -2471,7 +2481,6 @@ function App() {
 
   useEffect(() => {
     if (!selectedGuildId || activeTab !== "karuta") {
-      setKarutaDrops([]);
       setKarutaCards([]);
       setKarutaAlbums([]);
       setKarutaLoading(false);
@@ -2481,15 +2490,11 @@ function App() {
 
     const refreshKaruta = (): Promise<void> => {
       return Promise.allSettled([
-        getKarutaDrops(selectedGuildId),
         getKarutaCards(selectedGuildId),
         getKarutaAlbums(selectedGuildId),
-      ]).then(([drops, cards, albums]) => {
+      ]).then(([cards, albums]) => {
         if (cancelled) {
           return;
-        }
-        if (drops.status === "fulfilled") {
-          setKarutaDrops(drops.value);
         }
         if (cards.status === "fulfilled") {
           setKarutaCards(cards.value);
@@ -2685,57 +2690,6 @@ function App() {
       cancelled = true;
     };
   }, [selectedGuildId, showSpecEditor]);
-
-  // Borra un drop de Karuta (admin/owner) y lo saca del feed local.
-  function handleDeleteKarutaDrop(drop: KarutaDrop): void {
-    if (!selectedGuildId) {
-      return;
-    }
-    setConfirmDialog({
-      kind: "danger",
-      title: "Eliminar drop",
-      message: `¿Eliminar "${drop.cardName ?? "esta carta"}" del feed de Karuta?`,
-      onConfirm: () => {
-        void (async () => {
-          try {
-            await deleteKarutaDrop(selectedGuildId, drop.id);
-            setKarutaDrops((current) =>
-              current.filter((entry) => entry.id !== drop.id),
-            );
-            pushToast("Drop eliminado.", "success");
-          } catch (error) {
-            pushToast(
-              error instanceof Error
-                ? error.message
-                : "No se pudo eliminar el drop.",
-              "error",
-            );
-          }
-        })();
-      },
-    });
-  }
-
-  // Carga (a demanda) los últimos eventos de diagnóstico del detector de
-  // drops: muestran los mensajes que el bot vio y qué decidió con cada uno.
-  async function loadKarutaDebugEvents(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    setKarutaDebugLoading(true);
-    try {
-      setKarutaDebugEvents(await getKarutaDebugEvents(selectedGuildId));
-    } catch (error) {
-      pushToast(
-        error instanceof Error
-          ? error.message
-          : "No se pudo cargar el diagnóstico.",
-        "error",
-      );
-    } finally {
-      setKarutaDebugLoading(false);
-    }
-  }
 
   // Quita manualmente una carta del registro de posesión (admin/owner).
   function handleDeleteKarutaCard(card: KarutaCard): void {
@@ -5166,7 +5120,52 @@ function App() {
                                 }}
                               />
                             </label>
+                            <label>
+                              <span>Print máximo para "súper rara"</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={10000}
+                                value={config.karutaSuperRarePrintMax ?? 3}
+                                onChange={(event) => {
+                                  const raw = event.target.value;
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      karutaSuperRarePrintMax:
+                                        raw === "" ? undefined : Number(raw),
+                                    }),
+                                    "karuta",
+                                  );
+                                }}
+                              />
+                            </label>
+                            <label>
+                              <span>Wishlists mínimas para "súper rara"</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={100000}
+                                value={config.karutaSuperRareWishlistMin ?? 10}
+                                onChange={(event) => {
+                                  const raw = event.target.value;
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      karutaSuperRareWishlistMin:
+                                        raw === "" ? undefined : Number(raw),
+                                    }),
+                                    "karuta",
+                                  );
+                                }}
+                              />
+                            </label>
                           </div>
+                          <p className="meta-text">
+                            Las cartas que cumplen el umbral "súper rara"
+                            (print muy bajo o muchas wishlists) se muestran con
+                            un brillo tipo carta shiny en la sección Raras.
+                          </p>
                         </div>
                       </div>
                       {isDirty("karuta") ? (
@@ -7191,13 +7190,6 @@ function App() {
                       Raras
                     </button>
                     <button
-                      className={`karuta-subtab${karutaSection === "drops" ? " active" : ""}`}
-                      onClick={() => setKarutaSection("drops")}
-                      type="button"
-                    >
-                      Drops raros
-                    </button>
-                    <button
                       className={`karuta-subtab${karutaSection === "coleccion" ? " active" : ""}`}
                       onClick={() => setKarutaSection("coleccion")}
                       type="button"
@@ -7215,128 +7207,6 @@ function App() {
 
                   {karutaLoading ? (
                     <LoadingState label="Cargando Karuta…" />
-                  ) : karutaSection === "drops" ? (
-                    <section className="karuta-section">
-                      {karutaDrops.length === 0 ? (
-                        <div className="empty-state">
-                          Todavía no se detectó ningún drop.
-                        </div>
-                      ) : (
-                        <div className="karuta-drops-grid">
-                          {karutaDrops.map((drop) => (
-                            <article className="karuta-drop-card" key={drop.id}>
-                              <KarutaCardArt
-                                name={drop.cardName}
-                                url={drop.imageUrl}
-                              />
-                              <div className="karuta-drop-body">
-                                <strong>{drop.cardName ?? "Carta"}</strong>
-                                {drop.series ? (
-                                  <span className="karuta-drop-series">
-                                    {drop.series}
-                                  </span>
-                                ) : null}
-                                <span className="karuta-drop-user">
-                                  {drop.dropperUsername
-                                    ? `${drop.dropperUsername} lo tiró · `
-                                    : ""}
-                                  {drop.username ?? "Alguien"} se la llevó
-                                </span>
-                                <div className="karuta-drop-reasons">
-                                  {drop.printNumber != null ? (
-                                    <span className="karuta-drop-badge">
-                                      Print #{drop.printNumber}
-                                    </span>
-                                  ) : null}
-                                  {drop.wishlistCount != null ? (
-                                    <span className="karuta-drop-badge">
-                                      {drop.wishlistCount} en wishlist
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <span className="karuta-drop-date">
-                                  {new Date(drop.createdAt).toLocaleString()}
-                                </span>
-                                {canAccess("config") ? (
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() => handleDeleteKarutaDrop(drop)}
-                                    type="button"
-                                  >
-                                    Eliminar
-                                  </button>
-                                ) : null}
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-                      )}
-
-                      {canAccess("config") ? (
-                        <details
-                          className="karuta-debug"
-                          onToggle={(event) => {
-                            if (
-                              (event.target as HTMLDetailsElement).open &&
-                              karutaDebugEvents.length === 0
-                            ) {
-                              void loadKarutaDebugEvents();
-                            }
-                          }}
-                        >
-                          <summary>
-                            🔍 Diagnóstico de detección
-                            {karutaDebugLoading ? " · cargando…" : ""}
-                          </summary>
-                          <p className="karuta-debug-hint">
-                            Últimos mensajes que el bot vio en el canal
-                            vigilado y qué decidió con cada uno. Sirve para
-                            entender por qué un drop no se registró (formato
-                            nuevo, umbral, canal equivocado, etc.).
-                          </p>
-                          <div className="karuta-debug-actions">
-                            <button
-                              className="ghost-button"
-                              disabled={karutaDebugLoading}
-                              onClick={() => void loadKarutaDebugEvents()}
-                              type="button"
-                            >
-                              Actualizar
-                            </button>
-                          </div>
-                          {karutaDebugEvents.length === 0 ? (
-                            <div className="empty-state">
-                              Sin eventos todavía. Se llenan cuando pasa algo
-                              en el canal vigilado.
-                            </div>
-                          ) : (
-                            <ul className="karuta-debug-list">
-                              {karutaDebugEvents.map((event) => (
-                                <li className="karuta-debug-item" key={event.id}>
-                                  <div className="karuta-debug-head">
-                                    <span className="karuta-drop-badge">
-                                      {event.kind}
-                                    </span>
-                                    <span>{event.decision}</span>
-                                  </div>
-                                  <span className="karuta-debug-meta">
-                                    {new Date(event.createdAt).toLocaleString()}
-                                    {event.authorName
-                                      ? ` · ${event.authorName}`
-                                      : ""}
-                                  </span>
-                                  {event.detail ? (
-                                    <code className="karuta-debug-detail">
-                                      {event.detail}
-                                    </code>
-                                  ) : null}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </details>
-                      ) : null}
-                    </section>
                   ) : karutaSection === "raras" ? (
                     <section className="karuta-section">
                       {karutaCards.length === 0 ? (
@@ -7345,55 +7215,70 @@ function App() {
                         </div>
                       ) : (
                         <div className="karuta-drops-grid">
-                          {karutaCards.map((card) => (
-                            <article className="karuta-drop-card" key={card.id}>
-                              <KarutaCardArt
-                                name={card.cardName}
-                                url={card.imageUrl}
-                              />
-                              <div className="karuta-drop-body">
-                                <strong>{card.cardName ?? "Carta"}</strong>
-                                {card.series ? (
-                                  <span className="karuta-drop-series">
-                                    {card.series}
+                          {karutaCards.map((card) => {
+                            const superRare = isSuperRareCard(card, config);
+                            return (
+                              <article
+                                className={`karuta-drop-card${superRare ? " karuta-super-rare" : ""}`}
+                                key={card.id}
+                              >
+                                <div className="karuta-card-art-wrap">
+                                  {superRare ? (
+                                    <span className="karuta-super-badge">
+                                      ✨ Súper rara
+                                    </span>
+                                  ) : null}
+                                  <KarutaCardArt
+                                    name={card.cardName}
+                                    url={card.imageUrl}
+                                  />
+                                </div>
+                                <div className="karuta-drop-body">
+                                  <strong>{card.cardName ?? "Carta"}</strong>
+                                  {card.series ? (
+                                    <span className="karuta-drop-series">
+                                      {card.series}
+                                    </span>
+                                  ) : null}
+                                  <span className="karuta-drop-user">
+                                    {card.ownerUsername ?? "Desconocido"} posee
+                                    la carta
                                   </span>
-                                ) : null}
-                                <span className="karuta-drop-user">
-                                  {card.ownerUsername ?? "Desconocido"} posee la
-                                  carta
-                                </span>
-                                <div className="karuta-drop-reasons">
-                                  {card.printNumber != null ? (
-                                    <span className="karuta-drop-badge">
-                                      Print #{card.printNumber}
-                                    </span>
-                                  ) : null}
-                                  {card.edition != null ? (
-                                    <span className="karuta-drop-badge">
-                                      Edición {card.edition}
-                                    </span>
-                                  ) : null}
-                                  {card.wishlistCount != null ? (
-                                    <span className="karuta-drop-badge">
-                                      {card.wishlistCount} en wishlist
-                                    </span>
+                                  <div className="karuta-drop-reasons">
+                                    {card.printNumber != null ? (
+                                      <span className="karuta-drop-badge">
+                                        Print #{card.printNumber}
+                                      </span>
+                                    ) : null}
+                                    {card.edition != null ? (
+                                      <span className="karuta-drop-badge">
+                                        Edición {card.edition}
+                                      </span>
+                                    ) : null}
+                                    {card.wishlistCount != null ? (
+                                      <span className="karuta-drop-badge">
+                                        {card.wishlistCount} en wishlist
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <code className="karuta-card-code">
+                                    {card.code}
+                                  </code>
+                                  {canAccess("config") ? (
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() =>
+                                        handleDeleteKarutaCard(card)
+                                      }
+                                      type="button"
+                                    >
+                                      Quitar
+                                    </button>
                                   ) : null}
                                 </div>
-                                <code className="karuta-card-code">
-                                  {card.code}
-                                </code>
-                                {canAccess("config") ? (
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() => handleDeleteKarutaCard(card)}
-                                    type="button"
-                                  >
-                                    Quitar
-                                  </button>
-                                ) : null}
-                              </div>
-                            </article>
-                          ))}
+                              </article>
+                            );
+                          })}
                         </div>
                       )}
                     </section>

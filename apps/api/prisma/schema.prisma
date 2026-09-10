@@ -48,6 +48,10 @@ model GuildConfig {
   karutaBotUserId              String?
   karutaRarePrintMax           Int      @default(10)
   karutaRareWishlistMin        Int      @default(3)
+  // Segundo umbral (más estricto): marca las cartas como "super raras" y la
+  // Colección las pinta con un brillo tipo shiny.
+  karutaSuperRarePrintMax      Int      @default(3)
+  karutaSuperRareWishlistMin   Int      @default(10)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
@@ -297,29 +301,6 @@ model EventImage {
   @@map("event_images")
 }
 
-// Grabs de Karuta detectados como "raros" (print bajo, muy wishlisteados o
-// con marcador especial). El bot los publica en el mismo canal de Karuta y
-// los guarda acá para el feed de la web.
-model KarutaDrop {
-  id              String   @id @default(cuid())
-  guildId         String
-  userId          String?
-  username        String?
-  dropperUsername String?
-  code            String?
-  cardName        String?
-  series          String?
-  printNumber     Int?
-  wishlistCount   Int?
-  reasons         String[] @default([])
-  imageUrl        String?
-  sourceMessageId String   @unique
-  createdAt       DateTime @default(now())
-
-  @@index([guildId, createdAt])
-  @@map("karuta_drops")
-}
-
 // Registro de posesión de cartas raras de Karuta. Se alimenta con `kv`
 // (ver una carta propia → "Owned by X") y se da de baja con `kb` (burn).
 // Es best-effort: 1 carta = 1 dueño actual, con borrado manual como red.
@@ -390,25 +371,6 @@ model KarutaAlbumPage {
   @@unique([albumId, page])
   @@index([guildId])
   @@map("karuta_album_pages")
-}
-
-// Diagnóstico del detector de drops: guarda los mensajes que el bot vio en el
-// canal vigilado de Karuta y qué decidió con cada uno. Es la herramienta para
-// responder "¿por qué no se detectó este drop?" cuando Karuta o Card
-// Companion cambian el formato de sus mensajes.
-model KarutaDebugEvent {
-  id         String   @id @default(cuid())
-  guildId    String
-  kind       String
-  decision   String
-  authorId   String?
-  authorName String?
-  channelId  String?
-  detail     String?
-  createdAt  DateTime @default(now())
-
-  @@index([guildId, createdAt])
-  @@map("karuta_debug_events")
 }
 
 model DiscordSession {

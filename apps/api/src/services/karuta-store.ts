@@ -1,68 +1,5 @@
 import { prisma } from "../db/prisma.js";
 
-export type KarutaDrop = {
-  cardName?: string;
-  code?: string;
-  createdAt: Date;
-  dropperUsername?: string;
-  guildId: string;
-  id: string;
-  imageUrl?: string;
-  printNumber?: number;
-  reasons: string[];
-  series?: string;
-  sourceMessageId: string;
-  userId?: string;
-  username?: string;
-  wishlistCount?: number;
-};
-
-function toKarutaDrop(record: {
-  cardName: string | null;
-  code: string | null;
-  createdAt: Date;
-  dropperUsername: string | null;
-  guildId: string;
-  id: string;
-  imageUrl: string | null;
-  printNumber: number | null;
-  reasons: string[];
-  series: string | null;
-  sourceMessageId: string;
-  userId: string | null;
-  username: string | null;
-  wishlistCount: number | null;
-}): KarutaDrop {
-  return {
-    cardName: record.cardName ?? undefined,
-    code: record.code ?? undefined,
-    createdAt: record.createdAt,
-    dropperUsername: record.dropperUsername ?? undefined,
-    guildId: record.guildId,
-    id: record.id,
-    imageUrl: record.imageUrl ?? undefined,
-    printNumber: record.printNumber ?? undefined,
-    reasons: record.reasons,
-    series: record.series ?? undefined,
-    sourceMessageId: record.sourceMessageId,
-    userId: record.userId ?? undefined,
-    username: record.username ?? undefined,
-    wishlistCount: record.wishlistCount ?? undefined,
-  };
-}
-
-export async function listRecentKarutaDrops(
-  guildId: string,
-  limit = 30,
-): Promise<KarutaDrop[]> {
-  const records = await prisma.karutaDrop.findMany({
-    where: { guildId },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-  });
-  return records.map(toKarutaDrop);
-}
-
 export type KarutaCard = {
   cardName?: string;
   code: string;
@@ -238,181 +175,32 @@ export async function deleteKarutaCard(
   }
 }
 
-export async function deleteKarutaDrop(
-  guildId: string,
-  id: string,
-): Promise<boolean> {
-  try {
-    const result = await prisma.karutaDrop.deleteMany({
-      where: { guildId, id },
-    });
-    return result.count > 0;
-  } catch {
-    return false;
-  }
-}
-
-// Idempotente por sourceMessageId: si el bot reintenta el mismo mensaje
-// (reconexión, doble evento) no duplica la entrada.
-export async function createKarutaDrop(input: {
-  cardName?: string;
-  code?: string;
-  dropperUsername?: string;
-  guildId: string;
-  imageUrl?: string;
-  printNumber?: number;
-  reasons: string[];
-  series?: string;
-  sourceMessageId: string;
-  userId?: string;
-  username?: string;
-  wishlistCount?: number;
-}): Promise<{ created: boolean; drop: KarutaDrop | null }> {
-  try {
-    const record = await prisma.karutaDrop.create({
-      data: {
-        cardName: input.cardName,
-        code: input.code,
-        dropperUsername: input.dropperUsername,
-        guildId: input.guildId,
-        imageUrl: input.imageUrl,
-        printNumber: input.printNumber,
-        reasons: input.reasons,
-        series: input.series,
-        sourceMessageId: input.sourceMessageId,
-        userId: input.userId,
-        username: input.username,
-        wishlistCount: input.wishlistCount,
-      },
-    });
-    return { created: true, drop: toKarutaDrop(record) };
-  } catch (error) {
-    // P2002 = unique constraint violation (sourceMessageId ya existe).
-    const isDuplicate = isUniqueViolation(error);
-    if (isDuplicate) {
-      return { created: false, drop: null };
-    }
-    throw error;
-  }
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "P2002"
-  );
-}
-
-// Grab de una carta ya registrada en la colección: registra el drop
-// (quién la agarró + quién la tiró = dueño anterior) y transfiere el dueño.
-// La wishlist (si el bot la trae desde Card Companion) actualiza la carta.
-// Best-effort: si la carta nunca se vio con `kv`, no está en la colección y
-// no podemos saber su rareza, así que se ignora.
+// Grab de una carta ya registrada en la colección: transfiere el dueño.
+// Best-effort: si la carta nunca se vio con `kv` no está en la colección y no
+// podemos saber su rareza, así que se ignora.
 export async function processKarutaGrab(input: {
-  cardName?: string;
   code: string;
   grabberUsername?: string;
   guildId: string;
-  sourceMessageId: string;
   wishlistCount?: number;
-}): Promise<{
-  processed: boolean;
-  drop: KarutaDrop | null;
-  card: KarutaCard | null;
-}> {
+}): Promise<{ processed: boolean; card: KarutaCard | null }> {
   const card = await prisma.karutaCard.findUnique({
     where: { guildId_code: { guildId: input.guildId, code: input.code } },
   });
   if (!card || card.status !== "owned") {
-    return { processed: false, drop: null, card: null };
-  }
-
-  const wishlistCount = input.wishlistCount ?? card.wishlistCount;
-  const cardName = card.cardName ?? input.cardName;
-
-  // Si Card Companion ya registró el drop al droppear (por wishlist, sin
-  // code), enriquecemos esa entrada con el code/imagen/dropper en vez de
-  // duplicarla.
-  const recentDrop = await prisma.karutaDrop.findFirst({
-    where: {
-      guildId: input.guildId,
-      cardName,
-      code: null,
-      createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  if (recentDrop) {
-    const enrichedDrop = await prisma.karutaDrop.update({
-      where: { id: recentDrop.id },
-      data: {
-        code: card.code,
-        dropperUsername: card.ownerUsername,
-        imageUrl: card.imageUrl,
-        printNumber: card.printNumber,
-        series: card.series ?? recentDrop.series,
-        username: input.grabberUsername,
-        wishlistCount,
-      },
-    });
-
-    const updated = await prisma.karutaCard.update({
-      where: { id: card.id },
-      data: {
-        ownerUsername: input.grabberUsername,
-        wishlistCount,
-        lastSeenAt: new Date(),
-      },
-    });
-
-    return {
-      processed: true,
-      drop: toKarutaDrop(enrichedDrop),
-      card: toKarutaCard(updated),
-    };
-  }
-
-  let dropRecord;
-  try {
-    dropRecord = await prisma.karutaDrop.create({
-      data: {
-        cardName,
-        code: card.code,
-        dropperUsername: card.ownerUsername,
-        guildId: input.guildId,
-        imageUrl: card.imageUrl,
-        printNumber: card.printNumber,
-        reasons: ["grab"],
-        series: card.series,
-        sourceMessageId: input.sourceMessageId,
-        username: input.grabberUsername,
-        wishlistCount,
-      },
-    });
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return { processed: false, drop: null, card: toKarutaCard(card) };
-    }
-    throw error;
+    return { processed: false, card: null };
   }
 
   const updated = await prisma.karutaCard.update({
     where: { id: card.id },
     data: {
       ownerUsername: input.grabberUsername,
-      wishlistCount,
+      wishlistCount: input.wishlistCount ?? card.wishlistCount,
       lastSeenAt: new Date(),
     },
   });
 
-  return {
-    processed: true,
-    drop: toKarutaDrop(dropRecord),
-    card: toKarutaCard(updated),
-  };
+  return { processed: true, card: toKarutaCard(updated) };
 }
 
 // Transferencia aceptada (kg): cambia el dueño de una carta ya registrada.
@@ -675,77 +463,4 @@ export async function getKarutaAlbumPageImage(
     return null;
   }
   return { data: Buffer.from(record.data), mimeType: record.mimeType };
-}
-
-// ── Diagnóstico del detector de drops ───────────────────────────────
-
-const KARUTA_DEBUG_MAX_AGE_DAYS = 14;
-
-export type KarutaDebugEvent = {
-  authorId?: string;
-  authorName?: string;
-  channelId?: string;
-  createdAt: Date;
-  decision: string;
-  detail?: string;
-  guildId: string;
-  id: string;
-  kind: string;
-};
-
-// Registra un mensaje visto por el detector (y qué se decidió con él).
-// Best-effort: si falla, no debe romper el flujo del bot.
-export async function createKarutaDebugEvent(input: {
-  authorId?: string;
-  authorName?: string;
-  channelId?: string;
-  decision: string;
-  detail?: string;
-  guildId: string;
-  kind: string;
-}): Promise<void> {
-  await prisma.karutaDebugEvent.create({
-    data: {
-      authorId: input.authorId,
-      authorName: input.authorName,
-      channelId: input.channelId,
-      decision: input.decision,
-      detail: input.detail?.slice(0, 1200),
-      guildId: input.guildId,
-      kind: input.kind,
-    },
-  });
-}
-
-// Limpieza: borra entradas viejas (se llama junto con la escritura).
-export async function pruneKarutaDebugEvents(): Promise<void> {
-  const cutoff = new Date(
-    Date.now() - KARUTA_DEBUG_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
-  );
-  await prisma.karutaDebugEvent.deleteMany({
-    where: { createdAt: { lt: cutoff } },
-  });
-}
-
-// Últimos eventos de diagnóstico de la guild, más recientes primero.
-export async function listKarutaDebugEvents(
-  guildId: string,
-  limit = 40,
-): Promise<KarutaDebugEvent[]> {
-  const records = await prisma.karutaDebugEvent.findMany({
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    where: { guildId },
-  });
-  return records.map((record) => ({
-    authorId: record.authorId ?? undefined,
-    authorName: record.authorName ?? undefined,
-    channelId: record.channelId ?? undefined,
-    createdAt: record.createdAt,
-    decision: record.decision,
-    detail: record.detail ?? undefined,
-    guildId: record.guildId,
-    id: record.id,
-    kind: record.kind,
-  }));
 }
