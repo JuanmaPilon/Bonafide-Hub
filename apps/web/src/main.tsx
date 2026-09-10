@@ -825,24 +825,15 @@ function karutaCardTier(
   const wishlist = card.wishlistCount;
 
   const matches = (printMax?: number, wishlistMin?: number): boolean => {
-    if (
-      print != null &&
-      printMax != null &&
-      print <= printMax
-    ) {
+    if (print != null && printMax != null && print <= printMax) {
       return true;
     }
-    return (
-      wishlist != null &&
-      wishlistMin != null &&
-      wishlist >= wishlistMin
-    );
+    return wishlist != null && wishlistMin != null && wishlist >= wishlistMin;
   };
 
   const ultra = matches(
     config.karutaUltraRarePrintMax ?? KARUTA_TIER_DEFAULTS.ultraPrintMax,
-    config.karutaUltraRareWishlistMin ??
-      KARUTA_TIER_DEFAULTS.ultraWishlistMin,
+    config.karutaUltraRareWishlistMin ?? KARUTA_TIER_DEFAULTS.ultraWishlistMin,
   );
   if (ultra) {
     return "ultra";
@@ -850,8 +841,7 @@ function karutaCardTier(
 
   const superRare = matches(
     config.karutaSuperRarePrintMax ?? KARUTA_TIER_DEFAULTS.superPrintMax,
-    config.karutaSuperRareWishlistMin ??
-      KARUTA_TIER_DEFAULTS.superWishlistMin,
+    config.karutaSuperRareWishlistMin ?? KARUTA_TIER_DEFAULTS.superWishlistMin,
   );
   return superRare ? "super" : null;
 }
@@ -3544,11 +3534,18 @@ function App() {
 
     setSavingAction("karuta");
     try {
+      // OJO: guardado parcial (el API fusiona con la config actual). Si un
+      // campo del formulario no se manda acá, su valor editado se pierde y el
+      // input vuelve al valor guardado.
       const nextConfig = await saveGuildConfig(selectedGuildId, {
         karutaWatchEnabled: config.karutaWatchEnabled,
         karutaChannelId: config.karutaChannelId,
         karutaRarePrintMax: config.karutaRarePrintMax,
         karutaRareWishlistMin: config.karutaRareWishlistMin,
+        karutaSuperRarePrintMax: config.karutaSuperRarePrintMax,
+        karutaSuperRareWishlistMin: config.karutaSuperRareWishlistMin,
+        karutaUltraRarePrintMax: config.karutaUltraRarePrintMax,
+        karutaUltraRareWishlistMin: config.karutaUltraRareWishlistMin,
       });
       clearDirty("karuta");
       setConfig(nextConfig);
@@ -5116,9 +5113,6 @@ function App() {
                             <h4 className="karuta-threshold-title">
                               Por print
                             </h4>
-                            <span className="karuta-threshold-hint">
-                              Número de copia de la carta (más bajo = más rara)
-                            </span>
                             <div className="form-grid">
                               <label>
                                 <span>Print máximo "rara"</span>
@@ -5187,9 +5181,6 @@ function App() {
                             <h4 className="karuta-threshold-title">
                               Por wishlist
                             </h4>
-                            <span className="karuta-threshold-hint">
-                              Cuántas personas de la comunidad la desean
-                            </span>
                             <div className="form-grid">
                               <label>
                                 <span>Wishlists mínimas "rara"</span>

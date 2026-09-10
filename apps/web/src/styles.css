@@ -4612,8 +4612,7 @@ textarea {
 .karuta-ultra-rare {
   border: 1px solid transparent;
   background:
-    linear-gradient(rgba(12, 19, 37, 0.94), rgba(12, 19, 37, 0.94))
-      padding-box,
+    linear-gradient(rgba(12, 19, 37, 0.94), rgba(12, 19, 37, 0.94)) padding-box,
     conic-gradient(
         from var(--karuta-ultra-angle),
         #ff6ec7,
@@ -4726,14 +4725,7 @@ textarea {
 .karuta-threshold-title {
   font-size: 0.88rem;
   font-weight: 700;
-  margin: 0;
-}
-
-.karuta-threshold-hint {
-  color: var(--muted);
-  display: block;
-  font-size: 0.78rem;
-  margin: 2px 0 8px;
+  margin: 0 0 8px;
 }
 
 .karuta-card-code {
