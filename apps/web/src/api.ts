@@ -181,6 +181,30 @@ export async function deleteKarutaAlbum(
   );
 }
 
+// Diagnóstico del detector de drops: qué mensajes vio el bot en el canal
+// vigilado y qué decidió con cada uno.
+export type KarutaDebugEvent = {
+  authorId?: string;
+  authorName?: string;
+  channelId?: string;
+  createdAt: string;
+  decision: string;
+  detail?: string;
+  guildId: string;
+  id: string;
+  kind: string;
+};
+
+export async function getKarutaDebugEvents(
+  guildId: string,
+): Promise<KarutaDebugEvent[]> {
+  const data = await requestJson<{ events: KarutaDebugEvent[] }>(
+    `/guilds/${guildId}/karuta/debug`,
+    { method: "GET" },
+  );
+  return data.events;
+}
+
 export type CommunicationInstance = {
   authorName?: string;
   channelId: string;

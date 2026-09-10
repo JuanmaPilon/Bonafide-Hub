@@ -676,3 +676,76 @@ export async function getKarutaAlbumPageImage(
   }
   return { data: Buffer.from(record.data), mimeType: record.mimeType };
 }
+
+// ── Diagnóstico del detector de drops ───────────────────────────────
+
+const KARUTA_DEBUG_MAX_AGE_DAYS = 14;
+
+export type KarutaDebugEvent = {
+  authorId?: string;
+  authorName?: string;
+  channelId?: string;
+  createdAt: Date;
+  decision: string;
+  detail?: string;
+  guildId: string;
+  id: string;
+  kind: string;
+};
+
+// Registra un mensaje visto por el detector (y qué se decidió con él).
+// Best-effort: si falla, no debe romper el flujo del bot.
+export async function createKarutaDebugEvent(input: {
+  authorId?: string;
+  authorName?: string;
+  channelId?: string;
+  decision: string;
+  detail?: string;
+  guildId: string;
+  kind: string;
+}): Promise<void> {
+  await prisma.karutaDebugEvent.create({
+    data: {
+      authorId: input.authorId,
+      authorName: input.authorName,
+      channelId: input.channelId,
+      decision: input.decision,
+      detail: input.detail?.slice(0, 1200),
+      guildId: input.guildId,
+      kind: input.kind,
+    },
+  });
+}
+
+// Limpieza: borra entradas viejas (se llama junto con la escritura).
+export async function pruneKarutaDebugEvents(): Promise<void> {
+  const cutoff = new Date(
+    Date.now() - KARUTA_DEBUG_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+  );
+  await prisma.karutaDebugEvent.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+}
+
+// Últimos eventos de diagnóstico de la guild, más recientes primero.
+export async function listKarutaDebugEvents(
+  guildId: string,
+  limit = 40,
+): Promise<KarutaDebugEvent[]> {
+  const records = await prisma.karutaDebugEvent.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    where: { guildId },
+  });
+  return records.map((record) => ({
+    authorId: record.authorId ?? undefined,
+    authorName: record.authorName ?? undefined,
+    channelId: record.channelId ?? undefined,
+    createdAt: record.createdAt,
+    decision: record.decision,
+    detail: record.detail ?? undefined,
+    guildId: record.guildId,
+    id: record.id,
+    kind: record.kind,
+  }));
+}

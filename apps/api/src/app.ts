@@ -59,14 +59,17 @@ import {
   deleteKarutaAlbum,
   deleteKarutaCard,
   deleteKarutaDrop,
+  createKarutaDebugEvent,
   getKarutaAlbumPageImage,
   listAllKarutaAlbums,
   listCachedKarutaAlbumPages,
   listKarutaAlbums,
+  listKarutaDebugEvents,
   listOwnedKarutaCards,
   listRecentKarutaDrops,
   processKarutaGrab,
   processKarutaTransfer,
+  pruneKarutaDebugEvents,
   saveKarutaAlbumPageImage,
   upsertKarutaAlbum,
   upsertKarutaCard,
@@ -942,7 +945,14 @@ async function refreshStaleKarutaAlbumImages(
           unresolved.push(page);
           continue;
         }
-        if (await cacheKarutaAlbumPageImage(album.guildId, album.id, page.page, url)) {
+        if (
+          await cacheKarutaAlbumPageImage(
+            album.guildId,
+            album.id,
+            page.page,
+            url,
+          )
+        ) {
           budget -= 1;
           saved += 1;
         }
@@ -4202,6 +4212,80 @@ export function buildApp() {
       guildId: params.guildId,
       created: result.created,
     };
+  });
+
+  // Diagnóstico del detector de drops: el bot manda acá cada mensaje que vio
+  // en el canal vigilado y qué decidió con él (registrado, ignorado por
+  // umbral, formato no reconocido, etc.).
+  app.post(
+    "/internal/guilds/:guildId/karuta/debug",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const body = (request.body ?? {}) as {
+        authorId?: string;
+        authorName?: string;
+        channelId?: string;
+        decision?: string;
+        detail?: string;
+        kind?: string;
+      };
+
+      if (!body.kind || !body.decision) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Missing kind or decision" });
+      }
+
+      await createKarutaDebugEvent({
+        authorId: body.authorId,
+        authorName: body.authorName,
+        channelId: body.channelId,
+        decision: body.decision,
+        detail: body.detail,
+        guildId: params.guildId,
+        kind: body.kind,
+      });
+      void pruneKarutaDebugEvents().catch(() => undefined);
+
+      return { ok: true };
+    },
+  );
+
+  // Últimos eventos de diagnóstico (solo admin de config): sirve para ver qué
+  // está mandando Karuta/Card Companion cuando un drop no se detecta.
+  app.get("/guilds/:guildId/karuta/debug", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const events = await listKarutaDebugEvents(params.guildId);
+
+    return { ok: true, guildId: params.guildId, events };
   });
 
   // Registro de posesión de cartas raras (alimentado por `kv` del bot).

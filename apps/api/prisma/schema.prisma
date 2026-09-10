@@ -392,6 +392,25 @@ model KarutaAlbumPage {
   @@map("karuta_album_pages")
 }
 
+// Diagnóstico del detector de drops: guarda los mensajes que el bot vio en el
+// canal vigilado de Karuta y qué decidió con cada uno. Es la herramienta para
+// responder "¿por qué no se detectó este drop?" cuando Karuta o Card
+// Companion cambian el formato de sus mensajes.
+model KarutaDebugEvent {
+  id         String   @id @default(cuid())
+  guildId    String
+  kind       String
+  decision   String
+  authorId   String?
+  authorName String?
+  channelId  String?
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@map("karuta_debug_events")
+}
+
 model DiscordSession {
   id        String   @id
   createdAt DateTime @default(now())

@@ -4540,6 +4540,71 @@ textarea {
   margin-top: 2px;
 }
 
+/* Diagnóstico del detector de drops (admin): lista de mensajes vistos. */
+.karuta-debug {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.karuta-debug > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.karuta-debug-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 8px 0;
+}
+
+.karuta-debug-actions {
+  margin-bottom: 8px;
+}
+
+.karuta-debug-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.karuta-debug-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.karuta-debug-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+}
+
+.karuta-debug-meta {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.karuta-debug-detail {
+  display: block;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+}
+
 .karuta-card-code {
   margin-top: 8px;
   font-size: 0.78rem;

@@ -66,6 +66,7 @@ import {
   getEventSpecs,
   getEvents,
   getGuildEmojis,
+  getKarutaDebugEvents,
   roleMeta,
   updateEvent,
   updateEventSpec,
@@ -91,6 +92,7 @@ import {
   type KarutaDrop,
   type KarutaCard,
   type KarutaAlbum,
+  type KarutaDebugEvent,
   type XpConfig,
   type XpImportEntry,
   type XpRoleMultiplier,
@@ -2030,6 +2032,10 @@ function App() {
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
   const [karutaAlbums, setKarutaAlbums] = useState<KarutaAlbum[]>([]);
   const [karutaLoading, setKarutaLoading] = useState(false);
+  const [karutaDebugEvents, setKarutaDebugEvents] = useState<
+    KarutaDebugEvent[]
+  >([]);
+  const [karutaDebugLoading, setKarutaDebugLoading] = useState(false);
   const [karutaSection, setKarutaSection] = useState<KarutaSection>(
     () => parseLocationHash().karutaSection,
   );
@@ -2708,6 +2714,27 @@ function App() {
         })();
       },
     });
+  }
+
+  // Carga (a demanda) los últimos eventos de diagnóstico del detector de
+  // drops: muestran los mensajes que el bot vio y qué decidió con cada uno.
+  async function loadKarutaDebugEvents(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setKarutaDebugLoading(true);
+    try {
+      setKarutaDebugEvents(await getKarutaDebugEvents(selectedGuildId));
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar el diagnóstico.",
+        "error",
+      );
+    } finally {
+      setKarutaDebugLoading(false);
+    }
   }
 
   // Quita manualmente una carta del registro de posesión (admin/owner).
@@ -7244,6 +7271,71 @@ function App() {
                           ))}
                         </div>
                       )}
+
+                      {canAccess("config") ? (
+                        <details
+                          className="karuta-debug"
+                          onToggle={(event) => {
+                            if (
+                              (event.target as HTMLDetailsElement).open &&
+                              karutaDebugEvents.length === 0
+                            ) {
+                              void loadKarutaDebugEvents();
+                            }
+                          }}
+                        >
+                          <summary>
+                            🔍 Diagnóstico de detección
+                            {karutaDebugLoading ? " · cargando…" : ""}
+                          </summary>
+                          <p className="karuta-debug-hint">
+                            Últimos mensajes que el bot vio en el canal
+                            vigilado y qué decidió con cada uno. Sirve para
+                            entender por qué un drop no se registró (formato
+                            nuevo, umbral, canal equivocado, etc.).
+                          </p>
+                          <div className="karuta-debug-actions">
+                            <button
+                              className="ghost-button"
+                              disabled={karutaDebugLoading}
+                              onClick={() => void loadKarutaDebugEvents()}
+                              type="button"
+                            >
+                              Actualizar
+                            </button>
+                          </div>
+                          {karutaDebugEvents.length === 0 ? (
+                            <div className="empty-state">
+                              Sin eventos todavía. Se llenan cuando pasa algo
+                              en el canal vigilado.
+                            </div>
+                          ) : (
+                            <ul className="karuta-debug-list">
+                              {karutaDebugEvents.map((event) => (
+                                <li className="karuta-debug-item" key={event.id}>
+                                  <div className="karuta-debug-head">
+                                    <span className="karuta-drop-badge">
+                                      {event.kind}
+                                    </span>
+                                    <span>{event.decision}</span>
+                                  </div>
+                                  <span className="karuta-debug-meta">
+                                    {new Date(event.createdAt).toLocaleString()}
+                                    {event.authorName
+                                      ? ` · ${event.authorName}`
+                                      : ""}
+                                  </span>
+                                  {event.detail ? (
+                                    <code className="karuta-debug-detail">
+                                      {event.detail}
+                                    </code>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </details>
+                      ) : null}
                     </section>
                   ) : karutaSection === "raras" ? (
                     <section className="karuta-section">
