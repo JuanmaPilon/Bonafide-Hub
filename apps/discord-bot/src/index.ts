@@ -2727,10 +2727,20 @@ function parseCardCompanionDrop(
       if (!cardName) {
         continue;
       }
+      // El mismo texto puede venir en `content` y en un embed: no duplicamos.
+      const wishlistCount = Number(match[1]);
+      if (
+        lines.some(
+          (line) =>
+            line.cardName === cardName && line.wishlistCount === wishlistCount,
+        )
+      ) {
+        continue;
+      }
       lines.push({
         cardName,
         series: match[3].trim() || undefined,
-        wishlistCount: Number(match[1]),
+        wishlistCount,
       });
     }
   }
@@ -2851,6 +2861,19 @@ async function announceKarutaRareDrops(
       `[discord-bot] No se pudo anunciar drop raro: ${getErrorMessage(error)}`,
     );
   }
+}
+
+// ¿El mensaje es un AVISO DE DROP y no otra cosa con el mismo formato?
+// Card Companion usa líneas `♡` `N` · **Nombre** · Serie tanto en sus avisos de
+// drop como en listados de wishlist/consultas. Los avisos de drop traen
+// marcadores propios (el contador "Drop expires", el aviso de "is dropping" de
+// Karuta o el tip de reporte de drops incorrectos): cualquiera de ellos sirve
+// para separar un drop real de una lista de wishlist.
+function looksLikeKarutaDropAnnouncement(texts: string[]): boolean {
+  const joined = texts.join("\n");
+  return /drop expires|incorrect drop|is dropping|\bdropped\b|\bdropping\b|card drop/i.test(
+    joined,
+  );
 }
 
 // Textos de un mensaje de Discord: contenido + embeds (título, descripción,
@@ -3295,11 +3318,11 @@ async function postKarutaGrab(
     grabberUsername?: string;
     wishlistCount?: number;
   },
-): Promise<boolean> {
+): Promise<{ ok: boolean; processed: boolean }> {
   const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
   const token = env.BOT_CONFIG_API_TOKEN?.trim();
   if (!baseUrl || !token) {
-    return false;
+    return { ok: false, processed: false };
   }
 
   const controller = new AbortController();
@@ -3328,15 +3351,21 @@ async function postKarutaGrab(
       console.warn(
         `[discord-bot] Karuta grab POST falló (${response.status}) para guild ${guildId}.`,
       );
-      return false;
+      return { ok: false, processed: false };
     }
 
-    return true;
+    // La API responde `processed: false` cuando la carta no está registrada
+    // (nunca se vio con `kv`), así el diagnóstico puede decirlo con certeza.
+    const data = (await response.json().catch(() => null)) as {
+      processed?: boolean;
+    } | null;
+
+    return { ok: true, processed: data?.processed === true };
   } catch (error: unknown) {
     console.warn(
       `[discord-bot] Karuta grab POST error: ${getErrorMessage(error)}`,
     );
-    return false;
+    return { ok: false, processed: false };
   }
 }
 
@@ -3667,6 +3696,27 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       `[discord-bot] Card Companion wishlists recordadas: ${lines.length} cartas`,
     );
 
+    // OJO: Card Companion usa el MISMO formato de línea (con ♡) para sus
+    // avisos de drop y para otros listados (wishlist del usuario, consultas).
+    // Antes tomábamos cualquier línea con ♡ como un drop, así que un listado
+    // de wishlist terminaba registrando "drops" de cartas ajenas. Para
+    // distinguirlos exigimos un marcador propio del aviso de drop
+    // ("Drop expires", "is dropping", el tip de "incorrect drop", etc.).
+    if (!looksLikeKarutaDropAnnouncement(texts)) {
+      postKarutaDebug(message.guildId, {
+        authorId: message.author.id,
+        authorName,
+        channelId: message.channelId,
+        decision:
+          "ignorado: tiene cartas con ♡ pero no parece un aviso de drop (sin marcador)",
+        detail: `${lines
+          .map((line) => `${line.cardName} = ${line.wishlistCount ?? "?"}`)
+          .join(" | ")} :: ${describeKarutaMessage(message)}`.slice(0, 700),
+        kind: "card-companion",
+      });
+      return;
+    }
+
     // Drops raros por wishlist: se registran y anuncian de inmediato, sin
     // esperar a que alguien agarre la carta.
     const wishlistMin = guildConfig.karutaRareWishlistMin ?? 3;
@@ -3729,13 +3779,13 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     const wishlistEntry = pendingCardCompanionWishlists.get(
       `${message.guildId}:${message.channelId}:${grab.cardName.toLowerCase()}`,
     );
-    const saved = await postKarutaGrab(message.guildId, message.id, {
+    const grabResult = await postKarutaGrab(message.guildId, message.id, {
       cardName: grab.cardName,
       code: grab.code,
       grabberUsername,
       wishlistCount: wishlistEntry?.wishlist,
     });
-    if (saved) {
+    if (grabResult.ok) {
       console.log(
         `[discord-bot] Karuta grab detectado: ${grab.code} por ${grabberUsername ?? "?"} wishlist=${wishlistEntry?.wishlist ?? "?"}`,
       );
@@ -3743,7 +3793,7 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     postKarutaDebug(message.guildId, {
       authorName: message.author.username,
       channelId: message.channelId,
-      decision: saved
+      decision: grabResult.processed
         ? "grab registrado (la carta estaba en la colección)"
         : "grab ignorado (esa carta nunca se registró con `kv`)",
       detail: `${grab.cardName} [${grab.code}] lo agarró ${grabberUsername ?? "?"}${wishlistEntry ? ` · wishlist ${wishlistEntry.wishlist}` : " · sin wishlist conocida"}`,
