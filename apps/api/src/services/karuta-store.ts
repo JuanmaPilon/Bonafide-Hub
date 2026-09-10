@@ -528,47 +528,12 @@ export async function listKarutaAlbums(
 
 // Todos los álbumes (de todas las guilds), más recientes primero. Lo usa el
 // sincronizador que renueva las URLs de imagen vencidas.
-export async function listAllKarutaAlbums(
-  limit = 200,
-): Promise<KarutaAlbum[]> {
+export async function listAllKarutaAlbums(limit = 200): Promise<KarutaAlbum[]> {
   const records = await prisma.karutaAlbum.findMany({
     orderBy: { updatedAt: "desc" },
     take: limit,
   });
   return records.map(toKarutaAlbum);
-}
-
-// Reemplaza/agrega las URLs de ciertas páginas de un álbum (tras renovarlas).
-export async function updateKarutaAlbumImageUrls(
-  guildId: string,
-  albumId: string,
-  replacements: Array<{ page: number; url: string }>,
-): Promise<KarutaAlbum | null> {
-  const record = await prisma.karutaAlbum.findFirst({
-    where: { id: albumId, guildId },
-  });
-  if (!record) {
-    return null;
-  }
-  const images = normalizeAlbumImages(record.images);
-  for (const replacement of replacements) {
-    const index = images.findIndex((image) => image.page === replacement.page);
-    if (index >= 0) {
-      images[index] = replacement;
-    } else {
-      images.push(replacement);
-    }
-  }
-  images.sort((a, b) => a.page - b.page);
-  const firstPage = images.find((image) => image.page === 1);
-  const updated = await prisma.karutaAlbum.update({
-    where: { id: albumId },
-    data: {
-      imageUrl: firstPage?.url ?? record.imageUrl,
-      images,
-    },
-  });
-  return toKarutaAlbum(updated);
 }
 
 // Upsert best-effort de un álbum (ka). Guarda la imagen de cada página que
@@ -648,6 +613,7 @@ export async function deleteKarutaAlbum(
   id: string,
 ): Promise<boolean> {
   try {
+    // Las páginas cacheadas se borran en cascada (relación KarutaAlbumPage).
     const result = await prisma.karutaAlbum.deleteMany({
       where: { guildId, id },
     });
@@ -655,4 +621,58 @@ export async function deleteKarutaAlbum(
   } catch {
     return false;
   }
+}
+
+// ── Imágenes de páginas cacheadas (bytes propios) ───────────────────
+// Guarda (o reemplaza) la imagen de una página con los bytes ya descargados.
+export async function saveKarutaAlbumPageImage(input: {
+  albumId: string;
+  data: Buffer;
+  guildId: string;
+  mimeType: string;
+  page: number;
+}): Promise<void> {
+  await prisma.karutaAlbumPage.upsert({
+    create: {
+      albumId: input.albumId,
+      data: new Uint8Array(input.data),
+      guildId: input.guildId,
+      mimeType: input.mimeType,
+      page: input.page,
+    },
+    update: {
+      data: new Uint8Array(input.data),
+      mimeType: input.mimeType,
+    },
+    where: { albumId_page: { albumId: input.albumId, page: input.page } },
+  });
+}
+
+// Qué páginas de estos álbumes ya están cacheadas (sin traer los bytes).
+export async function listCachedKarutaAlbumPages(
+  albumIds: string[],
+): Promise<Array<{ albumId: string; page: number }>> {
+  if (albumIds.length === 0) {
+    return [];
+  }
+  return prisma.karutaAlbumPage.findMany({
+    select: { albumId: true, page: true },
+    where: { albumId: { in: albumIds } },
+  });
+}
+
+// Bytes de una página cacheada (para servirla por el API público).
+export async function getKarutaAlbumPageImage(
+  guildId: string,
+  albumId: string,
+  page: number,
+): Promise<{ data: Buffer; mimeType: string } | null> {
+  const record = await prisma.karutaAlbumPage.findFirst({
+    select: { data: true, mimeType: true },
+    where: { albumId, guildId, page },
+  });
+  if (!record) {
+    return null;
+  }
+  return { data: Buffer.from(record.data), mimeType: record.mimeType };
 }

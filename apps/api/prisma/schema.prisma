@@ -366,8 +366,30 @@ model KarutaAlbum {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  pages KarutaAlbumPage[]
+
   @@index([guildId, updatedAt])
   @@map("karuta_albums")
+}
+
+// Imagen de una página del álbum guardada como bytes en NUESTRA base. Es la
+// que evita depender de las URLs firmadas de Discord (vencen a las ~24 h):
+// una vez cacheada, la Colección la muestra desde el API para siempre.
+model KarutaAlbumPage {
+  id        String   @id @default(cuid())
+  albumId   String
+  guildId   String
+  page      Int
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  album KarutaAlbum @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, page])
+  @@index([guildId])
+  @@map("karuta_album_pages")
 }
 
 model DiscordSession {

@@ -44,14 +44,17 @@ export async function refreshDiscordAttachmentUrls(
     return result;
   }
   try {
-    const response = await fetch(`${DISCORD_API_BASE}/attachments/refresh-urls`, {
-      body: JSON.stringify({ attachment_urls: urls.slice(0, 50) }),
-      headers: {
-        authorization: `Bot ${token}`,
-        "content-type": "application/json",
+    const response = await fetch(
+      `${DISCORD_API_BASE}/attachments/refresh-urls`,
+      {
+        body: JSON.stringify({ attachment_urls: urls.slice(0, 50) }),
+        headers: {
+          authorization: `Bot ${token}`,
+          "content-type": "application/json",
+        },
+        method: "POST",
       },
-      method: "POST",
-    });
+    );
     if (!response.ok) {
       return result;
     }
@@ -67,6 +70,42 @@ export async function refreshDiscordAttachmentUrls(
     // Best-effort: si no se puede renovar, el caller decide.
   }
   return result;
+}
+
+// Descarga los bytes de una imagen del CDN (best-effort). Devuelve null si no
+// es una imagen, es demasiado grande o falla. Sirve para cachear la imagen en
+// nuestra DB y dejar de depender de la URL firmada.
+export async function downloadDiscordImage(
+  url: string,
+  maxBytes: number,
+): Promise<{ data: Buffer; mimeType: string } | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    const mimeType = (response.headers.get("content-type") ?? "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    if (!mimeType.startsWith("image/")) {
+      return null;
+    }
+    const declared = Number.parseInt(
+      response.headers.get("content-length") ?? "",
+      10,
+    );
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      return null;
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.byteLength === 0 || data.byteLength > maxBytes) {
+      return null;
+    }
+    return { data, mimeType };
+  } catch {
+    return null;
+  }
 }
 
 // Relee un mensaje de Discord y devuelve sus URLs de imagen vigentes (embed o

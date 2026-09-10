@@ -60,6 +60,7 @@ import {
   deleteEventImage,
   deleteEventSpec,
   deleteMyEventSignup,
+  apiAssetUrl,
   discordEmojiUrl,
   getEventImages,
   getEventSpecs,
@@ -351,9 +352,9 @@ function KarutaAlbumCard({
 }) {
   const urls =
     album.images.length > 0
-      ? album.images.map((image) => image.url)
+      ? album.images.map((image) => apiAssetUrl(image.url))
       : album.imageUrl
-        ? [album.imageUrl]
+        ? [apiAssetUrl(album.imageUrl)]
         : [];
   const [pageIndex, setPageIndex] = useState(0);
   // URLs que ya fallaron (los links de Discord expiran): evitamos el ícono de

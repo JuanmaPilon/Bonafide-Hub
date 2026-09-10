@@ -59,17 +59,20 @@ import {
   deleteKarutaAlbum,
   deleteKarutaCard,
   deleteKarutaDrop,
+  getKarutaAlbumPageImage,
   listAllKarutaAlbums,
+  listCachedKarutaAlbumPages,
   listKarutaAlbums,
   listOwnedKarutaCards,
   listRecentKarutaDrops,
   processKarutaGrab,
   processKarutaTransfer,
-  updateKarutaAlbumImageUrls,
+  saveKarutaAlbumPageImage,
   upsertKarutaAlbum,
   upsertKarutaCard,
 } from "./services/karuta-store.js";
 import {
+  downloadDiscordImage,
   fetchDiscordMessageImageUrls,
   isDiscordCdnUrlFresh,
   refreshDiscordAttachmentUrls,
@@ -762,18 +765,111 @@ function startEventRecurrenceSync(): void {
 }
 
 // ── Imágenes de álbumes de Karuta ───────────────────────────────────
-// Las URLs de los adjuntos de Discord vencen (~24 h). Las cartas se renuevan
-// seguido (cada kv), pero los álbumes solo cuando alguien corre `ka`: acá las
-// renovamos con el endpoint de refresh de adjuntos y, como fallback, con el
-// "puntero" al mensaje de Karuta (channelId + messageId) que guarda el álbum.
+// Las URLs de los adjuntos de Discord vencen (~24 h). Estrategia en dos capas:
+//   1) CACHE: bajamos los bytes de la imagen y los guardamos en nuestra DB
+//      (`karuta_album_pages`). Una vez cacheada, la Colección se sirve desde
+//      `/public/.../pages/:page/image` y ya no depende de Discord.
+//   2) PUNTERO: si una URL venció y no tenemos los bytes, re-firmamos la URL
+//      con el endpoint de refresh de adjuntos (o releyendo el mensaje de
+//      Karuta, para la página que muestra hoy).
 const KARUTA_ALBUM_IMAGE_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 // No reintentamos el mismo álbum antes de este tiempo (evita castigar a
 // Discord desde el refresco "lazy" que corre al abrir la Colección).
 const KARUTA_ALBUM_IMAGE_THROTTLE_MS = 10 * 60 * 1000;
+// Máximo de imágenes a cachear por pasada (evita ráfagas de descargas).
+const KARUTA_ALBUM_PAGE_CACHE_PER_PASS = 12;
+// Tope de tamaño por imagen (las páginas de Karuta rondan los cientos de KB).
+const KARUTA_ALBUM_PAGE_MAX_BYTES = 6 * 1024 * 1024;
 let karutaAlbumImageTimer: NodeJS.Timeout | null = null;
 let karutaAlbumImageSyncRunning = false;
 const karutaAlbumImageAttempts = new Map<string, number>();
 
+// Ruta pública (relativa al API) donde servimos la imagen cacheada de una
+// página. La web le antepone su base de API.
+function karutaAlbumPageImagePath(
+  guildId: string,
+  albumId: string,
+  page: number,
+): string {
+  return `/public/guilds/${encodeURIComponent(guildId)}/karuta/albums/${encodeURIComponent(albumId)}/pages/${page}/image`;
+}
+
+// Descarga y guarda los bytes de una página. Es el paso que "blinda" la
+// imagen: después, la URL original de Discord ya no importa.
+async function cacheKarutaAlbumPageImage(
+  guildId: string,
+  albumId: string,
+  page: number,
+  url: string,
+): Promise<boolean> {
+  if (!url || url.startsWith("/")) {
+    return false;
+  }
+  try {
+    const image = await downloadDiscordImage(url, KARUTA_ALBUM_PAGE_MAX_BYTES);
+    if (!image) {
+      return false;
+    }
+    await saveKarutaAlbumPageImage({
+      albumId,
+      data: image.data,
+      guildId,
+      mimeType: image.mimeType,
+      page,
+    });
+    return true;
+  } catch (error) {
+    console.warn("[karuta] no se pudo cachear la imagen de página", error);
+    return false;
+  }
+}
+
+// Reemplaza, en la respuesta, las URLs de las páginas ya cacheadas por la ruta
+// propia del API (las de Discord pueden estar vencidas y no las usamos más).
+function withCachedAlbumImageUrls(
+  albums: Awaited<ReturnType<typeof listAllKarutaAlbums>>,
+  cachedPages: Array<{ albumId: string; page: number }>,
+) {
+  const byAlbum = new Map<string, Set<number>>();
+  for (const row of cachedPages) {
+    const pages = byAlbum.get(row.albumId) ?? new Set<number>();
+    pages.add(row.page);
+    byAlbum.set(row.albumId, pages);
+  }
+
+  return albums.map((album) => {
+    const cached = byAlbum.get(album.id);
+    if (!cached || cached.size === 0) {
+      return album;
+    }
+    const images = album.images.map((image) =>
+      cached.has(image.page)
+        ? {
+            page: image.page,
+            url: karutaAlbumPageImagePath(album.guildId, album.id, image.page),
+          }
+        : image,
+    );
+    for (const page of [...cached].sort((a, b) => a - b)) {
+      if (!images.some((image) => image.page === page)) {
+        images.push({
+          page,
+          url: karutaAlbumPageImagePath(album.guildId, album.id, page),
+        });
+      }
+    }
+    images.sort((a, b) => a.page - b.page);
+    const firstPage = images[0];
+    return {
+      ...album,
+      imageUrl: firstPage?.url ?? album.imageUrl,
+      images,
+    };
+  });
+}
+
+// Recorre los álbumes y cachea las páginas que todavía no tenemos, re-firmando
+// antes las URLs vencidas cuando hace falta.
 async function refreshStaleKarutaAlbumImages(
   candidates?: Awaited<ReturnType<typeof listAllKarutaAlbums>>,
 ): Promise<void> {
@@ -783,19 +879,39 @@ async function refreshStaleKarutaAlbumImages(
   karutaAlbumImageSyncRunning = true;
   try {
     const albums = candidates ?? (await listAllKarutaAlbums(200));
+    if (albums.length === 0) {
+      return;
+    }
+    const cachedRows = await listCachedKarutaAlbumPages(
+      albums.map((album) => album.id),
+    );
+    const cachedByAlbum = new Map<string, Set<number>>();
+    for (const row of cachedRows) {
+      const pages = cachedByAlbum.get(row.albumId) ?? new Set<number>();
+      pages.add(row.page);
+      cachedByAlbum.set(row.albumId, pages);
+    }
+
+    let budget = KARUTA_ALBUM_PAGE_CACHE_PER_PASS;
     const now = Date.now();
+
     for (const album of albums) {
+      if (budget <= 0) {
+        break;
+      }
       const pages =
         album.images.length > 0
           ? album.images
           : album.imageUrl
             ? [{ page: 1, url: album.imageUrl }]
             : [];
-      const stale = pages.filter((page) => !isDiscordCdnUrlFresh(page.url));
-      if (stale.length === 0) {
+      const cached = cachedByAlbum.get(album.id) ?? new Set<number>();
+      const pending = pages.filter(
+        (page) => !cached.has(page.page) && !page.url.startsWith("/"),
+      );
+      if (pending.length === 0) {
         continue;
       }
-
       const throttleKey = `${album.guildId}:${album.id}`;
       if (
         now - (karutaAlbumImageAttempts.get(throttleKey) ?? 0) <
@@ -805,41 +921,60 @@ async function refreshStaleKarutaAlbumImages(
       }
       karutaAlbumImageAttempts.set(throttleKey, now);
 
-      const replacements: Array<{ page: number; url: string }> = [];
+      // 1) Re-firmamos las URLs vencidas (sirve incluso para firmas ya
+      //    expiradas, mientras el adjunto siga existiendo en Discord).
+      const stale = pending.filter((page) => !isDiscordCdnUrlFresh(page.url));
+      const refreshed =
+        stale.length > 0
+          ? await refreshDiscordAttachmentUrls(stale.map((page) => page.url))
+          : new Map<string, string>();
 
-      // 1) Refresco masivo: sirve para cualquier adjunto que siga vivo.
-      const refreshed = await refreshDiscordAttachmentUrls(
-        stale.map((page) => page.url),
-      );
-      for (const page of stale) {
+      // 2) Cacheamos cada página que tengamos con URL utilizable.
+      let saved = 0;
+      const unresolved: typeof pending = [];
+      for (const page of pending) {
+        if (budget <= 0) {
+          break;
+        }
         const fresh = refreshed.get(page.url);
-        if (fresh) {
-          replacements.push({ page: page.page, url: fresh });
+        const url = fresh ?? page.url;
+        if (!fresh && !isDiscordCdnUrlFresh(page.url)) {
+          unresolved.push(page);
+          continue;
+        }
+        if (await cacheKarutaAlbumPageImage(album.guildId, album.id, page.page, url)) {
+          budget -= 1;
+          saved += 1;
         }
       }
 
-      // 2) Fallback por puntero: relee el mensaje de Karuta y toma la imagen
-      //    que muestra hoy (la única que el mensaje puede devolvernos).
-      const unresolved = stale.filter((page) => !refreshed.has(page.url));
-      const currentPage = album.page ?? 1;
-      if (
-        unresolved.some((page) => page.page === currentPage) &&
-        album.channelId &&
-        album.messageId
-      ) {
+      // 3) Último recurso: releer el mensaje de Karuta para la página que
+      //    muestra hoy (es la única que el mensaje puede devolvernos).
+      const currentPage = unresolved.find(
+        (page) => page.page === (album.page ?? 1),
+      );
+      if (budget > 0 && currentPage && album.channelId && album.messageId) {
         const urls = await fetchDiscordMessageImageUrls(
           album.channelId,
           album.messageId,
         );
-        if (urls[0]) {
-          replacements.push({ page: currentPage, url: urls[0] });
+        if (
+          urls[0] &&
+          (await cacheKarutaAlbumPageImage(
+            album.guildId,
+            album.id,
+            currentPage.page,
+            urls[0],
+          ))
+        ) {
+          budget -= 1;
+          saved += 1;
         }
       }
 
-      if (replacements.length > 0) {
-        await updateKarutaAlbumImageUrls(album.guildId, album.id, replacements);
+      if (saved > 0) {
         console.log(
-          `[karuta] imágenes de álbum renovadas: "${album.albumName ?? album.id}" (${replacements.length})`,
+          `[karuta] imágenes de álbum cacheadas: "${album.albumName ?? album.id}" (+${saved})`,
         );
       }
     }
@@ -4371,6 +4506,18 @@ export function buildApp() {
         totalPages: body.totalPages,
       });
 
+      // Cacheamos los bytes de la página en segundo plano: así la imagen deja
+      // de depender de la URL firmada de Discord (que vence). Respondemos ya
+      // para no hacer esperar al bot (tiene timeout de 4s).
+      if (album.imageUrl) {
+        void cacheKarutaAlbumPageImage(
+          params.guildId,
+          album.id,
+          album.page ?? 1,
+          album.imageUrl,
+        );
+      }
+
       return { ok: true, guildId: params.guildId, album };
     },
   );
@@ -4392,12 +4539,50 @@ export function buildApp() {
     }
 
     const albums = await listKarutaAlbums(params.guildId);
-    // Refresco "lazy": si alguna imagen está vencida, la renovamos en segundo
-    // plano (el próximo poll de la web ya la muestra bien).
+    // Refresco "lazy": cachea/re-firma las páginas que todavía falten. La
+    // respuesta ya sale con las URLs propias de las páginas cacheadas.
     void refreshStaleKarutaAlbumImages(albums);
+    const cachedPages = await listCachedKarutaAlbumPages(
+      albums.map((album) => album.id),
+    );
 
-    return { ok: true, guildId: params.guildId, albums };
+    return {
+      ok: true,
+      guildId: params.guildId,
+      albums: withCachedAlbumImageUrls(albums, cachedPages),
+    };
   });
+
+  // Imagen de una página de álbum servida por el API (sin sesión): son los
+  // bytes que cacheamos, así el navegador no depende del CDN de Discord.
+  app.get(
+    "/public/guilds/:guildId/karuta/albums/:albumId/pages/:page/image",
+    async (request, reply) => {
+      const params = request.params as {
+        albumId?: string;
+        guildId?: string;
+        page?: string;
+      };
+      const page = Number.parseInt(params.page ?? "", 10);
+      if (!params.guildId || !params.albumId || !Number.isFinite(page)) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const image = await getKarutaAlbumPageImage(
+        params.guildId,
+        params.albumId,
+        page,
+      );
+      if (!image) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+      // Cache corto: la página puede actualizarse (se agregan cartas) y no
+      // queremos que el navegador muestre una versión vieja por mucho tiempo.
+      return reply
+        .header("Content-Type", image.mimeType)
+        .header("Cache-Control", "public, max-age=3600")
+        .send(image.data);
+    },
+  );
 
   // Borrar un álbum de la Colección (admin/owner). Red para quitar entradas
   // incorrectas.

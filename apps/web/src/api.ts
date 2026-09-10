@@ -852,6 +852,12 @@ export function classEmoji(wowClass?: string): string {
   return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.emoji ?? "❔";
 }
 
+// Las rutas propias del API (ej. las imágenes cacheadas de álbumes) llegan
+// como path relativo ("/public/..."); acá les anteponemos la base del API.
+export function apiAssetUrl(path: string): string {
+  return path.startsWith("/") ? `${API_BASE_URL}${path}` : path;
+}
+
 export function classColor(wowClass?: string): string | undefined {
   return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.color;
 }
