@@ -2854,6 +2854,7 @@ export function buildApp() {
         voiceChannelId?: string;
       };
       durationMinutes?: number;
+      discordCleanupOnComplete?: boolean;
       imageUrl?: string;
       paused?: boolean;
       recurrenceEnabled?: boolean;
@@ -2895,6 +2896,7 @@ export function buildApp() {
       createdByUserId: user.id,
       createdByUsername: user.global_name ?? user.username ?? undefined,
       description: body.description?.trim() || undefined,
+      discordCleanupOnComplete: body.discordCleanupOnComplete === true,
       durationMinutes: body.durationMinutes,
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
@@ -2966,6 +2968,7 @@ export function buildApp() {
         voiceChannelId?: string;
       };
       durationMinutes?: number | null;
+      discordCleanupOnComplete?: boolean;
       imageUrl?: string;
       paused?: boolean;
       recurrenceEnabled?: boolean;
@@ -2995,12 +2998,12 @@ export function buildApp() {
     // Publicación en Discord: primero limpiamos lo viejo (si la web mandó
     // el bloque discord) y después sincronizamos según la nueva config.
     const discordOpts = normalizeDiscordOptions(body.discord);
+    const previous = await getEvent(params.guildId, params.eventId);
     if (discordOpts) {
       const validationError = validateDiscordOptions(discordOpts);
       if (validationError) {
         return reply.code(400).send({ ok: false, error: validationError });
       }
-      const previous = await getEvent(params.guildId, params.eventId);
       if (previous) {
         await cleanupEventDiscord({
           discordEventId: previous.discordEventId,
@@ -3013,6 +3016,10 @@ export function buildApp() {
 
     const event = await updateEvent(params.guildId, params.eventId, {
       description: body.description?.trim() || undefined,
+      discordCleanupOnComplete:
+        body.discordCleanupOnComplete === undefined
+          ? undefined
+          : body.discordCleanupOnComplete === true,
       durationMinutes: body.durationMinutes ?? null,
       imageUrl: body.imageUrl?.trim() || undefined,
       paused: body.paused === undefined ? undefined : body.paused === true,
@@ -3049,7 +3056,30 @@ export function buildApp() {
 
     let discordError: string | undefined;
     let savedEvent = event;
-    if (discordOpts) {
+
+    // Auto-limpieza en Discord al marcarlo Completado: el registro ya quedó
+    // guardado (completedAt + historial), así que si el evento lo tenía
+    // activado borramos el evento agendado y el aviso, y limpiamos sus ids.
+    const completedNow =
+      event.status === "completed" && previous?.status !== "completed";
+    if (completedNow && event.discordCleanupOnComplete) {
+      await cleanupEventDiscord({
+        discordEventId: event.discordEventId,
+        discordMessageIds: event.discordMessageIds,
+        guildId: params.guildId,
+        publishChannelId: event.publishChannelId,
+      });
+      const cleared = await setEventDiscordInfo(params.guildId, event.id, {
+        discordEventId: null,
+        discordMessageIds: [],
+      });
+      if (cleared) {
+        savedEvent = cleared;
+      }
+      console.log(
+        `[eventos] evento completado: aviso/evento de Discord eliminado (${event.title})`,
+      );
+    } else if (discordOpts) {
       const synced = await syncAndStoreEventDiscord({ discordOpts, event });
       discordError = synced.discordError;
       if (synced.event) {

@@ -2019,6 +2019,7 @@ function App() {
       recurrence: "none" | "daily" | "weekly" | "biweekly";
       voiceChannelId: string;
     };
+    discordCleanupOnComplete: boolean;
     durationMinutes: string;
     imageUrl: string;
     paused: boolean;
@@ -2033,6 +2034,7 @@ function App() {
     type: string;
   }>({
     discord: defaultEventDiscord(),
+    discordCleanupOnComplete: false,
     durationMinutes: "",
     imageUrl: "",
     paused: false,
@@ -2919,6 +2921,7 @@ function App() {
     setDuplicatingEvent(false);
     setEventForm({
       discord: defaultEventDiscord(),
+      discordCleanupOnComplete: false,
       durationMinutes: "",
       imageUrl: "",
       paused: false,
@@ -2951,6 +2954,7 @@ function App() {
         recurrence: event.discordEventConfig?.recurrence ?? "none",
         voiceChannelId: event.voiceChannelId ?? "",
       },
+      discordCleanupOnComplete: event.discordCleanupOnComplete ?? false,
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
@@ -2994,6 +2998,7 @@ function App() {
         recurrence: "none",
         voiceChannelId: event.voiceChannelId ?? "",
       },
+      discordCleanupOnComplete: event.discordCleanupOnComplete ?? false,
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
@@ -3112,6 +3117,7 @@ function App() {
           durationMinutes: eventForm.durationMinutes
             ? Number(eventForm.durationMinutes)
             : null,
+          discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           imageUrl: eventForm.imageUrl || undefined,
           paused: eventForm.paused,
           recurrenceEnabled: eventForm.recurrenceEnabled,
@@ -3144,6 +3150,7 @@ function App() {
           durationMinutes: eventForm.durationMinutes
             ? Number(eventForm.durationMinutes)
             : undefined,
+          discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           imageUrl: eventForm.imageUrl || undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
           recurrenceEveryDays: eventForm.recurrenceEnabled
@@ -7851,6 +7858,37 @@ function App() {
                                 </option>
                               ))}
                             </select>
+                          </label>
+                        ) : null}
+                        {eventForm.discord.createScheduledEvent ||
+                        eventForm.discord.publishMessage ? (
+                          <label
+                            className={`module-toggle event-reminder-toggle${eventForm.discordCleanupOnComplete ? " checked" : ""}`}
+                          >
+                            <span className="module-toggle-text">
+                              <strong>
+                                🧹 Eliminar de Discord al completar
+                              </strong>
+                            </span>
+                            <span className="module-switch">
+                              <input
+                                type="checkbox"
+                                checked={eventForm.discordCleanupOnComplete}
+                                onChange={(event) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    discordCleanupOnComplete:
+                                      event.target.checked,
+                                  }))
+                                }
+                              />
+                              <span
+                                className="module-switch-track"
+                                aria-hidden="true"
+                              >
+                                <span className="module-switch-thumb" />
+                              </span>
+                            </span>
                           </label>
                         ) : null}
                       </div>

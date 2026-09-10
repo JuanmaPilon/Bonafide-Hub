@@ -198,6 +198,9 @@ export type HubEvent = {
   discordEventConfig?: EventDiscordConfig;
   discordEventId?: string;
   discordMessageIds: string[];
+  // Si está activo, al marcar el evento como Completado se borra de Discord
+  // (evento agendado + aviso) una vez guardado el registro/informe.
+  discordCleanupOnComplete: boolean;
   durationMinutes?: number;
   guildId: string;
   id: string;
@@ -257,6 +260,7 @@ type EventRecord = {
   discordEventConfig: unknown;
   discordEventId: string | null;
   discordMessageIds: string[];
+  discordCleanupOnComplete: boolean;
   durationMinutes: number | null;
   guildId: string;
   id: string;
@@ -324,6 +328,7 @@ function toEvent(record: EventRecord): HubEvent {
       (record.discordEventConfig as EventDiscordConfig | null) ?? undefined,
     discordEventId: record.discordEventId ?? undefined,
     discordMessageIds: record.discordMessageIds,
+    discordCleanupOnComplete: record.discordCleanupOnComplete,
     durationMinutes: record.durationMinutes ?? undefined,
     guildId: record.guildId,
     id: record.id,
@@ -433,6 +438,7 @@ export async function createEvent(input: {
   createdByUserId?: string;
   createdByUsername?: string;
   description?: string;
+  discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
   guildId: string;
   imageUrl?: string;
@@ -452,6 +458,7 @@ export async function createEvent(input: {
       createdByUserId: input.createdByUserId,
       createdByUsername: input.createdByUsername,
       description: input.description,
+      discordCleanupOnComplete: input.discordCleanupOnComplete ?? false,
       durationMinutes: input.durationMinutes,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
@@ -484,6 +491,7 @@ export async function updateEvent(
   eventId: string,
   input: {
     description?: string;
+    discordCleanupOnComplete?: boolean;
     durationMinutes?: number | null;
     imageUrl?: string;
     paused?: boolean;
@@ -542,6 +550,7 @@ export async function updateEvent(
     data: {
       completedAt: input.status === "completed" ? new Date() : undefined,
       description: input.description,
+      discordCleanupOnComplete: input.discordCleanupOnComplete,
       durationMinutes: input.durationMinutes,
       imageUrl: input.imageUrl,
       paused: input.paused,
@@ -556,8 +565,7 @@ export async function updateEvent(
       // Si cambia (o se limpia) el cierre de inscripciones, reseteamos el
       // marcador de "aviso ya actualizado por cierre": si vuelve a ser
       // futuro se re-abre, y si vuelve a pasar se re-renderiza de nuevo.
-      signupClosedAt:
-        input.signupDeadline !== undefined ? null : undefined,
+      signupClosedAt: input.signupDeadline !== undefined ? null : undefined,
       signupDeadline:
         input.signupDeadline === null
           ? null

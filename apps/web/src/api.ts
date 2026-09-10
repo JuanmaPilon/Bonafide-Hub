@@ -892,6 +892,8 @@ export type HubEvent = {
   };
   discordEventId?: string;
   discordMessageIds?: string[];
+  // Al marcar Completado, borra el aviso/evento de Discord tras guardar.
+  discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
   guildId: string;
   id: string;
@@ -946,6 +948,7 @@ export async function createEvent(
   input: {
     description?: string;
     discord?: EventDiscordOptions;
+    discordCleanupOnComplete?: boolean;
     durationMinutes?: number;
     imageUrl?: string;
     paused?: boolean;
@@ -975,6 +978,7 @@ export async function updateEvent(
   input: {
     description?: string;
     discord?: EventDiscordOptions;
+    discordCleanupOnComplete?: boolean;
     durationMinutes?: number | null;
     imageUrl?: string;
     paused?: boolean;

@@ -212,6 +212,9 @@ model HubEvent {
   recurrenceEveryDays Int?
   // Próxima fecha en la que hay que generar la copia.
   recurrenceNextAt    DateTime?
+  // Si está activo, al marcar el evento como Completado se borra de Discord
+  // (evento agendado + aviso) una vez guardado el registro/informe.
+  discordCleanupOnComplete Boolean @default(false)
   // Config guardada de la publicación (entityType voice|external, location,
   // recurrence none|daily|weekly|biweekly) para poder re-sincronizar.
   discordEventConfig Json?
