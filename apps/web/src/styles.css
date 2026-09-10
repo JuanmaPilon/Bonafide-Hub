@@ -3059,8 +3059,14 @@ textarea {
   gap: 10px;
 }
 
+.event-recurrence-days-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .event-recurrence-days {
-  max-width: 170px;
+  max-width: 190px;
 }
 
 .event-deadline.closed {

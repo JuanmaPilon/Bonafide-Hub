@@ -2025,6 +2025,7 @@ function App() {
     paused: boolean;
     recurrenceEnabled: boolean;
     recurrenceEveryDays: string;
+    recurrencePublishDaysBefore: string;
     reminderHours: number[];
     requiredRoleId: string;
     signupDeadline: string;
@@ -2040,6 +2041,7 @@ function App() {
     paused: false,
     recurrenceEnabled: false,
     recurrenceEveryDays: "",
+    recurrencePublishDaysBefore: "3",
     reminderHours: [],
     requiredRoleId: "",
     signupDeadline: "",
@@ -2927,6 +2929,7 @@ function App() {
       paused: false,
       recurrenceEnabled: false,
       recurrenceEveryDays: "",
+      recurrencePublishDaysBefore: "3",
       reminderHours: [],
       requiredRoleId: "",
       signupDeadline: "",
@@ -2964,6 +2967,10 @@ function App() {
         event.recurrenceEveryDays != null
           ? String(event.recurrenceEveryDays)
           : "",
+      recurrencePublishDaysBefore:
+        event.recurrencePublishDaysBefore != null
+          ? String(event.recurrencePublishDaysBefore)
+          : "3",
       reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: event.signupDeadline
@@ -3006,6 +3013,7 @@ function App() {
       paused: false,
       recurrenceEnabled: false,
       recurrenceEveryDays: "",
+      recurrencePublishDaysBefore: "3",
       reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: "",
@@ -3124,6 +3132,9 @@ function App() {
           recurrenceEveryDays: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrenceEveryDays) || undefined
             : undefined,
+          recurrencePublishDaysBefore: eventForm.recurrenceEnabled
+            ? Number(eventForm.recurrencePublishDaysBefore) || undefined
+            : undefined,
           reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || null,
@@ -3155,6 +3166,9 @@ function App() {
           recurrenceEnabled: eventForm.recurrenceEnabled,
           recurrenceEveryDays: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrenceEveryDays) || undefined
+            : undefined,
+          recurrencePublishDaysBefore: eventForm.recurrenceEnabled
+            ? Number(eventForm.recurrencePublishDaysBefore) || undefined
             : undefined,
           reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
@@ -7568,22 +7582,43 @@ function App() {
                             ) : null}
                           </div>
                           {eventForm.recurrenceEnabled ? (
-                            <label className="event-recurrence-days">
-                              <span>Cada (días)</span>
-                              <input
-                                className="input"
-                                type="number"
-                                min="1"
-                                max="365"
-                                value={eventForm.recurrenceEveryDays}
-                                onChange={(event) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    recurrenceEveryDays: event.target.value,
-                                  }))
-                                }
-                              />
-                            </label>
+                            <div className="event-recurrence-days-row">
+                              <label className="event-recurrence-days">
+                                <span>Cada (días)</span>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="1"
+                                  max="365"
+                                  value={eventForm.recurrenceEveryDays}
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      recurrenceEveryDays: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="event-recurrence-days">
+                                <span>Publicar (días antes)</span>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="1"
+                                  max="365"
+                                  value={
+                                    eventForm.recurrencePublishDaysBefore
+                                  }
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      recurrencePublishDaysBefore:
+                                        event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                            </div>
                           ) : null}
                         </div>
                         <div className="event-form-wide event-image-editor">

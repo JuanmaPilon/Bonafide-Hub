@@ -213,6 +213,8 @@ model HubEvent {
   // copias generadas no repiten la recurrencia.
   recurrenceEnabled   Boolean  @default(false)
   recurrenceEveryDays Int?
+  // Cuántos días ANTES de la fecha del evento se crea/publica la ocurrencia.
+  recurrencePublishDaysBefore Int?
   // Próxima fecha en la que hay que generar la copia.
   recurrenceNextAt    DateTime?
   // Si está activo, al marcar el evento como Completado se borra de Discord

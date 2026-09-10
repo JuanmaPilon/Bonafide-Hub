@@ -83,7 +83,7 @@ import {
   listEventImages,
   listEvents,
   listEventsPendingCloseAnnouncement,
-  listEventsPendingRecurrence,
+  listRecurrenceSeries,
   listRaidSpecs,
   listReminderDueEvents,
   listReportPendingEvents,
@@ -634,6 +634,7 @@ const EVENT_RECURRENCE_SYNC_INTERVAL_MS = 60 * 1000;
 // Tope de copias por tick: si el server estuvo caído mucho tiempo, evita
 // crear de golpe decenas de eventos.
 const EVENT_RECURRENCE_MAX_CATCHUP = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
 let eventRecurrenceTimer: NodeJS.Timeout | null = null;
 
 async function createRecurrenceCopy(
@@ -649,6 +650,7 @@ async function createRecurrenceCopy(
     createdByUserId: head.createdByUserId,
     createdByUsername: head.createdByUsername,
     description: head.description,
+    discordCleanupOnComplete: head.discordCleanupOnComplete,
     durationMinutes: head.durationMinutes,
     guildId: head.guildId,
     imageUrl: head.imageUrl,
@@ -690,30 +692,33 @@ async function createRecurrenceCopy(
 
 async function runEventRecurrenceSync(): Promise<void> {
   try {
-    const pending = await listEventsPendingRecurrence();
-    for (const head of pending) {
+    const series = await listRecurrenceSeries();
+    for (const head of series) {
       const every = head.recurrenceEveryDays;
       if (!every || every <= 0 || !head.recurrenceNextAt) {
         continue;
       }
-      const stepMs = every * 24 * 60 * 60 * 1000;
+      const stepMs = every * DAY_MS;
+      // Cuántos días antes de la fecha del evento se publica la ocurrencia.
+      const publishBeforeMs =
+        Math.max(1, head.recurrencePublishDaysBefore ?? 1) * DAY_MS;
       let nextAt = head.recurrenceNextAt;
       let changed = false;
 
-      // Si la serie quedó muy atrasada (API caída mucho tiempo), saltamos al
-      // próximo slot futuro en vez de crear un montón de eventos viejos.
-      if (
-        Date.now() - nextAt.getTime() >
-        stepMs * EVENT_RECURRENCE_MAX_CATCHUP
-      ) {
+      // 1) Ocurrencias cuya fecha ya pasó (API caída mucho tiempo): las
+      // salteamos para no crear eventos viejos.
+      if (nextAt.getTime() <= Date.now()) {
         const steps = Math.ceil((Date.now() - nextAt.getTime()) / stepMs);
         nextAt = new Date(nextAt.getTime() + steps * stepMs);
         changed = true;
       }
 
+      // 2) Creamos las ocurrencias que ya entraron en su ventana de
+      // publicación (X días antes de la fecha del evento).
       let created = 0;
       while (
-        nextAt.getTime() <= Date.now() &&
+        nextAt.getTime() - publishBeforeMs <= Date.now() &&
+        nextAt.getTime() > Date.now() &&
         created < EVENT_RECURRENCE_MAX_CATCHUP
       ) {
         try {
@@ -2859,6 +2864,7 @@ export function buildApp() {
       paused?: boolean;
       recurrenceEnabled?: boolean;
       recurrenceEveryDays?: number;
+      recurrencePublishDaysBefore?: number;
       reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string;
@@ -2903,6 +2909,9 @@ export function buildApp() {
       paused: body.paused === true,
       recurrenceEnabled: body.recurrenceEnabled === true,
       recurrenceEveryDays: normalizeRecurrenceDays(body.recurrenceEveryDays),
+      recurrencePublishDaysBefore: normalizeRecurrenceDays(
+        body.recurrencePublishDaysBefore,
+      ),
       reminderHours: normalizeReminderHours(body.reminderHours),
       requiredRoleId: body.requiredRoleId?.trim() || null,
       signupDeadline: body.signupDeadline?.trim() || undefined,
@@ -2973,6 +2982,7 @@ export function buildApp() {
       paused?: boolean;
       recurrenceEnabled?: boolean;
       recurrenceEveryDays?: number;
+      recurrencePublishDaysBefore?: number;
       reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string | null;
@@ -3031,6 +3041,10 @@ export function buildApp() {
         body.recurrenceEveryDays === undefined
           ? undefined
           : normalizeRecurrenceDays(body.recurrenceEveryDays),
+      recurrencePublishDaysBefore:
+        body.recurrencePublishDaysBefore === undefined
+          ? undefined
+          : normalizeRecurrenceDays(body.recurrencePublishDaysBefore),
       reminderHours:
         body.reminderHours === undefined
           ? undefined

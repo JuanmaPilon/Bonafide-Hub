@@ -904,6 +904,7 @@ export type HubEvent = {
   // Recurrencia propia: cada X días se crea y publica una copia del evento.
   recurrenceEnabled?: boolean;
   recurrenceEveryDays?: number;
+  recurrencePublishDaysBefore?: number;
   recurrenceNextAt?: string;
   // Rol de Discord mínimo para entrar al roster principal (yes sin rol→bench).
   requiredRoleId?: string;
@@ -954,6 +955,7 @@ export async function createEvent(
     paused?: boolean;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number;
+    recurrencePublishDaysBefore?: number;
     reminderHours?: number[];
     requiredRoleId?: string;
     signupDeadline?: string;
@@ -984,6 +986,7 @@ export async function updateEvent(
     paused?: boolean;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number;
+    recurrencePublishDaysBefore?: number;
     reminderHours?: number[];
     requiredRoleId?: string;
     signupDeadline?: string | null;

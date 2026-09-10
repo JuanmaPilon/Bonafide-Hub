@@ -210,6 +210,7 @@ export type HubEvent = {
   recurrenceEnabled: boolean;
   recurrenceEveryDays?: number;
   recurrenceNextAt?: Date;
+  recurrencePublishDaysBefore?: number;
   reminderMessageIds: string[];
   reminderHours: number[];
   reminderSentHours: number[];
@@ -271,6 +272,7 @@ type EventRecord = {
   recurrenceEnabled: boolean;
   recurrenceEveryDays: number | null;
   recurrenceNextAt: Date | null;
+  recurrencePublishDaysBefore: number | null;
   reminderMessageIds: string[];
   reminderHours: number[];
   reminderSentHours: number[];
@@ -340,6 +342,7 @@ function toEvent(record: EventRecord): HubEvent {
     recurrenceEnabled: record.recurrenceEnabled,
     recurrenceEveryDays: record.recurrenceEveryDays ?? undefined,
     recurrenceNextAt: record.recurrenceNextAt ?? undefined,
+    recurrencePublishDaysBefore: record.recurrencePublishDaysBefore ?? undefined,
     reminderMessageIds: record.reminderMessageIds,
     reminderHours: record.reminderHours,
     reminderSentHours: record.reminderSentHours,
@@ -462,6 +465,7 @@ export async function createEvent(input: {
   paused?: boolean;
   recurrenceEnabled?: boolean;
   recurrenceEveryDays?: number | null;
+  recurrencePublishDaysBefore?: number | null;
   reminderHours?: number[];
   requiredRoleId?: string | null;
   signupDeadline?: string;
@@ -482,6 +486,7 @@ export async function createEvent(input: {
       paused: input.paused ?? false,
       recurrenceEnabled: input.recurrenceEnabled ?? false,
       recurrenceEveryDays: everyDays,
+      recurrencePublishDaysBefore: input.recurrencePublishDaysBefore ?? null,
       recurrenceNextAt:
         input.recurrenceEnabled && everyDays && everyDays > 0
           ? new Date(
@@ -514,6 +519,7 @@ export async function updateEvent(
     paused?: boolean;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number | null;
+    recurrencePublishDaysBefore?: number | null;
     reminderHours?: number[];
     requiredRoleId?: string | null;
     signupDeadline?: string | null;
@@ -573,6 +579,7 @@ export async function updateEvent(
       paused: input.paused,
       recurrenceEnabled: input.recurrenceEnabled,
       recurrenceEveryDays: input.recurrenceEveryDays,
+      recurrencePublishDaysBefore: input.recurrencePublishDaysBefore,
       recurrenceNextAt,
       reminderHours: input.reminderHours,
       requiredRoleId:
@@ -679,17 +686,16 @@ export async function markEventSignupClosed(
   });
 }
 
-// Eventos con recurrencia activa cuya próxima publicación ya venció (y que no
-// están pausados). La API crea una copia y avanza la serie.
-export async function listEventsPendingRecurrence(
-  now: Date = new Date(),
-): Promise<HubEvent[]> {
+// Series de recurrencia activas (recurrenceEnabled y no pausadas). No filtra
+// por fecha: el scheduler decide en cada tick si ya entró en la ventana de
+// publicación (X días antes de la fecha del evento) y crea la ocurrencia.
+export async function listRecurrenceSeries(): Promise<HubEvent[]> {
   const records = await prisma.hubEvent.findMany({
     where: {
       paused: false,
       recurrenceEnabled: true,
       recurrenceEveryDays: { not: null },
-      recurrenceNextAt: { lte: now },
+      recurrenceNextAt: { not: null },
     },
     include: { signups: { orderBy: { createdAt: "asc" } } },
   });
