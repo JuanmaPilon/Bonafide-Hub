@@ -896,7 +896,13 @@ export type HubEvent = {
   guildId: string;
   id: string;
   imageUrl?: string;
+  // Pausa manual: frena recordatorios, recurrencia y anotaciones sin cancelar.
+  paused?: boolean;
   publishChannelId?: string;
+  // Recurrencia propia: cada X días se crea y publica una copia del evento.
+  recurrenceEnabled?: boolean;
+  recurrenceEveryDays?: number;
+  recurrenceNextAt?: string;
   // Rol de Discord mínimo para entrar al roster principal (yes sin rol→bench).
   requiredRoleId?: string;
   // Recordatorios de asistencia (horas antes de startsAt) que eligió el staff
@@ -942,6 +948,9 @@ export async function createEvent(
     discord?: EventDiscordOptions;
     durationMinutes?: number;
     imageUrl?: string;
+    paused?: boolean;
+    recurrenceEnabled?: boolean;
+    recurrenceEveryDays?: number;
     reminderHours?: number[];
     requiredRoleId?: string;
     signupDeadline?: string;
@@ -968,6 +977,9 @@ export async function updateEvent(
     discord?: EventDiscordOptions;
     durationMinutes?: number | null;
     imageUrl?: string;
+    paused?: boolean;
+    recurrenceEnabled?: boolean;
+    recurrenceEveryDays?: number;
     reminderHours?: number[];
     requiredRoleId?: string;
     signupDeadline?: string | null;

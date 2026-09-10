@@ -2801,6 +2801,11 @@ textarea {
   background: rgba(124, 227, 139, 0.12);
 }
 
+.event-card-status.paused {
+  color: #b9c2d4;
+  background: rgba(139, 147, 167, 0.16);
+}
+
 .event-card-date {
   color: var(--muted);
   font-size: 0.85rem;
@@ -3042,8 +3047,29 @@ textarea {
   cursor: not-allowed;
 }
 
+/* Repetición automática + pausa (mismo lenguaje visual que los recordatorios). */
+.event-recurrence {
+  display: grid;
+  gap: 10px;
+}
+
+.event-recurrence-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.event-recurrence-days {
+  max-width: 170px;
+}
+
 .event-deadline.closed {
   color: #ff8a5c;
+  font-weight: 600;
+}
+
+.event-deadline.paused {
+  color: #b9c2d4;
   font-weight: 600;
 }
 

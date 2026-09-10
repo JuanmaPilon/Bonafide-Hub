@@ -202,6 +202,16 @@ model HubEvent {
   // Cuándo se re-renderizó el aviso de Discord por cierre de inscripciones
   // (embed rojo + botones deshabilitados). Evita re-publicarlo cada minuto.
   signupClosedAt      DateTime?
+  // Pausa manual: frena recordatorios, recurrencia y anotaciones sin cancelar
+  // el evento (se puede reactivar en cualquier momento).
+  paused              Boolean  @default(false)
+  // Recurrencia propia: cada X días se crea y publica una copia del evento.
+  // El evento con recurrenceEnabled actúa como "cabecera" de la serie; las
+  // copias generadas no repiten la recurrencia.
+  recurrenceEnabled   Boolean  @default(false)
+  recurrenceEveryDays Int?
+  // Próxima fecha en la que hay que generar la copia.
+  recurrenceNextAt    DateTime?
   // Config guardada de la publicación (entityType voice|external, location,
   // recurrence none|daily|weekly|biweekly) para poder re-sincronizar.
   discordEventConfig Json?

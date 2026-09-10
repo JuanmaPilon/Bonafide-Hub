@@ -83,6 +83,7 @@ import {
   listEventImages,
   listEvents,
   listEventsPendingCloseAnnouncement,
+  listEventsPendingRecurrence,
   listRaidSpecs,
   listReminderDueEvents,
   listReportPendingEvents,
@@ -90,6 +91,8 @@ import {
   markEventReportSent,
   markEventSignupClosed,
   setEventDiscordInfo,
+  setEventRecurrenceNext,
+  type HubEvent,
   updateEvent,
   updateRaidSpec,
   upsertSignup,
@@ -623,6 +626,129 @@ function startEventCloseSync(): void {
   }, EVENT_CLOSE_SYNC_INTERVAL_MS);
 }
 
+// ── Recurrencia de eventos ──────────────────────────────────────────
+// Cada minuto revisa las series (recurrenceEnabled) cuya próxima fecha ya
+// venció: crea una COPIA del evento (con su propia publicación en Discord) y
+// avanza la serie. Si el evento está pausado, no se genera nada.
+const EVENT_RECURRENCE_SYNC_INTERVAL_MS = 60 * 1000;
+// Tope de copias por tick: si el server estuvo caído mucho tiempo, evita
+// crear de golpe decenas de eventos.
+const EVENT_RECURRENCE_MAX_CATCHUP = 5;
+let eventRecurrenceTimer: NodeJS.Timeout | null = null;
+
+async function createRecurrenceCopy(
+  head: HubEvent,
+  startsAt: Date,
+): Promise<void> {
+  // El cierre de inscripciones se mantiene a la misma antelación respecto
+  // del inicio (si la tenía).
+  const deadlineOffsetMs = head.signupDeadline
+    ? head.signupDeadline.getTime() - head.startsAt.getTime()
+    : null;
+  const created = await createEvent({
+    createdByUserId: head.createdByUserId,
+    createdByUsername: head.createdByUsername,
+    description: head.description,
+    durationMinutes: head.durationMinutes,
+    guildId: head.guildId,
+    imageUrl: head.imageUrl,
+    reminderHours: head.reminderHours,
+    requiredRoleId: head.requiredRoleId ?? null,
+    signupDeadline:
+      deadlineOffsetMs !== null
+        ? new Date(startsAt.getTime() + deadlineOffsetMs).toISOString()
+        : undefined,
+    startsAt: startsAt.toISOString(),
+    title: head.title,
+    type: head.type,
+  });
+
+  // Publicación en Discord igual que la cabecera (solo si tenía aviso o
+  // Scheduled Event). Las copias NO heredan la recurrencia.
+  const hadMessage = (head.discordMessageIds ?? []).length > 0;
+  const hadScheduledEvent = Boolean(head.discordEventId);
+  if (head.publishChannelId || hadScheduledEvent) {
+    const discordOpts: EventDiscordOptions = {
+      createScheduledEvent:
+        head.discordEventConfig?.createScheduledEvent ?? hadScheduledEvent,
+      entityType: head.discordEventConfig?.entityType ?? "voice",
+      location: head.discordEventConfig?.location,
+      publishChannelId: head.publishChannelId,
+      publishMessage: hadMessage && Boolean(head.publishChannelId),
+      recurrence: "none",
+      voiceChannelId: head.voiceChannelId,
+    };
+    if (!validateDiscordOptions(discordOpts)) {
+      await syncAndStoreEventDiscord({ discordOpts, event: created });
+    }
+  }
+
+  console.log(
+    `[eventos] recurrencia: copia creada de "${head.title}" para ${startsAt.toISOString()}`,
+  );
+}
+
+async function runEventRecurrenceSync(): Promise<void> {
+  try {
+    const pending = await listEventsPendingRecurrence();
+    for (const head of pending) {
+      const every = head.recurrenceEveryDays;
+      if (!every || every <= 0 || !head.recurrenceNextAt) {
+        continue;
+      }
+      const stepMs = every * 24 * 60 * 60 * 1000;
+      let nextAt = head.recurrenceNextAt;
+      let changed = false;
+
+      // Si la serie quedó muy atrasada (API caída mucho tiempo), saltamos al
+      // próximo slot futuro en vez de crear un montón de eventos viejos.
+      if (
+        Date.now() - nextAt.getTime() >
+        stepMs * EVENT_RECURRENCE_MAX_CATCHUP
+      ) {
+        const steps = Math.ceil((Date.now() - nextAt.getTime()) / stepMs);
+        nextAt = new Date(nextAt.getTime() + steps * stepMs);
+        changed = true;
+      }
+
+      let created = 0;
+      while (
+        nextAt.getTime() <= Date.now() &&
+        created < EVENT_RECURRENCE_MAX_CATCHUP
+      ) {
+        try {
+          await createRecurrenceCopy(head, nextAt);
+        } catch (error) {
+          console.error(
+            `[eventos] recurrencia falló para "${head.title}"`,
+            error,
+          );
+          break;
+        }
+        nextAt = new Date(nextAt.getTime() + stepMs);
+        created += 1;
+        changed = true;
+      }
+
+      if (changed) {
+        await setEventRecurrenceNext(head.guildId, head.id, nextAt);
+      }
+    }
+  } catch (error) {
+    console.error("[eventos] recurrence sync failed", error);
+  }
+}
+
+function startEventRecurrenceSync(): void {
+  if (eventRecurrenceTimer) {
+    return;
+  }
+  void runEventRecurrenceSync();
+  eventRecurrenceTimer = setInterval(() => {
+    void runEventRecurrenceSync();
+  }, EVENT_RECURRENCE_SYNC_INTERVAL_MS);
+}
+
 // ── Publicación de eventos en Discord (Módulo X) ────────────────────
 // Normaliza el bloque "discord" que manda la web a una config tipada.
 function normalizeDiscordOptions(
@@ -686,6 +812,7 @@ async function syncAndStoreEventDiscord(input: {
     guildId: string;
     id: string;
     imageUrl?: string;
+    paused?: boolean;
     signupDeadline?: Date;
     signups: AnnouncementSignup[];
     startsAt: Date;
@@ -705,6 +832,7 @@ async function syncAndStoreEventDiscord(input: {
     guildId: event.guildId,
     imageUrl: event.imageUrl,
     options: discordOpts,
+    paused: event.paused,
     signupDeadline: event.signupDeadline,
     signups: event.signups,
     specs,
@@ -767,6 +895,7 @@ async function refreshEventAnnouncement(
         event.discordEventConfig?.entityType === "external"
           ? event.discordEventConfig.location
           : undefined,
+      paused: event.paused,
       recurrence: (event.discordEventConfig?.recurrence ??
         "none") as EventRecurrence,
       signupDeadline: event.signupDeadline,
@@ -782,7 +911,7 @@ async function refreshEventAnnouncement(
     return await updateEventAnnouncement({
       channelId: event.publishChannelId,
       components: buildEventSignupActionRows(event.id, {
-        disableSignup: signupsClosed,
+        disableSignup: event.paused || signupsClosed,
       }),
       embeds,
       messageId,
@@ -812,6 +941,15 @@ function normalizeReminderHours(value: unknown): number[] {
     }
   }
   return Array.from(hours).sort((a, b) => a - b);
+}
+
+// Días de recurrencia válidos (1 a 365). null = sin recurrencia.
+function normalizeRecurrenceDays(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  const days = Math.round(value);
+  return days >= 1 && days <= 365 ? days : null;
 }
 
 export function buildApp() {
@@ -2717,6 +2855,9 @@ export function buildApp() {
       };
       durationMinutes?: number;
       imageUrl?: string;
+      paused?: boolean;
+      recurrenceEnabled?: boolean;
+      recurrenceEveryDays?: number;
       reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string;
@@ -2757,6 +2898,9 @@ export function buildApp() {
       durationMinutes: body.durationMinutes,
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
+      paused: body.paused === true,
+      recurrenceEnabled: body.recurrenceEnabled === true,
+      recurrenceEveryDays: normalizeRecurrenceDays(body.recurrenceEveryDays),
       reminderHours: normalizeReminderHours(body.reminderHours),
       requiredRoleId: body.requiredRoleId?.trim() || null,
       signupDeadline: body.signupDeadline?.trim() || undefined,
@@ -2823,6 +2967,9 @@ export function buildApp() {
       };
       durationMinutes?: number | null;
       imageUrl?: string;
+      paused?: boolean;
+      recurrenceEnabled?: boolean;
+      recurrenceEveryDays?: number;
       reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string | null;
@@ -2868,6 +3015,15 @@ export function buildApp() {
       description: body.description?.trim() || undefined,
       durationMinutes: body.durationMinutes ?? null,
       imageUrl: body.imageUrl?.trim() || undefined,
+      paused: body.paused === undefined ? undefined : body.paused === true,
+      recurrenceEnabled:
+        body.recurrenceEnabled === undefined
+          ? undefined
+          : body.recurrenceEnabled === true,
+      recurrenceEveryDays:
+        body.recurrenceEveryDays === undefined
+          ? undefined
+          : normalizeRecurrenceDays(body.recurrenceEveryDays),
       reminderHours:
         body.reminderHours === undefined
           ? undefined
@@ -3254,6 +3410,12 @@ export function buildApp() {
           .send({ ok: false, error: "Evento no encontrado" });
       }
 
+      if (event.paused) {
+        return reply.code(400).send({
+          ok: false,
+          error: "El evento está pausado.",
+        });
+      }
       if (event.status !== "scheduled") {
         return reply.code(400).send({
           ok: false,
@@ -3538,6 +3700,12 @@ export function buildApp() {
         return reply
           .code(404)
           .send({ ok: false, error: "Evento no encontrado" });
+      }
+      if (event.paused) {
+        return reply.code(400).send({
+          ok: false,
+          error: "El evento está pausado.",
+        });
       }
       if (event.status !== "scheduled") {
         return reply.code(400).send({
@@ -5099,6 +5267,7 @@ export function buildApp() {
 
   startRaidLogSync();
   startEventCloseSync();
+  startEventRecurrenceSync();
 
   return app;
 }

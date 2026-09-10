@@ -202,7 +202,11 @@ export type HubEvent = {
   guildId: string;
   id: string;
   imageUrl?: string;
+  paused: boolean;
   publishChannelId?: string;
+  recurrenceEnabled: boolean;
+  recurrenceEveryDays?: number;
+  recurrenceNextAt?: Date;
   reminderHours: number[];
   reminderSentHours: number[];
   // Rol de Discord mínimo para entrar al roster principal: quien no lo tiene
@@ -257,7 +261,11 @@ type EventRecord = {
   guildId: string;
   id: string;
   imageUrl: string | null;
+  paused: boolean;
   publishChannelId: string | null;
+  recurrenceEnabled: boolean;
+  recurrenceEveryDays: number | null;
+  recurrenceNextAt: Date | null;
   reminderHours: number[];
   reminderSentHours: number[];
   reportSentAt: Date | null;
@@ -320,7 +328,11 @@ function toEvent(record: EventRecord): HubEvent {
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
+    paused: record.paused,
     publishChannelId: record.publishChannelId ?? undefined,
+    recurrenceEnabled: record.recurrenceEnabled,
+    recurrenceEveryDays: record.recurrenceEveryDays ?? undefined,
+    recurrenceNextAt: record.recurrenceNextAt ?? undefined,
     reminderHours: record.reminderHours,
     reminderSentHours: record.reminderSentHours,
     reportSentAt: record.reportSentAt ?? undefined,
@@ -355,7 +367,7 @@ export async function listReminderDueEvents(
   now: Date = new Date(),
 ): Promise<Array<{ dueHours: number[]; event: HubEvent }>> {
   const records = await prisma.hubEvent.findMany({
-    where: { guildId, status: "scheduled" },
+    where: { guildId, status: "scheduled", paused: false },
     include: { signups: { orderBy: { createdAt: "asc" } } },
   });
   const nowMs = now.getTime();
@@ -424,6 +436,9 @@ export async function createEvent(input: {
   durationMinutes?: number;
   guildId: string;
   imageUrl?: string;
+  paused?: boolean;
+  recurrenceEnabled?: boolean;
+  recurrenceEveryDays?: number | null;
   reminderHours?: number[];
   requiredRoleId?: string | null;
   signupDeadline?: string;
@@ -431,6 +446,7 @@ export async function createEvent(input: {
   title: string;
   type: string;
 }): Promise<HubEvent> {
+  const everyDays = input.recurrenceEveryDays ?? null;
   const record = await prisma.hubEvent.create({
     data: {
       createdByUserId: input.createdByUserId,
@@ -439,6 +455,16 @@ export async function createEvent(input: {
       durationMinutes: input.durationMinutes,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
+      paused: input.paused ?? false,
+      recurrenceEnabled: input.recurrenceEnabled ?? false,
+      recurrenceEveryDays: everyDays,
+      recurrenceNextAt:
+        input.recurrenceEnabled && everyDays && everyDays > 0
+          ? new Date(
+              new Date(input.startsAt).getTime() +
+                everyDays * 24 * 60 * 60 * 1000,
+            )
+          : null,
       reminderHours: input.reminderHours ?? [],
       requiredRoleId: input.requiredRoleId ?? null,
       signupDeadline: input.signupDeadline
@@ -460,6 +486,9 @@ export async function updateEvent(
     description?: string;
     durationMinutes?: number | null;
     imageUrl?: string;
+    paused?: boolean;
+    recurrenceEnabled?: boolean;
+    recurrenceEveryDays?: number | null;
     reminderHours?: number[];
     requiredRoleId?: string | null;
     signupDeadline?: string | null;
@@ -469,6 +498,45 @@ export async function updateEvent(
     type?: string;
   },
 ): Promise<HubEvent | null> {
+  const current = await prisma.hubEvent.findFirst({
+    where: { id: eventId, guildId },
+    select: {
+      recurrenceEnabled: true,
+      recurrenceEveryDays: true,
+      recurrenceNextAt: true,
+      startsAt: true,
+    },
+  });
+  if (!current) {
+    return null;
+  }
+
+  // Recurrencia: si se activa (o cambia el intervalo/fecha base) recalculamos
+  // la próxima publicación como startsAt + X días. Si está apagada, se limpia.
+  // Editar otros campos no reancla la serie (conserva recurrenceNextAt).
+  const nextEnabled = input.recurrenceEnabled ?? current.recurrenceEnabled;
+  const nextEveryDays =
+    input.recurrenceEveryDays !== undefined
+      ? input.recurrenceEveryDays
+      : current.recurrenceEveryDays;
+  const nextStartsAt = input.startsAt
+    ? new Date(input.startsAt)
+    : current.startsAt;
+  const recurrenceChanged =
+    nextEnabled !== current.recurrenceEnabled ||
+    (input.recurrenceEveryDays !== undefined &&
+      nextEveryDays !== current.recurrenceEveryDays) ||
+    (input.startsAt !== undefined &&
+      nextStartsAt.getTime() !== current.startsAt.getTime());
+  let recurrenceNextAt = current.recurrenceNextAt;
+  if (!nextEnabled || !nextEveryDays || nextEveryDays <= 0) {
+    recurrenceNextAt = null;
+  } else if (!current.recurrenceNextAt || recurrenceChanged) {
+    recurrenceNextAt = new Date(
+      nextStartsAt.getTime() + nextEveryDays * 24 * 60 * 60 * 1000,
+    );
+  }
+
   const record = await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
     data: {
@@ -476,6 +544,10 @@ export async function updateEvent(
       description: input.description,
       durationMinutes: input.durationMinutes,
       imageUrl: input.imageUrl,
+      paused: input.paused,
+      recurrenceEnabled: input.recurrenceEnabled,
+      recurrenceEveryDays: input.recurrenceEveryDays,
+      recurrenceNextAt,
       reminderHours: input.reminderHours,
       requiredRoleId:
         input.requiredRoleId === undefined
@@ -570,6 +642,35 @@ export async function markEventSignupClosed(
   await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
     data: { signupClosedAt: new Date() },
+  });
+}
+
+// Eventos con recurrencia activa cuya próxima publicación ya venció (y que no
+// están pausados). La API crea una copia y avanza la serie.
+export async function listEventsPendingRecurrence(
+  now: Date = new Date(),
+): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    where: {
+      paused: false,
+      recurrenceEnabled: true,
+      recurrenceEveryDays: { not: null },
+      recurrenceNextAt: { lte: now },
+    },
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+  });
+  return records.map((record) => toEvent(record));
+}
+
+// Avanza la próxima publicación de una serie recurrente.
+export async function setEventRecurrenceNext(
+  guildId: string,
+  eventId: string,
+  nextAt: Date,
+): Promise<void> {
+  await prisma.hubEvent.updateMany({
+    where: { id: eventId, guildId },
+    data: { recurrenceNextAt: nextAt },
   });
 }
 

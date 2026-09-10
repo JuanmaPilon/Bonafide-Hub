@@ -850,7 +850,9 @@ function EventCard({
     yes: event.signups.filter((signup) => signup.status === "yes").length,
   };
 
+  const paused = event.paused === true;
   const signupsClosed =
+    paused ||
     event.status !== "scheduled" ||
     Boolean(
       event.signupDeadline &&
@@ -943,6 +945,9 @@ function EventCard({
         <div className="event-card-head">
           <strong>{event.title}</strong>
           <div className="event-card-badges">
+            {paused ? (
+              <span className="event-card-status paused">⏸️ Pausado</span>
+            ) : null}
             {event.status !== "scheduled" ? (
               <span className={`event-card-status ${event.status}`}>
                 {event.status === "cancelled" ? "Cancelado" : "Completado"}
@@ -994,9 +999,11 @@ function EventCard({
             ) : null}
           </div>
         ) : null}
-        {/* Último dato del evento: si las inscripciones ya cerraron, se avisa
-            acá abajo para que sea lo último de la info antes del roster. */}
-        {event.signupDeadline && signupsClosed ? (
+        {/* Último dato del evento: si está pausado o ya cerraron las
+            inscripciones, se avisa acá antes del roster. */}
+        {paused ? (
+          <div className="event-deadline paused">⏸️ Evento pausado</div>
+        ) : event.signupDeadline && signupsClosed ? (
           <div className="event-deadline closed">🔒 Inscripciones cerradas</div>
         ) : null}
         <div className="event-card-counts">
@@ -1069,7 +1076,9 @@ function EventCard({
           <div className="event-signup">
             {signupsClosed ? (
               <div className="event-signup-closed">
-                🔒 Las inscripciones están cerradas.
+                {paused
+                  ? "⏸️ El evento está pausado."
+                  : "🔒 Las inscripciones están cerradas."}
                 {mySignup ? " Tu inscripción actual queda guardada." : ""}
               </div>
             ) : (
@@ -2012,6 +2021,9 @@ function App() {
     };
     durationMinutes: string;
     imageUrl: string;
+    paused: boolean;
+    recurrenceEnabled: boolean;
+    recurrenceEveryDays: string;
     reminderHours: number[];
     requiredRoleId: string;
     signupDeadline: string;
@@ -2023,6 +2035,9 @@ function App() {
     discord: defaultEventDiscord(),
     durationMinutes: "",
     imageUrl: "",
+    paused: false,
+    recurrenceEnabled: false,
+    recurrenceEveryDays: "",
     reminderHours: [],
     requiredRoleId: "",
     signupDeadline: "",
@@ -2906,6 +2921,9 @@ function App() {
       discord: defaultEventDiscord(),
       durationMinutes: "",
       imageUrl: "",
+      paused: false,
+      recurrenceEnabled: false,
+      recurrenceEveryDays: "",
       reminderHours: [],
       requiredRoleId: "",
       signupDeadline: "",
@@ -2936,6 +2954,12 @@ function App() {
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      paused: event.paused ?? false,
+      recurrenceEnabled: event.recurrenceEnabled ?? false,
+      recurrenceEveryDays:
+        event.recurrenceEveryDays != null
+          ? String(event.recurrenceEveryDays)
+          : "",
       reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: event.signupDeadline
@@ -2973,6 +2997,10 @@ function App() {
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
       imageUrl: event.imageUrl ?? "",
+      // La copia no hereda pausa ni recurrencia (evita dos series andando).
+      paused: false,
+      recurrenceEnabled: false,
+      recurrenceEveryDays: "",
       reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: "",
@@ -3085,6 +3113,11 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : null,
           imageUrl: eventForm.imageUrl || undefined,
+          paused: eventForm.paused,
+          recurrenceEnabled: eventForm.recurrenceEnabled,
+          recurrenceEveryDays: eventForm.recurrenceEnabled
+            ? Number(eventForm.recurrenceEveryDays) || undefined
+            : undefined,
           reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || null,
@@ -3112,6 +3145,10 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : undefined,
           imageUrl: eventForm.imageUrl || undefined,
+          recurrenceEnabled: eventForm.recurrenceEnabled,
+          recurrenceEveryDays: eventForm.recurrenceEnabled
+            ? Number(eventForm.recurrenceEveryDays) || undefined
+            : undefined,
           reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || undefined,
@@ -7459,6 +7496,88 @@ function App() {
                               );
                             })}
                           </div>
+                        </div>
+                        <div className="event-form-wide event-recurrence">
+                          <span className="event-reminders-title">
+                            Repetición y estado
+                          </span>
+                          <div className="event-recurrence-options">
+                            <label
+                              className={`module-toggle event-reminder-toggle${eventForm.recurrenceEnabled ? " checked" : ""}`}
+                            >
+                              <span className="module-toggle-text">
+                                <strong>🔁 Repetir automáticamente</strong>
+                              </span>
+                              <span className="module-switch">
+                                <input
+                                  type="checkbox"
+                                  checked={eventForm.recurrenceEnabled}
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      recurrenceEnabled: event.target.checked,
+                                      recurrenceEveryDays:
+                                        event.target.checked &&
+                                        !current.recurrenceEveryDays
+                                          ? "7"
+                                          : current.recurrenceEveryDays,
+                                    }))
+                                  }
+                                />
+                                <span
+                                  className="module-switch-track"
+                                  aria-hidden="true"
+                                >
+                                  <span className="module-switch-thumb" />
+                                </span>
+                              </span>
+                            </label>
+                            {editingEventId ? (
+                              <label
+                                className={`module-toggle event-reminder-toggle${eventForm.paused ? " checked" : ""}`}
+                              >
+                                <span className="module-toggle-text">
+                                  <strong>⏸️ Pausar evento</strong>
+                                </span>
+                                <span className="module-switch">
+                                  <input
+                                    type="checkbox"
+                                    checked={eventForm.paused}
+                                    onChange={(event) =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        paused: event.target.checked,
+                                      }))
+                                    }
+                                  />
+                                  <span
+                                    className="module-switch-track"
+                                    aria-hidden="true"
+                                  >
+                                    <span className="module-switch-thumb" />
+                                  </span>
+                                </span>
+                              </label>
+                            ) : null}
+                          </div>
+                          {eventForm.recurrenceEnabled ? (
+                            <label className="event-recurrence-days">
+                              <span>Cada (días)</span>
+                              <input
+                                className="input"
+                                type="number"
+                                min="1"
+                                max="365"
+                                value={eventForm.recurrenceEveryDays}
+                                onChange={(event) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    recurrenceEveryDays: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          ) : null}
                         </div>
                         <div className="event-form-wide event-image-editor">
                           <span className="event-image-editor-label">

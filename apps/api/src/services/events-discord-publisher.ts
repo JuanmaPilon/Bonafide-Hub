@@ -341,6 +341,7 @@ export function buildEventAnnouncementEmbeds(input: {
   guildId: string;
   imageUrl?: string;
   location?: string;
+  paused?: boolean;
   recurrence: EventRecurrence;
   signupDeadline?: Date;
   signups: AnnouncementSignup[];
@@ -358,6 +359,9 @@ export function buildEventAnnouncementEmbeds(input: {
   const signupsClosed =
     input.signupDeadline !== undefined &&
     input.signupDeadline.getTime() <= Date.now();
+  // Pausado: frena todo sin cancelar; el aviso se muestra en gris y sin
+  // inscripciones hasta reactivarlo.
+  const isPaused = input.paused === true;
 
   const lines: string[] = [`🕒 <t:${timestamp}:F> (<t:${timestamp}:R>)`];
   const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
@@ -372,7 +376,7 @@ export function buildEventAnnouncementEmbeds(input: {
       `⏱️ Duración: ${input.durationMinutes} min (hasta <t:${end}:t>)`,
     );
   }
-  if (input.signupDeadline && !signupsClosed) {
+  if (input.signupDeadline && !signupsClosed && !isPaused) {
     const dl = Math.floor(input.signupDeadline.getTime() / 1000);
     lines.push(`⏳ Inscripciones abiertas hasta <t:${dl}:F> (<t:${dl}:R>)`);
   }
@@ -442,7 +446,11 @@ export function buildEventAnnouncementEmbeds(input: {
   // que el embed respire y no se vea todo junto. Al final, link a la web.
   const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
   const descriptionParts: string[] = [];
-  if (signupsClosed && input.signupDeadline) {
+  if (isPaused) {
+    descriptionParts.push(
+      "⏸️ **EVENTO PAUSADO** — momentáneamente sin inscripciones.",
+    );
+  } else if (signupsClosed && input.signupDeadline) {
     const dl = Math.floor(input.signupDeadline.getTime() / 1000);
     descriptionParts.push(
       `🔒 **INSCRIPCIONES CERRADAS** — ya no se puede anotar (cerró <t:${dl}:R>).`,
@@ -462,8 +470,8 @@ export function buildEventAnnouncementEmbeds(input: {
 
   const embed: Record<string, unknown> = {
     title: `${EVENT_TYPE_EMOJI[input.type ?? ""] ?? "📅"} ${input.title.slice(0, 250)}`,
-    // Rojo (Danger) cuando ya no se puede anotar; azul el resto del tiempo.
-    color: signupsClosed ? 0xe5484d : 0x6aa8ff,
+    // Gris si está pausado, rojo si ya no se puede anotar; azul el resto.
+    color: isPaused ? 0x8b93a7 : signupsClosed ? 0xe5484d : 0x6aa8ff,
     description: descriptionText,
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
@@ -614,8 +622,9 @@ async function postAnnouncement(
         allowed_mentions: { parse: ["users", "roles"] },
         components: buildEventSignupActionRows(input.eventId, {
           disableSignup:
-            input.signupDeadline !== undefined &&
-            input.signupDeadline.getTime() <= Date.now(),
+            input.paused === true ||
+            (input.signupDeadline !== undefined &&
+              input.signupDeadline.getTime() <= Date.now()),
         }),
         embeds,
       },
@@ -639,6 +648,7 @@ export async function syncEventToDiscord(input: {
   guildId: string;
   imageUrl?: string;
   options: EventDiscordOptions;
+  paused?: boolean;
   signupDeadline?: Date;
   signups?: AnnouncementSignup[];
   specs?: AnnouncementSpec[];
@@ -682,6 +692,7 @@ export async function syncEventToDiscord(input: {
       location:
         options.entityType === "external" ? options.location : undefined,
       recurrence: options.recurrence,
+      paused: input.paused,
       signupDeadline: input.signupDeadline,
       signups: input.signups ?? [],
       specs: input.specs ?? [],
