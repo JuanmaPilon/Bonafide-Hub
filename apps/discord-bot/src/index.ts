@@ -3416,7 +3416,11 @@ async function postKarutaTransfer(
 
 async function postKarutaAlbum(
   guildId: string,
-  album: ParsedKarutaAlbum & { ownerUsername?: string },
+  album: ParsedKarutaAlbum & {
+    channelId?: string;
+    messageId?: string;
+    ownerUsername?: string;
+  },
 ): Promise<boolean> {
   const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
   const token = env.BOT_CONFIG_API_TOKEN?.trim();
@@ -3433,7 +3437,9 @@ async function postKarutaAlbum(
         body: JSON.stringify({
           albumName: album.albumName,
           background: album.background,
+          channelId: album.channelId,
           imageUrl: album.imageUrl,
+          messageId: album.messageId,
           ownerUserId: album.ownerUserId,
           ownerUsername: album.ownerUsername,
           page: album.page,
@@ -3681,6 +3687,8 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       const ownerUsername = member.displayName;
       const saved = await postKarutaAlbum(message.guildId, {
         ...album,
+        channelId: message.channelId,
+        messageId: message.id,
         ownerUsername,
       });
       if (saved) {
@@ -3790,6 +3798,8 @@ async function handleKarutaMessageUpdate(message: Message): Promise<void> {
       }
       const saved = await postKarutaAlbum(message.guildId, {
         ...album,
+        channelId: message.channelId,
+        messageId: message.id,
         ownerUsername: member.displayName,
       });
       if (saved) {

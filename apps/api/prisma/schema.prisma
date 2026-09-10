@@ -359,6 +359,10 @@ model KarutaAlbum {
   images        Json     @default("[]")
   page          Int?
   totalPages    Int?
+  // "Puntero" al mensaje de Karuta que muestra el álbum: permite volver a
+  // leerlo y obtener URLs de imagen vigentes (las del CDN vencen).
+  channelId     String?
+  messageId     String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

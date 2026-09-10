@@ -442,11 +442,13 @@ export type KarutaAlbumImage = { page: number; url: string };
 export type KarutaAlbum = {
   albumName?: string;
   background?: string;
+  channelId?: string;
   createdAt: Date;
   guildId: string;
   id: string;
   imageUrl?: string;
   images: KarutaAlbumImage[];
+  messageId?: string;
   ownerUserId?: string;
   ownerUsername?: string;
   page?: number;
@@ -480,11 +482,13 @@ function normalizeAlbumImages(raw: unknown): KarutaAlbumImage[] {
 function toKarutaAlbum(record: {
   albumName: string | null;
   background: string | null;
+  channelId: string | null;
   createdAt: Date;
   guildId: string;
   id: string;
   imageUrl: string | null;
   images: unknown;
+  messageId: string | null;
   ownerUserId: string | null;
   ownerUsername: string | null;
   page: number | null;
@@ -494,11 +498,13 @@ function toKarutaAlbum(record: {
   return {
     albumName: record.albumName ?? undefined,
     background: record.background ?? undefined,
+    channelId: record.channelId ?? undefined,
     createdAt: record.createdAt,
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
     images: normalizeAlbumImages(record.images),
+    messageId: record.messageId ?? undefined,
     ownerUserId: record.ownerUserId ?? undefined,
     ownerUsername: record.ownerUsername ?? undefined,
     page: record.page ?? undefined,
@@ -520,13 +526,60 @@ export async function listKarutaAlbums(
   return records.map(toKarutaAlbum);
 }
 
+// Todos los álbumes (de todas las guilds), más recientes primero. Lo usa el
+// sincronizador que renueva las URLs de imagen vencidas.
+export async function listAllKarutaAlbums(
+  limit = 200,
+): Promise<KarutaAlbum[]> {
+  const records = await prisma.karutaAlbum.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
+  return records.map(toKarutaAlbum);
+}
+
+// Reemplaza/agrega las URLs de ciertas páginas de un álbum (tras renovarlas).
+export async function updateKarutaAlbumImageUrls(
+  guildId: string,
+  albumId: string,
+  replacements: Array<{ page: number; url: string }>,
+): Promise<KarutaAlbum | null> {
+  const record = await prisma.karutaAlbum.findFirst({
+    where: { id: albumId, guildId },
+  });
+  if (!record) {
+    return null;
+  }
+  const images = normalizeAlbumImages(record.images);
+  for (const replacement of replacements) {
+    const index = images.findIndex((image) => image.page === replacement.page);
+    if (index >= 0) {
+      images[index] = replacement;
+    } else {
+      images.push(replacement);
+    }
+  }
+  images.sort((a, b) => a.page - b.page);
+  const firstPage = images.find((image) => image.page === 1);
+  const updated = await prisma.karutaAlbum.update({
+    where: { id: albumId },
+    data: {
+      imageUrl: firstPage?.url ?? record.imageUrl,
+      images,
+    },
+  });
+  return toKarutaAlbum(updated);
+}
+
 // Upsert best-effort de un álbum (ka). Guarda la imagen de cada página que
 // se ve: si llega una página nueva, la agrega; si ya existía, la reemplaza.
 export async function upsertKarutaAlbum(input: {
   albumName?: string;
   background?: string;
+  channelId?: string;
   guildId: string;
   imageUrl?: string;
+  messageId?: string;
   ownerUserId?: string;
   ownerUsername?: string;
   page?: number;
@@ -560,8 +613,10 @@ export async function upsertKarutaAlbum(input: {
       where: { id: existing.id },
       data: {
         background: input.background,
+        channelId: input.channelId ?? existing.channelId,
         imageUrl: input.imageUrl ?? existing.imageUrl,
         images: nextImages,
+        messageId: input.messageId ?? existing.messageId,
         ownerUsername: input.ownerUsername,
         page: pageNumber,
         totalPages: input.totalPages,
@@ -574,9 +629,11 @@ export async function upsertKarutaAlbum(input: {
     data: {
       albumName: input.albumName,
       background: input.background,
+      channelId: input.channelId,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
       images: input.imageUrl ? [{ page: pageNumber, url: input.imageUrl }] : [],
+      messageId: input.messageId,
       ownerUserId: input.ownerUserId,
       ownerUsername: input.ownerUsername,
       page: pageNumber,

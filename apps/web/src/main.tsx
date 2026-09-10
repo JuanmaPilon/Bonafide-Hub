@@ -356,15 +356,28 @@ function KarutaAlbumCard({
         ? [album.imageUrl]
         : [];
   const [pageIndex, setPageIndex] = useState(0);
-  // Si la URL de una página falla (los links de Discord expiran), mostramos
-  // un placeholder en vez del ícono de imagen rota + el texto alt.
-  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  // URLs que ya fallaron (los links de Discord expiran): evitamos el ícono de
+  // imagen rota y, si hay otra página que sí cargue, saltamos a esa.
+  const [brokenUrls, setBrokenUrls] = useState<string[]>([]);
   const albumName = cleanKarutaText(album.albumName) ?? "Álbum";
   const albumBackground = cleanKarutaText(album.background);
   const pageCount = urls.length;
   const pageNumber = pageCount > 0 ? pageIndex + 1 : 0;
   const currentUrl = pageCount > 0 ? urls[pageIndex] : undefined;
-  const showImage = Boolean(currentUrl) && currentUrl !== brokenUrl;
+  const showImage =
+    Boolean(currentUrl) && !brokenUrls.includes(currentUrl as string);
+
+  const markBroken = (failedUrl: string) => {
+    setBrokenUrls((previous) =>
+      previous.includes(failedUrl) ? previous : [...previous, failedUrl],
+    );
+    const alternative = urls.findIndex(
+      (url) => url !== failedUrl && !brokenUrls.includes(url),
+    );
+    if (alternative >= 0) {
+      setPageIndex(alternative);
+    }
+  };
 
   return (
     <article className="karuta-drop-card">
@@ -375,7 +388,7 @@ function KarutaAlbumCard({
             src={currentUrl}
             alt={`${albumName} · página ${pageNumber}`}
             loading="lazy"
-            onError={() => setBrokenUrl(currentUrl)}
+            onError={() => markBroken(currentUrl)}
           />
         ) : (
           <div className="karuta-album-image karuta-album-image-empty">
@@ -7625,9 +7638,7 @@ function App() {
                                   type="number"
                                   min="1"
                                   max="365"
-                                  value={
-                                    eventForm.recurrencePublishDaysBefore
-                                  }
+                                  value={eventForm.recurrencePublishDaysBefore}
                                   onChange={(event) =>
                                     setEventForm((current) => ({
                                       ...current,

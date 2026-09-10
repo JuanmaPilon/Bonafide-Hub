@@ -59,14 +59,21 @@ import {
   deleteKarutaAlbum,
   deleteKarutaCard,
   deleteKarutaDrop,
+  listAllKarutaAlbums,
   listKarutaAlbums,
   listOwnedKarutaCards,
   listRecentKarutaDrops,
   processKarutaGrab,
   processKarutaTransfer,
+  updateKarutaAlbumImageUrls,
   upsertKarutaAlbum,
   upsertKarutaCard,
 } from "./services/karuta-store.js";
+import {
+  fetchDiscordMessageImageUrls,
+  isDiscordCdnUrlFresh,
+  refreshDiscordAttachmentUrls,
+} from "./services/discord-cdn.js";
 import {
   EVENT_TYPES,
   RAID_ROLES,
@@ -752,6 +759,105 @@ function startEventRecurrenceSync(): void {
   eventRecurrenceTimer = setInterval(() => {
     void runEventRecurrenceSync();
   }, EVENT_RECURRENCE_SYNC_INTERVAL_MS);
+}
+
+// ── Imágenes de álbumes de Karuta ───────────────────────────────────
+// Las URLs de los adjuntos de Discord vencen (~24 h). Las cartas se renuevan
+// seguido (cada kv), pero los álbumes solo cuando alguien corre `ka`: acá las
+// renovamos con el endpoint de refresh de adjuntos y, como fallback, con el
+// "puntero" al mensaje de Karuta (channelId + messageId) que guarda el álbum.
+const KARUTA_ALBUM_IMAGE_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+// No reintentamos el mismo álbum antes de este tiempo (evita castigar a
+// Discord desde el refresco "lazy" que corre al abrir la Colección).
+const KARUTA_ALBUM_IMAGE_THROTTLE_MS = 10 * 60 * 1000;
+let karutaAlbumImageTimer: NodeJS.Timeout | null = null;
+let karutaAlbumImageSyncRunning = false;
+const karutaAlbumImageAttempts = new Map<string, number>();
+
+async function refreshStaleKarutaAlbumImages(
+  candidates?: Awaited<ReturnType<typeof listAllKarutaAlbums>>,
+): Promise<void> {
+  if (karutaAlbumImageSyncRunning) {
+    return;
+  }
+  karutaAlbumImageSyncRunning = true;
+  try {
+    const albums = candidates ?? (await listAllKarutaAlbums(200));
+    const now = Date.now();
+    for (const album of albums) {
+      const pages =
+        album.images.length > 0
+          ? album.images
+          : album.imageUrl
+            ? [{ page: 1, url: album.imageUrl }]
+            : [];
+      const stale = pages.filter((page) => !isDiscordCdnUrlFresh(page.url));
+      if (stale.length === 0) {
+        continue;
+      }
+
+      const throttleKey = `${album.guildId}:${album.id}`;
+      if (
+        now - (karutaAlbumImageAttempts.get(throttleKey) ?? 0) <
+        KARUTA_ALBUM_IMAGE_THROTTLE_MS
+      ) {
+        continue;
+      }
+      karutaAlbumImageAttempts.set(throttleKey, now);
+
+      const replacements: Array<{ page: number; url: string }> = [];
+
+      // 1) Refresco masivo: sirve para cualquier adjunto que siga vivo.
+      const refreshed = await refreshDiscordAttachmentUrls(
+        stale.map((page) => page.url),
+      );
+      for (const page of stale) {
+        const fresh = refreshed.get(page.url);
+        if (fresh) {
+          replacements.push({ page: page.page, url: fresh });
+        }
+      }
+
+      // 2) Fallback por puntero: relee el mensaje de Karuta y toma la imagen
+      //    que muestra hoy (la única que el mensaje puede devolvernos).
+      const unresolved = stale.filter((page) => !refreshed.has(page.url));
+      const currentPage = album.page ?? 1;
+      if (
+        unresolved.some((page) => page.page === currentPage) &&
+        album.channelId &&
+        album.messageId
+      ) {
+        const urls = await fetchDiscordMessageImageUrls(
+          album.channelId,
+          album.messageId,
+        );
+        if (urls[0]) {
+          replacements.push({ page: currentPage, url: urls[0] });
+        }
+      }
+
+      if (replacements.length > 0) {
+        await updateKarutaAlbumImageUrls(album.guildId, album.id, replacements);
+        console.log(
+          `[karuta] imágenes de álbum renovadas: "${album.albumName ?? album.id}" (${replacements.length})`,
+        );
+      }
+    }
+  } catch (error) {
+    console.error("[karuta] album image sync failed", error);
+  } finally {
+    karutaAlbumImageSyncRunning = false;
+  }
+}
+
+function startKarutaAlbumImageSync(): void {
+  if (karutaAlbumImageTimer) {
+    return;
+  }
+  void refreshStaleKarutaAlbumImages();
+  karutaAlbumImageTimer = setInterval(() => {
+    void refreshStaleKarutaAlbumImages();
+  }, KARUTA_ALBUM_IMAGE_SYNC_INTERVAL_MS);
 }
 
 // ── Publicación de eventos en Discord (Módulo X) ────────────────────
@@ -4239,7 +4345,9 @@ export function buildApp() {
       const body = (request.body ?? {}) as {
         albumName?: string;
         background?: string;
+        channelId?: string;
         imageUrl?: string;
+        messageId?: string;
         ownerUserId?: string;
         ownerUsername?: string;
         page?: number;
@@ -4253,8 +4361,10 @@ export function buildApp() {
       const album = await upsertKarutaAlbum({
         albumName: body.albumName,
         background: body.background,
+        channelId: body.channelId,
         guildId: params.guildId,
         imageUrl: body.imageUrl,
+        messageId: body.messageId,
         ownerUserId: body.ownerUserId,
         ownerUsername: body.ownerUsername,
         page: body.page,
@@ -4282,6 +4392,9 @@ export function buildApp() {
     }
 
     const albums = await listKarutaAlbums(params.guildId);
+    // Refresco "lazy": si alguna imagen está vencida, la renovamos en segundo
+    // plano (el próximo poll de la web ya la muestra bien).
+    void refreshStaleKarutaAlbumImages(albums);
 
     return { ok: true, guildId: params.guildId, albums };
   });
@@ -5324,6 +5437,7 @@ export function buildApp() {
   startRaidLogSync();
   startEventCloseSync();
   startEventRecurrenceSync();
+  startKarutaAlbumImageSync();
 
   return app;
 }
