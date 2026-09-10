@@ -3009,7 +3009,7 @@ textarea {
   line-height: 1.35;
 }
 
-/* Recordatorios de asistencia (form + badge en tarjeta). */
+/* Recordatorios de asistencia (form). */
 .event-reminders {
   display: grid;
   gap: 10px;
@@ -3023,36 +3023,23 @@ textarea {
 .event-reminders-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
-.event-reminder-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.3);
-  background: rgba(12, 19, 37, 0.45);
-  font-size: 0.85rem;
-  cursor: pointer;
-  user-select: none;
+/* Cada recordatorio es un toggle compacto con el mismo switch que usa el
+   resto de la app (module-switch), para mantener la UI armonizada. */
+.event-reminder-toggle {
+  flex: 1 1 190px;
+  padding: 10px 12px;
 }
 
-.event-reminder-option.checked {
-  border-color: var(--accent, #6aa8ff);
-  background: rgba(106, 168, 255, 0.16);
-}
-
-.event-reminder-option.disabled {
-  opacity: 0.45;
+.event-reminder-toggle.disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.event-reminders-help {
-  font-size: 0.78rem;
-  line-height: 1.4;
-  margin: 0;
+.event-reminder-toggle.disabled .module-switch input {
+  cursor: not-allowed;
 }
 
 .event-deadline.closed {
@@ -5008,15 +4995,6 @@ textarea {
 :root[data-theme="light"] .event-image-library-item,
 :root[data-theme="light"] .event-image-preview {
   background: rgba(255, 255, 255, 0.75);
-}
-
-:root[data-theme="light"] .event-reminder-option {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: rgba(60, 85, 130, 0.28);
-}
-
-:root[data-theme="light"] .event-reminder-option.checked {
-  background: rgba(106, 168, 255, 0.22);
 }
 
 /* Historial de eventos (Admin) */

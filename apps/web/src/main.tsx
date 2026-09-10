@@ -1012,21 +1012,15 @@ function EventCard({
             {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
                 con sus confirmados (solo nombres). */}
             <div className="event-roster-columns">
-              {([...COMBAT_ROLES, "legacy"] as const).map((groupKey) => {
+              {COMBAT_ROLES.map((groupKey) => {
                 const roleSignups = event.signups.filter(
                   (signup) =>
-                    signup.status === "yes" &&
-                    (groupKey === "legacy"
-                      ? !COMBAT_ROLES.includes(signup.role as never)
-                      : signup.role === groupKey),
+                    signup.status === "yes" && signup.role === groupKey,
                 );
                 if (roleSignups.length === 0) {
                   return null;
                 }
-                const meta =
-                  groupKey === "legacy"
-                    ? { emoji: "⭐", label: "Otros" }
-                    : roleMeta(groupKey);
+                const meta = roleMeta(groupKey);
                 return (
                   <div className="event-roster-column" key={groupKey}>
                     <span className="event-roster-role">
@@ -1232,7 +1226,7 @@ function EventCard({
                         value={character}
                         onChange={(event) => setCharacter(event.target.value)}
                         maxLength={40}
-                        placeholder="Nombre de tu personaje (opcional)"
+                        placeholder="Nombre de tu personaje"
                       />
                     </div>
                     <div className="event-signup-actions">
@@ -7422,45 +7416,49 @@ function App() {
                           </span>
                           <div className="event-reminders-options">
                             {REMINDER_HOUR_OPTIONS.map((option) => {
-                              const checked =
-                                eventForm.reminderHours.includes(option.hours);
-                              const disabled =
-                                !eventForm.requiredRoleId.trim();
+                              const checked = eventForm.reminderHours.includes(
+                                option.hours,
+                              );
+                              const disabled = !eventForm.requiredRoleId.trim();
                               return (
                                 <label
-                                  className={`event-reminder-option${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
+                                  className={`module-toggle event-reminder-toggle${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
                                   key={option.hours}
                                 >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    disabled={disabled}
-                                    onChange={() =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        reminderHours: checked
-                                          ? current.reminderHours.filter(
-                                              (hours) =>
-                                                hours !== option.hours,
-                                            )
-                                          : [
-                                              ...current.reminderHours,
-                                              option.hours,
-                                            ],
-                                      }))
-                                    }
-                                  />
-                                  ⏰ {option.label}
+                                  <span className="module-toggle-text">
+                                    <strong>⏰ {option.label}</strong>
+                                  </span>
+                                  <span className="module-switch">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      disabled={disabled}
+                                      onChange={() =>
+                                        setEventForm((current) => ({
+                                          ...current,
+                                          reminderHours: checked
+                                            ? current.reminderHours.filter(
+                                                (hours) =>
+                                                  hours !== option.hours,
+                                              )
+                                            : [
+                                                ...current.reminderHours,
+                                                option.hours,
+                                              ],
+                                        }))
+                                      }
+                                    />
+                                    <span
+                                      className="module-switch-track"
+                                      aria-hidden="true"
+                                    >
+                                      <span className="module-switch-thumb" />
+                                    </span>
+                                  </span>
                                 </label>
                               );
                             })}
                           </div>
-                          <p className="muted-text event-reminders-help">
-                            El bot mencionará en el canal del aviso a quienes
-                            tengan el rol y no se hayan anotado en ese
-                            momento, y al completar el evento te manda por DM
-                            un informe de quiénes no se anotaron.
-                          </p>
                         </div>
                         <div className="event-form-wide event-image-editor">
                           <span className="event-image-editor-label">

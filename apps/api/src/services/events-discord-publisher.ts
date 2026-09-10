@@ -424,14 +424,6 @@ export function buildEventAnnouncementEmbeds(input: {
       linesFor(members),
     );
   }
-  // Confirmados sin rol o con rol legacy (dps): se agrupan aparte.
-  const leftovers = confirmed.filter(
-    (signup) => !signup.role || !ROLE_ORDER.includes(signup.role as never),
-  );
-  if (leftovers.length > 0) {
-    pushField(fields, `⭐ Otros (${leftovers.length})`, linesFor(leftovers));
-  }
-
   const bench = input.signups.filter((signup) => signup.status === "bench");
   if (bench.length > 0) {
     pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench));

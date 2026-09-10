@@ -258,8 +258,8 @@ async function processReminder(
       const content = [
         `⏰ **${event.title}** — ${formatRemaining(startsMs - Date.now())}`,
         `🗓️ ${formatEventDate(event.startsAt)}`,
+        "**Estas personas faltan anotarse:**",
         missing.map((member) => `<@${member.id}>`).join(" "),
-        "Si vas a venir, anotate con los botones del aviso del evento de este canal (o desde el hub). 📝",
       ].join("\n");
       const sent = await sendToChannel(guild, channelId, content);
       if (!sent) {
