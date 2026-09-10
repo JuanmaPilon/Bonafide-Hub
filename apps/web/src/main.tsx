@@ -330,6 +330,16 @@ function LoadingState({ label = "Cargando…" }: { label?: string }) {
 // muestra UNA página por vez con flechas para navegar (‹ ›). El estado de la
 // página visible es local de la tarjeta y se reinicia al cambiar de álbum
 // (React lo hace solo porque usamos key={album.id} en el map).
+// Limpia el markdown residual que Karuta a veces deja en los textos de un
+// álbum (p. ej. el fondo puede venir como "**Rockin' Robin Cafe**").
+function cleanKarutaText(value?: string): string | undefined {
+  const cleaned = value
+    ?.replace(/[`*_~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || undefined;
+}
+
 function KarutaAlbumCard({
   album,
   canDelete,
@@ -346,23 +356,32 @@ function KarutaAlbumCard({
         ? [album.imageUrl]
         : [];
   const [pageIndex, setPageIndex] = useState(0);
+  // Si la URL de una página falla (los links de Discord expiran), mostramos
+  // un placeholder en vez del ícono de imagen rota + el texto alt.
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  const albumName = cleanKarutaText(album.albumName) ?? "Álbum";
+  const albumBackground = cleanKarutaText(album.background);
   const pageCount = urls.length;
   const pageNumber = pageCount > 0 ? pageIndex + 1 : 0;
   const currentUrl = pageCount > 0 ? urls[pageIndex] : undefined;
+  const showImage = Boolean(currentUrl) && currentUrl !== brokenUrl;
 
   return (
     <article className="karuta-drop-card">
       <div className="karuta-album-images">
-        {currentUrl ? (
+        {showImage && currentUrl ? (
           <img
             className="karuta-album-image"
             src={currentUrl}
-            alt={`${album.albumName ?? "Álbum"} · página ${pageNumber}`}
+            alt={`${albumName} · página ${pageNumber}`}
             loading="lazy"
+            onError={() => setBrokenUrl(currentUrl)}
           />
         ) : (
           <div className="karuta-album-image karuta-album-image-empty">
-            Sin imagen
+            {currentUrl
+              ? `No se pudo cargar la imagen · ${albumName}`
+              : "Sin imagen"}
           </div>
         )}
         {pageCount > 1 ? (
@@ -394,9 +413,9 @@ function KarutaAlbumCard({
         ) : null}
       </div>
       <div className="karuta-drop-body">
-        <strong>{album.albumName ?? "Álbum"}</strong>
-        {album.background ? (
-          <span className="karuta-drop-series">{album.background}</span>
+        <strong>{albumName}</strong>
+        {albumBackground ? (
+          <span className="karuta-drop-series">{albumBackground}</span>
         ) : null}
         <span className="karuta-drop-user">
           {album.ownerUsername ?? "Desconocido"}

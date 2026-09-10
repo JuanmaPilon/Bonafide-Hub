@@ -3177,9 +3177,16 @@ function parseKarutaAlbum(
   const ownerMatch = allText.match(/owned by\s+<@!?(\d+)>/i);
   const pageMatch = allText.match(/showing page\s+(\d+)\s+of\s+(\d+)/i);
 
+  // Karuta a veces manda el nombre/fondo con markdown (**negrita**, `code`):
+  // lo limpiamos para no guardar los asteriscos como parte del texto.
+  const albumName = stripKarutaMarkdown(albumMatch[1]);
+  const background = backgroundMatch?.[1]
+    ? stripKarutaMarkdown(backgroundMatch[1])
+    : undefined;
+
   return {
-    albumName: albumMatch[1].trim() || undefined,
-    background: backgroundMatch?.[1]?.trim() || undefined,
+    albumName: albumName || undefined,
+    background: background || undefined,
     imageUrl: embed.image?.url || undefined,
     ownerUserId: ownerMatch?.[1],
     page: pageMatch ? Number(pageMatch[1]) : undefined,
