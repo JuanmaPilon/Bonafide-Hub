@@ -123,11 +123,12 @@ Tablas:
 2. `admin_role_modules` — permisos de staff: qué módulos del Admin ve cada rol de Discord
 3. `xp_configs` — config de XP (niveles, multiplicadores, colores)
 4. `xp_profiles` — XP/nivel/contadores por usuario
-8. `audit_log_entries` — registro de auditoría
-9. `discord_sessions` / `oauth_states` — OAuth
-10. `communications` / `communication_instances` — comunicados y sus publicaciones
-11. `daily_messages` — frases del loro de Karpindomo
-12. `raid_logs` — logs de raid sincronizados con Warcraft Logs
+5. `audit_log_entries` — registro de auditoría
+6. `discord_sessions` / `oauth_states` — OAuth
+7. `communications` / `communication_instances` — comunicados y sus publicaciones
+8. `daily_messages` — frases del loro de Karpindomo
+9. `raid_logs` — logs de raid sincronizados con Warcraft Logs
+10. `karuta_cards` / `karuta_albums` / `karuta_album_pages` — cartas raras, álbumes e imágenes cacheadas de Karuta
 
 ## 9. Decisiones operativas
 

@@ -169,7 +169,7 @@ const HUB_MODULES: Array<{
   {
     key: "karuta",
     label: "Karuta",
-    description: "Drops, cartas y guía de comandos de Karuta.",
+    description: "Cartas raras, colecciones y guía de comandos de Karuta.",
   },
   {
     key: "sugerencias",
@@ -805,25 +805,55 @@ function KarutaCardArt({ name, url }: { name?: string; url?: string }) {
   );
 }
 
-// Umbrales del segundo nivel de rareza (config del módulo Karuta). Una carta
-// es "súper rara" si tiene un print muy bajo O mucha wishlist; en la grilla se
-// pinta con un brillo tipo carta shiny.
-const DEFAULT_SUPER_RARE_PRINT_MAX = 3;
-const DEFAULT_SUPER_RARE_WISHLIST_MIN = 10;
+// Niveles de rareza "extra" (config del módulo Karuta). Se comparan contra el
+// print y/o la wishlist de la carta; en la grilla se pintan con brillos
+// distintos: súper = dorado, ultra = holográfico.
+const KARUTA_TIER_DEFAULTS = {
+  superPrintMax: 3,
+  superWishlistMin: 10,
+  ultraPrintMax: 1,
+  ultraWishlistMin: 25,
+} as const;
 
-function isSuperRareCard(
+type KarutaCardTier = "super" | "ultra" | null;
+
+function karutaCardTier(
   card: { printNumber?: number; wishlistCount?: number },
   config: GuildConfig,
-): boolean {
-  const printMax =
-    config.karutaSuperRarePrintMax ?? DEFAULT_SUPER_RARE_PRINT_MAX;
-  const wishlistMin =
-    config.karutaSuperRareWishlistMin ?? DEFAULT_SUPER_RARE_WISHLIST_MIN;
+): KarutaCardTier {
+  const print = card.printNumber;
+  const wishlist = card.wishlistCount;
 
-  if (card.printNumber != null && card.printNumber <= printMax) {
-    return true;
+  const matches = (printMax?: number, wishlistMin?: number): boolean => {
+    if (
+      print != null &&
+      printMax != null &&
+      print <= printMax
+    ) {
+      return true;
+    }
+    return (
+      wishlist != null &&
+      wishlistMin != null &&
+      wishlist >= wishlistMin
+    );
+  };
+
+  const ultra = matches(
+    config.karutaUltraRarePrintMax ?? KARUTA_TIER_DEFAULTS.ultraPrintMax,
+    config.karutaUltraRareWishlistMin ??
+      KARUTA_TIER_DEFAULTS.ultraWishlistMin,
+  );
+  if (ultra) {
+    return "ultra";
   }
-  return card.wishlistCount != null && card.wishlistCount >= wishlistMin;
+
+  const superRare = matches(
+    config.karutaSuperRarePrintMax ?? KARUTA_TIER_DEFAULTS.superPrintMax,
+    config.karutaSuperRareWishlistMin ??
+      KARUTA_TIER_DEFAULTS.superWishlistMin,
+  );
+  return superRare ? "super" : null;
 }
 
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
@@ -5031,7 +5061,8 @@ function App() {
                             <div>
                               <strong>Watcher de Karuta</strong>
                               <span>
-                                Detecta drops y cartas automáticamente
+                                Detecta cartas raras y colecciones
+                                automáticamente
                               </span>
                             </div>
                             <label className="raid-watcher-toggle">
@@ -5080,92 +5111,152 @@ function App() {
                                 ))}
                               </select>
                             </label>
-                            <label>
-                              <span>Print máximo para "rara"</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10000}
-                                value={config.karutaRarePrintMax ?? 10}
-                                onChange={(event) => {
-                                  const raw = event.target.value;
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      karutaRarePrintMax:
-                                        raw === "" ? undefined : Number(raw),
-                                    }),
-                                    "karuta",
-                                  );
-                                }}
-                              />
-                            </label>
-                            <label>
-                              <span>Wishlists mínimas</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={100000}
-                                value={config.karutaRareWishlistMin ?? 3}
-                                onChange={(event) => {
-                                  const raw = event.target.value;
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      karutaRareWishlistMin:
-                                        raw === "" ? undefined : Number(raw),
-                                    }),
-                                    "karuta",
-                                  );
-                                }}
-                              />
-                            </label>
-                            <label>
-                              <span>Print máximo para "súper rara"</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={10000}
-                                value={config.karutaSuperRarePrintMax ?? 3}
-                                onChange={(event) => {
-                                  const raw = event.target.value;
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      karutaSuperRarePrintMax:
-                                        raw === "" ? undefined : Number(raw),
-                                    }),
-                                    "karuta",
-                                  );
-                                }}
-                              />
-                            </label>
-                            <label>
-                              <span>Wishlists mínimas para "súper rara"</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={100000}
-                                value={config.karutaSuperRareWishlistMin ?? 10}
-                                onChange={(event) => {
-                                  const raw = event.target.value;
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      karutaSuperRareWishlistMin:
-                                        raw === "" ? undefined : Number(raw),
-                                    }),
-                                    "karuta",
-                                  );
-                                }}
-                              />
-                            </label>
                           </div>
-                          <p className="meta-text">
-                            Las cartas que cumplen el umbral "súper rara"
-                            (print muy bajo o muchas wishlists) se muestran con
-                            un brillo tipo carta shiny en la sección Raras.
-                          </p>
+                          <div className="karuta-threshold-group">
+                            <h4 className="karuta-threshold-title">
+                              Por print
+                            </h4>
+                            <span className="karuta-threshold-hint">
+                              Número de copia de la carta (más bajo = más rara)
+                            </span>
+                            <div className="form-grid">
+                              <label>
+                                <span>Print máximo "rara"</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={10000}
+                                  value={config.karutaRarePrintMax ?? 10}
+                                  onChange={(event) => {
+                                    const raw = event.target.value;
+                                    editConfig(
+                                      (current) => ({
+                                        ...current,
+                                        karutaRarePrintMax:
+                                          raw === "" ? undefined : Number(raw),
+                                      }),
+                                      "karuta",
+                                    );
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                <span>Print máximo "súper rara"</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={10000}
+                                  value={config.karutaSuperRarePrintMax ?? 3}
+                                  onChange={(event) => {
+                                    const raw = event.target.value;
+                                    editConfig(
+                                      (current) => ({
+                                        ...current,
+                                        karutaSuperRarePrintMax:
+                                          raw === "" ? undefined : Number(raw),
+                                      }),
+                                      "karuta",
+                                    );
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                <span>Print máximo "ultra rara"</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={10000}
+                                  value={config.karutaUltraRarePrintMax ?? 1}
+                                  onChange={(event) => {
+                                    const raw = event.target.value;
+                                    editConfig(
+                                      (current) => ({
+                                        ...current,
+                                        karutaUltraRarePrintMax:
+                                          raw === "" ? undefined : Number(raw),
+                                      }),
+                                      "karuta",
+                                    );
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="karuta-threshold-group">
+                            <h4 className="karuta-threshold-title">
+                              Por wishlist
+                            </h4>
+                            <span className="karuta-threshold-hint">
+                              Cuántas personas de la comunidad la desean
+                            </span>
+                            <div className="form-grid">
+                              <label>
+                                <span>Wishlists mínimas "rara"</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={100000}
+                                  value={config.karutaRareWishlistMin ?? 3}
+                                  onChange={(event) => {
+                                    const raw = event.target.value;
+                                    editConfig(
+                                      (current) => ({
+                                        ...current,
+                                        karutaRareWishlistMin:
+                                          raw === "" ? undefined : Number(raw),
+                                      }),
+                                      "karuta",
+                                    );
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                <span>Wishlists mínimas "súper rara"</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={100000}
+                                  value={
+                                    config.karutaSuperRareWishlistMin ?? 10
+                                  }
+                                  onChange={(event) => {
+                                    const raw = event.target.value;
+                                    editConfig(
+                                      (current) => ({
+                                        ...current,
+                                        karutaSuperRareWishlistMin:
+                                          raw === "" ? undefined : Number(raw),
+                                      }),
+                                      "karuta",
+                                    );
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                <span>Wishlists mínimas "ultra rara"</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={100000}
+                                  value={
+                                    config.karutaUltraRareWishlistMin ?? 25
+                                  }
+                                  onChange={(event) => {
+                                    const raw = event.target.value;
+                                    editConfig(
+                                      (current) => ({
+                                        ...current,
+                                        karutaUltraRareWishlistMin:
+                                          raw === "" ? undefined : Number(raw),
+                                      }),
+                                      "karuta",
+                                    );
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       {isDirty("karuta") ? (
@@ -7216,15 +7307,25 @@ function App() {
                       ) : (
                         <div className="karuta-drops-grid">
                           {karutaCards.map((card) => {
-                            const superRare = isSuperRareCard(card, config);
+                            const tier = karutaCardTier(card, config);
+                            const tierClass =
+                              tier === "ultra"
+                                ? " karuta-ultra-rare"
+                                : tier === "super"
+                                  ? " karuta-super-rare"
+                                  : "";
                             return (
                               <article
-                                className={`karuta-drop-card${superRare ? " karuta-super-rare" : ""}`}
+                                className={`karuta-drop-card${tierClass}`}
                                 key={card.id}
                               >
                                 <div className="karuta-card-art-wrap">
-                                  {superRare ? (
-                                    <span className="karuta-super-badge">
+                                  {tier === "ultra" ? (
+                                    <span className="karuta-tier-badge karuta-ultra-badge">
+                                      💎 Ultra rara
+                                    </span>
+                                  ) : tier === "super" ? (
+                                    <span className="karuta-tier-badge karuta-super-badge">
                                       ✨ Súper rara
                                     </span>
                                   ) : null}

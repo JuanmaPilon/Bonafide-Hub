@@ -27,6 +27,8 @@ export type GuildConfig = {
   karutaRareWishlistMin?: number;
   karutaSuperRarePrintMax?: number;
   karutaSuperRareWishlistMin?: number;
+  karutaUltraRarePrintMax?: number;
+  karutaUltraRareWishlistMin?: number;
   karutaWatchEnabled?: boolean;
   logsChannelId?: string;
   logsWatchEnabled?: boolean;

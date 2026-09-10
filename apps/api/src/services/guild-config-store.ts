@@ -23,6 +23,8 @@ export type GuildConfig = {
   karutaRareWishlistMin?: number;
   karutaSuperRarePrintMax?: number;
   karutaSuperRareWishlistMin?: number;
+  karutaUltraRarePrintMax?: number;
+  karutaUltraRareWishlistMin?: number;
   karutaWatchEnabled?: boolean;
   logsChannelId?: string;
   logsWatchEnabled?: boolean;
@@ -54,6 +56,8 @@ function toGuildConfig(
     karutaRareWishlistMin: number;
     karutaSuperRarePrintMax: number;
     karutaSuperRareWishlistMin: number;
+    karutaUltraRarePrintMax: number;
+    karutaUltraRareWishlistMin: number;
     karutaWatchEnabled: boolean;
     logsChannelId: string | null;
     logsWatchEnabled: boolean;
@@ -94,6 +98,8 @@ function toGuildConfig(
     karutaRareWishlistMin: record.karutaRareWishlistMin,
     karutaSuperRarePrintMax: record.karutaSuperRarePrintMax,
     karutaSuperRareWishlistMin: record.karutaSuperRareWishlistMin,
+    karutaUltraRarePrintMax: record.karutaUltraRarePrintMax,
+    karutaUltraRareWishlistMin: record.karutaUltraRareWishlistMin,
     karutaWatchEnabled: record.karutaWatchEnabled,
     logsChannelId: record.logsChannelId ?? undefined,
     logsWatchEnabled: record.logsWatchEnabled,
@@ -126,6 +132,8 @@ type NormalizedGuildConfig = {
   karutaRareWishlistMin: number;
   karutaSuperRarePrintMax: number;
   karutaSuperRareWishlistMin: number;
+  karutaUltraRarePrintMax: number;
+  karutaUltraRareWishlistMin: number;
   karutaWatchEnabled: boolean;
   logsChannelId?: string;
   logsWatchEnabled: boolean;
@@ -170,6 +178,8 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     karutaRareWishlistMin: config.karutaRareWishlistMin ?? 3,
     karutaSuperRarePrintMax: config.karutaSuperRarePrintMax ?? 3,
     karutaSuperRareWishlistMin: config.karutaSuperRareWishlistMin ?? 10,
+    karutaUltraRarePrintMax: config.karutaUltraRarePrintMax ?? 1,
+    karutaUltraRareWishlistMin: config.karutaUltraRareWishlistMin ?? 25,
     karutaWatchEnabled: config.karutaWatchEnabled ?? false,
     logsChannelId: config.logsChannelId,
     logsWatchEnabled: config.logsWatchEnabled ?? false,
@@ -242,6 +252,8 @@ export async function replaceGuildConfig(
         karutaRareWishlistMin: normalized.karutaRareWishlistMin,
         karutaSuperRarePrintMax: normalized.karutaSuperRarePrintMax,
         karutaSuperRareWishlistMin: normalized.karutaSuperRareWishlistMin,
+        karutaUltraRarePrintMax: normalized.karutaUltraRarePrintMax,
+        karutaUltraRareWishlistMin: normalized.karutaUltraRareWishlistMin,
         karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
       update: {
@@ -271,6 +283,8 @@ export async function replaceGuildConfig(
         karutaRareWishlistMin: normalized.karutaRareWishlistMin,
         karutaSuperRarePrintMax: normalized.karutaSuperRarePrintMax,
         karutaSuperRareWishlistMin: normalized.karutaSuperRareWishlistMin,
+        karutaUltraRarePrintMax: normalized.karutaUltraRarePrintMax,
+        karutaUltraRareWishlistMin: normalized.karutaUltraRareWishlistMin,
         karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
     });

@@ -4540,14 +4540,61 @@ textarea {
   margin-top: 2px;
 }
 
-/* Contenedor del arte de la carta: permite colgar la etiqueta "súper rara"
+/* Contenedor del arte de la carta: permite colgar la etiqueta de rareza
    arriba de la imagen, como una etiqueta de oferta. */
 .karuta-card-art-wrap {
   position: relative;
   display: flex;
+  overflow: hidden;
 }
 
-/* Carta "súper rara": borde dorado + brillo animado que barre la portada. */
+/* ── Brillo "shiny" ─────────────────────────────────────────────────
+   Dos bandas inclinadas que se desplazan con transform (barato de animar) y
+   desfasadas media duración: cuando una sale por la derecha la otra ya está
+   entrando por la izquierda, así el brillo nunca se corta ni "se tranca". */
+.karuta-super-rare .karuta-card-art-wrap::before,
+.karuta-super-rare .karuta-card-art-wrap::after,
+.karuta-ultra-rare .karuta-card-art-wrap::before,
+.karuta-ultra-rare .karuta-card-art-wrap::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: 0;
+  width: 45%;
+  height: 140%;
+  pointer-events: none;
+  will-change: transform;
+  animation: karuta-shine 2.6s linear infinite;
+}
+
+.karuta-super-rare .karuta-card-art-wrap::after,
+.karuta-ultra-rare .karuta-card-art-wrap::after {
+  animation-delay: -1.3s;
+}
+
+.karuta-super-rare .karuta-card-art-wrap::before,
+.karuta-super-rare .karuta-card-art-wrap::after {
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 240, 200, 0.18) 35%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 240, 200, 0.18) 65%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+}
+
+@keyframes karuta-shine {
+  0% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
+
+/* ── Súper rara: brillo dorado ────────────────────────────────────── */
 .karuta-super-rare {
   border-color: rgba(255, 196, 90, 0.55);
   box-shadow:
@@ -4555,38 +4602,74 @@ textarea {
     0 0 22px rgba(255, 176, 46, 0.22);
 }
 
-.karuta-super-rare .karuta-drop-image {
-  position: relative;
+/* ── Ultra rara: borde holográfico giratorio + aura pulsante ───────── */
+@property --karuta-ultra-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
 }
 
-.karuta-super-rare .karuta-card-art-wrap::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 35%,
-    rgba(255, 245, 210, 0.45) 48%,
-    rgba(255, 255, 255, 0.75) 50%,
-    rgba(255, 245, 210, 0.45) 52%,
-    transparent 65%
-  );
-  background-size: 260% 100%;
-  animation: karuta-shine 3.4s linear infinite;
-  mix-blend-mode: screen;
-  pointer-events: none;
+.karuta-ultra-rare {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(rgba(12, 19, 37, 0.94), rgba(12, 19, 37, 0.94))
+      padding-box,
+    conic-gradient(
+        from var(--karuta-ultra-angle),
+        #ff6ec7,
+        #8a5cff,
+        #35d6ff,
+        #7cffb2,
+        #ffd166,
+        #ff6ec7
+      )
+      border-box;
+  animation:
+    karuta-ultra-border 6s linear infinite,
+    karuta-ultra-aura 2.8s ease-in-out infinite;
 }
 
-@keyframes karuta-shine {
-  0% {
-    background-position: 160% 0;
+@keyframes karuta-ultra-border {
+  to {
+    --karuta-ultra-angle: 360deg;
   }
+}
+
+@keyframes karuta-ultra-aura {
+  0%,
   100% {
-    background-position: -60% 0;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.12),
+      0 0 24px rgba(138, 92, 255, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.22),
+      0 0 34px rgba(53, 214, 255, 0.4);
   }
 }
 
-.karuta-super-badge {
+.karuta-ultra-rare .karuta-card-art-wrap::before,
+.karuta-ultra-rare .karuta-card-art-wrap::after {
+  width: 55%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 214, 255, 0.25) 30%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(190, 240, 255, 0.4) 70%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  animation-duration: 1.9s;
+}
+
+.karuta-ultra-rare .karuta-card-art-wrap::after {
+  animation-delay: -0.95s;
+}
+
+/* ── Etiquetas de rareza ─────────────────────────────────────────── */
+.karuta-tier-badge {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -4596,9 +4679,6 @@ textarea {
   gap: 4px;
   padding: 3px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 205, 110, 0.75);
-  background: linear-gradient(135deg, #7a4a06 0%, #c98a1b 55%, #ffe9a8 100%);
-  color: #fff8e2;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -4607,10 +4687,53 @@ textarea {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
+.karuta-super-badge {
+  border: 1px solid rgba(255, 205, 110, 0.75);
+  background: linear-gradient(135deg, #7a4a06 0%, #c98a1b 55%, #ffe9a8 100%);
+  color: #fff8e2;
+}
+
+.karuta-ultra-badge {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: linear-gradient(
+    115deg,
+    #6b2bd9 0%,
+    #b83bd6 30%,
+    #2ec5ff 65%,
+    #7cffb2 100%
+  );
+  color: #ffffff;
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(140, 92, 255, 0.55);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .karuta-super-rare .karuta-card-art-wrap::after {
+  .karuta-super-rare .karuta-card-art-wrap::before,
+  .karuta-super-rare .karuta-card-art-wrap::after,
+  .karuta-ultra-rare .karuta-card-art-wrap::before,
+  .karuta-ultra-rare .karuta-card-art-wrap::after,
+  .karuta-ultra-rare {
     animation: none;
   }
+}
+
+/* Grupos de umbrales en Admin → Karuta (print vs wishlist). */
+.karuta-threshold-group {
+  margin-top: 14px;
+}
+
+.karuta-threshold-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.karuta-threshold-hint {
+  color: var(--muted);
+  display: block;
+  font-size: 0.78rem;
+  margin: 2px 0 8px;
 }
 
 .karuta-card-code {

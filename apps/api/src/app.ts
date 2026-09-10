@@ -4666,6 +4666,14 @@ export function buildApp() {
       allowedBody.karutaSuperRareWishlistMin = body.karutaSuperRareWishlistMin;
     }
 
+    if (body.karutaUltraRarePrintMax !== undefined) {
+      allowedBody.karutaUltraRarePrintMax = body.karutaUltraRarePrintMax;
+    }
+
+    if (body.karutaUltraRareWishlistMin !== undefined) {
+      allowedBody.karutaUltraRareWishlistMin = body.karutaUltraRareWishlistMin;
+    }
+
     if (body.dailyMessagesChannelId !== undefined) {
       allowedBody.dailyMessagesChannelId = body.dailyMessagesChannelId;
     }

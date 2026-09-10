@@ -52,6 +52,9 @@ model GuildConfig {
   // Colección las pinta con un brillo tipo shiny.
   karutaSuperRarePrintMax      Int      @default(3)
   karutaSuperRareWishlistMin   Int      @default(10)
+  // Tercer umbral (el tope): "ultra raras", con un brillo holográfico.
+  karutaUltraRarePrintMax      Int      @default(1)
+  karutaUltraRareWishlistMin   Int      @default(25)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 

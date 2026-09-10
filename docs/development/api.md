@@ -138,8 +138,11 @@ Tablas:
 5. `audit_log_entries` — registro de auditoría
 6. `discord_sessions` / `oauth_states` — OAuth
 7. `communications` / `communication_instances` — comunicados y sus publicaciones
-11. `daily_messages` — frases del loro de Karpindomo
-12. `raid_logs` — logs de raid sincronizados con Warcraft Logs
+8. `daily_messages` — frases del loro de Karpindomo
+9. `raid_logs` — logs de raid sincronizados con Warcraft Logs
+10. `karuta_cards` — posesión de cartas raras (print/wishlist/dueño)
+11. `karuta_albums` — álbumes (`ka`) de cada usuario, con puntero al mensaje
+12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)
 
 Campos relevantes de `guild_configs`:
 
