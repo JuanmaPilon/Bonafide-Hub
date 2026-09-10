@@ -967,20 +967,10 @@ function EventCard({
             para entrar al roster principal.
           </div>
         ) : null}
-        {event.signupDeadline ? (
-          <div className={`event-deadline${signupsClosed ? " closed" : ""}`}>
-            {signupsClosed
-              ? "🔒 Inscripciones cerradas"
-              : `⏳ Cierre de inscripciones: ${new Date(event.signupDeadline).toLocaleString()}`}
-          </div>
-        ) : null}
-        {event.reminderHours && event.reminderHours.length > 0 ? (
-          <div className="event-reminder-badge">
-            ⏰ Recordatorio:{" "}
-            {[...event.reminderHours]
-              .sort((a, b) => b - a)
-              .map((hours) => `${hours} h antes`)
-              .join(" · ")}
+        {event.signupDeadline && !signupsClosed ? (
+          <div className="event-deadline">
+            ⏳ Cierre de inscripciones:{" "}
+            {new Date(event.signupDeadline).toLocaleString()}
           </div>
         ) : null}
         {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
@@ -1003,6 +993,11 @@ function EventCard({
               </span>
             ) : null}
           </div>
+        ) : null}
+        {/* Último dato del evento: si las inscripciones ya cerraron, se avisa
+            acá abajo para que sea lo último de la info antes del roster. */}
+        {event.signupDeadline && signupsClosed ? (
+          <div className="event-deadline closed">🔒 Inscripciones cerradas</div>
         ) : null}
         <div className="event-card-counts">
           {SIGNUP_OPTIONS.map((option) => (

@@ -3055,11 +3055,6 @@ textarea {
   margin: 0;
 }
 
-.event-reminder-badge {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
 .event-deadline.closed {
   color: #ff8a5c;
   font-weight: 600;
