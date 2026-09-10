@@ -96,7 +96,7 @@ async function postAction(
   guildId: string,
   eventId: string,
   action: "reminders-sent" | "report-sent",
-  body?: { hours?: number[] },
+  body?: { hours?: number[]; messageIds?: string[] },
 ): Promise<void> {
   if (!REMOTE_BASE || !REMOTE_TOKEN) {
     return;
@@ -193,23 +193,25 @@ function formatRemaining(ms: number): string {
   return `faltan ${days} día${days === 1 ? "" : "s"}`;
 }
 
+// Devuelve el id del mensaje enviado (o null si no se pudo). Guardamos el id
+// para poder borrar los recordatorios cuando el evento se completa/elimina.
 async function sendToChannel(
   guild: Guild,
   channelId: string,
   content: string,
-): Promise<boolean> {
+): Promise<string | null> {
   try {
     const channel = await guild.channels.fetch(channelId).catch(() => null);
     if (!channel || !("send" in channel)) {
-      return false;
+      return null;
     }
-    await channel.send(content);
-    return true;
+    const message = await channel.send(content);
+    return message.id ?? null;
   } catch (error) {
     console.warn(
       `[event-control] No se pudo enviar mensaje al canal ${channelId}: ${getErrorMessage(error)}`,
     );
-    return false;
+    return null;
   }
 }
 
@@ -252,6 +254,7 @@ async function processReminder(
   try {
     const roleMembers = await fetchMembersWithRole(guild, roleId);
     const missing = computeMissingMembers(roleMembers, event.signups);
+    const reminderMessageIds: string[] = [];
 
     if (missing.length > 0) {
       const startsMs = new Date(event.startsAt).getTime();
@@ -261,15 +264,17 @@ async function processReminder(
         "**Estas personas faltan anotarse:**",
         missing.map((member) => `<@${member.id}>`).join(" "),
       ].join("\n");
-      const sent = await sendToChannel(guild, channelId, content);
-      if (!sent) {
+      const sentId = await sendToChannel(guild, channelId, content);
+      if (!sentId) {
         // Canal inválido: no lo marcamos para no perder el aviso, se reintenta.
         return;
       }
+      reminderMessageIds.push(sentId);
     }
 
     await postAction(guild.id, event.id, "reminders-sent", {
       hours: item.dueHours,
+      messageIds: reminderMessageIds,
     });
     console.log(
       `[event-control] Recordatorio enviado (${item.dueHours.join("/")}h) para "${event.title}" — ${missing.length} sin anotar`,
@@ -311,11 +316,8 @@ async function processReport(guild: Guild, event: RemoteEvent): Promise<void> {
     const delivered = await sendDm(guild, event.createdByUserId, lines);
     let channelDelivered = false;
     if (!delivered && event.publishChannelId) {
-      channelDelivered = await sendToChannel(
-        guild,
-        event.publishChannelId,
-        lines,
-      );
+      channelDelivered =
+        (await sendToChannel(guild, event.publishChannelId, lines)) !== null;
     }
 
     if (delivered || channelDelivered) {

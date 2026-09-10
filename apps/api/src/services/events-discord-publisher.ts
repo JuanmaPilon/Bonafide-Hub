@@ -717,6 +717,7 @@ export async function cleanupEventDiscord(input: {
   guildId: string;
   publishChannelId?: string;
   discordMessageIds?: string[];
+  reminderMessageIds?: string[];
 }): Promise<void> {
   if (input.discordEventId) {
     await discordFetch(
@@ -725,7 +726,12 @@ export async function cleanupEventDiscord(input: {
     );
   }
   if (input.publishChannelId) {
-    for (const messageId of input.discordMessageIds ?? []) {
+    // Aviso(s) del evento + mensajes de recordatorio publicado(s).
+    const messageIds = [
+      ...(input.discordMessageIds ?? []),
+      ...(input.reminderMessageIds ?? []),
+    ];
+    for (const messageId of messageIds) {
       await discordFetch(
         `/channels/${encodeURIComponent(input.publishChannelId)}/messages/${encodeURIComponent(messageId)}`,
         { method: "DELETE" },

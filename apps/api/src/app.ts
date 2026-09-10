@@ -3068,10 +3068,12 @@ export function buildApp() {
         discordMessageIds: event.discordMessageIds,
         guildId: params.guildId,
         publishChannelId: event.publishChannelId,
+        reminderMessageIds: event.reminderMessageIds,
       });
       const cleared = await setEventDiscordInfo(params.guildId, event.id, {
         discordEventId: null,
         discordMessageIds: [],
+        reminderMessageIds: [],
       });
       if (cleared) {
         savedEvent = cleared;
@@ -3124,6 +3126,7 @@ export function buildApp() {
         discordMessageIds: existing.discordMessageIds,
         guildId: params.guildId,
         publishChannelId: existing.publishChannelId,
+        reminderMessageIds: existing.reminderMessageIds,
       });
     }
 
@@ -3654,11 +3657,20 @@ export function buildApp() {
       if (!params.guildId || !params.eventId) {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
-      const body = (request.body ?? {}) as { hours?: number[] };
+      const body = (request.body ?? {}) as {
+        hours?: number[];
+        messageIds?: string[];
+      };
+      const messageIds = Array.isArray(body.messageIds)
+        ? body.messageIds.filter(
+            (id): id is string => typeof id === "string" && id.length > 0,
+          )
+        : [];
       const event = await markEventRemindersSent(
         params.guildId,
         params.eventId,
         normalizeReminderHours(body.hours),
+        messageIds,
       );
       if (!event) {
         return reply

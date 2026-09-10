@@ -210,6 +210,7 @@ export type HubEvent = {
   recurrenceEnabled: boolean;
   recurrenceEveryDays?: number;
   recurrenceNextAt?: Date;
+  reminderMessageIds: string[];
   reminderHours: number[];
   reminderSentHours: number[];
   // Rol de Discord mínimo para entrar al roster principal: quien no lo tiene
@@ -270,6 +271,7 @@ type EventRecord = {
   recurrenceEnabled: boolean;
   recurrenceEveryDays: number | null;
   recurrenceNextAt: Date | null;
+  reminderMessageIds: string[];
   reminderHours: number[];
   reminderSentHours: number[];
   reportSentAt: Date | null;
@@ -338,6 +340,7 @@ function toEvent(record: EventRecord): HubEvent {
     recurrenceEnabled: record.recurrenceEnabled,
     recurrenceEveryDays: record.recurrenceEveryDays ?? undefined,
     recurrenceNextAt: record.recurrenceNextAt ?? undefined,
+    reminderMessageIds: record.reminderMessageIds,
     reminderHours: record.reminderHours,
     reminderSentHours: record.reminderSentHours,
     reportSentAt: record.reportSentAt ?? undefined,
@@ -409,18 +412,32 @@ export async function listReminderDueEvents(
   return due;
 }
 
-// Eventos completados a los que todavía no se les mandó el informe de
-// asistencia (quienes tenían el rol requerido y no se anotaron).
+// Eventos cuyo informe de asistencia (quienes tenían el rol y no se anotaron)
+// todavía no se envió. Se dispara apenas CIERRAN las inscripciones (mientras el
+// evento todavía no empezó), no al terminar; si el evento no tenía cierre de
+// inscripciones cargado, queda el fallback de mandarlo al completarse.
 export async function listReportPendingEvents(
   guildId: string,
+  now: Date = new Date(),
 ): Promise<HubEvent[]> {
   const records = await prisma.hubEvent.findMany({
-    where: { guildId, status: "completed", reportSentAt: null },
+    where: {
+      guildId,
+      OR: [
+        {
+          paused: false,
+          signupDeadline: { lte: now, not: null },
+          startsAt: { gt: now },
+          status: "scheduled",
+        },
+        { completedAt: { not: null }, status: "completed" },
+      ],
+      reportSentAt: null,
+      requiredRoleId: { not: null },
+    },
     include: { signups: { orderBy: { createdAt: "asc" } } },
   });
-  return records
-    .filter((record) => record.completedAt !== null && record.requiredRoleId)
-    .map((record) => toEvent(record));
+  return records.map((record) => toEvent(record));
 }
 
 export async function getEvent(
@@ -590,18 +607,27 @@ export async function markEventRemindersSent(
   guildId: string,
   eventId: string,
   hours: number[],
+  messageIds: string[] = [],
 ): Promise<HubEvent | null> {
   const current = await prisma.hubEvent.findFirst({
     where: { id: eventId, guildId },
-    select: { reminderSentHours: true },
+    select: { reminderMessageIds: true, reminderSentHours: true },
   });
   if (!current) {
     return null;
   }
-  const merged = Array.from(new Set([...current.reminderSentHours, ...hours]));
+  const mergedHours = Array.from(
+    new Set([...current.reminderSentHours, ...hours]),
+  );
+  const mergedMessages = Array.from(
+    new Set([...current.reminderMessageIds, ...messageIds]),
+  );
   await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
-    data: { reminderSentHours: merged },
+    data: {
+      reminderMessageIds: mergedMessages,
+      reminderSentHours: mergedHours,
+    },
   });
   return getEvent(guildId, eventId);
 }
@@ -692,6 +718,7 @@ export async function setEventDiscordInfo(
     discordEventId?: string | null;
     discordMessageIds?: string[] | null;
     publishChannelId?: string | null;
+    reminderMessageIds?: string[] | null;
     voiceChannelId?: string | null;
   },
 ): Promise<HubEvent | null> {
@@ -707,6 +734,9 @@ export async function setEventDiscordInfo(
   }
   if (input.publishChannelId !== undefined) {
     data.publishChannelId = input.publishChannelId;
+  }
+  if (input.reminderMessageIds !== undefined) {
+    data.reminderMessageIds = input.reminderMessageIds ?? [];
   }
   if (input.voiceChannelId !== undefined) {
     data.voiceChannelId = input.voiceChannelId;

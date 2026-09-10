@@ -195,6 +195,9 @@ model HubEvent {
   reminderHours       Int[]    @default([])
   // Cuáles de reminderHours ya se enviaron (evita re-envíos tras reinicios).
   reminderSentHours   Int[]    @default([])
+  // Ids de los mensajes de recordatorio publicados en el canal (para poder
+  // borrarlos cuando el evento se completa o se elimina).
+  reminderMessageIds  String[] @default([])
   // Control de asistencia: cuándo se marcó el evento como completado y si ya
   // se mandó el informe al creador con los que no se anotaron.
   completedAt         DateTime?
