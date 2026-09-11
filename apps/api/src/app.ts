@@ -58,13 +58,17 @@ import {
   deleteKarutaAlbum,
   deleteKarutaCard,
   getKarutaAlbumPageImage,
+  getKarutaCardImage,
   listAllKarutaAlbums,
   listCachedKarutaAlbumPages,
+  listCachedKarutaCardIds,
   listKarutaAlbums,
+  listKarutaCardsMissingArt,
   listOwnedKarutaCards,
   processKarutaGrab,
   processKarutaTransfer,
   saveKarutaAlbumPageImage,
+  saveKarutaCardImage,
   upsertKarutaAlbum,
   upsertKarutaCard,
 } from "./services/karuta-store.js";
@@ -996,6 +1000,144 @@ function startKarutaAlbumImageSync(): void {
   void refreshStaleKarutaAlbumImages();
   karutaAlbumImageTimer = setInterval(() => {
     void refreshStaleKarutaAlbumImages();
+  }, KARUTA_ALBUM_IMAGE_SYNC_INTERVAL_MS);
+}
+
+// ── Arte de las cartas raras ────────────────────────────────────────
+// Mismo problema que los álbumes: la URL del arte es un adjunto firmado de
+// Discord que vence (~24 h), y la carta se veía "desaparecer" (placeholder).
+// Ahora bajamos los bytes a `karuta_card_images` y los servimos desde
+// `/public/.../cards/:cardId/image`.
+// Tope de tamaño por imagen (el arte de Karuta ronda los cientos de KB).
+const KARUTA_CARD_ART_MAX_BYTES = 6 * 1024 * 1024;
+// Máximo de artes a cachear por pasada (evita ráfagas de descargas).
+const KARUTA_CARD_ART_CACHE_PER_PASS = 30;
+// No reintentamos una carta que falló antes de este tiempo.
+const KARUTA_CARD_ART_THROTTLE_MS = 10 * 60 * 1000;
+let karutaCardImageTimer: NodeJS.Timeout | null = null;
+let karutaCardImageSyncRunning = false;
+const karutaCardImageAttempts = new Map<string, number>();
+
+// Ruta pública (relativa al API) del arte cacheado de una carta.
+function karutaCardImagePath(guildId: string, cardId: string): string {
+  return `/public/guilds/${encodeURIComponent(guildId)}/karuta/cards/${encodeURIComponent(cardId)}/image`;
+}
+
+// Descarga y guarda el arte de una carta. Es el paso que "blinda" la imagen:
+// después, la URL original de Discord ya no importa.
+async function cacheKarutaCardImage(
+  guildId: string,
+  cardId: string,
+  url: string,
+): Promise<boolean> {
+  if (!url || url.startsWith("/")) {
+    return false;
+  }
+  try {
+    const image = await downloadDiscordImage(url, KARUTA_CARD_ART_MAX_BYTES);
+    if (!image) {
+      return false;
+    }
+    await saveKarutaCardImage({
+      cardId,
+      data: image.data,
+      guildId,
+      mimeType: image.mimeType,
+    });
+    return true;
+  } catch (error) {
+    console.warn("[karuta] no se pudo cachear el arte de la carta", error);
+    return false;
+  }
+}
+
+// Reemplaza, en la respuesta, la URL de las cartas cuyo arte ya cacheamos.
+function withCachedCardImageUrls(
+  cards: Awaited<ReturnType<typeof listOwnedKarutaCards>>,
+  cachedCardIds: string[],
+) {
+  const cached = new Set(cachedCardIds);
+  return cards.map((card) =>
+    cached.has(card.id)
+      ? { ...card, imageUrl: karutaCardImagePath(card.guildId, card.id) }
+      : card,
+  );
+}
+
+// Recorre las cartas sin arte cacheado y lo baja (re-firmando la URL si venció).
+async function refreshStaleKarutaCardImages(
+  candidates?: Awaited<ReturnType<typeof listOwnedKarutaCards>>,
+): Promise<void> {
+  if (karutaCardImageSyncRunning) {
+    return;
+  }
+  karutaCardImageSyncRunning = true;
+  try {
+    const cards =
+      candidates ?? (await listKarutaCardsMissingArt(KARUTA_CARD_ART_CACHE_PER_PASS));
+    if (cards.length === 0) {
+      return;
+    }
+    const now = Date.now();
+    let budget = KARUTA_CARD_ART_CACHE_PER_PASS;
+    let saved = 0;
+
+    // Re-firmamos primero todas las URLs vencidas de esta tanda.
+    const expired = cards.filter(
+      (card) => card.imageUrl && !isDiscordCdnUrlFresh(card.imageUrl),
+    );
+    const refreshed =
+      expired.length > 0
+        ? await refreshDiscordAttachmentUrls(
+            expired.map((card) => card.imageUrl as string),
+          )
+        : new Map<string, string>();
+
+    for (const card of cards) {
+      if (budget <= 0) {
+        break;
+      }
+      const url = card.imageUrl;
+      const throttleKey = `${card.guildId}:${card.id}`;
+      if (
+        now - (karutaCardImageAttempts.get(throttleKey) ?? 0) <
+        KARUTA_CARD_ART_THROTTLE_MS
+      ) {
+        continue;
+      }
+      if (!url) {
+        continue;
+      }
+      const usable = refreshed.get(url) ?? url;
+      if (!refreshed.has(url) && !isDiscordCdnUrlFresh(url)) {
+        karutaCardImageAttempts.set(throttleKey, now);
+        continue;
+      }
+      if (await cacheKarutaCardImage(card.guildId, card.id, usable)) {
+        budget -= 1;
+        saved += 1;
+      } else {
+        karutaCardImageAttempts.set(throttleKey, now);
+      }
+    }
+
+    if (saved > 0) {
+      console.log(`[karuta] artes de carta cacheados: +${saved}`);
+    }
+  } catch (error) {
+    console.error("[karuta] card image sync failed", error);
+  } finally {
+    karutaCardImageSyncRunning = false;
+  }
+}
+
+function startKarutaCardImageSync(): void {
+  if (karutaCardImageTimer) {
+    return;
+  }
+  void refreshStaleKarutaCardImages();
+  karutaCardImageTimer = setInterval(() => {
+    void refreshStaleKarutaCardImages();
   }, KARUTA_ALBUM_IMAGE_SYNC_INTERVAL_MS);
 }
 
@@ -4106,13 +4248,39 @@ export function buildApp() {
     }
 
     const cards = await listOwnedKarutaCards(params.guildId);
+    // Refresco "lazy": cachea el arte que falte (el próximo poll ya lo muestra
+    // servido por nosotros y no roto por la URL vencida de Discord).
+    void refreshStaleKarutaCardImages(cards);
+    const cachedCardIds = await listCachedKarutaCardIds(
+      cards.map((card) => card.id),
+    );
 
     return {
       ok: true,
       guildId: params.guildId,
-      cards,
+      cards: withCachedCardImageUrls(cards, cachedCardIds),
     };
   });
+
+  // Arte de una carta servido por el API (sin sesión): son los bytes que
+  // cacheamos, así el navegador no depende del CDN de Discord.
+  app.get(
+    "/public/guilds/:guildId/karuta/cards/:cardId/image",
+    async (request, reply) => {
+      const params = request.params as { cardId?: string; guildId?: string };
+      if (!params.guildId || !params.cardId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const image = await getKarutaCardImage(params.guildId, params.cardId);
+      if (!image) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+      return reply
+        .header("Content-Type", image.mimeType)
+        .header("Cache-Control", "public, max-age=3600")
+        .send(image.data);
+    },
+  );
 
   // Quitar manualmente una carta del registro (admin/owner). Red de seguridad
   // cuando el bot no puede deducir un burn/trade automáticamente.
@@ -4195,6 +4363,12 @@ export function buildApp() {
       series: body.series,
       wishlistCount: body.wishlistCount,
     });
+
+    // Cacheamos el arte en segundo plano: así la carta deja de depender de la
+    // URL firmada de Discord (que vence y la hacía "desaparecer").
+    if (card.imageUrl) {
+      void cacheKarutaCardImage(params.guildId, card.id, card.imageUrl);
+    }
 
     return {
       ok: true,
@@ -5519,6 +5693,7 @@ export function buildApp() {
   startEventCloseSync();
   startEventRecurrenceSync();
   startKarutaAlbumImageSync();
+  startKarutaCardImageSync();
 
   return app;
 }

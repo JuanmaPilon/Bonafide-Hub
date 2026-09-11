@@ -7322,7 +7322,11 @@ function App() {
                                   ) : null}
                                   <KarutaCardArt
                                     name={card.cardName}
-                                    url={card.imageUrl}
+                                    url={
+                                      card.imageUrl
+                                        ? apiAssetUrl(card.imageUrl)
+                                        : undefined
+                                    }
                                   />
                                 </div>
                                 <div className="karuta-drop-body">

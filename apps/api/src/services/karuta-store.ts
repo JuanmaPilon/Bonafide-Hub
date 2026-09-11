@@ -67,6 +67,77 @@ export async function listOwnedKarutaCards(
   return records.map(toKarutaCard);
 }
 
+// Cartas poseídas a las que TODAVÍA no les cacheamos el arte (de todas las
+// guilds). Las usa el sincronizador que baja la imagen antes de que la URL
+// firmada de Discord venza.
+export async function listKarutaCardsMissingArt(
+  limit = 40,
+  guildId?: string,
+): Promise<KarutaCard[]> {
+  const records = await prisma.karutaCard.findMany({
+    orderBy: { lastSeenAt: "desc" },
+    take: limit,
+    where: {
+      ...(guildId ? { guildId } : {}),
+      art: { is: null },
+      imageUrl: { not: null },
+      status: "owned",
+    },
+  });
+  return records.map(toKarutaCard);
+}
+
+// Qué cartas de esta lista ya tienen el arte cacheado.
+export async function listCachedKarutaCardIds(
+  cardIds: string[],
+): Promise<string[]> {
+  if (cardIds.length === 0) {
+    return [];
+  }
+  const records = await prisma.karutaCardImage.findMany({
+    select: { cardId: true },
+    where: { cardId: { in: cardIds } },
+  });
+  return records.map((record) => record.cardId);
+}
+
+// Guarda (o reemplaza) el arte de una carta con los bytes ya descargados.
+export async function saveKarutaCardImage(input: {
+  cardId: string;
+  data: Buffer;
+  guildId: string;
+  mimeType: string;
+}): Promise<void> {
+  await prisma.karutaCardImage.upsert({
+    create: {
+      cardId: input.cardId,
+      data: new Uint8Array(input.data),
+      guildId: input.guildId,
+      mimeType: input.mimeType,
+    },
+    update: {
+      data: new Uint8Array(input.data),
+      mimeType: input.mimeType,
+    },
+    where: { cardId: input.cardId },
+  });
+}
+
+// Bytes del arte cacheado (para servirlo por el API público).
+export async function getKarutaCardImage(
+  guildId: string,
+  cardId: string,
+): Promise<{ data: Buffer; mimeType: string } | null> {
+  const record = await prisma.karutaCardImage.findFirst({
+    select: { data: true, mimeType: true },
+    where: { cardId, guildId },
+  });
+  if (!record) {
+    return null;
+  }
+  return { data: Buffer.from(record.data), mimeType: record.mimeType };
+}
+
 // Upsert de posesión: 1 carta (code) = 1 dueño actual. Si alguien ya la
 // tenía y aparece con otro dueño (trade/drop), se actualiza el dueño.
 export async function upsertKarutaCard(input: {

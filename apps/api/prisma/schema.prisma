@@ -325,9 +325,30 @@ model KarutaCard {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  art KarutaCardImage?
+
   @@unique([guildId, code])
   @@index([guildId, status])
   @@map("karuta_cards")
+}
+
+// Arte de la carta guardado como bytes en NUESTRA base (mismo truco que las
+// páginas de álbum): las URLs firmadas del CDN de Discord vencen a las ~24 h y
+// la carta se veía "desaparecer". Va en tabla aparte para no arrastrar los
+// bytes en cada listado de cartas.
+model KarutaCardImage {
+  id        String   @id @default(cuid())
+  cardId    String   @unique
+  guildId   String
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  card KarutaCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([guildId])
+  @@map("karuta_card_images")
 }
 
 // Álbumes de Karuta (ka). Colección de un usuario: nombre del álbum, fondo
