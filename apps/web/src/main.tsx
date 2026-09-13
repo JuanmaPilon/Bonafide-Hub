@@ -1214,6 +1214,15 @@ function EventRoleEmoji({
   );
 }
 
+// Texto "Clase · Spec" de una inscripción. Devuelve "" si el jugador todavía
+// no eligió nada (o si el juego no usa catálogo), así no se muestra al vacío.
+function signupClassSpec(signup: EventSignup): string {
+  return [signup.wowClass, signup.spec]
+    .map((part) => (part ?? "").trim())
+    .filter((part) => part.length > 0)
+    .join(" · ");
+}
+
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
 function EventCard({
@@ -1358,9 +1367,38 @@ function EventCard({
     }
   };
 
-  // Render de un miembro del roster: nick + personaje (si lo cargó) y, si la
-  // spec tiene emoji custom configurado, el emoji de la spec adelante (sin
-  // fallback a emoji de clase).
+  // Columnas del roster: los roles configurados, más cualquier rol que
+  // aparezca en las inscripciones y no esté en la config (el "dps" viejo, un
+  // rol que se borró) y los que se anotaron sin elegir rol. Sin ese último
+  // grupo, quien se anota con un botón rápido queda contado en "Asistencia"
+  // pero invisible en el roster.
+  const rosterColumns = useMemo(() => {
+    const confirmed = event.signups.filter((signup) => signup.status === "yes");
+    const knownKeys = new Set(eventRoles.map((role) => role.key));
+    const extraKeys = [
+      ...new Set(
+        confirmed
+          .map((signup) => signup.role?.trim() ?? "")
+          .filter((key) => key === "" || !knownKeys.has(key)),
+      ),
+    ];
+    return [
+      ...eventRoles.map((role) => ({
+        key: role.key,
+        label: role.label,
+        role: role.key,
+      })),
+      ...extraKeys.map((key) => ({
+        key: key === "" ? "sin-rol" : key,
+        label: key ? (eventRoleMeta(key, config)?.label ?? key) : "Sin rol",
+        role: key,
+      })),
+    ];
+  }, [config, event.signups, eventRoles]);
+
+  // Render de un miembro del roster: emoji de la spec (si tiene uno
+  // configurado), nick, personaje y la clase/spec en texto, para que se vea
+  // quién es y con qué juega sin tener que deducirlo del emoji.
   const renderMember = (signup: EventSignup) => {
     const specRow = specs.find(
       (row) =>
@@ -1368,6 +1406,7 @@ function EventCard({
         row.className === signup.wowClass &&
         row.specName === (signup.spec ?? ""),
     );
+    const classSpec = signupClassSpec(signup);
     return (
       <span className="event-roster-member" key={signup.id}>
         <DiscordEmojiImage
@@ -1375,8 +1414,13 @@ function EventCard({
           emojiId={specRow?.emojiId}
           name={specRow?.specName}
         />
-        {signup.username}
-        {signup.character ? ` (${signup.character})` : ""}
+        <span className="event-roster-name">
+          {signup.username}
+          {signup.character ? ` (${signup.character})` : ""}
+        </span>
+        {classSpec ? (
+          <span className="event-roster-class">{classSpec}</span>
+        ) : null}
       </span>
     );
   };
@@ -1528,12 +1572,13 @@ function EventCard({
         {event.signups.length > 0 ? (
           <div className="event-roster">
             {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
-                con sus confirmados (solo nombres). */}
+                con sus confirmados (nombre, personaje y clase/spec). */}
             <div className="event-roster-columns">
-              {eventRoles.map((entry) => {
+              {rosterColumns.map((entry) => {
                 const roleSignups = event.signups.filter(
                   (signup) =>
-                    signup.status === "yes" && signup.role === entry.key,
+                    signup.status === "yes" &&
+                    (signup.role?.trim() ?? "") === entry.role,
                 );
                 if (roleSignups.length === 0) {
                   return null;
@@ -1541,7 +1586,10 @@ function EventCard({
                 return (
                   <div className="event-roster-column" key={entry.key}>
                     <span className="event-roster-role">
-                      <EventRoleEmoji config={config} role={entry.key} />{" "}
+                      <EventRoleEmoji
+                        config={config}
+                        role={entry.role || "sin-rol"}
+                      />{" "}
                       {entry.label} ({roleSignups.length})
                     </span>
                     <div className="event-roster-members">
@@ -7596,10 +7644,17 @@ function App() {
                                                   className="event-roster-member"
                                                   key={signup.id}
                                                 >
-                                                  {signup.username}
-                                                  {signup.character
-                                                    ? ` (${signup.character})`
-                                                    : ""}
+                                                  <span className="event-roster-name">
+                                                    {signup.username}
+                                                    {signup.character
+                                                      ? ` (${signup.character})`
+                                                      : ""}
+                                                  </span>
+                                                  {signupClassSpec(signup) ? (
+                                                    <span className="event-roster-class">
+                                                      {signupClassSpec(signup)}
+                                                    </span>
+                                                  ) : null}
                                                 </span>
                                               ))}
                                             </span>

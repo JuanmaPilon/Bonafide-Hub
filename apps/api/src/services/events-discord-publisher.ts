@@ -665,6 +665,13 @@ export function buildEventAnnouncementEmbeds(input: {
       true,
     );
   }
+  // Quien se anotó sin elegir rol (p. ej. con los botones rápidos de estado)
+  // no puede desaparecer del roster: va en una columna "Sin rol" al final,
+  // igual que la web.
+  const noRole = confirmed.filter((signup) => !signup.role);
+  if (noRole.length > 0) {
+    pushField(fields, `❔ Sin rol (${noRole.length})`, linesFor(noRole), true);
+  }
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten.
   if (late.length > 0) {
