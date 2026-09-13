@@ -660,19 +660,16 @@ export function buildEventAnnouncementEmbeds(input: {
       true,
     );
   }
-  if (bench.length > 0) {
-    pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench), true);
-  }
+  // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
+  // de la otra) y en este orden: tarde → bench → no asisten.
   if (late.length > 0) {
-    pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late), true);
+    pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late));
+  }
+  if (bench.length > 0) {
+    pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench));
   }
   if (absent.length > 0) {
-    pushField(
-      fields,
-      `❌ No asisten (${absent.length})`,
-      linesFor(absent),
-      true,
-    );
+    pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
   }
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción

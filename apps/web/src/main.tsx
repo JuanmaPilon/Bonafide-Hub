@@ -1545,12 +1545,13 @@ function EventCard({
                 );
               })}
             </div>
-            {/* Grupos por estado: Bench, Tarde y los que no asisten. */}
+            {/* Grupos por estado (uno por fila, debajo del roster): tarde,
+                bench y al final los que no asisten. */}
             <div className="event-roster-statuses">
               {(
                 [
+                  ["late", "⏰", "Llegan tarde"],
                   ["bench", "🪑", "Bench"],
-                  ["late", "⏰", "Tarde"],
                   ["no", "❌", "No asisten"],
                 ] as const
               ).map(([statusKey, emoji, label]) => {
