@@ -559,7 +559,7 @@ function RaidLogsList({
                 <strong>{log.title || "Log de Raid"}</strong>
                 {log.firstFightAt ? (
                   <span className="comunicado-date">
-                    {new Date(log.firstFightAt).toLocaleDateString()}
+                    {formatDate24(log.firstFightAt)}
                   </span>
                 ) : null}
                 <span className="raid-log-meta-inline">
@@ -631,8 +631,6 @@ function RaidLogsList({
   );
 }
 
-// Convierte una fecha a string compatible con <input type="datetime-local">
-// (formato local YYYY-MM-DDTHH:mm, sin zona horaria).
 // Valores por defecto de la sección "Publicar en Discord" del form.
 function defaultEventDiscord() {
   return {
@@ -681,10 +679,151 @@ const REMINDER_HOUR_OPTIONS: Array<{ hours: number; label: string }> = [
   { hours: 2, label: "2 h antes" },
 ];
 
+// Convierte una fecha a string local YYYY-MM-DDTHH:mm (sin zona horaria).
 function toDateTimeLocal(value: Date | string): string {
   const date = new Date(value);
   const pad = (n: number): string => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// ── Fechas y horas en formato fijo (dd/mm/aaaa + 24 hs) ─────────────
+// No usamos toLocaleString/toLocaleDateString porque dependen del idioma del
+// navegador: con el navegador en inglés muestran mm/dd y AM/PM.
+function toDateOrNull(value: string | Date | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function formatDate24(value: string | Date | undefined): string {
+  const date = toDateOrNull(value);
+  if (!date) {
+    return "—";
+  }
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+function formatTime24(
+  value: string | Date | undefined,
+  withSeconds = false,
+): string {
+  const date = toDateOrNull(value);
+  if (!date) {
+    return "—";
+  }
+  const base = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  return withSeconds ? `${base}:${pad2(date.getSeconds())}` : base;
+}
+
+function formatDateTime24(value: string | Date | undefined): string {
+  const date = toDateOrNull(value);
+  if (!date) {
+    return "—";
+  }
+  return `${formatDate24(date)} ${formatTime24(date)}`;
+}
+
+// Parte de fecha (dd/mm/aaaa) de un valor local YYYY-MM-DDTHH:mm.
+function datePartText(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+}
+
+// Selector de fecha y hora con formato FIJO dd/mm/aaaa + 24 hs (selects de
+// hora/minuto), sin depender del idioma del navegador. Emite el mismo formato
+// que el input nativo: YYYY-MM-DDTHH:mm (o "" si la fecha está incompleta).
+function EventDateTimeField({
+  onChange,
+  value,
+}: {
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [dateText, setDateText] = useState(() => datePartText(value));
+  // Último valor que emitimos: sirve para distinguir un cambio nuestro (no hay
+  // que pisar lo que el usuario está tipeando) de uno externo (editar/duplicar).
+  const lastEmitted = useRef<string | null>(null);
+  const hours = value.match(/T(\d{2}):/)?.[1] ?? "00";
+  const minutes = value.match(/T\d{2}:(\d{2})/)?.[1] ?? "00";
+
+  // Si el valor cambia desde afuera (editar/duplicar un evento), sincronizamos.
+  useEffect(() => {
+    if (value === lastEmitted.current) {
+      return;
+    }
+    lastEmitted.current = value;
+    setDateText(datePartText(value));
+  }, [value]);
+
+  const emit = (
+    nextDateText: string,
+    nextHours: string,
+    nextMinutes: string,
+  ) => {
+    const match = nextDateText.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) {
+      lastEmitted.current = "";
+      onChange("");
+      return;
+    }
+    const [, day, month, year] = match;
+    const iso = `${year}-${month}-${day}T${nextHours}:${nextMinutes}`;
+    const next = Number.isNaN(new Date(iso).getTime()) ? "" : iso;
+    lastEmitted.current = next;
+    onChange(next);
+  };
+
+  return (
+    <div className="event-datetime-field">
+      <input
+        className="input"
+        inputMode="numeric"
+        placeholder="dd/mm/aaaa"
+        value={dateText}
+        onChange={(event) => {
+          // Máscara: solo dígitos, con las barras puestas solas.
+          const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+          const parts = [
+            digits.slice(0, 2),
+            digits.slice(2, 4),
+            digits.slice(4, 8),
+          ].filter(Boolean);
+          const nextText = parts.join("/");
+          setDateText(nextText);
+          emit(nextText, hours, minutes);
+        }}
+      />
+      <select
+        className="select event-time-select"
+        value={hours}
+        onChange={(event) => emit(dateText, event.target.value, minutes)}
+      >
+        {Array.from({ length: 24 }, (_value, hour) => (
+          <option key={hour} value={pad2(hour)}>
+            {pad2(hour)}
+          </option>
+        ))}
+      </select>
+      <span aria-hidden="true">:</span>
+      <select
+        className="select event-time-select"
+        value={minutes}
+        onChange={(event) => emit(dateText, hours, event.target.value)}
+      >
+        {Array.from({ length: 60 }, (_value, minute) => (
+          <option key={minute} value={pad2(minute)}>
+            {pad2(minute)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 // ── Tag de comunicados ──────────────────────────────────────────────
@@ -933,9 +1072,7 @@ function EventCard({
   // "Cambiar" vuelve a abrir el editor.
   const [editingSignup, setEditingSignup] = useState(false);
   const hasFullSignup = Boolean(
-    mySignup?.status &&
-      mySignup?.wowClass &&
-      (!specEnabled || mySignup?.spec),
+    mySignup?.status && mySignup?.wowClass && (!specEnabled || mySignup?.spec),
   );
   const showSignupSummary = hasFullSignup && !editingSignup;
   const signupDirty =
@@ -1063,11 +1200,12 @@ function EventCard({
             <span className="event-card-type">
               {typeMeta.emoji} {typeMeta.label}
             </span>
+            <ComunicadoTag color={event.tagColor} label={event.tagLabel} />
           </div>
         </div>
         <div className="event-card-date">
-          📅 {new Date(event.startsAt).toLocaleString()}
-          {endAt ? ` → ${endAt.toLocaleTimeString()}` : ""}
+          📅 {formatDateTime24(event.startsAt)}
+          {endAt ? ` → ${formatTime24(endAt)}` : ""}
         </div>
         {event.requiredRoleId ? (
           <div className="event-required-role">
@@ -1081,8 +1219,7 @@ function EventCard({
         ) : null}
         {event.signupDeadline && !signupsClosed ? (
           <div className="event-deadline">
-            ⏳ Cierre de inscripciones:{" "}
-            {new Date(event.signupDeadline).toLocaleString()}
+            ⏳ Cierre de inscripciones: {formatDateTime24(event.signupDeadline)}
           </div>
         ) : null}
         {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
@@ -1260,7 +1397,9 @@ function EventCard({
                         </div>
                       ) : catalogClasses.length === 0 ? (
                         <div className="event-signup-no-catalog">
-                          Todavía no hay {config.eventClassLabel?.toLowerCase() ?? "clases"} cargadas para ese rol.
+                          Todavía no hay{" "}
+                          {config.eventClassLabel?.toLowerCase() ?? "clases"}{" "}
+                          cargadas para ese rol.
                         </div>
                       ) : (
                         <div className="event-signup-specs">
@@ -2067,7 +2206,7 @@ function HomeView({
                   {booster.nickname || booster.username}
                 </span>
                 <span className="booster-since">
-                  Desde {new Date(booster.premiumSince).toLocaleDateString()}
+                  Desde {formatDate24(booster.premiumSince)}
                 </span>
               </div>
             ))}
@@ -2149,6 +2288,8 @@ function App() {
     signupDeadline: string;
     startsAt: string;
     status: string;
+    tagColor: string;
+    tagLabel: string;
     title: string;
     type: string;
   }>({
@@ -2165,6 +2306,8 @@ function App() {
     signupDeadline: "",
     startsAt: "",
     status: "scheduled",
+    tagColor: "#6aa8ff",
+    tagLabel: "",
     title: "",
     type: "raid",
   });
@@ -2896,10 +3039,9 @@ function App() {
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
         eventClassLabel: config.eventClassLabel?.trim() || undefined,
-        eventRoles: (
-          config.eventRoles && config.eventRoles.length > 0
-            ? config.eventRoles
-            : DEFAULT_EVENT_ROLES
+        eventRoles: (config.eventRoles && config.eventRoles.length > 0
+          ? config.eventRoles
+          : DEFAULT_EVENT_ROLES
         ).map((entry) => ({
           animated: entry.animated,
           emoji: entry.emoji,
@@ -3059,6 +3201,8 @@ function App() {
       signupDeadline: "",
       startsAt: "",
       status: "scheduled",
+      tagColor: "#6aa8ff",
+      tagLabel: "",
       title: "",
       type: "raid",
     });
@@ -3102,6 +3246,8 @@ function App() {
         : "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: event.status,
+      tagColor: event.tagColor ?? "#6aa8ff",
+      tagLabel: event.tagLabel ?? "",
       title: event.title,
       type: event.type,
     });
@@ -3143,6 +3289,8 @@ function App() {
       signupDeadline: "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: "scheduled",
+      tagColor: event.tagColor ?? "#6aa8ff",
+      tagLabel: event.tagLabel ?? "",
       title: event.title,
       type: event.type,
     });
@@ -3264,6 +3412,8 @@ function App() {
           signupDeadline: eventForm.signupDeadline || null,
           startsAt: eventForm.startsAt,
           status: eventForm.status,
+          tagColor: eventForm.tagColor || undefined,
+          tagLabel: eventForm.tagLabel.trim() || undefined,
           title: eventForm.title.trim(),
           type: eventForm.type,
         });
@@ -3298,6 +3448,8 @@ function App() {
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: eventForm.signupDeadline || undefined,
           startsAt: eventForm.startsAt,
+          tagColor: eventForm.tagColor || undefined,
+          tagLabel: eventForm.tagLabel.trim() || undefined,
           title: eventForm.title.trim(),
           type: eventForm.type,
         });
@@ -5708,15 +5860,7 @@ function App() {
                                           ? "Mensaje"
                                           : "Web"}{" "}
                                         ·{" "}
-                                        {new Date(
-                                          instance.publishedAt,
-                                        ).toLocaleDateString()}{" "}
-                                        {new Date(
-                                          instance.publishedAt,
-                                        ).toLocaleTimeString([], {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
+                                        {formatDateTime24(instance.publishedAt)}
                                       </span>
                                       <div className="comunicado-instance-actions">
                                         <button
@@ -6619,7 +6763,7 @@ function App() {
                               {auditLogs.map((entry) => (
                                 <div className="audit-row" key={entry.id}>
                                   <span className="audit-time">
-                                    {new Date(entry.createdAt).toLocaleString()}
+                                    {formatDateTime24(entry.createdAt)}
                                   </span>
                                   <span className="audit-actor">
                                     {entry.actorName ??
@@ -6679,8 +6823,7 @@ function App() {
                           Roles de evento
                         </h4>
                         <div className="event-role-editor">
-                          {(config.eventRoles &&
-                          config.eventRoles.length > 0
+                          {(config.eventRoles && config.eventRoles.length > 0
                             ? config.eventRoles
                             : DEFAULT_EVENT_ROLES
                           ).map((entry, index) => (
@@ -6740,7 +6883,8 @@ function App() {
                                           ? {
                                               ...role,
                                               animated: false,
-                                              emoji: event.target.value || undefined,
+                                              emoji:
+                                                event.target.value || undefined,
                                               emojiId: undefined,
                                               emojiName: undefined,
                                             }
@@ -7042,16 +7186,14 @@ function App() {
                                   }))
                                 }
                               >
-                                {resolveEventRoles(config).map(
-                                  (roleOption) => (
-                                    <option
-                                      key={roleOption.key}
-                                      value={roleOption.key}
-                                    >
-                                      {roleOption.label}
-                                    </option>
-                                  ),
-                                )}
+                                {resolveEventRoles(config).map((roleOption) => (
+                                  <option
+                                    key={roleOption.key}
+                                    value={roleOption.key}
+                                  >
+                                    {roleOption.label}
+                                  </option>
+                                ))}
                               </select>
                             </label>
                             <label>
@@ -7204,9 +7346,7 @@ function App() {
                                   <summary className="event-history-head">
                                     <strong>{finished.title}</strong>
                                     <span className="event-history-date">
-                                      {new Date(
-                                        finished.startsAt,
-                                      ).toLocaleDateString()}
+                                      {formatDateTime24(finished.startsAt)}
                                     </span>
                                   </summary>
                                   <div className="event-history-body">
@@ -7347,8 +7487,7 @@ function App() {
                           ) : null}
                           {profile.joinedAt ? (
                             <span className="profile-badge">
-                              📅 Desde{" "}
-                              {new Date(profile.joinedAt).toLocaleDateString()}
+                              📅 Desde {formatDate24(profile.joinedAt)}
                             </span>
                           ) : null}
                         </div>
@@ -7439,9 +7578,7 @@ function App() {
                           />
                           {currentComunicado.publishedAt ? (
                             <span className="comunicado-date">
-                              {new Date(
-                                currentComunicado.publishedAt,
-                              ).toLocaleDateString()}
+                              {formatDate24(currentComunicado.publishedAt)}
                             </span>
                           ) : null}
                         </div>
@@ -7536,9 +7673,7 @@ function App() {
                               />
                               {comm.publishedAt ? (
                                 <span className="comunicado-date">
-                                  {new Date(
-                                    comm.publishedAt,
-                                  ).toLocaleDateString()}
+                                  {formatDate24(comm.publishedAt)}
                                 </span>
                               ) : null}
                             </span>
@@ -7852,25 +7987,27 @@ function App() {
                             maxLength={120}
                           />
                         </label>
-                        <label>
-                          <span>Tipo</span>
-                          <select
-                            className="select"
-                            value={eventForm.type}
-                            onChange={(event) =>
+                        <div className="event-form-wide event-tag-field">
+                          <span className="event-tag-title">
+                            Etiqueta del evento (opcional)
+                          </span>
+                          <ComunicadoTagFields
+                            color={eventForm.tagColor}
+                            label={eventForm.tagLabel}
+                            onColor={(tagColor) =>
                               setEventForm((current) => ({
                                 ...current,
-                                type: event.target.value,
+                                tagColor,
                               }))
                             }
-                          >
-                            {EVENT_TYPES.map((type) => (
-                              <option key={type.key} value={type.key}>
-                                {type.emoji} {type.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                            onLabel={(tagLabel) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                tagLabel,
+                              }))
+                            }
+                          />
+                        </div>
                         {editingEventId ? (
                           <label>
                             <span>Estado</span>
@@ -7890,20 +8027,18 @@ function App() {
                             </select>
                           </label>
                         ) : null}
-                        <label>
+                        <div className="event-date-field">
                           <span>Fecha y hora</span>
-                          <input
-                            className="input"
-                            type="datetime-local"
+                          <EventDateTimeField
                             value={eventForm.startsAt}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setEventForm((current) => ({
                                 ...current,
-                                startsAt: event.target.value,
+                                startsAt: value,
                               }))
                             }
                           />
-                        </label>
+                        </div>
                         <label>
                           <span>Duración (minutos)</span>
                           <input
@@ -7919,20 +8054,18 @@ function App() {
                             }
                           />
                         </label>
-                        <label>
+                        <div className="event-date-field">
                           <span>Cierre de inscripciones</span>
-                          <input
-                            className="input"
-                            type="datetime-local"
+                          <EventDateTimeField
                             value={eventForm.signupDeadline}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setEventForm((current) => ({
                                 ...current,
-                                signupDeadline: event.target.value,
+                                signupDeadline: value,
                               }))
                             }
                           />
-                        </label>
+                        </div>
                         <label>
                           <span>Rol mínimo para el roster (opcional)</span>
                           <select
@@ -7945,9 +8078,7 @@ function App() {
                               }))
                             }
                           >
-                            <option value="">
-                              Sin requisito: todos entran al roster
-                            </option>
+                            <option value="">Sin requisitos</option>
                             {guildRoles.map((role) => (
                               <option key={role.id} value={role.id}>
                                 {role.name}

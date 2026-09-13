@@ -189,6 +189,11 @@ model HubEvent {
   title             String
   description       String?
   type              String   @default("raid") // raid | mplus | pvp | social
+  // Etiqueta libre del evento (estilo comunicados): el staff escribe el texto
+  // y elige el color, sin categorías fijas. Se muestra en la web y en el
+  // embed de Discord.
+  tagLabel          String?
+  tagColor          String?
   startsAt          DateTime
   // Duración del evento en minutos (opcional, para mostrar hora de fin).
   durationMinutes   Int?

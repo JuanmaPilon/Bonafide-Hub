@@ -222,6 +222,8 @@ export type HubEvent = {
   signupDeadline?: Date;
   startsAt: Date;
   status: string;
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
   type: string;
   updatedAt: Date;
@@ -282,6 +284,8 @@ type EventRecord = {
   signupDeadline: Date | null;
   startsAt: Date;
   status: string;
+  tagColor: string | null;
+  tagLabel: string | null;
   title: string;
   type: string;
   updatedAt: Date;
@@ -342,7 +346,8 @@ function toEvent(record: EventRecord): HubEvent {
     recurrenceEnabled: record.recurrenceEnabled,
     recurrenceEveryDays: record.recurrenceEveryDays ?? undefined,
     recurrenceNextAt: record.recurrenceNextAt ?? undefined,
-    recurrencePublishDaysBefore: record.recurrencePublishDaysBefore ?? undefined,
+    recurrencePublishDaysBefore:
+      record.recurrencePublishDaysBefore ?? undefined,
     reminderMessageIds: record.reminderMessageIds,
     reminderHours: record.reminderHours,
     reminderSentHours: record.reminderSentHours,
@@ -352,6 +357,8 @@ function toEvent(record: EventRecord): HubEvent {
     signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
     status: record.status,
+    tagColor: record.tagColor ?? undefined,
+    tagLabel: record.tagLabel ?? undefined,
     title: record.title,
     type: record.type,
     updatedAt: record.updatedAt,
@@ -470,6 +477,8 @@ export async function createEvent(input: {
   requiredRoleId?: string | null;
   signupDeadline?: string;
   startsAt: string;
+  tagColor?: string | null;
+  tagLabel?: string | null;
   title: string;
   type: string;
 }): Promise<HubEvent> {
@@ -500,6 +509,8 @@ export async function createEvent(input: {
         ? new Date(input.signupDeadline)
         : null,
       startsAt: new Date(input.startsAt),
+      tagColor: input.tagColor?.trim() || null,
+      tagLabel: input.tagLabel?.trim() || null,
       title: input.title,
       type: input.type,
     },
@@ -525,6 +536,8 @@ export async function updateEvent(
     signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
+    tagColor?: string | null;
+    tagLabel?: string | null;
     title?: string;
     type?: string;
   },
@@ -598,6 +611,14 @@ export async function updateEvent(
             : undefined,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
       status: input.status,
+      tagColor:
+        input.tagColor === undefined
+          ? undefined
+          : input.tagColor?.trim() || null,
+      tagLabel:
+        input.tagLabel === undefined
+          ? undefined
+          : input.tagLabel?.trim() || null,
       title: input.title,
       type: input.type,
     },

@@ -44,7 +44,9 @@ export function normalizeEventRoles(value: unknown): EventRoleOption[] | null {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9_-]/g, "");
-    const label = String(raw.label ?? "").trim().slice(0, 24);
+    const label = String(raw.label ?? "")
+      .trim()
+      .slice(0, 24);
     if (!key || !label || seen.has(key)) {
       continue;
     }
@@ -52,7 +54,10 @@ export function normalizeEventRoles(value: unknown): EventRoleOption[] | null {
 
     const emojiId = String(raw.emojiId ?? "").trim() || undefined;
     const emojiName = String(raw.emojiName ?? "").trim() || undefined;
-    const emoji = String(raw.emoji ?? "").trim().slice(0, 8) || undefined;
+    const emoji =
+      String(raw.emoji ?? "")
+        .trim()
+        .slice(0, 8) || undefined;
 
     roles.push({
       animated: emojiId ? Boolean(raw.animated) : false,

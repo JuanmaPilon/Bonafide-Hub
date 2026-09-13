@@ -378,6 +378,7 @@ export function buildEventAnnouncementEmbeds(input: {
   specLabel?: string;
   specs: AnnouncementSpec[];
   startsAt: Date;
+  tagLabel?: string;
   title: string;
   type?: string;
 }): Array<Record<string, unknown>> {
@@ -532,6 +533,14 @@ export function buildEventAnnouncementEmbeds(input: {
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
   };
+  // Tag libre del evento (estilo comunicados): va como "autor" del embed para
+  // que se vea arriba del título con su color de acento.
+  const tagLabel = input.tagLabel?.trim();
+  if (tagLabel) {
+    embed.author = {
+      name: `🏷️ ${tagLabel.slice(0, 250)}`,
+    };
+  }
   if (input.discordEventId) {
     embed.url = `https://discord.com/events/${encodeURIComponent(input.guildId)}/${encodeURIComponent(input.discordEventId)}`;
   }
@@ -729,6 +738,7 @@ export async function syncEventToDiscord(input: {
   specLabel?: string;
   specs?: AnnouncementSpec[];
   startsAt: Date;
+  tagLabel?: string;
   title: string;
   type?: string;
 }): Promise<EventPublishResult> {
@@ -777,6 +787,7 @@ export async function syncEventToDiscord(input: {
       specLabel: input.specLabel,
       specs: input.specs ?? [],
       startsAt: input.startsAt,
+      tagLabel: input.tagLabel,
       title: input.title,
       type: input.type,
     });

@@ -2702,6 +2702,50 @@ textarea {
   grid-column: 1 / -1;
 }
 
+/* Fecha y hora del evento: texto dd/mm/aaaa + selects de hora/minuto (24 hs).
+   No usamos <input type="datetime-local"> porque su formato y el AM/PM dependen
+   del idioma del navegador. */
+.event-date-field {
+  display: grid;
+  gap: 8px;
+}
+
+.event-date-field > span {
+  color: #bdd8d2;
+  font-size: 0.84rem;
+}
+
+.event-datetime-field {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.event-datetime-field .input {
+  width: 118px;
+  flex: 0 0 auto;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  letter-spacing: 0.03em;
+}
+
+.event-datetime-field .event-time-select {
+  width: 74px;
+  flex: 0 0 auto;
+  padding: 11px 8px;
+}
+
+/* Etiqueta libre del evento (texto + color), dentro del grid del form. */
+.event-tag-field {
+  display: grid;
+  gap: 10px;
+}
+
+.event-tag-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .event-form-actions {
   display: flex;
   justify-content: flex-end;
@@ -4023,7 +4067,7 @@ textarea {
   gap: 8px;
 }
 
-.comm-form input.comm-tag-swatch {
+input.comm-tag-swatch {
   width: 46px;
   height: 42px;
   flex: 0 0 auto;
@@ -4031,7 +4075,7 @@ textarea {
   cursor: pointer;
 }
 
-.comm-form input.comm-tag-hex {
+input.comm-tag-hex {
   width: 130px;
   flex: 0 0 auto;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
@@ -5170,6 +5214,7 @@ textarea {
 
 /* Etiquetas de formulario (verde claro) -> más oscuras */
 :root[data-theme="light"] .form-grid label span,
+:root[data-theme="light"] .event-date-field > span,
 :root[data-theme="light"] .role-multiselect-field > span,
 :root[data-theme="light"] .comm-form label span,
 :root[data-theme="light"] .suggestions-field span,

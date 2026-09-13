@@ -820,12 +820,14 @@ export type EventRoleOption = {
   label: string;
 };
 
-export const DEFAULT_EVENT_ROLES: EventRoleOption[] = ROLE_META.map((entry) => ({
-  animated: false,
-  emoji: entry.emoji,
-  key: entry.key,
-  label: entry.label,
-}));
+export const DEFAULT_EVENT_ROLES: EventRoleOption[] = ROLE_META.map(
+  (entry) => ({
+    animated: false,
+    emoji: entry.emoji,
+    key: entry.key,
+    label: entry.label,
+  }),
+);
 
 export function resolveEventRoles(config: GuildConfig): EventRoleOption[] {
   const roles = config.eventRoles;
@@ -939,6 +941,9 @@ export type HubEvent = {
   signupDeadline?: string;
   startsAt: string;
   status: string;
+  // Etiqueta libre del evento (texto + color), estilo comunicados.
+  tagColor?: string;
+  tagLabel?: string;
   title: string;
   type: string;
   updatedAt: string;
@@ -985,6 +990,8 @@ export async function createEvent(
     requiredRoleId?: string;
     signupDeadline?: string;
     startsAt: string;
+    tagColor?: string;
+    tagLabel?: string;
     title: string;
     type: string;
   },
@@ -1017,6 +1024,8 @@ export async function updateEvent(
     signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
+    tagColor?: string;
+    tagLabel?: string;
     title?: string;
     type?: string;
   },
