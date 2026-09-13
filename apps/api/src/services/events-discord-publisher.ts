@@ -274,49 +274,47 @@ async function updateScheduledEvent(input: {
   return { id: input.discordEventId };
 }
 
-// ¿El mensaje-aviso ya tiene la mención de ese rol en su contenido? Sirve para
-// agregarla cuando falta (p. ej. avisos publicados antes de que existiera la
-// mención) sin volver a notificar en cada edición.
-async function messageHasRoleMention(
+// Contenido actual del mensaje-aviso (null si no se pudo leer).
+async function fetchMessageContent(
   channelId: string,
   messageId: string,
-  roleId: string,
-): Promise<boolean> {
+): Promise<string | null> {
   try {
     const response = await discordFetch(
       `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
     );
     if (!response.ok) {
-      return false;
+      return null;
     }
     const data = (await response.json()) as { content?: string };
-    return (data.content ?? "").includes(roleId);
+    return data.content ?? "";
   } catch {
-    return false;
+    return null;
   }
 }
 
 // Contenido del mensaje-aviso según el rol requerido del evento:
-//   - con rol y sin mención  → agrega la mención `<@&rol>` (así el rol queda
-//     etiquetado y le notifica a todos los que lo tienen);
-//   - con rol y ya mencionado → undefined (no tocamos el contenido para no
-//     re-notificar en cada edición);
-//   - sin rol → "" (limpia una mención vieja que haya quedado).
+//   - con rol  → la mención pelada `<@&rol>`;
+//   - sin rol  → "" (limpia una mención vieja que haya quedado).
+//
+// Devuelve `undefined` (no tocar) cuando el mensaje YA dice exactamente eso:
+// así los refrescos no reescriben el contenido. Si el mensaje tiene la mención
+// con decoración vieja (p. ej. `🛡️ <@&rol>`), se normaliza al refrescar sin
+// notificar (el PATCH va con `allowed_mentions: { parse: [] }`).
 export async function resolveAnnouncementContent(input: {
   channelId: string;
   messageId: string;
   requiredRoleId?: string;
 }): Promise<string | undefined> {
-  const roleId = input.requiredRoleId?.trim();
-  if (!roleId) {
-    return "";
+  const desired = input.requiredRoleId?.trim()
+    ? `<@&${input.requiredRoleId.trim()}>`
+    : "";
+  const current = await fetchMessageContent(input.channelId, input.messageId);
+  if (current === null) {
+    // No pudimos leer el mensaje: no lo tocamos.
+    return undefined;
   }
-  const mentioned = await messageHasRoleMention(
-    input.channelId,
-    input.messageId,
-    roleId,
-  );
-  return mentioned ? undefined : `<@&${roleId}>`;
+  return current.trim() === desired ? undefined : desired;
 }
 
 // ── Roster estilo Raid Helper dentro del embed del evento ───────────
@@ -375,13 +373,6 @@ function roleEmoji(role: EventRoleOption): string {
   return role.emoji ?? ROLE_META[role.key]?.emoji ?? "❔";
 }
 
-const RECURRENCE_LABEL: Record<EventRecurrence, string | undefined> = {
-  none: undefined,
-  daily: "Repite todos los días",
-  weekly: "Repite semanalmente",
-  biweekly: "Repite cada 2 semanas",
-};
-
 // Mención de emoji custom (`<:name:id>` o `<a:name:id>`) para que Discord
 // la renderice inline dentro del texto del embed.
 function specMention(spec?: AnnouncementSpec): string {
@@ -394,10 +385,16 @@ function specMention(spec?: AnnouncementSpec): string {
 
 function signupDisplay(signup: AnnouncementSignup): string {
   // El nombre de Discord es el principal; el personaje (opcional) va entre
-  // paréntesis.
-  return signup.character
-    ? `${signup.username} (${signup.character})`
-    : signup.username;
+  // paréntesis. Si el personaje es igual al nick, no lo repetimos: así la
+  // línea queda corta y entra en una sola línea.
+  const character = signup.character?.trim();
+  if (
+    character &&
+    character.toLowerCase() !== signup.username.trim().toLowerCase()
+  ) {
+    return `${signup.username} (${character})`;
+  }
+  return signup.username;
 }
 
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars
@@ -543,9 +540,8 @@ export function buildEventAnnouncementEmbeds(input: {
     `**🗓️ <t:${timestamp}:F>**`,
     `<t:${timestamp}:R>`,
   ];
-  const recurrenceLabel = input.ownRecurrenceEveryDays
-    ? `Cada ${input.ownRecurrenceEveryDays} días`
-    : RECURRENCE_LABEL[input.recurrence];
+  // La recurrencia NO se muestra en el embed (se ve solo en la web): el aviso
+  // queda para la fecha concreta del evento.
   const endTimestamp =
     input.durationMinutes && input.durationMinutes > 0
       ? Math.floor(
@@ -594,9 +590,8 @@ export function buildEventAnnouncementEmbeds(input: {
       ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
       : "—",
   });
-  if (recurrenceLabel) {
-    fields.push({ name: "🔁 Repetición", value: recurrenceLabel });
-  }
+  // La repetición NO se muestra en Discord (solo en la web): el aviso queda
+  // para la fecha concreta del evento.
   // Requisito de rol: caja aparte (bien visible) + el mensaje menciona al rol
   // para que notifique a todos los que lo tienen.
   const requiredRoleId = input.requiredRoleId?.trim();
@@ -657,21 +652,21 @@ export function buildEventAnnouncementEmbeds(input: {
     if (members.length === 0) {
       continue;
     }
-    // Inline: cada rol es una columna con sus anotados, así el roster crece a
-    // lo ancho (3 por fila) y no empuja el embed hacia abajo.
+    // Cada rol en su propia fila (ancho completo): así "nick (personaje)" entra
+    // en una sola línea, que es lo que se pidió. Con columnas inline el texto
+    // se partía en dos líneas.
     pushField(
       fields,
       `${roleEmoji(role)} ${role.label} (${members.length})`,
       linesFor(members),
-      true,
     );
   }
   // Quien se anotó sin elegir rol (p. ej. con los botones rápidos de estado)
-  // no puede desaparecer del roster: va en una columna "Sin rol" al final,
+  // no puede desaparecer del roster: va en una sección "Sin rol" al final,
   // igual que la web.
   const noRole = confirmed.filter((signup) => !signup.role);
   if (noRole.length > 0) {
-    pushField(fields, `❔ Sin rol (${noRole.length})`, linesFor(noRole), true);
+    pushField(fields, `❔ Sin rol (${noRole.length})`, linesFor(noRole));
   }
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten.
@@ -1077,8 +1072,8 @@ export async function syncEventToDiscord(input: {
         : [];
     if (previousMessages.length > 0) {
       const embeds = buildEventAnnouncementEmbeds(announcementInput);
-      // Deja la mención del rol al día (la agrega si falta, la respeta si ya
-      // está) sin spamear en cada edición del evento.
+      // Deja la mención del rol al día: la agrega si falta y la normaliza si
+      // quedó con decoración vieja (p. ej. `🛡️ <@&rol>`), sin re-notificar.
       const content = await resolveAnnouncementContent({
         channelId: options.publishChannelId,
         messageId: previousMessages[0],

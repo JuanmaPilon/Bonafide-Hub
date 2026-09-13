@@ -1,4 +1,4 @@
-# Bonafide Platform
+![alt text]({7A25D267-9807-4A54-AB4C-402DCABEC50C}.png)# Bonafide Platform
 
 Plataforma privada para una comunidad de Discord, construida como monorepo con tres piezas principales:
 
@@ -29,16 +29,16 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 3. Config de XP (niveles, roles, multiplicadores, colores)
 4. Leaderboard enriquecido (avatar, nombre, `isBooster`)
 5. **Registro de auditoría** de cambios del Hub (solo lectura, visible para el owner)
-7. Widget del servidor (conectados, totales, boosts de Nitro)
-8. Boosters de Nitro (lista de quienes boostean)
-9. Comunicados: plantillas + publicación en Discord y en el hub (opción solo web)
-10. Mensajes diarios del loro de Karpindomo (CRUD + config)
-11. Logs de raid con Warcraft Logs: links manuales + vigilado de perfil (solo raids)
-12. Leaderboard público (`/public/leaderboard`) para la landing
-13. **Permisos de staff por rol de Discord** (`admin_role_modules`): qué módulos del Admin ve cada rol (tiers owner/admin/officer)
-14. **Sugerencias del hub**: se envían por DM al staff según los rangos configurados
-15. **Endpoint interno del bot con merge selectivo**: el bot solo escribe sus campos y ya no pisa módulos/sugerencias/permisos del hub
-16. **Eventos ("Módulo X") con juego por evento**: cada evento elige juego (WoW, LoL, …) y hereda sus roles de inscripción y su catálogo de clases/specs; el catálogo (`raid_specs`) se guarda por juego
+6. Widget del servidor (conectados, totales, boosts de Nitro)
+7. Boosters de Nitro (lista de quienes boostean)
+8. Comunicados: plantillas + publicación en Discord y en el hub (opción solo web)
+9. Mensajes diarios del loro de Karpindomo (CRUD + config)
+10. Logs de raid con Warcraft Logs: links manuales + vigilado de perfil (solo raids)
+11. Leaderboard público (`/public/leaderboard`) para la landing
+12. **Permisos de staff por rol de Discord** (`admin_role_modules`): qué módulos del Admin ve cada rol (tiers owner/admin/officer)
+13. **Sugerencias del hub**: se envían por DM al staff según los rangos configurados
+14. **Endpoint interno del bot con merge selectivo**: el bot solo escribe sus campos y ya no pisa módulos/sugerencias/permisos del hub
+15. **Eventos ("Módulo X") con juego por evento**: cada evento elige juego (WoW, LoL, …) y hereda sus roles de inscripción y su catálogo de clases/specs; el catálogo (`raid_specs`) se guarda por juego
 
 ### Web hub (`apps/web`)
 

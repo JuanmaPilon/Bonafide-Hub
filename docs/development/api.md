@@ -123,6 +123,13 @@ guild no personalizó ese juego, se usan los roles de su plantilla
 (`apps/api/src/services/event-templates.ts`: `wow`, `lol`). El catálogo de
 clases/specs es `RaidSpec` con el mismo `game` como discriminador.
 
+> **Nombre en la UI:** esto se muestra como **"Tipo de evento"** (en el evento y
+> en el Admin), porque no todos los tipos son juegos. Internamente (columna,
+> endpoints y payloads) la clave sigue siendo `game`.
+> La web NO aplica plantillas: elige el tipo y edita sus roles + su catálogo a
+> mano. `POST /events/templates/:key/apply` queda disponible en el API (precarga
+> roles y catálogo de un juego) por si se quiere usar más adelante.
+
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`

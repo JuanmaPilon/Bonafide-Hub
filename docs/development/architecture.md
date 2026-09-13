@@ -252,6 +252,8 @@ Inscripción
    -> el API valida el rol contra el juego del evento y re-renderiza el aviso
 ```
 
-1. El aviso-embed muestra el juego en el footer y el roster agrupado por los roles del juego; quien no eligió rol aparece en la columna "Sin rol".
-2. Cambiar el juego de un evento no borra inscripciones: las que tienen un rol de otro juego pasan a columnas con su icono clásico (o "Sin rol").
-3. El catálogo se guarda por juego, así cargar emojis de LoL no toca los de WoW.
+1. El aviso-embed muestra el tipo en el footer y el roster agrupado por los roles del tipo; quien no eligió rol aparece en la sección "Sin rol".
+2. La **repetición** del evento se ve solo en la web: el aviso de Discord (y sus campos) no la muestra.
+3. La mención del rol mínimo va pelada en el contenido del mensaje (`<@&rol>`, sin decoración) y se normaliza al refrescar sin re-notificar (`allowed_mentions: { parse: [] }`).
+4. Cambiar el tipo de un evento no borra inscripciones: las que tienen un rol de otro tipo pasan a su icono clásico (o "Sin rol").
+5. El catálogo se guarda por tipo, así cargar emojis de LoL no toca los de WoW.

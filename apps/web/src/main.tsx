@@ -55,7 +55,6 @@ import {
   createEventSpec,
   deleteEvent,
   deleteEventImage,
-  applyEventTemplate,
   deleteEventSpec,
   deleteMyEventSignup,
   resetMyEventSignup,
@@ -68,7 +67,6 @@ import {
   getEventGames,
   getEvents,
   getGuildEmojis,
-  getEventTemplates,
   resolveEventRoles,
   updateEvent,
   updateEventSpec,
@@ -101,7 +99,6 @@ import {
   type EventGameConfig,
   type EventGameOption,
   type EventRoleOption,
-  type EventTemplateSummary,
   type EventDiscordOptions,
   type EventSignup,
   type EventImage,
@@ -2609,12 +2606,9 @@ function App() {
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
   const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
   const [showSpecEditor, setShowSpecEditor] = useState(false);
-  // Plantillas de juego (WoW, LoL, …) para dejar el módulo configurado de una.
-  const [eventTemplates, setEventTemplates] = useState<EventTemplateSummary[]>(
-    [],
-  );
-  const [templateKey, setTemplateKey] = useState("");
-  // Juego que se está editando en "Configuración de eventos" (roles + catálogo).
+  // Tipo de evento que se está editando en "Configuración de eventos"
+  // (roles + catálogo). Las claves internas son las de las plantillas
+  // (wow/lol/…) o las que configure la guild.
   const [adminGameKey, setAdminGameKey] = useState("");
   const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
   const [guildEmojisLoading, setGuildEmojisLoading] = useState(false);
@@ -2635,7 +2629,6 @@ function App() {
     | "panel"
     | "daily"
     | "eventRoles"
-    | "eventTemplate"
     | "modules"
     | "permissions"
     | "karuta"
@@ -3096,30 +3089,8 @@ function App() {
     };
   }, [activeTab, selectedGuildId, showSpecEditor]);
 
-  // Plantillas de juego: se piden al abrir "Configuración de eventos".
-  useEffect(() => {
-    const adminOpen =
-      activeTab === "admin" && showSpecEditor && canAccess("config");
-    if (!selectedGuildId || !adminOpen) {
-      return;
-    }
-    let cancelled = false;
-    getEventTemplates(selectedGuildId)
-      .then((list) => {
-        if (cancelled) {
-          return;
-        }
-        setEventTemplates(list);
-        setTemplateKey((current) => current || (list[0]?.key ?? ""));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, selectedGuildId, showSpecEditor]);
-
-  // Juegos del módulo de eventos (roles de cada uno): los usa el selector de
-  // juego del evento, el roster y el editor del panel.
+  // Tipos de evento (roles de cada uno): los usa el selector del formulario de
+  // evento, el roster y el editor del panel.
   useEffect(() => {
     const adminOpen =
       activeTab === "admin" && showSpecEditor && canAccess("config");
@@ -3412,8 +3383,8 @@ function App() {
     }
   }
 
-  // Guarda los roles del JUEGO que se está editando en el panel (cada juego
-  // tiene los suyos). Es config de admin/super admin.
+  // Guarda los roles del TIPO DE EVENTO que se está editando en el panel
+  // (cada tipo tiene los suyos). Es config de admin/super admin.
   async function handleSaveEventRoleConfig(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -3437,7 +3408,7 @@ function App() {
       });
       setConfig(nextConfig);
       setEventGames(await getEventGames(selectedGuildId));
-      pushToast("Roles del juego guardados.", "success");
+      pushToast("Roles del tipo de evento guardados.", "success");
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "No se pudo guardar.",
@@ -3448,35 +3419,8 @@ function App() {
     }
   }
 
-  // Agrega (o actualiza) un juego a partir de su plantilla: deja sus roles y
-  // precarga en el catálogo las clases/specs que falten (no borra ni pisa lo
-  // existente, ni toca los otros juegos).
-  async function handleApplyEventTemplate(key = templateKey): Promise<void> {
-    if (!selectedGuildId || !key) {
-      return;
-    }
-    setSavingAction("eventTemplate");
-    try {
-      const result = await applyEventTemplate(selectedGuildId, key);
-      setConfig(result.config);
-      setEventSpecs(await getEventSpecs(selectedGuildId));
-      setEventGames(await getEventGames(selectedGuildId));
-      setTemplateKey(key);
-      setAdminGameKey(key);
-      setSpecDraft({ className: "", game: key, role: "", specName: "" });
-      pushToast("Plantilla aplicada.", "success");
-    } catch (error) {
-      pushToast(
-        error instanceof Error ? error.message : "No se pudo aplicar.",
-        "error",
-      );
-    } finally {
-      setSavingAction(null);
-    }
-  }
-
-  // Agrega o edita una clase/spec (rol + emoji) del catálogo del juego que se
-  // está editando.
+  // Agrega o edita una clase/spec (rol + emoji) del catálogo del tipo de
+  // evento que se está editando.
   async function handleSaveEventSpec(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -3486,11 +3430,11 @@ function App() {
       return;
     }
     const game = specDraft.game || adminGameKey;
-    // Rol: si el draft todavía no eligió uno, va el primero del juego (es el que
+    // Rol: si el draft todavía no eligió uno, va el primero del tipo (es el que
     // muestra el select).
     const role = specDraft.role || adminRoles[0]?.key || "";
     if (!role) {
-      pushToast("Ese juego no tiene roles configurados.", "error");
+      pushToast("Ese tipo de evento no tiene roles configurados.", "error");
       return;
     }
     const editing = Boolean(specDraft.id);
@@ -7349,7 +7293,7 @@ function App() {
                       <div className="admin-card-body">
                         <div className="admin-card-hint-row">
                           <label className="event-role-field">
-                            <span>Juego</span>
+                            <span>Tipo de evento</span>
                             <select
                               className="select"
                               value={adminGameKey}
@@ -7380,50 +7324,12 @@ function App() {
                               )}
                             </select>
                           </label>
-                          <label className="event-role-field">
-                            <span>Agregar juego (plantilla)</span>
-                            <select
-                              className="select"
-                              value={templateKey}
-                              disabled={savingAction === "eventTemplate"}
-                              onChange={(event) => {
-                                const next = event.target.value;
-                                const template = eventTemplates.find(
-                                  (entry) => entry.key === next,
-                                );
-                                if (!template || next === templateKey) {
-                                  return;
-                                }
-                                // Agregar un juego deja SUS roles y precarga su
-                                // catálogo; si el juego ya existía, sus roles se
-                                // restablecen a los de la plantilla, así que
-                                // pedimos confirmación.
-                                setConfirmDialog({
-                                  kind: "danger",
-                                  title: "Agregar juego",
-                                  message: `Se van a dejar los roles de "${template.label}" según la plantilla. ${template.description} El catálogo de otros juegos no se toca (solo se agregan las clases/specs que falten de este juego).`,
-                                  onConfirm: () => {
-                                    void handleApplyEventTemplate(next);
-                                  },
-                                });
-                              }}
-                            >
-                              {eventTemplates.map((template) => (
-                                <option key={template.key} value={template.key}>
-                                  {template.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          {savingAction === "eventTemplate" ? (
-                            <span className="muted-text">Guardando…</span>
-                          ) : null}
                         </div>
 
-                        {/* Roles del juego elegido (label + emoji), en acordeones
+                        {/* Roles del tipo elegido (label + emoji), en acordeones
                             para que la sección no crezca hacia abajo. */}
                         <h4 className="karuta-threshold-title">
-                          Roles del juego
+                          Roles del tipo de evento
                         </h4>
                         <div className="event-role-editor">
                           {adminRoles.map((entry, index) => (
@@ -7548,8 +7454,8 @@ function App() {
                           <span className="muted-text">Cargando…</span>
                         ) : adminSpecs.length === 0 ? (
                           <div className="event-signup-no-catalog">
-                            Este juego todavía no tiene clases/specs cargadas.
-                            Agregá abajo cada una con su emoji.
+                            Este tipo de evento todavía no tiene clases/specs
+                            cargadas. Agregá abajo cada una con su emoji.
                           </div>
                         ) : (
                           adminRoles.map((roleOption) => {
@@ -8443,10 +8349,10 @@ function App() {
                             maxLength={120}
                           />
                         </label>
-                        {/* Juego: define los roles de inscripción y el catálogo
-                            que se ofrecen en este evento. */}
+                        {/* Tipo de evento: define los roles de inscripción y el
+                            catálogo que se ofrecen en este evento. */}
                         <label>
-                          <span>Juego</span>
+                          <span>Tipo de evento</span>
                           <select
                             className="select"
                             value={eventForm.game}
