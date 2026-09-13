@@ -849,7 +849,24 @@ export function eventRoleMeta(
   if (role === "dps") {
     return { animated: false, emoji: "⚔️", key: "dps", label: "DPS" };
   }
-  return resolveEventRoles(config).find((entry) => entry.key === role);
+  const configured = resolveEventRoles(config).find(
+    (entry) => entry.key === role,
+  );
+  if (configured) {
+    return configured;
+  }
+  // Rol que ya NO está en la config (le cambiaron el juego a la guild o se
+  // borró el rol) pero sigue guardado en inscripciones viejas: mostramos su
+  // icono clásico igual, para que el roster no quede con "❔ healer".
+  const classic = ROLE_META.find((entry) => entry.key === role);
+  return classic
+    ? {
+        animated: false,
+        emoji: classic.emoji,
+        key: classic.key,
+        label: classic.label,
+      }
+    : undefined;
 }
 
 export function roleMeta(

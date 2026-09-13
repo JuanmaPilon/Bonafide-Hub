@@ -3145,23 +3145,8 @@ textarea {
   color: var(--muted);
 }
 
-/* Miembro del roster: emoji de spec + nick/personaje y, al lado y en gris,
-   la clase · spec en texto. */
 .event-roster-member {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
   font-size: 0.88rem;
-}
-
-.event-roster-name {
-  white-space: nowrap;
-}
-
-.event-roster-class {
-  font-size: 0.74rem;
-  color: var(--muted);
-  white-space: nowrap;
 }
 
 .event-roster-empty {

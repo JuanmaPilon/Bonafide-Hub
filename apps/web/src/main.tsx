@@ -1214,15 +1214,6 @@ function EventRoleEmoji({
   );
 }
 
-// Texto "Clase · Spec" de una inscripción. Devuelve "" si el jugador todavía
-// no eligió nada (o si el juego no usa catálogo), así no se muestra al vacío.
-function signupClassSpec(signup: EventSignup): string {
-  return [signup.wowClass, signup.spec]
-    .map((part) => (part ?? "").trim())
-    .filter((part) => part.length > 0)
-    .join(" · ");
-}
-
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
 function EventCard({
@@ -1397,8 +1388,7 @@ function EventCard({
   }, [config, event.signups, eventRoles]);
 
   // Render de un miembro del roster: emoji de la spec (si tiene uno
-  // configurado), nick, personaje y la clase/spec en texto, para que se vea
-  // quién es y con qué juega sin tener que deducirlo del emoji.
+  // configurado) + nick y personaje.
   const renderMember = (signup: EventSignup) => {
     const specRow = specs.find(
       (row) =>
@@ -1406,7 +1396,6 @@ function EventCard({
         row.className === signup.wowClass &&
         row.specName === (signup.spec ?? ""),
     );
-    const classSpec = signupClassSpec(signup);
     return (
       <span className="event-roster-member" key={signup.id}>
         <DiscordEmojiImage
@@ -1414,13 +1403,8 @@ function EventCard({
           emojiId={specRow?.emojiId}
           name={specRow?.specName}
         />
-        <span className="event-roster-name">
-          {signup.username}
-          {signup.character ? ` (${signup.character})` : ""}
-        </span>
-        {classSpec ? (
-          <span className="event-roster-class">{classSpec}</span>
-        ) : null}
+        {signup.username}
+        {signup.character ? ` (${signup.character})` : ""}
       </span>
     );
   };
@@ -1472,7 +1456,8 @@ function EventCard({
                 ? `${event.durationMinutes} min${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
                 : "—"}
             </span>
-          </div>          <div className="event-info-item">
+          </div>{" "}
+          <div className="event-info-item">
             <span className="event-info-label">⏳ Cierre de inscripciones</span>
             <span
               className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
@@ -7202,10 +7187,25 @@ function App() {
                               value={templateKey}
                               disabled={savingAction === "eventTemplate"}
                               onChange={(event) => {
-                                setTemplateKey(event.target.value);
-                                void handleApplyEventTemplate(
-                                  event.target.value,
+                                const next = event.target.value;
+                                const template = eventTemplates.find(
+                                  (entry) => entry.key === next,
                                 );
+                                if (!template || next === templateKey) {
+                                  return;
+                                }
+                                // Aplicar una plantilla REEMPLAZA los roles del
+                                // módulo, así que pedimos confirmación: elegir
+                                // otro juego sin querer rompe el roster de los
+                                // eventos que ya tienen inscripciones.
+                                setConfirmDialog({
+                                  kind: "danger",
+                                  title: "Aplicar plantilla",
+                                  message: `Se van a reemplazar los roles de evento por los de "${template.label}". ${template.description} El catálogo actual no se borra: solo se agregan las clases/specs que falten.`,
+                                  onConfirm: () => {
+                                    void handleApplyEventTemplate(next);
+                                  },
+                                });
                               }}
                             >
                               {eventTemplates.map((template) => (
@@ -7644,17 +7644,10 @@ function App() {
                                                   className="event-roster-member"
                                                   key={signup.id}
                                                 >
-                                                  <span className="event-roster-name">
-                                                    {signup.username}
-                                                    {signup.character
-                                                      ? ` (${signup.character})`
-                                                      : ""}
-                                                  </span>
-                                                  {signupClassSpec(signup) ? (
-                                                    <span className="event-roster-class">
-                                                      {signupClassSpec(signup)}
-                                                    </span>
-                                                  ) : null}
+                                                  {signup.username}
+                                                  {signup.character
+                                                    ? ` (${signup.character})`
+                                                    : ""}
                                                 </span>
                                               ))}
                                             </span>
