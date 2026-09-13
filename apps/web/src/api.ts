@@ -856,8 +856,18 @@ export function roleMeta(
   return ROLE_META.find((entry) => entry.key === role);
 }
 
+// Discord solo acepta tamaños potencia de 2 (16..4096); cualquier otro valor
+// hace que el CDN responda 400 y el navegador muestre el recuadro roto.
+const EMOJI_SIZES = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+
+function normalizeEmojiSize(size: number): number {
+  return EMOJI_SIZES.find((candidate) => candidate >= size) ?? 4096;
+}
+
 // URL del CDN de Discord para un emoji custom (por id). Los emojis del
 // servidor se sirven desde cdn.discordapp.com sin requerir autenticación.
+// Para estáticos usamos .webp (también sirve GIFs animados), así no se rompe
+// si el flag `animated` quedó mal guardado.
 export function discordEmojiUrl(
   emojiId?: string,
   animated?: boolean,
@@ -866,7 +876,8 @@ export function discordEmojiUrl(
   if (!emojiId) {
     return undefined;
   }
-  return `https://cdn.discordapp.com/emojis/${emojiId}.${animated ? "gif" : "png"}?size=${size}&quality=lossless`;
+  const extension = animated ? "gif" : "webp";
+  return `https://cdn.discordapp.com/emojis/${emojiId}.${extension}?size=${normalizeEmojiSize(size)}&quality=lossless`;
 }
 
 export function classEmoji(wowClass?: string): string {

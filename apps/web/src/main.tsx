@@ -747,9 +747,48 @@ function datePartText(value: string): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
 }
 
-// Selector de fecha y hora con formato FIJO dd/mm/aaaa + 24 hs (selects de
-// hora/minuto), sin depender del idioma del navegador. Emite el mismo formato
-// que el input nativo: YYYY-MM-DDTHH:mm (o "" si la fecha está incompleta).
+// Nombres/etiquetas del almanaque (semana arranca lunes, como acá).
+const MONTH_LABELS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
+
+function parseDateParts(
+  value: string,
+): { day: number; month: number; year: number } | null {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) {
+    return null;
+  }
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+  return { day, month, year };
+}
+
+function currentMonthKey(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${pad2(today.getMonth() + 1)}`;
+}
+
+// Selector de fecha y hora: se puede tipear dd/mm/aaaa o elegir la fecha en el
+// almanaque (mismo formato siempre, sin depender del idioma del navegador) y
+// la hora se elige en selects de 24 hs. Emite un valor local YYYY-MM-DDTHH:mm
+// (o "" si la fecha está incompleta).
 function EventDateTimeField({
   onChange,
   value,
@@ -761,6 +800,11 @@ function EventDateTimeField({
   // Último valor que emitimos: sirve para distinguir un cambio nuestro (no hay
   // que pisar lo que el usuario está tipeando) de uno externo (editar/duplicar).
   const lastEmitted = useRef<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  // Mes que muestra el almanaque (clave YYYY-MM).
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    value ? value.slice(0, 7) : currentMonthKey(),
+  );
   const hours = value.match(/T(\d{2}):/)?.[1] ?? "00";
   const minutes = value.match(/T\d{2}:(\d{2})/)?.[1] ?? "00";
 
@@ -791,26 +835,151 @@ function EventDateTimeField({
     onChange(next);
   };
 
+  const selected = parseDateParts(dateText);
+  const [calendarYear, calendarMonthNumber] = calendarMonth
+    .split("-")
+    .map(Number);
+
+  // Celdas del mes: huecos del primer día + los días (semana empieza lunes).
+  const monthCells = useMemo(() => {
+    const firstWeekday =
+      (new Date(calendarYear, calendarMonthNumber - 1, 1).getDay() + 6) % 7;
+    const totalDays = new Date(
+      calendarYear,
+      calendarMonthNumber,
+      0,
+    ).getDate();
+    const cells: Array<number | null> = Array.from(
+      { length: firstWeekday },
+      () => null,
+    );
+    for (let day = 1; day <= totalDays; day += 1) {
+      cells.push(day);
+    }
+    return cells;
+  }, [calendarMonthNumber, calendarYear]);
+
+  const today = new Date();
+
+  const shiftMonth = (delta: number): void => {
+    const next = new Date(calendarYear, calendarMonthNumber - 1 + delta, 1);
+    setCalendarMonth(`${next.getFullYear()}-${pad2(next.getMonth() + 1)}`);
+  };
+
+  const toggleCalendar = (): void => {
+    if (!calendarOpen && selected) {
+      // Abrimos en el mes de la fecha que ya está puesta.
+      setCalendarMonth(`${selected.year}-${pad2(selected.month)}`);
+    }
+    setCalendarOpen((current) => !current);
+  };
+
+  const pickDay = (day: number): void => {
+    const next = `${pad2(day)}/${pad2(calendarMonthNumber)}/${calendarYear}`;
+    setDateText(next);
+    emit(next, hours, minutes);
+    setCalendarOpen(false);
+  };
+
   return (
     <div className="event-datetime-field">
-      <input
-        className="input"
-        inputMode="numeric"
-        placeholder="dd/mm/aaaa"
-        value={dateText}
-        onChange={(event) => {
-          // Máscara: solo dígitos, con las barras puestas solas.
-          const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
-          const parts = [
-            digits.slice(0, 2),
-            digits.slice(2, 4),
-            digits.slice(4, 8),
-          ].filter(Boolean);
-          const nextText = parts.join("/");
-          setDateText(nextText);
-          emit(nextText, hours, minutes);
-        }}
-      />
+      <span className="event-date-input">
+        <input
+          className="input"
+          inputMode="numeric"
+          placeholder="dd/mm/aaaa"
+          value={dateText}
+          onChange={(event) => {
+            // Máscara: solo dígitos, con las barras puestas solas.
+            const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+            const parts = [
+              digits.slice(0, 2),
+              digits.slice(2, 4),
+              digits.slice(4, 8),
+            ].filter(Boolean);
+            const nextText = parts.join("/");
+            setDateText(nextText);
+            emit(nextText, hours, minutes);
+          }}
+        />
+        <button
+          aria-expanded={calendarOpen}
+          className="event-date-toggle"
+          onClick={toggleCalendar}
+          title="Elegir la fecha en el almanaque"
+          type="button"
+        >
+          📅
+        </button>
+        {calendarOpen ? (
+          <>
+            <span
+              className="event-calendar-backdrop"
+              onClick={() => setCalendarOpen(false)}
+            />
+            <div className="event-calendar">
+              <div className="event-calendar-head">
+                <button
+                  aria-label="Mes anterior"
+                  onClick={() => shiftMonth(-1)}
+                  type="button"
+                >
+                  ‹
+                </button>
+                <span>
+                  {MONTH_LABELS[calendarMonthNumber - 1]} {calendarYear}
+                </span>
+                <button
+                  aria-label="Mes siguiente"
+                  onClick={() => shiftMonth(1)}
+                  type="button"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="event-calendar-grid">
+                {WEEKDAY_LABELS.map((label, index) => (
+                  <span
+                    className="event-calendar-weekday"
+                    key={`${label}-${index}`}
+                  >
+                    {label}
+                  </span>
+                ))}
+                {monthCells.map((day, index) =>
+                  day === null ? (
+                    <span key={`hueco-${index}`} />
+                  ) : (
+                    <button
+                      className={[
+                        "event-calendar-day",
+                        selected &&
+                        selected.day === day &&
+                        selected.month === calendarMonthNumber &&
+                        selected.year === calendarYear
+                          ? "selected"
+                          : "",
+                        today.getDate() === day &&
+                        today.getMonth() + 1 === calendarMonthNumber &&
+                        today.getFullYear() === calendarYear
+                          ? "today"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      key={day}
+                      onClick={() => pickDay(day)}
+                      type="button"
+                    >
+                      {day}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </span>
       <select
         className="select event-time-select"
         value={hours}
@@ -998,6 +1167,39 @@ function karutaCardTier(
   return superRare ? "super" : null;
 }
 
+// Imagen de un emoji custom de Discord con fallback: si el CDN la rechaza
+// (emoji borrado, URL inválida) mostramos el emoji unicode o nada, en vez del
+// clásico recuadro de imagen rota.
+function DiscordEmojiImage({
+  animated,
+  className = "signup-spec-emoji",
+  emojiId,
+  fallback,
+  name,
+  size,
+}: {
+  animated?: boolean;
+  className?: string;
+  emojiId?: string;
+  fallback?: string;
+  name?: string;
+  size?: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = discordEmojiUrl(emojiId, animated, size);
+  if (!url || failed) {
+    return fallback ? <span aria-hidden="true">{fallback}</span> : null;
+  }
+  return (
+    <img
+      alt={name ?? ""}
+      className={className}
+      onError={() => setFailed(true)}
+      src={url}
+    />
+  );
+}
+
 // Emoji de un rol de evento: custom de Discord (imagen) o unicode.
 function EventRoleEmoji({
   config,
@@ -1009,16 +1211,15 @@ function EventRoleEmoji({
   size?: number;
 }) {
   const meta = eventRoleMeta(role, config);
-  if (meta?.emojiId) {
-    return (
-      <img
-        alt=""
-        className="signup-spec-emoji"
-        src={discordEmojiUrl(meta.emojiId, meta.animated, size)}
-      />
-    );
-  }
-  return <span aria-hidden="true">{meta?.emoji ?? "❔"}</span>;
+  return (
+    <DiscordEmojiImage
+      animated={meta?.animated}
+      emojiId={meta?.emojiId}
+      fallback={meta?.emoji ?? "❔"}
+      name={meta?.label}
+      size={size}
+    />
+  );
 }
 
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
@@ -1172,12 +1373,13 @@ function EventCard({
         row.className === signup.wowClass &&
         row.specName === (signup.spec ?? ""),
     );
-    const emojiUrl = discordEmojiUrl(specRow?.emojiId, specRow?.animated);
     return (
       <span className="event-roster-member" key={signup.id}>
-        {emojiUrl ? (
-          <img alt="" className="signup-spec-emoji" src={emojiUrl} />
-        ) : null}
+        <DiscordEmojiImage
+          animated={specRow?.animated}
+          emojiId={specRow?.emojiId}
+          name={specRow?.specName}
+        />
         {signup.username}
         {signup.character ? ` (${signup.character})` : ""}
       </span>
@@ -1427,11 +1629,6 @@ function EventCard({
                                       role === row.role &&
                                       wowClass === row.className &&
                                       spec === row.specName;
-                                    const emojiUrl = discordEmojiUrl(
-                                      row.emojiId,
-                                      row.animated,
-                                      24,
-                                    );
                                     return (
                                       <button
                                         className={`event-signup-spec${selected ? " active" : ""}`}
@@ -1444,13 +1641,12 @@ function EventCard({
                                         }
                                         type="button"
                                       >
-                                        {emojiUrl ? (
-                                          <img
-                                            alt=""
-                                            className="signup-spec-emoji"
-                                            src={emojiUrl}
-                                          />
-                                        ) : null}
+                                        <DiscordEmojiImage
+                                          animated={row.animated}
+                                          emojiId={row.emojiId}
+                                          name={row.specName}
+                                          size={24}
+                                        />
                                         <span>
                                           {specEnabled
                                             ? row.specName
@@ -1467,20 +1663,12 @@ function EventCard({
                       )}
                       {role && wowClass && spec ? (
                         <div className="event-signup-selected">
-                          {currentSpecRow?.emojiId ? (
-                            <img
-                              alt=""
-                              className="signup-spec-emoji"
-                              src={discordEmojiUrl(
-                                currentSpecRow.emojiId,
-                                currentSpecRow.animated,
-                              )}
-                            />
-                          ) : (
-                            <span aria-hidden="true">
-                              {classEmoji(wowClass)}{" "}
-                            </span>
-                          )}
+                          <DiscordEmojiImage
+                            animated={currentSpecRow?.animated}
+                            emojiId={currentSpecRow?.emojiId}
+                            fallback={classEmoji(wowClass)}
+                            name={currentSpecRow?.specName}
+                          />
                           <span>
                             {roleLabelFor(role)}
                             {specEnabled && spec

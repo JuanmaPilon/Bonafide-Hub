@@ -2735,6 +2735,139 @@ textarea {
   padding: 11px 8px;
 }
 
+/* Input de fecha + botón del almanaque (el popover cuelga de acá). */
+.event-date-input {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.event-date-toggle {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(133, 156, 212, 0.24);
+  background: rgba(10, 16, 31, 0.88);
+  cursor: pointer;
+  font-size: 1.05rem;
+}
+
+.event-date-toggle:hover {
+  border-color: rgba(255, 180, 84, 0.6);
+}
+
+/* Capa invisible para cerrar el almanaque al tocar afuera. */
+.event-calendar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.event-calendar {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 268px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(133, 156, 212, 0.32);
+  background: #0d1424;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.event-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #dce7ff;
+  text-transform: capitalize;
+}
+
+.event-calendar-head button {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid rgba(133, 156, 212, 0.28);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.event-calendar-head button:hover {
+  border-color: rgba(255, 180, 84, 0.6);
+}
+
+.event-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.event-calendar-weekday {
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--muted);
+  padding-bottom: 2px;
+}
+
+.event-calendar-day {
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.event-calendar-day:hover {
+  background: rgba(134, 158, 214, 0.16);
+}
+
+.event-calendar-day.today {
+  border-color: rgba(134, 158, 214, 0.45);
+}
+
+.event-calendar-day.selected {
+  background: #6aa8ff;
+  border-color: #6aa8ff;
+  color: #0b1226;
+  font-weight: 700;
+}
+
+:root[data-theme="light"] .event-calendar {
+  background: #ffffff;
+  border-color: rgba(67, 81, 109, 0.25);
+}
+
+:root[data-theme="light"] .event-calendar-head {
+  color: #22304a;
+}
+
+:root[data-theme="light"] .event-date-toggle {
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .event-calendar-day {
+  color: #22304a;
+}
+
+:root[data-theme="light"] .event-calendar-day.selected {
+  color: #ffffff;
+}
+
 /* Etiqueta libre del evento (texto + color), dentro del grid del form. */
 .event-tag-field {
   display: grid;

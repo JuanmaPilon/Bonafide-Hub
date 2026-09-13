@@ -114,6 +114,7 @@ import {
   buildEventSignupActionRows,
   cleanupEventDiscord,
   fetchGuildIconUrl,
+  resolveAnnouncementContent,
   syncEventToDiscord,
   updateEventAnnouncement,
   type AnnouncementSignup,
@@ -1361,7 +1362,6 @@ async function syncAndStoreEventDiscord(input: {
     discordEventId?: string;
     messageIds?: string[];
     publishChannelId?: string;
-    requiredRoleId?: string;
   };
 }): Promise<{
   discordError?: string;
@@ -1478,8 +1478,13 @@ async function refreshEventAnnouncement(
         specLabel: eventConfig.eventSpecLabel,
       }),
       // Si el evento ya no tiene rol mínimo, limpiamos la mención vieja del
-      // contenido; si la tiene, no la tocamos (evita re-notificar al rol).
-      content: event.requiredRoleId ? undefined : "",
+      // contenido; si la tiene y falta la mención, la agrega (así el rol queda
+      // etiquetado aunque el aviso sea viejo).
+      content: await resolveAnnouncementContent({
+        channelId: event.publishChannelId,
+        messageId,
+        requiredRoleId: event.requiredRoleId,
+      }),
       embeds,
       messageId,
     });
@@ -3603,7 +3608,6 @@ export function buildApp() {
           discordEventId?: string;
           messageIds?: string[];
           publishChannelId?: string;
-          requiredRoleId?: string;
         }
       | undefined;
     if (discordOpts) {
@@ -3633,7 +3637,6 @@ export function buildApp() {
             discordEventId: previous.discordEventId,
             messageIds: previous.discordMessageIds,
             publishChannelId: previous.publishChannelId,
-            requiredRoleId: previous.requiredRoleId,
           };
         } else {
           await cleanupEventDiscord({

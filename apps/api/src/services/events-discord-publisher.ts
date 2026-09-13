@@ -274,6 +274,51 @@ async function updateScheduledEvent(input: {
   return { id: input.discordEventId };
 }
 
+// ¿El mensaje-aviso ya tiene la mención de ese rol en su contenido? Sirve para
+// agregarla cuando falta (p. ej. avisos publicados antes de que existiera la
+// mención) sin volver a notificar en cada edición.
+async function messageHasRoleMention(
+  channelId: string,
+  messageId: string,
+  roleId: string,
+): Promise<boolean> {
+  try {
+    const response = await discordFetch(
+      `/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}`,
+    );
+    if (!response.ok) {
+      return false;
+    }
+    const data = (await response.json()) as { content?: string };
+    return (data.content ?? "").includes(roleId);
+  } catch {
+    return false;
+  }
+}
+
+// Contenido del mensaje-aviso según el rol requerido del evento:
+//   - con rol y sin mención  → agrega "🛡️ <@&rol>" (así el rol queda
+//     etiquetado y le notifica a todos los que lo tienen);
+//   - con rol y ya mencionado → undefined (no tocamos el contenido para no
+//     re-notificar en cada edición);
+//   - sin rol → "" (limpia una mención vieja que haya quedado).
+export async function resolveAnnouncementContent(input: {
+  channelId: string;
+  messageId: string;
+  requiredRoleId?: string;
+}): Promise<string | undefined> {
+  const roleId = input.requiredRoleId?.trim();
+  if (!roleId) {
+    return "";
+  }
+  const mentioned = await messageHasRoleMention(
+    input.channelId,
+    input.messageId,
+    roleId,
+  );
+  return mentioned ? undefined : `🛡️ <@&${roleId}>`;
+}
+
 // ── Roster estilo Raid Helper dentro del embed del evento ───────────
 
 export type AnnouncementSignup = {
@@ -497,35 +542,27 @@ export function buildEventAnnouncementEmbeds(input: {
   // inscripciones hasta reactivarlo.
   const isPaused = input.paused === true;
 
-  // Bloque de "cuándo": la fecha va como subtítulo grande (Discord renderiza
-  // ## en la descripción de un embed) y abajo el contexto en una línea.
-  const metaBits: string[] = [`<t:${timestamp}:R>`];
-  const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
-  if (input.durationMinutes && input.durationMinutes > 0) {
-    const end = Math.floor(
-      (input.startsAt.getTime() + input.durationMinutes * 60_000) / 1000,
-    );
-    metaBits.push(`⏱️ ${input.durationMinutes} min (hasta <t:${end}:t>)`);
-  }
-  if (recurrenceLabel) {
-    metaBits.push(`🔁 ${recurrenceLabel}`);
-  }
+  // OJO: Discord NO renderiza títulos markdown (`##`) dentro de la descripción
+  // de un embed: van como texto plano. Por eso la fecha va en negrita acá y
+  // los datos cortos (hora, duración, cierre) en campos en columnas, que es
+  // lo que le da el aspecto de "tarjeta".
   const whenLines: string[] = [
-    `## 🗓️ <t:${timestamp}:F>`,
-    metaBits.join(" · "),
+    `**🗓️ <t:${timestamp}:F>**`,
+    `<t:${timestamp}:R>`,
   ];
+  const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
+  const endTimestamp =
+    input.durationMinutes && input.durationMinutes > 0
+      ? Math.floor(
+          (input.startsAt.getTime() + input.durationMinutes * 60_000) / 1000,
+        )
+      : undefined;
   if (input.location) {
     whenLines.push(`📍 ${input.location}`);
   }
-  if (input.signupDeadline && !signupsClosed && !isPaused) {
-    const dl = Math.floor(input.signupDeadline.getTime() / 1000);
-    whenLines.push(
-      `⏳ **Inscripciones abiertas hasta <t:${dl}:F>** (<t:${dl}:R>)`,
-    );
-  }
 
-  // Conteo por estado (solo los que tengan al menos uno). Se muestra aparte
-  // (con aire) para que el embed no quede todo junto.
+  // Conteo por estado (solo los que tengan al menos uno). Va en su propio
+  // campo para que se vea como una caja de estadísticas.
   const counts: string[] = [];
   for (const [status, meta] of Object.entries(STATUS_META)) {
     const count = input.signups.filter(
@@ -537,6 +574,37 @@ export function buildEventAnnouncementEmbeds(input: {
   }
 
   const fields: Array<{ name: string; value: string }> = [];
+  // Fila de datos rápidos, en columnas de a 3 (Discord las acomoda solo).
+  fields.push({ name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
+  fields.push({
+    name: "⏱️ Duración",
+    value: endTimestamp
+      ? `${input.durationMinutes} min\n(termina <t:${endTimestamp}:t>)`
+      : "—",
+  });
+  fields.push({
+    name: "⏳ Cierre",
+    value: input.signupDeadline
+      ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
+      : "—",
+  });
+  if (recurrenceLabel) {
+    fields.push({ name: "🔁 Repetición", value: recurrenceLabel });
+  }
+  // Requisito de rol: caja aparte (bien visible) + el mensaje menciona al rol
+  // para que notifique a todos los que lo tienen.
+  const requiredRoleId = input.requiredRoleId?.trim();
+  if (requiredRoleId) {
+    fields.push({
+      name: "🛡️ Roster principal",
+      value: `Requiere <@&${requiredRoleId}>\n*Sin el rol quedás como Bench.*`,
+    });
+  }
+  fields.push({
+    name: "📊 Asistencia",
+    value: counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía",
+  });
+
   const resolveSpec = (
     signup: AnnouncementSignup,
   ): AnnouncementSpec | undefined =>
@@ -607,9 +675,9 @@ export function buildEventAnnouncementEmbeds(input: {
     pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
   }
 
-  // Descripción en bloques (con línea en blanco entre ellos) para que el
-  // embed respire: fecha + contexto, requisito de rol, asistencia y link.
-  // El detalle del roster va en fields (se ve en columnas).
+  // Descripción: banner de estado + cuándo, link a la web y la descripción
+  // que escribió el staff. El resto (duración, cierre, requisito, asistencia
+  // y roster) va en fields, que es lo que le da el aspecto ordenado.
   const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
   const descriptionParts: string[] = [];
   if (isPaused) {
@@ -623,23 +691,6 @@ export function buildEventAnnouncementEmbeds(input: {
     );
   }
   descriptionParts.push(whenLines.join("\n"));
-  // Rol mínimo para entrar al roster principal: se avisa acá y además el
-  // mensaje menciona al rol (así le llega la notificación a todos los que lo
-  // tienen; una mención dentro de un embed no notifica).
-  const requiredRoleId = input.requiredRoleId?.trim();
-  if (requiredRoleId) {
-    descriptionParts.push(
-      [
-        `> 🛡️ **Roster principal:** hay que tener <@&${requiredRoleId}>`,
-        "> *Si no tenés el rol, tu anotación queda como Bench.*",
-      ].join("\n"),
-    );
-  }
-  descriptionParts.push(
-    counts.length > 0
-      ? `📊 **Asistencia:** ${counts.join(" · ")}`
-      : "📊 **Sin anotados todavía** — ¡anotate con los botones de abajo!",
-  );
   if (webBase) {
     descriptionParts.push(`[🌐 Ver el evento en la web](${webBase}/#/eventos)`);
   }
@@ -655,9 +706,11 @@ export function buildEventAnnouncementEmbeds(input: {
     description: descriptionText,
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
+    // Sello de tiempo abajo a la derecha (se actualiza solo con cada refresh).
+    timestamp: new Date().toISOString(),
   };
-  // Icono de la guild: thumbnail a la derecha + icono del footer. Le da
-  // identidad al aviso (sin pisar la imagen grande del evento).
+  // Icono de la guild: thumbnail a la derecha + icono del footer + icono del
+  // autor. Le da identidad al aviso (sin pisar la imagen grande del evento).
   if (input.guildIconUrl) {
     embed.thumbnail = { url: input.guildIconUrl };
     embed.footer = {
@@ -670,6 +723,7 @@ export function buildEventAnnouncementEmbeds(input: {
   const tagLabel = input.tagLabel?.trim();
   if (tagLabel) {
     embed.author = {
+      ...(input.guildIconUrl ? { icon_url: input.guildIconUrl } : {}),
       name: `🏷️ ${tagLabel.slice(0, 250)}`,
     };
   }
@@ -888,7 +942,6 @@ export async function syncEventToDiscord(input: {
     discordEventId?: string;
     messageIds?: string[];
     publishChannelId?: string;
-    requiredRoleId?: string;
   };
   guildIconUrl?: string;
   guildId: string;
@@ -995,7 +1048,13 @@ export async function syncEventToDiscord(input: {
         : [];
     if (previousMessages.length > 0) {
       const embeds = buildEventAnnouncementEmbeds(announcementInput);
-      const roleId = input.requiredRoleId?.trim();
+      // Deja la mención del rol al día (la agrega si falta, la respeta si ya
+      // está) sin spamear en cada edición del evento.
+      const content = await resolveAnnouncementContent({
+        channelId: options.publishChannelId,
+        messageId: previousMessages[0],
+        requiredRoleId: input.requiredRoleId,
+      });
       const edited = await patchAnnouncement({
         channelId: options.publishChannelId,
         components: buildEventSignupActionRows(input.eventId, {
@@ -1007,14 +1066,7 @@ export async function syncEventToDiscord(input: {
           specEnabled: input.specEnabled,
           specLabel: input.specLabel,
         }),
-        // La mención del rol solo se reescribe si CAMBIÓ el rol mínimo (es el
-        // único caso en el que vale la pena volver a notificar); sin rol,
-        // vaciamos el contenido por si quedó una mención vieja.
-        content: roleId
-          ? input.existing?.requiredRoleId?.trim() === roleId
-            ? undefined
-            : `🛡️ <@&${roleId}>`
-          : "",
+        content,
         embeds,
         messageId: previousMessages[0],
       });
