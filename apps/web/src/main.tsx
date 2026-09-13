@@ -117,7 +117,6 @@ type HubTab =
   | "comunicados"
   | "raids"
   | "eventos"
-  | "memes"
   | "karuta"
   | "perfil"
   | "sugerencias"
@@ -129,7 +128,6 @@ const VALID_TABS: HubTab[] = [
   "comunicados",
   "raids",
   "eventos",
-  "memes",
   "karuta",
   "perfil",
   "sugerencias",
@@ -164,11 +162,6 @@ const HUB_MODULES: Array<{
     key: "eventos",
     label: "Eventos",
     description: "Calendario y organización de eventos.",
-  },
-  {
-    key: "memes",
-    label: "Memes",
-    description: "Highlights, clips y contenido destacado.",
   },
   {
     key: "karuta",
@@ -1668,7 +1661,7 @@ function EventCard({
                       {specs.length === 0 ? (
                         <div className="event-signup-no-catalog">
                           El staff todavía no configuró los roles de evento
-                          (Admin → Configuración de roles).
+                          (Admin → Configuración de eventos).
                         </div>
                       ) : catalogClasses.length === 0 ? (
                         <div className="event-signup-no-catalog">
@@ -1962,10 +1955,6 @@ function tabLabel(tab: HubTab): string {
     return "Eventos";
   }
 
-  if (tab === "memes") {
-    return "Memes";
-  }
-
   if (tab === "karuta") {
     return "Karuta";
   }
@@ -2000,10 +1989,6 @@ function panelTitle(tab: HubTab): string {
 
   if (tab === "eventos") {
     return "Eventos";
-  }
-
-  if (tab === "memes") {
-    return "Memes";
   }
 
   if (tab === "karuta") {
@@ -2042,10 +2027,6 @@ function panelDescription(tab: HubTab): string {
     // La cabecera de Eventos es propia (título + botón nuevo evento); no
     // queremos descripción genérica.
     return "";
-  }
-
-  if (tab === "memes") {
-    return "Highlights, clips y contenido curado de la comunidad.";
   }
 
   if (tab === "karuta") {
@@ -3033,7 +3014,7 @@ function App() {
   }, [activeTab, selectedGuildId]);
 
   // El catálogo de roles/specs se carga donde se usa: en la tab Eventos
-  // (selector de inscripción y roster) o en Admin → Configuración de roles.
+  // (selector de inscripción y roster) o en Admin → Configuración de eventos.
   useEffect(() => {
     const adminOpen =
       activeTab === "admin" && showSpecEditor && canAccess("config");
@@ -3061,7 +3042,7 @@ function App() {
     };
   }, [activeTab, selectedGuildId, showSpecEditor]);
 
-  // Plantillas de juego: se piden al abrir "Configuración de roles".
+  // Plantillas de juego: se piden al abrir "Configuración de eventos".
   useEffect(() => {
     const adminOpen =
       activeTab === "admin" && showSpecEditor && canAccess("config");
@@ -3402,7 +3383,7 @@ function App() {
     }
   }
 
-  // Agrega o edita una clase/spec (rol + emoji) de la configuración de roles.
+  // Agrega o edita una clase/spec (rol + emoji) de la configuración de eventos.
   async function handleSaveEventSpec(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -3465,8 +3446,8 @@ function App() {
     }
     setConfirmDialog({
       kind: "danger",
-      title: "Quitar de la configuración de roles",
-      message: `¿Quitar "${spec.specName}" (${spec.className}) de la configuración de roles? Las inscripciones existentes conservan su texto pero pierden el emoji.`,
+      title: "Quitar de la configuración de eventos",
+      message: `¿Quitar "${spec.specName}" (${spec.className}) de la configuración de eventos? Las inscripciones existentes conservan su texto pero pierden el emoji.`,
       onConfirm: () => {
         void (async () => {
           try {
@@ -4152,11 +4133,17 @@ function App() {
   function toggleModule(key: string): void {
     markDirty("modules");
     setConfig((current) => {
-      const enabled = new Set(
+      // Arrancamos de la lista guardada, pero normalizada: el alias viejo
+      // "muro" pasa a ser "karuta" y se descartan claves que ya no existen
+      // como módulo (ej. "memes"), así la config no acumula basura.
+      const known = new Set<string>(HUB_MODULES.map((mod) => mod.key));
+      const base =
         current.enabledModules && current.enabledModules.length > 0
-          ? current.enabledModules
-          : HUB_MODULES.map((mod) => mod.key),
-      );
+          ? current.enabledModules.map((saved) =>
+              saved === "muro" ? "karuta" : saved,
+            )
+          : HUB_MODULES.map((mod) => mod.key);
+      const enabled = new Set(base.filter((saved) => known.has(saved)));
       if (enabled.has(key)) {
         enabled.delete(key);
       } else {
@@ -7148,7 +7135,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Configuración de roles{" "}
+                            Configuración de eventos{" "}
                             <span className="admin-tier-badge tier-admin">
                               Admin
                             </span>

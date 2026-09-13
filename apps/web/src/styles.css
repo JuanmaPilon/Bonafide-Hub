@@ -3513,7 +3513,7 @@ textarea {
   border-top: 1px dashed rgba(136, 159, 216, 0.3);
 }
 
-/* Editor de roles de evento (Admin → Configuración de roles): cada rol es un
+/* Editor de roles de evento (Admin → Configuración de eventos): cada rol es un
    acordeón (emoji + nombre en el header) para que la sección no crezca. */
 .event-role-editor {
   display: grid;

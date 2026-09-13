@@ -3880,7 +3880,7 @@ export function buildApp() {
 
   // ── Plantillas de juego (presets de roles + catálogo) ──
   // Listado de plantillas disponibles (Admin). Solo admin/owner, porque es
-  // parte de la configuración de roles del módulo.
+  // parte de la configuración de eventos del módulo.
   app.get("/guilds/:guildId/events/templates", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -4014,7 +4014,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    // Configuración de roles = admin/super admin (módulo "config"), no officer.
+    // Configuración de eventos = admin/super admin (módulo "config"), no officer.
     if (!(await canManageModule(session, params.guildId, "config"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
@@ -4082,7 +4082,7 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      // Configuración de roles = admin/super admin (módulo "config").
+      // Configuración de eventos = admin/super admin (módulo "config").
       if (!(await canManageModule(session, params.guildId, "config"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
