@@ -3460,6 +3460,58 @@ textarea {
   margin-bottom: 14px;
 }
 
+/* Plantillas de juego: elegís el preset, ves un resumen y lo aplicás. */
+.event-template-picker {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.event-template-picker .event-role-field .select {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.event-template-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.event-template-preview p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.event-template-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-template-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.3);
+  font-size: 0.85rem;
+}
+
+.event-template-note {
+  font-size: 0.8rem;
+}
+
+:root[data-theme="light"] .event-template-picker {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(67, 81, 109, 0.18);
+}
+
 .event-role-row {
   display: flex;
   flex-wrap: wrap;

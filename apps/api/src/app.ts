@@ -110,6 +110,11 @@ import {
   upsertSignup,
 } from "./services/events-store.js";
 import {
+  EVENT_TEMPLATES,
+  findEventTemplate,
+  summarizeEventTemplate,
+} from "./services/event-templates.js";
+import {
   buildEventAnnouncementEmbeds,
   buildEventSignupActionRows,
   cleanupEventDiscord,
@@ -3787,6 +3792,112 @@ export function buildApp() {
 
     return { ok: true, guildId: params.guildId, deleted };
   });
+
+  // ── Plantillas de juego (presets de roles + catálogo) ──
+  // Listado de plantillas disponibles (Admin). Solo admin/owner, porque es
+  // parte de la configuración de roles del módulo.
+  app.get("/guilds/:guildId/events/templates", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      templates: EVENT_TEMPLATES.map(summarizeEventTemplate),
+    };
+  });
+
+  // Aplica una plantilla: configura los roles y ejes del módulo y precarga el
+  // catálogo de clases/specs (solo agrega las filas que faltan: no borra nada
+  // de lo que ya tenga la guild, así no se pierden los emojis cargados).
+  app.post(
+    "/guilds/:guildId/events/templates/:templateKey/apply",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        templateKey?: string;
+      };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "config"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const template = findEventTemplate(params.templateKey);
+      if (!template) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Plantilla no encontrada" });
+      }
+
+      const config = await upsertGuildConfig(params.guildId, {
+        eventClassLabel: template.classLabel,
+        eventRoles: template.roles,
+        eventSpecEnabled: template.specEnabled,
+        eventSpecLabel: template.specLabel,
+      });
+
+      // Precarga del catálogo: comparamos por rol + clase + spec para no
+      // duplicar filas ni pisar los emojis ya cargados.
+      const existingSpecs = await listRaidSpecs(params.guildId);
+      const existingKeys = new Set(
+        existingSpecs.map(
+          (spec) => `${spec.role}|${spec.className}|${spec.specName}`,
+        ),
+      );
+      let created = 0;
+      for (const spec of template.specs) {
+        const specKey = `${spec.role}|${spec.className}|${spec.specName}`;
+        if (existingKeys.has(specKey)) {
+          continue;
+        }
+        const row = await createRaidSpec({
+          animated: false,
+          className: spec.className,
+          guildId: params.guildId,
+          role: spec.role,
+          specName: spec.specName,
+        });
+        if (row) {
+          created += 1;
+          existingKeys.add(specKey);
+        }
+      }
+
+      refreshUpcomingAnnouncements(params.guildId);
+
+      await logAdminAction(session, params.guildId, "event:template-apply", {
+        details: `Se aplicó la plantilla ${template.label} (${created} filas nuevas de catálogo).`,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        applied: summarizeEventTemplate(template),
+        config,
+        created,
+        specs: await listRaidSpecs(params.guildId),
+      };
+    },
+  );
 
   // ── Catálogo de specs de inscripción (RaidSpec, estilo Raid Helper) ──
   // Cualquier miembro puede leerlo (lo usa el selector de inscripción).

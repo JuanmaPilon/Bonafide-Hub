@@ -55,6 +55,7 @@ import {
   createEventSpec,
   deleteEvent,
   deleteEventImage,
+  applyEventTemplate,
   deleteEventSpec,
   deleteMyEventSignup,
   apiAssetUrl,
@@ -65,6 +66,7 @@ import {
   getEventSpecs,
   getEvents,
   getGuildEmojis,
+  getEventTemplates,
   resolveEventRoles,
   updateEvent,
   updateEventSpec,
@@ -94,6 +96,7 @@ import {
   type XpRoleMultiplier,
   type XpRoleRule,
   type RaidSpec,
+  type EventTemplateSummary,
   type EventDiscordOptions,
   type EventSignup,
   type EventImage,
@@ -844,11 +847,7 @@ function EventDateTimeField({
   const monthCells = useMemo(() => {
     const firstWeekday =
       (new Date(calendarYear, calendarMonthNumber - 1, 1).getDay() + 6) % 7;
-    const totalDays = new Date(
-      calendarYear,
-      calendarMonthNumber,
-      0,
-    ).getDate();
+    const totalDays = new Date(calendarYear, calendarMonthNumber, 0).getDate();
     const cells: Array<number | null> = Array.from(
       { length: firstWeekday },
       () => null,
@@ -2519,6 +2518,11 @@ function App() {
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
   const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
   const [showSpecEditor, setShowSpecEditor] = useState(false);
+  // Plantillas de juego (WoW, LoL, …) para dejar el módulo configurado de una.
+  const [eventTemplates, setEventTemplates] = useState<EventTemplateSummary[]>(
+    [],
+  );
+  const [templateKey, setTemplateKey] = useState("");
   const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
   const [guildEmojisLoading, setGuildEmojisLoading] = useState(false);
   const [specDraft, setSpecDraft] = useState<{
@@ -2536,6 +2540,7 @@ function App() {
     | "panel"
     | "daily"
     | "eventRoles"
+    | "eventTemplate"
     | "modules"
     | "permissions"
     | "karuta"
@@ -2996,6 +3001,28 @@ function App() {
     };
   }, [activeTab, selectedGuildId, showSpecEditor]);
 
+  // Plantillas de juego: se piden al abrir "Configuración de roles".
+  useEffect(() => {
+    const adminOpen =
+      activeTab === "admin" && showSpecEditor && canAccess("config");
+    if (!selectedGuildId || !adminOpen) {
+      return;
+    }
+    let cancelled = false;
+    getEventTemplates(selectedGuildId)
+      .then((list) => {
+        if (cancelled) {
+          return;
+        }
+        setEventTemplates(list);
+        setTemplateKey((current) => current || (list[0]?.key ?? ""));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId, showSpecEditor]);
+
   // Canales de texto/voz para el editor de publicación en Discord de un
   // evento (solo staff). Se cargan la primera vez que se abre el form; el
   // panel Admin usa su propia carga de canales.
@@ -3258,6 +3285,31 @@ function App() {
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "No se pudo guardar.",
+        "error",
+      );
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  // Aplica una plantilla de juego: deja los roles/ejes configurados y
+  // precarga el catálogo de clases y specs (solo agrega lo que falta).
+  async function handleApplyEventTemplate(): Promise<void> {
+    if (!selectedGuildId || !templateKey) {
+      return;
+    }
+    setSavingAction("eventTemplate");
+    try {
+      const result = await applyEventTemplate(selectedGuildId, templateKey);
+      setConfig(result.config);
+      setEventSpecs(result.specs);
+      pushToast(
+        `Plantilla ${result.applied.label} aplicada · ${result.created} clases/specs agregadas`,
+        "success",
+      );
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo aplicar.",
         "error",
       );
     } finally {
@@ -7022,10 +7074,91 @@ function App() {
                       <div className="admin-card-body">
                         <p className="admin-card-hint">
                           Estos roles alimentan las inscripciones de los eventos
-                          (web y Discord). Se puede adaptar a cualquier juego:
-                          los roles son libres y el catálogo tiene dos ejes
-                          configurables.
+                          (web y Discord). Lo más rápido es arrancar con una
+                          plantilla del juego y después ajustar a mano.
                         </p>
+
+                        {/* Plantilla del juego: roles + ejes + catálogo de una */}
+                        <h4 className="karuta-threshold-title">
+                          Plantilla del juego
+                        </h4>
+                        {eventTemplates.length === 0 ? (
+                          <div className="empty-state">
+                            Todavía no hay plantillas disponibles.
+                          </div>
+                        ) : (
+                          <div className="event-template-picker">
+                            <label className="event-role-field">
+                              <span>Juego</span>
+                              <select
+                                className="select"
+                                value={templateKey}
+                                onChange={(event) =>
+                                  setTemplateKey(event.target.value)
+                                }
+                              >
+                                {eventTemplates.map((template) => (
+                                  <option
+                                    key={template.key}
+                                    value={template.key}
+                                  >
+                                    {template.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            {(() => {
+                              const selectedTemplate = eventTemplates.find(
+                                (template) => template.key === templateKey,
+                              );
+                              if (!selectedTemplate) {
+                                return null;
+                              }
+                              return (
+                                <div className="event-template-preview">
+                                  <p>{selectedTemplate.description}</p>
+                                  <div className="event-template-roles">
+                                    {selectedTemplate.roles.map((role) => (
+                                      <span
+                                        className="event-template-role"
+                                        key={role.key}
+                                      >
+                                        <DiscordEmojiImage
+                                          animated={role.animated}
+                                          emojiId={role.emojiId}
+                                          fallback={role.emoji ?? "❔"}
+                                          name={role.label}
+                                          size={18}
+                                        />
+                                        {role.label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <p className="event-template-note">
+                                    {selectedTemplate.specCount > 0
+                                      ? `Precarga ${selectedTemplate.specCount} ${selectedTemplate.classLabel.toLowerCase()}/spec. `
+                                      : "No precarga catálogo. "}
+                                    Reemplaza los roles de inscripción y en el
+                                    catálogo solo agrega lo que falta (no borra
+                                    ni pisa emojis ya cargados).
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                            <button
+                              className="primary-button"
+                              disabled={
+                                !templateKey || savingAction === "eventTemplate"
+                              }
+                              onClick={() => void handleApplyEventTemplate()}
+                              type="button"
+                            >
+                              {savingAction === "eventTemplate"
+                                ? "Aplicando…"
+                                : "Aplicar plantilla"}
+                            </button>
+                          </div>
+                        )}
 
                         {/* Roles de inscripción (label + emoji) */}
                         <h4 className="karuta-threshold-title">

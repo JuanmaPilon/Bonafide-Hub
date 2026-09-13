@@ -1170,6 +1170,51 @@ export async function updateEventSpec(
   return data.spec;
 }
 
+// ── Plantillas de juego (presets de roles + catálogo) ───────────────
+// Una plantilla deja el módulo listo para un juego: roles de inscripción,
+// nombres de los ejes y el catálogo de clases/specs precargado.
+
+export type EventTemplateSummary = {
+  classLabel: string;
+  description: string;
+  key: string;
+  label: string;
+  roles: EventRoleOption[];
+  specCount: number;
+  specEnabled: boolean;
+  specLabel: string;
+};
+
+export async function getEventTemplates(
+  guildId: string,
+): Promise<EventTemplateSummary[]> {
+  const data = await requestJson<{ templates: EventTemplateSummary[] }>(
+    `/guilds/${guildId}/events/templates`,
+    { method: "GET" },
+  );
+  return data.templates;
+}
+
+export async function applyEventTemplate(
+  guildId: string,
+  templateKey: string,
+): Promise<{
+  applied: EventTemplateSummary;
+  config: GuildConfig;
+  created: number;
+  specs: RaidSpec[];
+}> {
+  return requestJson<{
+    applied: EventTemplateSummary;
+    config: GuildConfig;
+    created: number;
+    specs: RaidSpec[];
+  }>(
+    `/guilds/${guildId}/events/templates/${encodeURIComponent(templateKey)}/apply`,
+    { method: "POST" },
+  );
+}
+
 export type EventImage = {
   createdAt: string;
   dataUrl: string;
