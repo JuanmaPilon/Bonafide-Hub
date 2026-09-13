@@ -3092,10 +3092,12 @@ textarea {
   gap: 10px;
 }
 
-/* Columnas por rol (estilo Raid Helper). */
+/* Columnas por rol (estilo Raid Helper). El mínimo es ancho a propósito: si la
+   columna es más angosta que "nick (personaje)", el nombre se parte en dos
+   renglones, que es justo lo que no queremos. */
 .event-roster-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
   gap: 8px;
 }
 
@@ -3147,6 +3149,15 @@ textarea {
 
 .event-roster-member {
   font-size: 0.88rem;
+  /* El nick y el personaje van SIEMPRE en la misma línea: si no entran, se
+     recorta el final con “…” en vez de bajar el personaje a otro renglón. */
+  white-space: nowrap;
+}
+
+/* Dentro de una columna (ancho fijo) el recorte es con puntos suspensivos. */
+.event-roster-members .event-roster-member {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .event-roster-empty {

@@ -385,16 +385,10 @@ function specMention(spec?: AnnouncementSpec): string {
 
 function signupDisplay(signup: AnnouncementSignup): string {
   // El nombre de Discord es el principal; el personaje (opcional) va entre
-  // paréntesis. Si el personaje es igual al nick, no lo repetimos: así la
-  // línea queda corta y entra en una sola línea.
+  // paréntesis, en la MISMA línea. No se omite cuando coincide con el nick: el
+  // jugador quiere ver los dos datos.
   const character = signup.character?.trim();
-  if (
-    character &&
-    character.toLowerCase() !== signup.username.trim().toLowerCase()
-  ) {
-    return `${signup.username} (${character})`;
-  }
-  return signup.username;
+  return character ? `${signup.username} (${character})` : signup.username;
 }
 
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars

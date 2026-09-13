@@ -3614,7 +3614,9 @@ export function buildApp() {
     const createConfig = await getGuildConfig(params.guildId);
     const game = resolveGameKey(createConfig, body.game);
     if (!game) {
-      return reply.code(400).send({ ok: false, error: "Tipo de evento inválido" });
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Tipo de evento inválido" });
     }
 
     const event = await createEvent({
@@ -3751,7 +3753,9 @@ export function buildApp() {
     if (body.game !== undefined) {
       const resolved = resolveGameKey(patchConfig, body.game);
       if (!resolved) {
-        return reply.code(400).send({ ok: false, error: "Tipo de evento inválido" });
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Tipo de evento inválido" });
       }
       game = resolved;
     }
@@ -4149,7 +4153,9 @@ export function buildApp() {
     const config = await getGuildConfig(params.guildId);
     const game = resolveGameKey(config, body.game);
     if (!game) {
-      return reply.code(400).send({ ok: false, error: "Tipo de evento inválido" });
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Tipo de evento inválido" });
     }
     const allowedRoles = resolveEventRoles(config, game);
 
@@ -4247,7 +4253,9 @@ export function buildApp() {
     const config = await getGuildConfig(params.guildId);
     const game = resolveGameKey(config, body.game);
     if (!game) {
-      return reply.code(400).send({ ok: false, error: "Tipo de evento inválido" });
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Tipo de evento inválido" });
     }
     const allowedRoles = resolveEventRoles(config, game);
     if (role && !allowedRoles.some((entry) => entry.key === role)) {
@@ -4597,7 +4605,9 @@ export function buildApp() {
     const config = await getGuildConfig(params.guildId);
     const game = resolveGameKey(config, query.game);
     if (!game) {
-      return reply.code(400).send({ ok: false, error: "Tipo de evento inválido" });
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Tipo de evento inválido" });
     }
     const specs = await listRaidSpecs(params.guildId, game);
     // El bot arma el asistente de inscripción con esto: roles del juego del
