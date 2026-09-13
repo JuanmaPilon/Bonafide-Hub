@@ -22,8 +22,15 @@ export const DEFAULT_EVENT_ROLES: EventRoleOption[] = [
   { animated: false, emoji: "🛡️", key: "tank", label: "Tank" },
   { animated: false, emoji: "💚", key: "healer", label: "Healer" },
   { animated: false, emoji: "⚔️", key: "melee", label: "Melee" },
-  { animated: false, emoji: "🏹", key: "ranged", label: "Ranged" },
+  { animated: false, emoji: "🏹", key: "ranged", label: "Range" },
 ];
+
+// La clave de los roles es interna (nunca se muestra) y está guardada en las
+// inscripciones y en la config de cada guild, así que no se renombra: solo
+// se corrige la ETIQUETA visible (el rol `ranged` se muestra como "Range").
+function normalizeRoleLabel(key: string, label: string): string {
+  return key === "ranged" && /^ranged$/i.test(label) ? "Range" : label;
+}
 
 // Sanea la lista de roles que manda el panel: claves únicas y en minúscula,
 // labels cortos, emoji unicode o custom de Discord (id + nombre).
@@ -66,7 +73,7 @@ export function normalizeEventRoles(value: unknown): EventRoleOption[] | null {
       emojiId,
       emojiName: emojiName ?? (emojiId ? "emoji" : undefined),
       key,
-      label,
+      label: normalizeRoleLabel(key, label),
     });
 
     if (roles.length >= 12) {

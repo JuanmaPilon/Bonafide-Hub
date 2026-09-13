@@ -31,14 +31,16 @@ const DEFAULT_ROLES: RemoteRole[] = [
   { animated: false, emoji: "🛡️", key: "tank", label: "Tank" },
   { animated: false, emoji: "💚", key: "healer", label: "Healer" },
   { animated: false, emoji: "⚔️", key: "melee", label: "Melee" },
-  { animated: false, emoji: "🏹", key: "ranged", label: "Ranged" },
+  { animated: false, emoji: "🏹", key: "ranged", label: "Range" },
 ];
 
-const STATUS_LABEL: Record<string, string> = {
-  bench: "anotarte de bench",
-  late: "avisar que llegás tarde",
-  no: "marcar que no asistís",
-  yes: "anotarte como asistente",
+// Textos NEUTROS (sin voseo): se muestran como título de la acción y en la
+// confirmación, así sirven en cualquier variante del español.
+const STATUS_TITLE: Record<string, string> = {
+  bench: "Quedar en bench",
+  late: "Llegar tarde",
+  no: "No asistir",
+  yes: "Asistir",
 };
 
 type RemoteRole = {
@@ -339,7 +341,7 @@ export async function handleEventSignupCharacterSubmit(
   if (!mine) {
     await interaction.reply({
       content:
-        "Primero anotate con los botones del evento (✅ / 🪑 / ⏰ / ❌).",
+        "Primero hay que anotarse con los botones del evento (✅ / 🪑 / ⏰ / ❌).",
       ephemeral: true,
     });
     return;
@@ -358,7 +360,7 @@ export async function handleEventSignupCharacterSubmit(
   });
   if (!result.ok) {
     await interaction.reply({
-      content: `No se pudo actualizar tu personaje: ${result.error}`,
+      content: `No se pudo actualizar el personaje: ${result.error}`,
       ephemeral: true,
     });
     return;
@@ -404,8 +406,8 @@ function specSelectRow(
     .setCustomId(`eventsign:${eventId}:spec:${role}:${status}`)
     .setPlaceholder(
       context.specEnabled
-        ? `Elegí tu ${context.specLabel.toLowerCase()}`
-        : `Elegí tu ${context.classLabel.toLowerCase()}`,
+        ? `Elegir una ${context.specLabel.toLowerCase()}`
+        : `Elegir una ${context.classLabel.toLowerCase()}`,
     );
 
   if (context.specEnabled) {
@@ -466,7 +468,7 @@ async function startRoleWizard(
         .setStyle(ButtonStyle.Secondary),
     );
   }
-  const content = `Elegí tu rol para **${STATUS_LABEL[status] ?? "asistir"}**:`;
+  const content = `Rol para **${STATUS_TITLE[status] ?? "Asistir"}**:`;
   try {
     await interaction.reply({ components: [row], content, ephemeral: true });
   } catch {
@@ -521,13 +523,13 @@ async function handleQuickStatus(
   if (!result.ok) {
     await replyOnce(
       interaction,
-      `No se pudo actualizar tu inscripción: ${result.error}`,
+      `No se pudo actualizar la inscripción: ${result.error}`,
     );
     return;
   }
   await replyOnce(
     interaction,
-    `Listo: te ${STATUS_LABEL[status] ?? "anotaste"}. ✅`,
+    `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}**. ✅`,
   );
 }
 
@@ -572,7 +574,7 @@ export async function handleEventSignupInteraction(
     }
     await updateWizard(
       interaction,
-      `Elegiste **${role.label}**. Ahora elegí tu ${(context.specEnabled
+      `Rol elegido: **${role.label}**. Ahora elegir ${(context.specEnabled
         ? context.specLabel
         : context.classLabel
       ).toLowerCase()}:`,
@@ -599,8 +601,7 @@ export async function handleEventSignupInteraction(
 
     const event = await fetchEvent(guildId, eventId);
     const mine = event?.signups?.find((signup) => signup.userId === userId);
-    const result = await putSignup({
-      character: mine?.character,
+    const result = await putSignup({      character: mine?.character,
       guildId,
       eventId,
       role,
@@ -614,7 +615,7 @@ export async function handleEventSignupInteraction(
     if (!result.ok) {
       await updateWizard(
         interaction,
-        `No se pudo inscribirte: ${result.error}`,
+        `No se pudo guardar la inscripción: ${result.error}`,
         [],
       );
       return;
@@ -625,7 +626,7 @@ export async function handleEventSignupInteraction(
         : className;
     await updateWizard(
       interaction,
-      `Te ${STATUS_LABEL[status] ?? "anotaste"} como **${detail}**. ✅`,
+      `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${detail}**. ✅`,
       [],
     );
     return;

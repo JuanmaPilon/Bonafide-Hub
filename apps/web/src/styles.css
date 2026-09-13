@@ -3054,6 +3054,14 @@ textarea {
   font-size: 0.85rem;
 }
 
+/* Total de confirmados fijos (+ posibles entre paréntesis): va primero y
+   resaltado, como en el aviso de Discord. */
+.event-count.total {
+  border-color: rgba(124, 227, 139, 0.5);
+  background: rgba(124, 227, 139, 0.1);
+  font-weight: 700;
+}
+
 .event-count.yes {
   border-color: rgba(124, 227, 139, 0.4);
 }

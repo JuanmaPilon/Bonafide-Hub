@@ -157,14 +157,14 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
   {
     classLabel: "Clase",
     description:
-      "Tank, Healer, Melee y Ranged + el catálogo de las 13 clases con sus specs.",
+      "Tank, Healer, Melee y Range + el catálogo de las 13 clases con sus specs.",
     key: "wow",
     label: "World of Warcraft",
     roles: [
       role("tank", "Tank", "🛡️"),
       role("healer", "Healer", "💚"),
       role("melee", "Melee", "⚔️"),
-      role("ranged", "Ranged", "🏹"),
+      role("ranged", "Range", "🏹"),
     ],
     specEnabled: true,
     specLabel: "Spec",
@@ -197,7 +197,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
       role("tank", "Tank", "🛡️"),
       role("healer", "Healer", "💚"),
       role("melee", "Melee", "⚔️"),
-      role("ranged", "Ranged", "🏹"),
+      role("ranged", "Range", "🏹"),
     ],
     specEnabled: true,
     specLabel: "Spec",

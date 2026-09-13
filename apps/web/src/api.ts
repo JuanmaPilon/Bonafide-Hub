@@ -804,7 +804,7 @@ export const ROLE_META: Array<{
   { key: "tank", emoji: "🛡️", label: "Tank" },
   { key: "healer", emoji: "💚", label: "Healer" },
   { key: "melee", emoji: "⚔️", label: "Melee" },
-  { key: "ranged", emoji: "🏹", label: "Ranged" },
+  { key: "ranged", emoji: "🏹", label: "Range" },
 ];
 
 // ── Roles de evento configurables ──────────────────────────────────
@@ -831,7 +831,16 @@ export const DEFAULT_EVENT_ROLES: EventRoleOption[] = ROLE_META.map(
 
 export function resolveEventRoles(config: GuildConfig): EventRoleOption[] {
   const roles = config.eventRoles;
-  return roles && roles.length > 0 ? roles : DEFAULT_EVENT_ROLES;
+  if (!roles || roles.length === 0) {
+    return DEFAULT_EVENT_ROLES;
+  }
+  // Misma corrección que hace el API: la etiqueta del rol `ranged` es
+  // "Range" (la clave se conserva porque está guardada en las inscripciones).
+  return roles.map((role) =>
+    role.key === "ranged" && /^ranged$/i.test(role.label)
+      ? { ...role, label: "Range" }
+      : role,
+  );
 }
 
 // Meta de un rol según la config de la guild, con fallback a los clásicos

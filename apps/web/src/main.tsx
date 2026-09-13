@@ -1434,9 +1434,7 @@ function EventCard({
             </span>
           </div>
           <div className="event-info-item">
-            <span className="event-info-label">
-              ⏳ Cierre de inscripciones
-            </span>
+            <span className="event-info-label">⏳ Cierre de inscripciones</span>
             <span
               className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
             >
@@ -1472,12 +1470,13 @@ function EventCard({
                     ?.name ?? "un rol"}
                 </strong>
                 <em className="event-info-note">
-                  Sin el rol quedás como Bench.
+                  Sin el rol, la inscripción queda como Bench.
                 </em>
               </span>
             </div>
           ) : null}
-          {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
+          {event.discordEventId ||
+          (event.discordMessageIds?.length ?? 0) > 0 ? (
             <div className="event-info-item wide">
               <span className="event-info-label">📣 Discord</span>
               <span className="event-info-value">
@@ -1506,6 +1505,12 @@ function EventCard({
         <div className="event-card-assistance">
           <span className="event-info-label">📊 Asistencia</span>
           <div className="event-card-counts">
+            <span className="event-count total">
+              👥 {counts.yes}
+              {counts.bench + counts.late > 0
+                ? ` (+${counts.bench + counts.late})`
+                : ""}
+            </span>
             {SIGNUP_OPTIONS.map((option) => (
               <span className={`event-count ${option.key}`} key={option.key}>
                 {option.emoji} {counts[option.key]}
@@ -3252,7 +3257,7 @@ function App() {
       setEvents(list);
       if (input.status === "yes" && signup.status === "bench") {
         pushToast(
-          "No tenés el rol requerido: quedaste como Bench (fuera del roster principal).",
+          "Sin el rol requerido, la inscripción queda como Bench (fuera del roster principal).",
           "success",
         );
       } else {
@@ -3309,10 +3314,7 @@ function App() {
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
         eventClassLabel: config.eventClassLabel?.trim() || undefined,
-        eventRoles: (config.eventRoles && config.eventRoles.length > 0
-          ? config.eventRoles
-          : DEFAULT_EVENT_ROLES
-        ).map((entry) => ({
+        eventRoles: resolveEventRoles(config).map((entry) => ({
           animated: entry.animated,
           emoji: entry.emoji,
           emojiId: entry.emojiId,
@@ -4342,7 +4344,7 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Eliminar log de raid",
-      message: `¿Eliminar "${log.title || log.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Podés recuperarlo desde el panel Admin → Logs de Raid.`,
+      message: `¿Eliminar "${log.title || log.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Se puede recuperar desde el panel Admin → Logs de Raid.`,
       onConfirm: () => {
         void handleHideRaidLog(log);
       },
@@ -7208,10 +7210,7 @@ function App() {
                           Roles de evento
                         </h4>
                         <div className="event-role-editor">
-                          {(config.eventRoles && config.eventRoles.length > 0
-                            ? config.eventRoles
-                            : DEFAULT_EVENT_ROLES
-                          ).map((entry, index) => (
+                          {resolveEventRoles(config).map((entry, index) => (
                             <div
                               className="event-role-row"
                               key={`${entry.key}-${index}`}
@@ -8807,7 +8806,7 @@ function App() {
                                   }
                                 >
                                   <option value="">
-                                    Elegí la sala de voz…
+                                    Seleccionar sala de voz…
                                   </option>
                                   {voiceChannels.map((channel) => (
                                     <option key={channel.id} value={channel.id}>
@@ -8887,7 +8886,7 @@ function App() {
                                 }))
                               }
                             >
-                              <option value="">Elegí el canal de texto…</option>
+                              <option value="">Seleccionar canal de texto…</option>
                               {textChannels.map((channel) => (
                                 <option key={channel.id} value={channel.id}>
                                   {channel.name}

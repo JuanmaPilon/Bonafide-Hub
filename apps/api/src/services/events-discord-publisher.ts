@@ -356,7 +356,7 @@ const ROLE_META: Record<string, { emoji: string; label: string }> = {
   tank: { emoji: "🛡️", label: "Tank" },
   healer: { emoji: "💚", label: "Healer" },
   melee: { emoji: "⚔️", label: "Melee" },
-  ranged: { emoji: "🏹", label: "Ranged" },
+  ranged: { emoji: "🏹", label: "Range" },
 };
 
 const DEFAULT_ROLE_OPTIONS: EventRoleOption[] = ROLE_ORDER.map((key) => ({
@@ -374,13 +374,6 @@ function roleEmoji(role: EventRoleOption): string {
   }
   return role.emoji ?? ROLE_META[role.key]?.emoji ?? "❔";
 }
-
-const STATUS_META: Record<string, { emoji: string; label: string }> = {
-  yes: { emoji: "✅", label: "Voy" },
-  bench: { emoji: "🪑", label: "Bench" },
-  late: { emoji: "⏰", label: "Tarde" },
-  no: { emoji: "❌", label: "No asiste" },
-};
 
 const RECURRENCE_LABEL: Record<EventRecurrence, string | undefined> = {
   none: undefined,
@@ -556,57 +549,57 @@ export function buildEventAnnouncementEmbeds(input: {
     whenLines.push(`📍 ${input.location}`);
   }
 
-  // Conteo por estado (solo los que tengan al menos uno). Va en su propio
-  // campo para que se vea como una caja de estadísticas.
-  const counts: string[] = [];
-  for (const [status, meta] of Object.entries(STATUS_META)) {
-    const count = input.signups.filter(
-      (signup) => signup.status === status,
-    ).length;
-    if (count > 0) {
-      counts.push(`${meta.emoji} ${count}`);
-    }
-  }
+  // Conteo por estado: la asistencia muestra el número FIJO de confirmados y,
+  // entre paréntesis, los POSIBLES (bench + los que llegan tarde).
+  const confirmed = input.signups.filter((signup) => signup.status === "yes");
+  const bench = input.signups.filter((signup) => signup.status === "bench");
+  const late = input.signups.filter((signup) => signup.status === "late");
+  // Igual que en la web: los que marcaron "no asisto" también se listan.
+  const absent = input.signups.filter((signup) => signup.status === "no");
+  const possibles = bench.length + late.length;
+  const assistanceValue =
+    input.signups.length === 0
+      ? "Sin anotados todavía"
+      : [
+          `**${confirmed.length}** confirmados${
+            possibles > 0 ? ` (+${possibles})` : ""
+          }`,
+          [
+            `✅ ${confirmed.length}`,
+            `🪑 ${bench.length}`,
+            `⏰ ${late.length}`,
+            `❌ ${absent.length}`,
+          ].join(" · "),
+        ].join("\n");
 
   const fields: Array<{ inline?: boolean; name: string; value: string }> = [];
-  // Fila de datos rápidos, en columnas de a 3 (Discord las acomoda solo).
-  fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
+  // Datos del evento: uno por línea (vertical), así se leen cómodos.
+  fields.push({ name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
   fields.push({
-    inline: true,
     name: "⏱️ Duración",
     value: endTimestamp
       ? `${input.durationMinutes} min\n(termina <t:${endTimestamp}:t>)`
       : "—",
   });
   fields.push({
-    inline: true,
     name: "⏳ Cierre de inscripciones",
     value: input.signupDeadline
       ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
       : "—",
   });
   if (recurrenceLabel) {
-    fields.push({
-      inline: true,
-      name: "🔁 Repetición",
-      value: recurrenceLabel,
-    });
+    fields.push({ name: "🔁 Repetición", value: recurrenceLabel });
   }
   // Requisito de rol: caja aparte (bien visible) + el mensaje menciona al rol
   // para que notifique a todos los que lo tienen.
   const requiredRoleId = input.requiredRoleId?.trim();
   if (requiredRoleId) {
     fields.push({
-      inline: true,
       name: "👥 Roster principal",
-      value: `Requiere <@&${requiredRoleId}>\n*Sin el rol quedás como Bench.*`,
+      value: `Requiere <@&${requiredRoleId}>\n*Sin el rol, la inscripción queda como Bench.*`,
     });
   }
-  fields.push({
-    inline: true,
-    name: "📊 Asistencia",
-    value: counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía",
-  });
+  fields.push({ name: "📊 Asistencia", value: assistanceValue });
 
   const resolveSpec = (
     signup: AnnouncementSignup,
@@ -627,7 +620,6 @@ export function buildEventAnnouncementEmbeds(input: {
       return mention ? `${mention} ${name}` : `❔ ${name}`;
     });
 
-  const confirmed = input.signups.filter((signup) => signup.status === "yes");
   // Orden y etiquetas de los roles: los configurados por la guild; cualquier
   // rol viejo (p. ej. "dps" legacy o un rol borrado de la config) va al final
   // para no perder a nadie del roster.
@@ -658,8 +650,8 @@ export function buildEventAnnouncementEmbeds(input: {
     if (members.length === 0) {
       continue;
     }
-    // Inline: cada rol es una columna, así el roster crece a lo ancho y no
-    // empuja el embed hacia abajo cuando se anota mucha gente.
+    // Inline: cada rol es una columna con sus anotados, así el roster crece a
+    // lo ancho (3 por fila) y no empuja el embed hacia abajo.
     pushField(
       fields,
       `${roleEmoji(role)} ${role.label} (${members.length})`,
@@ -667,16 +659,12 @@ export function buildEventAnnouncementEmbeds(input: {
       true,
     );
   }
-  const bench = input.signups.filter((signup) => signup.status === "bench");
   if (bench.length > 0) {
     pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench), true);
   }
-  const late = input.signups.filter((signup) => signup.status === "late");
   if (late.length > 0) {
     pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late), true);
   }
-  // Igual que en la web: los que marcaron "no asisto" también se listan.
-  const absent = input.signups.filter((signup) => signup.status === "no");
   if (absent.length > 0) {
     pushField(
       fields,
