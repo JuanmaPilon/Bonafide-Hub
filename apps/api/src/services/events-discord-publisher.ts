@@ -297,7 +297,7 @@ async function messageHasRoleMention(
 }
 
 // Contenido del mensaje-aviso según el rol requerido del evento:
-//   - con rol y sin mención  → agrega "🛡️ <@&rol>" (así el rol queda
+//   - con rol y sin mención  → agrega la mención `<@&rol>` (así el rol queda
 //     etiquetado y le notifica a todos los que lo tienen);
 //   - con rol y ya mencionado → undefined (no tocamos el contenido para no
 //     re-notificar en cada edición);
@@ -316,7 +316,7 @@ export async function resolveAnnouncementContent(input: {
     input.messageId,
     roleId,
   );
-  return mentioned ? undefined : `🛡️ <@&${roleId}>`;
+  return mentioned ? undefined : `<@&${roleId}>`;
 }
 
 // ── Roster estilo Raid Helper dentro del embed del evento ───────────
@@ -923,7 +923,7 @@ async function postAnnouncement(
               input.signupDeadline.getTime() <= Date.now()),
           specLabel: input.specLabel,
         }),
-        content: requiredRoleId ? `🛡️ <@&${requiredRoleId}>` : undefined,
+        content: requiredRoleId ? `<@&${requiredRoleId}>` : undefined,
         embeds,
       },
     },

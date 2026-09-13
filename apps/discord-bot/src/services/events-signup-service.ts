@@ -82,6 +82,7 @@ type RemoteSignup = {
 
 type RemoteEvent = {
   event?: {
+    characterEnabled?: boolean;
     signups?: RemoteSignup[];
     status?: string;
   };
@@ -165,6 +166,21 @@ async function updateWizard(
   }
 }
 
+// Botón para completar el nombre de personaje: cuando el evento lo pide y el
+// jugador todavía no lo tiene, se lo pedimos al terminar de anotarse (abre el
+// mismo modal que el botón del aviso).
+function characterPromptRow(
+  eventId: string,
+): ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`eventsign:${eventId}:character`)
+      .setEmoji("✏️")
+      .setLabel("Poner nombre de personaje")
+      .setStyle(ButtonStyle.Primary),
+  );
+}
+
 function fetchMemberName(interaction: EventInteraction): string {
   const member = interaction.member as { displayName?: string } | null;
   return member?.displayName?.trim() || interaction.user.username;
@@ -230,7 +246,7 @@ async function putSignup(input: {
   userId: string;
   username: string;
   wowClass?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; character?: string; error?: string }> {
   const response = await remoteRequest(
     `/internal/guilds/${encodeURIComponent(input.guildId)}/events/${encodeURIComponent(input.eventId)}/signups`,
     {
@@ -249,7 +265,10 @@ async function putSignup(input: {
   if (!response.ok) {
     return { error: getErrorMessage(response.data), ok: false };
   }
-  return { ok: true };
+  const payload = response.data as {
+    signup?: { character?: string | null };
+  };
+  return { character: payload.signup?.character ?? undefined, ok: true };
 }
 
 async function removeSignup(input: {
@@ -525,6 +544,31 @@ async function handleQuickStatus(
     );
     return;
   }
+  // El evento pide personaje y el jugador no tiene ninguno: lo pedimos acá.
+  if (event.characterEnabled !== false && !result.character) {
+    const content = [
+      `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}**. ✅`,
+      "",
+      "⚠️ **Falta el nombre de personaje** — completalo con el botón de abajo.",
+    ].join("\n");
+    try {
+      await interaction.reply({
+        components: [characterPromptRow(eventId)],
+        content,
+        ephemeral: true,
+      });
+    } catch {
+      try {
+        await interaction.update({
+          components: [characterPromptRow(eventId)],
+          content,
+        });
+      } catch {
+        // Nada más que hacer.
+      }
+    }
+    return;
+  }
   await replyOnce(
     interaction,
     `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}**. ✅`,
@@ -616,6 +660,21 @@ export async function handleEventSignupInteraction(
       return;
     }
     const detail = specName ? `${className} — ${specName}` : className;
+    // Si el evento pide nombre de personaje y el jugador todavía no tiene uno
+    // (ni recordado), se lo pedimos acá mismo con un botón que abre el modal.
+    const asksCharacter = event?.characterEnabled !== false;
+    if (asksCharacter && !result.character) {
+      await updateWizard(
+        interaction,
+        [
+          `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${detail}**. ✅`,
+          "",
+          "⚠️ **Falta el nombre de personaje** — completalo con el botón de abajo.",
+        ].join("\n"),
+        [characterPromptRow(eventId)],
+      );
+      return;
+    }
     await updateWizard(
       interaction,
       `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${detail}**. ✅`,
