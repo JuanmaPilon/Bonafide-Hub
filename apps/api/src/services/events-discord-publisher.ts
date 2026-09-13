@@ -652,21 +652,21 @@ export function buildEventAnnouncementEmbeds(input: {
     if (members.length === 0) {
       continue;
     }
-    // Cada rol en su propia fila (ancho completo): así "nick (personaje)" entra
-    // en una sola línea, que es lo que se pidió. Con columnas inline el texto
-    // se partía en dos líneas.
+    // Horizontal: cada rol es una COLUMNA (hasta 3 por fila), así el roster no
+    // empuja el embed hacia abajo. El nick va sin repetir el personaje cuando
+    // es el mismo, que es lo que hacía que el texto se partiera en dos líneas.
     pushField(
       fields,
       `${roleEmoji(role)} ${role.label} (${members.length})`,
       linesFor(members),
+      true,
     );
   }
   // Quien se anotó sin elegir rol (p. ej. con los botones rápidos de estado)
-  // no puede desaparecer del roster: va en una sección "Sin rol" al final,
-  // igual que la web.
+  // no puede desaparecer del roster: va en su columna al final, igual que la web.
   const noRole = confirmed.filter((signup) => !signup.role);
   if (noRole.length > 0) {
-    pushField(fields, `❔ Sin rol (${noRole.length})`, linesFor(noRole));
+    pushField(fields, `❔ Sin rol (${noRole.length})`, linesFor(noRole), true);
   }
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten.
