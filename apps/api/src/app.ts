@@ -95,6 +95,7 @@ import {
   listEvents,
   listEventsPendingCloseAnnouncement,
   listRecurrenceSeries,
+  listGuildIdsWithEvents,
   listRaidSpecs,
   listReminderDueEvents,
   listReportPendingEvents,
@@ -1602,6 +1603,35 @@ function refreshUpcomingAnnouncements(guildId: string): void {
     } catch (error) {
       console.warn(
         "[eventos] no se pudieron refrescar los avisos publicados",
+        error,
+      );
+    }
+  })();
+}
+
+// Refresca los avisos publicados de TODAS las guilds. Se llama al arrancar el
+// API: el embed queda congelado con el formato con el que se publicó hasta que
+// alguien se anota, así que un cambio de layout no se veía hasta el próximo
+// movimiento. Con esto, al deployar, todos los avisos vigentes se re-renderizan.
+export function refreshAllPublishedAnnouncements(): void {
+  void (async () => {
+    try {
+      const guildIds = await listGuildIdsWithEvents();
+      for (const guildId of guildIds) {
+        const events = await listPublishedUpcomingEvents(guildId);
+        const pending = events.filter(
+          (event) => (event.discordMessageIds ?? []).length > 0,
+        );
+        for (const event of pending) {
+          await refreshEventAnnouncement(guildId, event.id);
+        }
+      }
+      console.log(
+        `[eventos] avisos publicados refrescados al arrancar (${guildIds.length} guilds revisadas)`,
+      );
+    } catch (error) {
+      console.warn(
+        "[eventos] no se pudieron refrescar los avisos al arrancar",
         error,
       );
     }

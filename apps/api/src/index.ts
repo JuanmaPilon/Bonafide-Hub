@@ -1,4 +1,4 @@
-import { buildApp } from "./app.js";
+import { buildApp, refreshAllPublishedAnnouncements } from "./app.js";
 import { env } from "./config/env.js";
 import { migrateLegacyEventRoles } from "./services/event-games-migration.js";
 
@@ -21,6 +21,10 @@ async function main(): Promise<void> {
   void migrateLegacyEventRoles().catch((error: unknown) => {
     app.log.warn({ err: error }, "No se pudieron migrar los roles por juego");
   });
+
+  // Re-renderiza los avisos-embed ya publicados (roles, roster y layout al
+  // dia). Es fire & forget y nunca notifica: edita los mensajes existentes.
+  refreshAllPublishedAnnouncements();
 }
 
 void main();

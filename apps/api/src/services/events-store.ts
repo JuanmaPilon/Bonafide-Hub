@@ -748,6 +748,18 @@ export async function listPublishedUpcomingEvents(
   return records.map((record) => toEvent(record));
 }
 
+// Guilds que tienen algún evento cargado. Se usa al arrancar el API para
+// re-renderizar los avisos ya publicados: el embed queda "congelado" con el
+// formato con el que se publicó hasta que alguien se anota (o se guarda el
+// evento), así que un cambio de layout no se ve hasta el próximo refresco.
+export async function listGuildIdsWithEvents(): Promise<string[]> {
+  const rows = await prisma.hubEvent.findMany({
+    select: { guildId: true },
+    distinct: ["guildId"],
+  });
+  return rows.map((row) => row.guildId);
+}
+
 // Marca que el aviso ya fue actualizado por cierre de inscripciones.
 export async function markEventSignupClosed(
   guildId: string,
