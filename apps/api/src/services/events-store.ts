@@ -52,6 +52,8 @@ export type RaidSpec = {
   createdAt: Date;
   emojiId?: string;
   emojiName?: string;
+  // Juego al que pertenece la fila (wow | lol | ...).
+  game: string;
   guildId: string;
   id: string;
   position: number;
@@ -66,6 +68,7 @@ type RaidSpecRecord = {
   createdAt: Date;
   emojiId: string | null;
   emojiName: string | null;
+  game: string;
   guildId: string;
   id: string;
   position: number;
@@ -81,6 +84,7 @@ function toRaidSpec(record: RaidSpecRecord): RaidSpec {
     createdAt: record.createdAt,
     emojiId: record.emojiId ?? undefined,
     emojiName: record.emojiName ?? undefined,
+    game: record.game,
     guildId: record.guildId,
     id: record.id,
     position: record.position,
@@ -90,9 +94,15 @@ function toRaidSpec(record: RaidSpecRecord): RaidSpec {
   };
 }
 
-export async function listRaidSpecs(guildId: string): Promise<RaidSpec[]> {
+// Catálogo de la guild. Sin `game` devuelve TODOS los juegos (la web filtra
+// por el juego del evento en el cliente, así hace una sola consulta).
+export async function listRaidSpecs(
+  guildId: string,
+  game?: string | null,
+): Promise<RaidSpec[]> {
+  const key = game?.trim().toLowerCase();
   const records = await prisma.raidSpec.findMany({
-    where: { guildId },
+    where: key ? { game: key, guildId } : { guildId },
     orderBy: [{ position: "asc" }, { className: "asc" }, { specName: "asc" }],
   });
   return records.map(toRaidSpec);
@@ -103,12 +113,15 @@ export async function createRaidSpec(input: {
   className: string;
   emojiId?: string;
   emojiName?: string;
+  game?: string;
   guildId: string;
   role: string;
   specName: string;
 }): Promise<RaidSpec | null> {
+  const game = input.game?.trim().toLowerCase() || "wow";
   const position =
-    (await prisma.raidSpec.count({ where: { guildId: input.guildId } })) + 1;
+    (await prisma.raidSpec.count({ where: { game, guildId: input.guildId } })) +
+    1;
   try {
     const record = await prisma.raidSpec.create({
       data: {
@@ -116,6 +129,7 @@ export async function createRaidSpec(input: {
         className: input.className,
         emojiId: input.emojiId,
         emojiName: input.emojiName,
+        game,
         guildId: input.guildId,
         position,
         role: input.role,
@@ -124,7 +138,7 @@ export async function createRaidSpec(input: {
     });
     return toRaidSpec(record);
   } catch {
-    // Duplicado (guildId+role+className+specName ya existe).
+    // Duplicado (guildId+game+role+className+specName ya existe).
     return null;
   }
 }
@@ -204,6 +218,8 @@ export type HubEvent = {
   // (evento agendado + aviso) una vez guardado el registro/informe.
   discordCleanupOnComplete: boolean;
   durationMinutes?: number;
+  // Juego del evento: decide roles de inscripción y catálogo.
+  game: string;
   guildId: string;
   id: string;
   imageUrl?: string;
@@ -269,6 +285,7 @@ type EventRecord = {
   discordMessageIds: string[];
   discordCleanupOnComplete: boolean;
   durationMinutes: number | null;
+  game: string;
   guildId: string;
   id: string;
   imageUrl: string | null;
@@ -342,6 +359,7 @@ function toEvent(record: EventRecord): HubEvent {
     discordMessageIds: record.discordMessageIds,
     discordCleanupOnComplete: record.discordCleanupOnComplete,
     durationMinutes: record.durationMinutes ?? undefined,
+    game: record.game,
     guildId: record.guildId,
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
@@ -472,6 +490,7 @@ export async function createEvent(input: {
   description?: string;
   discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
+  game?: string;
   guildId: string;
   imageUrl?: string;
   paused?: boolean;
@@ -496,6 +515,7 @@ export async function createEvent(input: {
       description: input.description,
       discordCleanupOnComplete: input.discordCleanupOnComplete ?? false,
       durationMinutes: input.durationMinutes,
+      game: input.game?.trim().toLowerCase() || "wow",
       guildId: input.guildId,
       imageUrl: input.imageUrl,
       paused: input.paused ?? false,
@@ -533,6 +553,7 @@ export async function updateEvent(
     description?: string;
     discordCleanupOnComplete?: boolean;
     durationMinutes?: number | null;
+    game?: string;
     imageUrl?: string;
     paused?: boolean;
     recurrenceEnabled?: boolean;
@@ -596,6 +617,7 @@ export async function updateEvent(
       description: input.description,
       discordCleanupOnComplete: input.discordCleanupOnComplete,
       durationMinutes: input.durationMinutes,
+      game: input.game?.trim().toLowerCase() || undefined,
       imageUrl: input.imageUrl,
       paused: input.paused,
       recurrenceEnabled: input.recurrenceEnabled,

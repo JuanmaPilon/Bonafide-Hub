@@ -1,5 +1,6 @@
 import { buildApp } from "./app.js";
 import { env } from "./config/env.js";
+import { migrateLegacyEventRoles } from "./services/event-games-migration.js";
 
 async function main(): Promise<void> {
   const app = buildApp();
@@ -13,6 +14,13 @@ async function main(): Promise<void> {
     app.log.error(error);
     process.exit(1);
   }
+
+  // Migración de datos de una sola vez (roles globales → roles por juego).
+  // Va después de escuchar para no demorar el arranque y no romper el health
+  // check; si falla, el API sigue funcionando con los roles de las plantillas.
+  void migrateLegacyEventRoles().catch((error: unknown) => {
+    app.log.warn({ err: error }, "No se pudieron migrar los roles por juego");
+  });
 }
 
 void main();

@@ -83,6 +83,9 @@ type RemoteSignup = {
 type RemoteEvent = {
   event?: {
     characterEnabled?: boolean;
+    // Juego del evento (wow | lol | ...): define los roles del asistente y el
+    // catálogo de clases/specs que se ofrece.
+    game?: string;
     signups?: RemoteSignup[];
     status?: string;
   };
@@ -200,9 +203,16 @@ async function fetchEvent(
   return payload.event ?? null;
 }
 
-async function fetchSignupContext(guildId: string): Promise<SignupContext> {
+// Config del asistente del juego del evento: roles y etiquetas de los ejes del
+// catálogo. La define el panel Admin (Configuración de eventos) y la sirve el
+// API según el juego que tenga el evento.
+async function fetchSignupContext(
+  guildId: string,
+  game?: string,
+): Promise<SignupContext> {
+  const suffix = game ? `?game=${encodeURIComponent(game)}` : "";
   const response = await remoteRequest(
-    `/internal/guilds/${encodeURIComponent(guildId)}/events/specs`,
+    `/internal/guilds/${encodeURIComponent(guildId)}/events/specs${suffix}`,
   );
   if (!response.ok) {
     return {
@@ -473,7 +483,7 @@ async function startRoleWizard(
     await replyOnce(interaction, "Este evento ya no acepta inscripciones.");
     return;
   }
-  const context = await fetchSignupContext(guildId);
+  const context = await fetchSignupContext(guildId, event.game);
 
   const row = new ActionRowBuilder<ButtonBuilder>();
   for (const role of context.roles) {
@@ -597,7 +607,8 @@ export async function handleEventSignupInteraction(
   if (action === "pickrole") {
     const roleKey = rest[0];
     const status = rest[1] ?? "yes";
-    const context = await fetchSignupContext(guildId);
+    const event = await fetchEvent(guildId, eventId);
+    const context = await fetchSignupContext(guildId, event?.game);
     const role =
       context.roles.find((entry) => entry.key === roleKey) ??
       DEFAULT_ROLES.find((entry) => entry.key === roleKey);
@@ -636,9 +647,10 @@ export async function handleEventSignupInteraction(
     }
     const className = value.slice(0, separator);
     const specName = value.slice(separator + 1);
-    const context = await fetchSignupContext(guildId);
-
     const event = await fetchEvent(guildId, eventId);
+    // El catálogo del juego del evento es el que valida la spec que eligió.
+    const context = await fetchSignupContext(guildId, event?.game);
+
     const mine = event?.signups?.find((signup) => signup.userId === userId);
     const result = await putSignup({
       character: mine?.character,

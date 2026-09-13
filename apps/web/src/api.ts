@@ -22,6 +22,7 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  eventGames?: EventGameConfig[];
   eventRoles?: EventRoleOption[];
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
@@ -805,9 +806,9 @@ export const ROLE_META: Array<{
 ];
 
 // ── Roles de evento configurables ──────────────────────────────────
-// Cada guild define sus roles de inscripción (label + emoji, unicode o custom
-// de Discord). Vacío = los 4 clásicos, así el módulo sirve para cualquier
-// juego: WoW (tank/healer/melee/ranged) o LoL (Top/Jungle/Mid/ADC/Support).
+// Cada JUEGO define sus roles de inscripción (label + emoji, unicode o custom
+// de Discord) y cada evento elige juego. Así el módulo sirve para WoW
+// (tank/healer/melee/ranged), LoL (Top/Jungle/Mid/ADC/Support) u otro.
 export type EventRoleOption = {
   animated: boolean;
   emoji?: string;
@@ -815,6 +816,14 @@ export type EventRoleOption = {
   emojiName?: string;
   key: string;
   label: string;
+};
+
+// Juego del módulo de eventos: sus roles de inscripción. El catálogo de
+// clases/specs vive en RaidSpec con el mismo `key` en `game`.
+export type EventGameConfig = {
+  key: string;
+  label: string;
+  roles: EventRoleOption[];
 };
 
 export const DEFAULT_EVENT_ROLES: EventRoleOption[] = ROLE_META.map(
@@ -826,13 +835,11 @@ export const DEFAULT_EVENT_ROLES: EventRoleOption[] = ROLE_META.map(
   }),
 );
 
-export function resolveEventRoles(config: GuildConfig): EventRoleOption[] {
-  const roles = config.eventRoles;
-  if (!roles || roles.length === 0) {
-    return DEFAULT_EVENT_ROLES;
-  }
-  // Misma corrección que hace el API: la etiqueta del rol `ranged` es
-  // "Range" (la clave se conserva porque está guardada en las inscripciones).
+// Corrección de etiquetas guardadas: el rol `ranged` se muestra como "Range"
+// (la clave se conserva porque está guardada en las inscripciones).
+export function normalizeEventRoles(
+  roles: EventRoleOption[],
+): EventRoleOption[] {
   return roles.map((role) =>
     role.key === "ranged" && /^ranged$/i.test(role.label)
       ? { ...role, label: "Range" }
@@ -840,24 +847,38 @@ export function resolveEventRoles(config: GuildConfig): EventRoleOption[] {
   );
 }
 
-// Meta de un rol según la config de la guild, con fallback a los clásicos
-// (y al "dps" legacy de inscripciones viejas).
+// Roles de un juego según la config, sin depender del endpoint de juegos (que
+// trae las plantillas del código). Se usa como respaldo cuando los juegos
+// todavía no se cargaron: el primero configurado o los 4 clásicos.
+export function resolveEventRoles(
+  config: GuildConfig,
+  game?: string,
+): EventRoleOption[] {
+  const games = config.eventGames ?? [];
+  const entry = game ? games.find((item) => item.key === game) : games[0];
+  const roles = entry?.roles;
+  if (!roles || roles.length === 0) {
+    return DEFAULT_EVENT_ROLES;
+  }
+  return normalizeEventRoles(roles);
+}
+
+// Meta de un rol dentro de la lista de roles de un juego, con fallback a los
+// clásicos (y al "dps" legacy de inscripciones viejas).
 export function eventRoleMeta(
   role: string | undefined,
-  config: GuildConfig,
+  roles: EventRoleOption[],
 ): EventRoleOption | undefined {
   if (role === "dps") {
     return { animated: false, emoji: "⚔️", key: "dps", label: "DPS" };
   }
-  const configured = resolveEventRoles(config).find(
-    (entry) => entry.key === role,
-  );
+  const configured = roles.find((entry) => entry.key === role);
   if (configured) {
     return configured;
   }
-  // Rol que ya NO está en la config (le cambiaron el juego a la guild o se
-  // borró el rol) pero sigue guardado en inscripciones viejas: mostramos su
-  // icono clásico igual, para que el roster no quede con "❔ healer".
+  // Rol que ya NO está en el juego (le cambiaron el juego al evento o se borró
+  // el rol) pero sigue guardado en inscripciones viejas: mostramos su icono
+  // clásico igual, para que el roster no quede con "❔ healer".
   const classic = ROLE_META.find((entry) => entry.key === role);
   return classic
     ? {
@@ -958,6 +979,9 @@ export type HubEvent = {
   // Al marcar Completado, borra el aviso/evento de Discord tras guardar.
   discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
+  // Juego del evento (wow | lol | …): decide qué roles de inscripción y qué
+  // catálogo de clases/specs se usan en el selector, el roster y el aviso.
+  game?: string;
   guildId: string;
   id: string;
   imageUrl?: string;
@@ -1021,6 +1045,8 @@ export async function createEvent(
     discord?: EventDiscordOptions;
     discordCleanupOnComplete?: boolean;
     durationMinutes?: number;
+    // Juego del evento (wow | lol | …): define roles y catálogo.
+    game?: string;
     imageUrl?: string;
     paused?: boolean;
     recurrenceEnabled?: boolean;
@@ -1055,6 +1081,7 @@ export async function updateEvent(
     discord?: EventDiscordOptions;
     discordCleanupOnComplete?: boolean;
     durationMinutes?: number | null;
+    game?: string;
     imageUrl?: string;
     paused?: boolean;
     recurrenceEnabled?: boolean;
@@ -1143,6 +1170,8 @@ export type RaidSpec = {
   createdAt: string;
   emojiId?: string;
   emojiName?: string;
+  // Juego al que pertenece la fila (wow | lol | …).
+  game: string;
   guildId: string;
   id: string;
   position: number;
@@ -1159,6 +1188,23 @@ export async function getEventSpecs(guildId: string): Promise<RaidSpec[]> {
   return data.specs;
 }
 
+// Juegos del módulo de eventos: los configurados por la guild + las plantillas.
+// Cada juego trae sus roles, que es lo que usa el selector y el roster.
+export type EventGameOption = EventGameConfig & {
+  // true = roles definidos por la guild; false = los de la plantilla.
+  configured: boolean;
+};
+
+export async function getEventGames(
+  guildId: string,
+): Promise<EventGameOption[]> {
+  const data = await requestJson<{ games: EventGameOption[] }>(
+    `/guilds/${guildId}/events/games`,
+    { method: "GET" },
+  );
+  return data.games;
+}
+
 export async function createEventSpec(
   guildId: string,
   input: {
@@ -1166,6 +1212,7 @@ export async function createEventSpec(
     className: string;
     emojiId?: string;
     emojiName?: string;
+    game: string;
     role: string;
     specName: string;
   },
@@ -1198,6 +1245,7 @@ export async function updateEventSpec(
     className?: string;
     emojiId?: string | null;
     emojiName?: string | null;
+    game?: string;
     role?: string;
     specName?: string;
   },

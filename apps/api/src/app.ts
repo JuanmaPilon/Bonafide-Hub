@@ -128,8 +128,12 @@ import {
   type EventRecurrence,
 } from "./services/events-discord-publisher.js";
 import {
+  DEFAULT_EVENT_GAME,
   getGuildConfig,
+  resolveEventGames,
   resolveEventRoles,
+  resolveGameLabel,
+  type EventGameConfig,
   type EventRoleOption,
   type GuildConfig,
   replaceGuildConfig,
@@ -617,17 +621,34 @@ function startXpExMemberCleanup(): void {
   );
 }
 
-// ¿El rol es válido para esta guild? Acepta los roles configurados, los 4
-// clásicos y el "dps" legacy de inscripciones viejas.
+// ¿El rol es válido para el juego del evento? Acepta los roles del juego
+// (config de la guild o plantilla) y el "dps" legacy de inscripciones viejas.
+// Sin `game` se validan los roles del juego por defecto.
 async function isValidEventRole(
   guildId: string,
   role: string,
+  game?: string | null,
 ): Promise<boolean> {
-  if (SIGNUP_ROLES.includes(role as never)) {
+  const config = await getGuildConfig(guildId);
+  const key = game?.trim().toLowerCase() || undefined;
+  if (resolveEventRoles(config, key).some((entry) => entry.key === role)) {
     return true;
   }
-  const config = await getGuildConfig(guildId);
-  return resolveEventRoles(config).some((entry) => entry.key === role);
+  // "dps": rol legacy que ya no se ofrece en ningún juego, pero se acepta para
+  // no rechazar inscripciones viejas al refrescar un aviso.
+  return role === "dps";
+}
+
+// Juego pedido por el cliente (evento o catálogo): normaliza la clave y la
+// valida contra los juegos disponibles (config de la guild + plantillas).
+// Devuelve null si ese juego no existe.
+function resolveGameKey(
+  config: GuildConfig,
+  game: string | undefined,
+): string | null {
+  const key = game?.trim().toLowerCase() || DEFAULT_EVENT_GAME;
+  const games = resolveEventGames(config);
+  return games.some((entry) => entry.key === key) ? key : null;
 }
 
 async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
@@ -1393,6 +1414,7 @@ async function syncAndStoreEventDiscord(input: {
     characterEnabled: boolean;
     description?: string;
     durationMinutes?: number;
+    game: string;
     guildId: string;
     id: string;
     imageUrl?: string;
@@ -1419,7 +1441,7 @@ async function syncAndStoreEventDiscord(input: {
   event: Awaited<ReturnType<typeof setEventDiscordInfo>>;
 }> {
   const { discordOpts, event } = input;
-  const specs = await listRaidSpecs(event.guildId);
+  const specs = await listRaidSpecs(event.guildId, event.game);
   const eventConfig = await getGuildConfig(event.guildId);
   const result = await syncEventToDiscord({
     characterEnabled: event.characterEnabled !== false,
@@ -1430,6 +1452,7 @@ async function syncAndStoreEventDiscord(input: {
     existing: input.existing,
     guildIconUrl: await fetchGuildIconUrl(event.guildId),
     guildId: event.guildId,
+    gameLabel: resolveGameLabel(eventConfig, event.game),
     imageUrl: event.imageUrl,
     options: discordOpts,
     ownRecurrenceEveryDays:
@@ -1438,7 +1461,7 @@ async function syncAndStoreEventDiscord(input: {
         : undefined,
     paused: event.paused,
     requiredRoleId: event.requiredRoleId,
-    roles: resolveEventRoles(eventConfig),
+    roles: resolveEventRoles(eventConfig, event.game),
     signupDeadline: event.signupDeadline,
     signups: event.signups,
     specLabel: eventConfig.eventSpecLabel,
@@ -1491,7 +1514,7 @@ async function refreshEventAnnouncement(
       // refrescar.
       return true;
     }
-    const specs = await listRaidSpecs(guildId);
+    const specs = await listRaidSpecs(guildId, event.game);
     const eventConfig = await getGuildConfig(guildId);
     const embeds = buildEventAnnouncementEmbeds({
       characterEnabled: event.characterEnabled !== false,
@@ -1502,6 +1525,7 @@ async function refreshEventAnnouncement(
       eventId: event.id,
       guildIconUrl: await fetchGuildIconUrl(guildId),
       guildId,
+      gameLabel: resolveGameLabel(eventConfig, event.game),
       imageUrl: event.imageUrl,
       location:
         event.discordEventConfig?.entityType === "external"
@@ -1515,7 +1539,7 @@ async function refreshEventAnnouncement(
           ? event.recurrenceEveryDays
           : undefined,
       requiredRoleId: event.requiredRoleId,
-      roles: resolveEventRoles(eventConfig),
+      roles: resolveEventRoles(eventConfig, event.game),
       signupDeadline: event.signupDeadline,
       signups: event.signups,
       specLabel: eventConfig.eventSpecLabel,
@@ -3517,6 +3541,7 @@ export function buildApp() {
       };
       durationMinutes?: number;
       discordCleanupOnComplete?: boolean;
+      game?: string;
       imageUrl?: string;
       paused?: boolean;
       recurrenceEnabled?: boolean;
@@ -3556,6 +3581,11 @@ export function buildApp() {
       id?: string;
       username?: string | null;
     };
+    const createConfig = await getGuildConfig(params.guildId);
+    const game = resolveGameKey(createConfig, body.game);
+    if (!game) {
+      return reply.code(400).send({ ok: false, error: "Juego inválido" });
+    }
 
     const event = await createEvent({
       characterEnabled: body.characterEnabled !== false,
@@ -3564,6 +3594,7 @@ export function buildApp() {
       description: body.description?.trim() || undefined,
       discordCleanupOnComplete: body.discordCleanupOnComplete === true,
       durationMinutes: body.durationMinutes,
+      game,
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
       paused: body.paused === true,
@@ -3647,6 +3678,7 @@ export function buildApp() {
       };
       durationMinutes?: number | null;
       discordCleanupOnComplete?: boolean;
+      game?: string;
       imageUrl?: string;
       paused?: boolean;
       recurrenceEnabled?: boolean;
@@ -3683,6 +3715,16 @@ export function buildApp() {
     // limpiamos lo viejo y publicamos de nuevo.
     const discordOpts = normalizeDiscordOptions(body.discord);
     const previous = await getEvent(params.guildId, params.eventId);
+    // Juego: si lo mandan tiene que existir (config de la guild o plantilla).
+    const patchConfig = await getGuildConfig(params.guildId);
+    let game: string | undefined;
+    if (body.game !== undefined) {
+      const resolved = resolveGameKey(patchConfig, body.game);
+      if (!resolved) {
+        return reply.code(400).send({ ok: false, error: "Juego inválido" });
+      }
+      game = resolved;
+    }
     let existingPublication:
       | {
           discordEventId?: string;
@@ -3740,6 +3782,7 @@ export function buildApp() {
           ? undefined
           : body.discordCleanupOnComplete === true,
       durationMinutes: body.durationMinutes ?? null,
+      game,
       imageUrl: body.imageUrl?.trim() || undefined,
       paused: body.paused === undefined ? undefined : body.paused === true,
       recurrenceEnabled:
@@ -3933,13 +3976,25 @@ export function buildApp() {
           .send({ ok: false, error: "Plantilla no encontrada" });
       }
 
+      // Agrega (o actualiza) ESE juego en la config, sin tocar los otros: se
+      // pueden tener WoW y LoL configurados a la vez y cada evento elige uno.
+      const currentConfig = await getGuildConfig(params.guildId);
+      const games: EventGameConfig[] = resolveEventGames(currentConfig)
+        .filter((entry) => entry.key !== template.key)
+        .map(({ key, label, roles }) => ({ key, label, roles }));
+      games.push({
+        key: template.key,
+        label: template.label,
+        roles: template.roles,
+      });
       const config = await upsertGuildConfig(params.guildId, {
-        eventRoles: template.roles,
+        eventGames: games,
       });
 
-      // Precarga del catálogo: comparamos por rol + clase + spec para no
-      // duplicar filas ni pisar los emojis ya cargados.
-      const existingSpecs = await listRaidSpecs(params.guildId);
+      // Precarga del catálogo: comparamos por rol + clase + spec dentro del
+      // juego de la plantilla para no duplicar filas ni pisar los emojis ya
+      // cargados (ni las filas de otros juegos).
+      const existingSpecs = await listRaidSpecs(params.guildId, template.key);
       const existingKeys = new Set(
         existingSpecs.map(
           (spec) => `${spec.role}|${spec.className}|${spec.specName}`,
@@ -3954,6 +4009,7 @@ export function buildApp() {
         const row = await createRaidSpec({
           animated: false,
           className: spec.className,
+          game: template.key,
           guildId: params.guildId,
           role: spec.role,
           specName: spec.specName,
@@ -3976,13 +4032,15 @@ export function buildApp() {
         applied: summarizeEventTemplate(template),
         config,
         created,
-        specs: await listRaidSpecs(params.guildId),
+        specs: await listRaidSpecs(params.guildId, template.key),
       };
     },
   );
 
   // ── Catálogo de specs de inscripción (RaidSpec, estilo Raid Helper) ──
   // Cualquier miembro puede leerlo (lo usa el selector de inscripción).
+  // Con `?game=` devuelve solo ese juego; sin el, todos (la web filtra por el
+  // juego del evento en el cliente, así hace una sola consulta).
   app.get("/guilds/:guildId/events/specs", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -3998,8 +4056,35 @@ export function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const specs = await listRaidSpecs(params.guildId);
+    const query = request.query as { game?: string };
+    const specs = await listRaidSpecs(params.guildId, query.game);
     return { ok: true, guildId: params.guildId, specs };
+  });
+
+  // Juegos disponibles del módulo de eventos: los configurados por la guild y
+  // las plantillas del código (wow/lol). El evento elige uno y de ahí salen
+  // sus roles de inscripción y su catálogo.
+  app.get("/guilds/:guildId/events/games", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    return {
+      ok: true,
+      guildId: params.guildId,
+      games: resolveEventGames(config),
+    };
   });
 
   // Alta de spec del catálogo (staff con acceso al módulo eventos).
@@ -4024,6 +4109,7 @@ export function buildApp() {
       className?: string;
       emojiId?: string;
       emojiName?: string;
+      game?: string;
       role?: string;
       specName?: string;
     };
@@ -4031,7 +4117,11 @@ export function buildApp() {
     const className = body.className?.trim();
     const specName = body.specName?.trim() ?? "";
     const config = await getGuildConfig(params.guildId);
-    const allowedRoles = resolveEventRoles(config);
+    const game = resolveGameKey(config, body.game);
+    if (!game) {
+      return reply.code(400).send({ ok: false, error: "Juego inválido" });
+    }
+    const allowedRoles = resolveEventRoles(config, game);
 
     if (
       !role ||
@@ -4050,6 +4140,7 @@ export function buildApp() {
       className,
       emojiId: body.emojiId?.trim() || undefined,
       emojiName: body.emojiName?.trim() || undefined,
+      game,
       guildId: params.guildId,
       role,
       specName,
@@ -4116,6 +4207,7 @@ export function buildApp() {
       className?: string;
       emojiId?: string;
       emojiName?: string;
+      game?: string;
       role?: string;
       specName?: string;
     };
@@ -4123,7 +4215,11 @@ export function buildApp() {
     const className = body.className?.trim();
     const specName = body.specName?.trim();
     const config = await getGuildConfig(params.guildId);
-    const allowedRoles = resolveEventRoles(config);
+    const game = resolveGameKey(config, body.game);
+    if (!game) {
+      return reply.code(400).send({ ok: false, error: "Juego inválido" });
+    }
+    const allowedRoles = resolveEventRoles(config, game);
     if (role && !allowedRoles.some((entry) => entry.key === role)) {
       return reply.code(400).send({
         ok: false,
@@ -4341,7 +4437,10 @@ export function buildApp() {
       if (!SIGNUP_STATUSES.includes(status as never)) {
         return reply.code(400).send({ ok: false, error: "Estado inválido" });
       }
-      if (body.role && !(await isValidEventRole(params.guildId, body.role))) {
+      if (
+        body.role &&
+        !(await isValidEventRole(params.guildId, body.role, event.game))
+      ) {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
@@ -4462,15 +4561,23 @@ export function buildApp() {
     if (!params.guildId) {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
-    const specs = await listRaidSpecs(params.guildId);
+    // `?game=` es el juego del evento que el bot está anotando: define los
+    // roles del asistente y el catálogo de clases/specs.
+    const query = request.query as { game?: string };
     const config = await getGuildConfig(params.guildId);
-    // El bot arma el asistente de inscripción con esto: roles configurados y
-    // etiquetas de los ejes del catálogo.
+    const game = resolveGameKey(config, query.game);
+    if (!game) {
+      return reply.code(400).send({ ok: false, error: "Juego inválido" });
+    }
+    const specs = await listRaidSpecs(params.guildId, game);
+    // El bot arma el asistente de inscripción con esto: roles del juego del
+    // evento y etiquetas de los ejes del catálogo.
     return {
       ok: true,
       guildId: params.guildId,
       classLabel: config.eventClassLabel ?? "Clase",
-      roles: resolveEventRoles(config),
+      game,
+      roles: resolveEventRoles(config, game),
       specLabel: config.eventSpecLabel ?? "Spec",
       specs,
     };
@@ -4665,7 +4772,10 @@ export function buildApp() {
       if (!SIGNUP_STATUSES.includes(status as never)) {
         return reply.code(400).send({ ok: false, error: "Estado inválido" });
       }
-      if (body.role && !(await isValidEventRole(params.guildId, body.role))) {
+      if (
+        body.role &&
+        !(await isValidEventRole(params.guildId, body.role, event.game))
+      ) {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
@@ -5407,6 +5517,10 @@ export function buildApp() {
       allowedBody.enabledModules = body.enabledModules;
     }
 
+    if (body.eventGames !== undefined) {
+      allowedBody.eventGames = body.eventGames;
+    }
+
     if (body.eventRoles !== undefined) {
       allowedBody.eventRoles = body.eventRoles;
     }
@@ -5434,9 +5548,12 @@ export function buildApp() {
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
     // Si cambió algo que se ve en los avisos de Discord (roles de
-    // inscripción), re-renderizamos los avisos de los próximos eventos
-    // publicados.
-    if (allowedBody.eventRoles !== undefined) {
+    // inscripción de los juegos), re-renderizamos los avisos de los próximos
+    // eventos publicados.
+    if (
+      allowedBody.eventGames !== undefined ||
+      allowedBody.eventRoles !== undefined
+    ) {
       refreshUpcomingAnnouncements(params.guildId);
     }
 

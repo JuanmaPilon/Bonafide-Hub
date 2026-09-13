@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma.js";
+import { EVENT_TEMPLATES, findEventTemplate } from "./event-templates.js";
 
 // Permiso de staff: un rol de Discord tiene acceso a ciertos módulos del
 // panel Admin.
@@ -18,12 +19,31 @@ export type EventRoleOption = {
   label: string;
 };
 
+// Juego configurado por la guild: sus roles de inscripción y su etiqueta.
+// El catálogo de clases/specs vive en RaidSpec con el mismo `key` en `game`.
+export type EventGameConfig = {
+  key: string;
+  label: string;
+  roles: EventRoleOption[];
+};
+
+// Juego efectivo que se ofrece en los selectores: lo configurado por la guild
+// o, si ese juego no fue personalizado, los roles de la plantilla del código.
+export type EventGameOption = EventGameConfig & {
+  // true = roles definidos por la guild; false = los de la plantilla.
+  configured: boolean;
+};
+
 export const DEFAULT_EVENT_ROLES: EventRoleOption[] = [
   { animated: false, emoji: "🛡️", key: "tank", label: "Tank" },
   { animated: false, emoji: "💚", key: "healer", label: "Healer" },
   { animated: false, emoji: "⚔️", key: "melee", label: "Melee" },
   { animated: false, emoji: "🏹", key: "ranged", label: "Range" },
 ];
+
+// Juego por defecto cuando la guild no configuró ninguno y el evento no
+// especifica otro (los eventos anteriores al juego por evento son de WoW).
+export const DEFAULT_EVENT_GAME = "wow";
 
 // La clave de los roles es interna (nunca se muestra) y está guardada en las
 // inscripciones y en la config de cada guild, así que no se renombra: solo
@@ -84,12 +104,109 @@ export function normalizeEventRoles(value: unknown): EventRoleOption[] | null {
   return roles;
 }
 
-// Roles efectivos de una guild (los configurados o los clásicos).
+// Sanea la lista de juegos que manda el panel: clave en minúscula, etiqueta
+// corta y roles saneados con la misma regla que los roles sueltos.
+export function normalizeEventGames(value: unknown): EventGameConfig[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const games: EventGameConfig[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const raw = entry as Record<string, unknown>;
+    const key = normalizeKey(raw.key);
+    const label = String(raw.label ?? "")
+      .trim()
+      .slice(0, 40);
+    if (!key || !label || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    games.push({
+      key,
+      label,
+      roles: normalizeEventRoles(raw.roles) ?? [],
+    });
+
+    if (games.length >= 12) {
+      break;
+    }
+  }
+
+  return games;
+}
+
+// Clave interna de un juego/rol (slug): minúsculas, sin espacios ni símbolos.
+function normalizeKey(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "");
+}
+
+// Roles efectivos de un juego: los configurados por la guild para ese juego o,
+// si no los personalizó, los de su plantilla (wow/lol del código). Sin juego
+// conocido se cae a los 4 clásicos, así un juego borrado nunca deja el roster
+// sin roles.
 export function resolveEventRoles(
-  config: { eventRoles?: unknown } | null | undefined,
+  config: { eventGames?: unknown } | null | undefined,
+  game?: string | null,
 ): EventRoleOption[] {
-  const roles = normalizeEventRoles(config?.eventRoles);
-  return roles && roles.length > 0 ? roles : DEFAULT_EVENT_ROLES;
+  const key = normalizeKey(game) || DEFAULT_EVENT_GAME;
+  const configured = normalizeEventGames(config?.eventGames)?.find(
+    (entry) => entry.key === key,
+  );
+  if (configured && configured.roles.length > 0) {
+    return configured.roles;
+  }
+  return findEventTemplate(key)?.roles ?? DEFAULT_EVENT_ROLES;
+}
+
+// Juegos que puede elegir un evento: los configurados por la guild y, si
+// todavía no personalizó ninguno, las plantillas del código (así el selector
+// nunca queda vacío). Se completa con la plantilla de los juegos que la guild
+// tenga configurados sin roles propios.
+export function resolveEventGames(
+  config: { eventGames?: unknown } | null | undefined,
+): EventGameOption[] {
+  const configured = normalizeEventGames(config?.eventGames) ?? [];
+  const keys = new Set(configured.map((game) => game.key));
+
+  for (const template of EVENT_TEMPLATES) {
+    keys.add(template.key);
+  }
+
+  const games: EventGameOption[] = [];
+  for (const key of keys) {
+    const custom = configured.find((game) => game.key === key);
+    const template = findEventTemplate(key);
+    games.push({
+      configured: Boolean(custom && custom.roles.length > 0),
+      key,
+      label: custom?.label ?? template?.label ?? key,
+      roles:
+        custom && custom.roles.length > 0
+          ? custom.roles
+          : (template?.roles ?? DEFAULT_EVENT_ROLES),
+    });
+  }
+  return games;
+}
+
+// Etiqueta visible de un juego (para el aviso de Discord y el panel).
+export function resolveGameLabel(
+  config: { eventGames?: unknown } | null | undefined,
+  game?: string | null,
+): string {
+  const key = normalizeKey(game) || DEFAULT_EVENT_GAME;
+  return (
+    resolveEventGames(config).find((entry) => entry.key === key)?.label ?? key
+  );
 }
 
 export type GuildConfig = {
@@ -103,6 +220,7 @@ export type GuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
   eventClassLabel?: string;
+  eventGames?: EventGameConfig[];
   eventRoles?: EventRoleOption[];
   eventSpecEnabled?: boolean;
   eventSpecLabel?: string;
@@ -140,6 +258,7 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
     eventClassLabel: string | null;
+    eventGames: unknown;
     eventRoles: unknown;
     eventSpecEnabled: boolean;
     eventSpecLabel: string | null;
@@ -186,6 +305,7 @@ function toGuildConfig(
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
     eventClassLabel: record.eventClassLabel ?? undefined,
+    eventGames: normalizeEventGames(record.eventGames) ?? undefined,
     eventRoles: normalizeEventRoles(record.eventRoles) ?? undefined,
     eventSpecEnabled: record.eventSpecEnabled,
     eventSpecLabel: record.eventSpecLabel ?? undefined,
@@ -224,6 +344,7 @@ type NormalizedGuildConfig = {
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
   eventClassLabel?: string;
+  eventGames?: EventGameConfig[];
   eventRoles?: EventRoleOption[];
   eventSpecEnabled: boolean;
   eventSpecLabel?: string;
@@ -274,6 +395,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
     eventClassLabel: config.eventClassLabel?.trim().slice(0, 24) || undefined,
+    eventGames: normalizeEventGames(config.eventGames) ?? [],
     eventRoles: normalizeEventRoles(config.eventRoles) ?? [],
     eventSpecEnabled: config.eventSpecEnabled ?? true,
     eventSpecLabel: config.eventSpecLabel?.trim().slice(0, 24) || undefined,
@@ -347,6 +469,7 @@ export async function replaceGuildConfig(
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
         eventClassLabel: normalized.eventClassLabel,
+        eventGames: normalized.eventGames ?? [],
         eventRoles: normalized.eventRoles ?? [],
         eventSpecEnabled: normalized.eventSpecEnabled,
         eventSpecLabel: normalized.eventSpecLabel,
@@ -382,6 +505,7 @@ export async function replaceGuildConfig(
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
         eventClassLabel: normalized.eventClassLabel,
+        eventGames: normalized.eventGames ?? [],
         eventRoles: normalized.eventRoles ?? [],
         eventSpecEnabled: normalized.eventSpecEnabled,
         eventSpecLabel: normalized.eventSpecLabel,

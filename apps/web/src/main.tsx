@@ -60,10 +60,12 @@ import {
   deleteMyEventSignup,
   resetMyEventSignup,
   apiAssetUrl,
+  DEFAULT_EVENT_ROLES,
   discordEmojiUrl,
   eventRoleMeta,
   getEventImages,
   getEventSpecs,
+  getEventGames,
   getEvents,
   getGuildEmojis,
   getEventTemplates,
@@ -96,6 +98,9 @@ import {
   type XpRoleMultiplier,
   type XpRoleRule,
   type RaidSpec,
+  type EventGameConfig,
+  type EventGameOption,
+  type EventRoleOption,
   type EventTemplateSummary,
   type EventDiscordOptions,
   type EventSignup,
@@ -1194,15 +1199,15 @@ function DiscordEmojiImage({
 
 // Emoji de un rol de evento: custom de Discord (imagen) o unicode.
 function EventRoleEmoji({
-  config,
   role,
+  roles,
   size = 18,
 }: {
-  config: GuildConfig;
   role: string;
+  roles: EventRoleOption[];
   size?: number;
 }) {
-  const meta = eventRoleMeta(role, config);
+  const meta = eventRoleMeta(role, roles);
   return (
     <DiscordEmojiImage
       animated={meta?.animated}
@@ -1221,6 +1226,7 @@ function EventCard({
   config,
   event,
   guildRoles,
+  gameRoles,
   meId,
   onDelete,
   onDuplicate,
@@ -1234,6 +1240,8 @@ function EventCard({
   config: GuildConfig;
   event: HubEvent;
   guildRoles: GuildRole[];
+  // Roles de inscripción del JUEGO del evento.
+  gameRoles: EventRoleOption[];
   meId?: string;
   onDelete: (event: HubEvent) => void;
   onDuplicate: (event: HubEvent) => void;
@@ -1256,13 +1264,13 @@ function EventCard({
     ? event.signups.find((signup) => signup.userId === meId)
     : undefined;
 
-  // Roles de evento configurados por la guild (o los 4 clásicos). El catálogo
-  // siempre tiene los dos ejes: rol/clase/spec. `characterEnabled` permite
-  // ocultar el personaje en juegos que no usan PJ (p. ej. LoL).
-  const eventRoles = resolveEventRoles(config);
+  // Roles del juego del evento: el catálogo también viene ya filtrado por
+  // juego desde la tab Eventos. `characterEnabled` permite ocultar el
+  // personaje en juegos que no usan PJ (p. ej. LoL).
+  const eventRoles = gameRoles;
   const characterEnabled = event.characterEnabled !== false;
   const roleLabelFor = (key: string): string =>
-    eventRoleMeta(key, config)?.label ?? key;
+    eventRoleMeta(key, eventRoles)?.label ?? key;
 
   const [wowClass, setWowClass] = useState(mySignup?.wowClass ?? "");
   const [role, setRole] = useState(mySignup?.role ?? "");
@@ -1381,11 +1389,11 @@ function EventCard({
       })),
       ...extraKeys.map((key) => ({
         key: key === "" ? "sin-rol" : key,
-        label: key ? (eventRoleMeta(key, config)?.label ?? key) : "Sin rol",
+        label: key ? (eventRoleMeta(key, eventRoles)?.label ?? key) : "Sin rol",
         role: key,
       })),
     ];
-  }, [config, event.signups, eventRoles]);
+  }, [event.signups, eventRoles]);
 
   // Render de un miembro del roster: emoji de la spec (si tiene uno
   // configurado) + nick y personaje.
@@ -1572,8 +1580,8 @@ function EventCard({
                   <div className="event-roster-column" key={entry.key}>
                     <span className="event-roster-role">
                       <EventRoleEmoji
-                        config={config}
                         role={entry.role || "sin-rol"}
+                        roles={eventRoles}
                       />{" "}
                       {entry.label} ({roleSignups.length})
                     </span>
@@ -1687,7 +1695,10 @@ function EventCard({
                             title={entry.label}
                             type="button"
                           >
-                            <EventRoleEmoji config={config} role={entry.key} />
+                            <EventRoleEmoji
+                              role={entry.key}
+                              roles={eventRoles}
+                            />
                           </button>
                         ))}
                       </div>
@@ -2550,6 +2561,8 @@ function App() {
     };
     discordCleanupOnComplete: boolean;
     durationMinutes: string;
+    // Juego del evento (clave de la lista de juegos).
+    game: string;
     imageUrl: string;
     paused: boolean;
     recurrenceEnabled: boolean;
@@ -2569,6 +2582,7 @@ function App() {
     discord: defaultEventDiscord(),
     discordCleanupOnComplete: false,
     durationMinutes: "",
+    game: "",
     imageUrl: "",
     paused: false,
     recurrenceEnabled: false,
@@ -2588,6 +2602,9 @@ function App() {
   const [eventImages, setEventImages] = useState<EventImage[]>([]);
   const [eventImagesLoading, setEventImagesLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  // Juegos del módulo de eventos (WoW, LoL, …): cada uno trae sus roles de
+  // inscripción. El evento elige juego y de ahí salen sus roles + catálogo.
+  const [eventGames, setEventGames] = useState<EventGameOption[]>([]);
   // Catálogo de specs de inscripción (estilo Raid Helper) + editor.
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
   const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
@@ -2597,6 +2614,8 @@ function App() {
     [],
   );
   const [templateKey, setTemplateKey] = useState("");
+  // Juego que se está editando en "Configuración de eventos" (roles + catálogo).
+  const [adminGameKey, setAdminGameKey] = useState("");
   const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
   const [guildEmojisLoading, setGuildEmojisLoading] = useState(false);
   const [specDraft, setSpecDraft] = useState<{
@@ -2604,10 +2623,12 @@ function App() {
     className: string;
     emojiId?: string;
     emojiName?: string;
+    // Juego al que pertenece la fila que se está editando.
+    game?: string;
     id?: string;
     role: string;
     specName: string;
-  }>({ className: "", role: "tank", specName: "" });
+  }>({ className: "", role: "", specName: "" });
   const [savingAction, setSavingAction] = useState<
     | "config"
     | "xp"
@@ -3097,6 +3118,34 @@ function App() {
     };
   }, [activeTab, selectedGuildId, showSpecEditor]);
 
+  // Juegos del módulo de eventos (roles de cada uno): los usa el selector de
+  // juego del evento, el roster y el editor del panel.
+  useEffect(() => {
+    const adminOpen =
+      activeTab === "admin" && showSpecEditor && canAccess("config");
+    if (!selectedGuildId || (activeTab !== "eventos" && !adminOpen)) {
+      return;
+    }
+    let cancelled = false;
+    getEventGames(selectedGuildId)
+      .then((list) => {
+        if (cancelled) {
+          return;
+        }
+        setEventGames(list);
+        // Juego que se edita en el panel: el primero disponible.
+        setAdminGameKey((current) => current || (list[0]?.key ?? ""));
+        // Un evento nuevo arranca con el primer juego (normalmente WoW).
+        setEventForm((current) =>
+          current.game ? current : { ...current, game: list[0]?.key ?? "" },
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId, showSpecEditor]);
+
   // Canales de texto/voz para el editor de publicación en Discord de un
   // evento (solo staff). Se cargan la primera vez que se abre el form; el
   // panel Admin usa su propia carga de canales.
@@ -3363,26 +3412,32 @@ function App() {
     }
   }
 
-  // Guarda los roles de evento, las etiquetas de los ejes y si el segundo eje
-  // (spec) se usa. Es config de admin/super admin.
+  // Guarda los roles del JUEGO que se está editando en el panel (cada juego
+  // tiene los suyos). Es config de admin/super admin.
   async function handleSaveEventRoleConfig(): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     setSavingAction("eventRoles");
     try {
+      // Mandamos todos los juegos materializados en la config, con las
+      // etiquetas ya recortadas (así guardar un juego no borra los otros).
+      const games: EventGameConfig[] = (config.eventGames ?? []).map(
+        (game) => ({
+          key: game.key,
+          label: game.label,
+          roles: game.roles.map((role) => ({
+            ...role,
+            label: role.label.trim() || role.key,
+          })),
+        }),
+      );
       const nextConfig = await saveGuildConfig(selectedGuildId, {
-        eventRoles: resolveEventRoles(config).map((entry) => ({
-          animated: entry.animated,
-          emoji: entry.emoji,
-          emojiId: entry.emojiId,
-          emojiName: entry.emojiName,
-          key: entry.key,
-          label: entry.label.trim() || entry.key,
-        })),
+        eventGames: games,
       });
       setConfig(nextConfig);
-      pushToast("Roles de evento guardados.", "success");
+      setEventGames(await getEventGames(selectedGuildId));
+      pushToast("Roles del juego guardados.", "success");
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "No se pudo guardar.",
@@ -3393,8 +3448,9 @@ function App() {
     }
   }
 
-  // Cambia la plantilla del juego: ajusta los roles del módulo y precarga en
-  // el catálogo las clases/specs que falten (no borra ni pisa lo existente).
+  // Agrega (o actualiza) un juego a partir de su plantilla: deja sus roles y
+  // precarga en el catálogo las clases/specs que falten (no borra ni pisa lo
+  // existente, ni toca los otros juegos).
   async function handleApplyEventTemplate(key = templateKey): Promise<void> {
     if (!selectedGuildId || !key) {
       return;
@@ -3403,8 +3459,11 @@ function App() {
     try {
       const result = await applyEventTemplate(selectedGuildId, key);
       setConfig(result.config);
-      setEventSpecs(result.specs);
+      setEventSpecs(await getEventSpecs(selectedGuildId));
+      setEventGames(await getEventGames(selectedGuildId));
       setTemplateKey(key);
+      setAdminGameKey(key);
+      setSpecDraft({ className: "", game: key, role: "", specName: "" });
       pushToast("Plantilla aplicada.", "success");
     } catch (error) {
       pushToast(
@@ -3416,13 +3475,22 @@ function App() {
     }
   }
 
-  // Agrega o edita una clase/spec (rol + emoji) de la configuración de eventos.
+  // Agrega o edita una clase/spec (rol + emoji) del catálogo del juego que se
+  // está editando.
   async function handleSaveEventSpec(): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     if (!specDraft.className.trim() || !specDraft.specName.trim()) {
       pushToast("Faltan datos del catálogo.", "error");
+      return;
+    }
+    const game = specDraft.game || adminGameKey;
+    // Rol: si el draft todavía no eligió uno, va el primero del juego (es el que
+    // muestra el select).
+    const role = specDraft.role || adminRoles[0]?.key || "";
+    if (!role) {
+      pushToast("Ese juego no tiene roles configurados.", "error");
       return;
     }
     const editing = Boolean(specDraft.id);
@@ -3433,7 +3501,8 @@ function App() {
           className: specDraft.className.trim(),
           emojiId: specDraft.emojiId ?? null,
           emojiName: specDraft.emojiName ?? null,
-          role: specDraft.role,
+          game,
+          role,
           specName: specDraft.specName.trim(),
         });
       } else {
@@ -3442,12 +3511,13 @@ function App() {
           className: specDraft.className.trim(),
           emojiId: specDraft.emojiId,
           emojiName: specDraft.emojiName,
-          role: specDraft.role,
+          game,
+          role,
           specName: specDraft.specName.trim(),
         });
       }
       setEventSpecs(await getEventSpecs(selectedGuildId));
-      setSpecDraft({ className: "", role: specDraft.role, specName: "" });
+      setSpecDraft({ className: "", game, role, specName: "" });
       pushToast(
         editing ? "Cambios guardados." : "Clase/spec agregada.",
         "success",
@@ -3467,6 +3537,7 @@ function App() {
       className: spec.className,
       emojiId: spec.emojiId,
       emojiName: spec.emojiName,
+      game: spec.game,
       id: spec.id,
       role: spec.role,
       specName: spec.specName,
@@ -3540,6 +3611,8 @@ function App() {
       discord: defaultEventDiscord(),
       discordCleanupOnComplete: false,
       durationMinutes: "",
+      // Arranca con el primer juego disponible (normalmente WoW).
+      game: eventGames[0]?.key ?? "",
       imageUrl: "",
       paused: false,
       recurrenceEnabled: false,
@@ -3578,6 +3651,7 @@ function App() {
       discordCleanupOnComplete: event.discordCleanupOnComplete ?? false,
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
+      game: event.game ?? "",
       imageUrl: event.imageUrl ?? "",
       paused: event.paused ?? false,
       recurrenceEnabled: event.recurrenceEnabled ?? false,
@@ -3629,6 +3703,7 @@ function App() {
       discordCleanupOnComplete: event.discordCleanupOnComplete ?? false,
       durationMinutes:
         event.durationMinutes != null ? String(event.durationMinutes) : "",
+      game: event.game ?? "",
       imageUrl: event.imageUrl ?? "",
       // La copia no hereda pausa ni recurrencia (evita dos series andando).
       paused: false,
@@ -3759,6 +3834,7 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : null,
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
+          game: eventForm.game || undefined,
           imageUrl: eventForm.imageUrl || undefined,
           paused: eventForm.paused,
           recurrenceEnabled: eventForm.recurrenceEnabled,
@@ -3798,6 +3874,7 @@ function App() {
             ? Number(eventForm.durationMinutes)
             : undefined,
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
+          game: eventForm.game || undefined,
           imageUrl: eventForm.imageUrl || undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
           recurrenceEveryDays: eventForm.recurrenceEnabled
@@ -4927,6 +5004,97 @@ function App() {
       setLoadingSession(false);
     }
   }
+
+  // Roles de inscripción de cada juego, ya resueltos (el endpoint /games trae
+  // las plantillas del código cuando la guild no personalizó ese juego).
+  const gameRolesMap = useMemo(() => {
+    const map = new Map<string, EventRoleOption[]>();
+    for (const game of eventGames) {
+      map.set(
+        game.key,
+        game.roles.length > 0 ? game.roles : DEFAULT_EVENT_ROLES,
+      );
+    }
+    return map;
+  }, [eventGames]);
+
+  // Roles del juego de un evento (o del primero disponible si todavía no
+  // cargaron los juegos). Devuelve siempre la misma referencia por juego.
+  function rolesForGame(game?: string): EventRoleOption[] {
+    return (
+      gameRolesMap.get(game ?? "") ??
+      gameRolesMap.values().next().value ??
+      DEFAULT_EVENT_ROLES
+    );
+  }
+
+  // El catálogo del evento es el de su juego.
+  function specsForGame(game?: string): RaidSpec[] {
+    return eventSpecs.filter((spec) => spec.game === (game ?? ""));
+  }
+
+  // ── Panel: edición por juego ────────────────────────────────────
+  // El juego que se edita puede venir solo de la plantilla (no estar en la
+  // config guardada). Para poder editarlo y guardarlo, lo "materializamos" en
+  // la config local con los roles de la plantilla; recién se persiste cuando
+  // el staff toca "Guardar roles".
+  useEffect(() => {
+    if (!adminGameKey || eventGames.length === 0) {
+      return;
+    }
+    setConfig((current) => {
+      if (
+        (current.eventGames ?? []).some((game) => game.key === adminGameKey)
+      ) {
+        return current;
+      }
+      const fromList = eventGames.find((game) => game.key === adminGameKey);
+      if (!fromList) {
+        return current;
+      }
+      return {
+        ...current,
+        eventGames: [
+          ...(current.eventGames ?? []),
+          { key: fromList.key, label: fromList.label, roles: fromList.roles },
+        ],
+      };
+    });
+  }, [adminGameKey, eventGames]);
+
+  // Aplica un cambio a los roles del juego que se está editando en el panel.
+  function editAdminGameRoles(
+    updater: (roles: EventRoleOption[]) => EventRoleOption[],
+  ): void {
+    const fromList = eventGames.find((game) => game.key === adminGameKey);
+    setConfig((current) => {
+      const games = current.eventGames ?? [];
+      const base = games.some((game) => game.key === adminGameKey)
+        ? games
+        : fromList
+          ? [
+              ...games,
+              {
+                key: fromList.key,
+                label: fromList.label,
+                roles: fromList.roles,
+              },
+            ]
+          : games;
+      return {
+        ...current,
+        eventGames: base.map((game) =>
+          game.key === adminGameKey
+            ? { ...game, roles: updater(game.roles) }
+            : game,
+        ),
+      };
+    });
+  }
+
+  // Roles y catálogo del juego que se está editando en el panel.
+  const adminRoles = resolveEventRoles(config, adminGameKey);
+  const adminSpecs = eventSpecs.filter((spec) => spec.game === adminGameKey);
 
   // La navegación = Inicio (siempre) + módulos activos + Admin (con permisos).
   const visibleTabs: HubTab[] = [
@@ -7181,7 +7349,39 @@ function App() {
                       <div className="admin-card-body">
                         <div className="admin-card-hint-row">
                           <label className="event-role-field">
-                            <span>Plantilla de juego</span>
+                            <span>Juego</span>
+                            <select
+                              className="select"
+                              value={adminGameKey}
+                              onChange={(event) => {
+                                const next = event.target.value;
+                                setAdminGameKey(next);
+                                const nextRoles =
+                                  eventGames.find((game) => game.key === next)
+                                    ?.roles ?? [];
+                                setSpecDraft({
+                                  className: "",
+                                  game: next,
+                                  role: nextRoles[0]?.key ?? "",
+                                  specName: "",
+                                });
+                              }}
+                            >
+                              {eventGames.length === 0 ? (
+                                <option value={adminGameKey}>
+                                  {adminGameKey || "Cargando…"}
+                                </option>
+                              ) : (
+                                eventGames.map((game) => (
+                                  <option key={game.key} value={game.key}>
+                                    {game.label}
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                          </label>
+                          <label className="event-role-field">
+                            <span>Agregar juego (plantilla)</span>
                             <select
                               className="select"
                               value={templateKey}
@@ -7194,14 +7394,14 @@ function App() {
                                 if (!template || next === templateKey) {
                                   return;
                                 }
-                                // Aplicar una plantilla REEMPLAZA los roles del
-                                // módulo, así que pedimos confirmación: elegir
-                                // otro juego sin querer rompe el roster de los
-                                // eventos que ya tienen inscripciones.
+                                // Agregar un juego deja SUS roles y precarga su
+                                // catálogo; si el juego ya existía, sus roles se
+                                // restablecen a los de la plantilla, así que
+                                // pedimos confirmación.
                                 setConfirmDialog({
                                   kind: "danger",
-                                  title: "Aplicar plantilla",
-                                  message: `Se van a reemplazar los roles de evento por los de "${template.label}". ${template.description} El catálogo actual no se borra: solo se agregan las clases/specs que falten.`,
+                                  title: "Agregar juego",
+                                  message: `Se van a dejar los roles de "${template.label}" según la plantilla. ${template.description} El catálogo de otros juegos no se toca (solo se agregan las clases/specs que falten de este juego).`,
                                   onConfirm: () => {
                                     void handleApplyEventTemplate(next);
                                   },
@@ -7220,21 +7420,21 @@ function App() {
                           ) : null}
                         </div>
 
-                        {/* Roles de inscripción (label + emoji), en acordeones
+                        {/* Roles del juego elegido (label + emoji), en acordeones
                             para que la sección no crezca hacia abajo. */}
                         <h4 className="karuta-threshold-title">
-                          Roles de evento
+                          Roles del juego
                         </h4>
                         <div className="event-role-editor">
-                          {resolveEventRoles(config).map((entry, index) => (
+                          {adminRoles.map((entry, index) => (
                             <details
                               className="event-role-row"
                               key={`${entry.key}-${index}`}
                             >
                               <summary className="event-role-summary">
                                 <EventRoleEmoji
-                                  config={{ ...config, eventRoles: [entry] }}
                                   role={entry.key}
+                                  roles={adminRoles}
                                   size={22}
                                 />
                                 <strong>{entry.label}</strong>
@@ -7253,22 +7453,16 @@ function App() {
                                     value={entry.label}
                                     maxLength={24}
                                     onChange={(event) =>
-                                      setConfig((current) => {
-                                        const roles = resolveEventRoles(
-                                          current,
-                                        ).map((role, position) =>
+                                      editAdminGameRoles((roles) =>
+                                        roles.map((role, position) =>
                                           position === index
                                             ? {
                                                 ...role,
                                                 label: event.target.value,
                                               }
                                             : role,
-                                        );
-                                        return {
-                                          ...current,
-                                          eventRoles: roles,
-                                        };
-                                      })
+                                        ),
+                                      )
                                     }
                                   />
                                 </label>
@@ -7294,10 +7488,8 @@ function App() {
                                             className={`spec-emoji-option${selected ? " active" : ""}`}
                                             key={emoji.id}
                                             onClick={() =>
-                                              setConfig((current) => {
-                                                const roles = resolveEventRoles(
-                                                  current,
-                                                ).map((role, position) =>
+                                              editAdminGameRoles((roles) =>
+                                                roles.map((role, position) =>
                                                   position === index
                                                     ? selected
                                                       ? {
@@ -7314,12 +7506,8 @@ function App() {
                                                           emojiName: emoji.name,
                                                         }
                                                     : role,
-                                                );
-                                                return {
-                                                  ...current,
-                                                  eventRoles: roles,
-                                                };
-                                              })
+                                                ),
+                                              )
                                             }
                                             title={`:${emoji.name}:`}
                                             type="button"
@@ -7358,14 +7546,14 @@ function App() {
                         </h4>
                         {eventSpecsLoading ? (
                           <span className="muted-text">Cargando…</span>
-                        ) : eventSpecs.length === 0 ? (
+                        ) : adminSpecs.length === 0 ? (
                           <div className="event-signup-no-catalog">
-                            Todavía no definiste roles de evento. Agregá abajo
-                            cada clase/spec con su emoji.
+                            Este juego todavía no tiene clases/specs cargadas.
+                            Agregá abajo cada una con su emoji.
                           </div>
                         ) : (
-                          resolveEventRoles(config).map((roleOption) => {
-                            const roleSpecs = eventSpecs.filter(
+                          adminRoles.map((roleOption) => {
+                            const roleSpecs = adminSpecs.filter(
                               (entry) => entry.role === roleOption.key,
                             );
                             if (roleSpecs.length === 0) {
@@ -7378,8 +7566,8 @@ function App() {
                               >
                                 <strong>
                                   <EventRoleEmoji
-                                    config={config}
                                     role={roleOption.key}
+                                    roles={adminRoles}
                                   />{" "}
                                   {roleOption.label}
                                 </strong>
@@ -7441,7 +7629,13 @@ function App() {
                               <span>Rol</span>
                               <select
                                 className="select"
-                                value={specDraft.role}
+                                value={
+                                  adminRoles.some(
+                                    (role) => role.key === specDraft.role,
+                                  )
+                                    ? specDraft.role
+                                    : (adminRoles[0]?.key ?? "")
+                                }
                                 onChange={(event) =>
                                   setSpecDraft((current) => ({
                                     ...current,
@@ -7449,7 +7643,7 @@ function App() {
                                   }))
                                 }
                               >
-                                {resolveEventRoles(config).map((roleOption) => (
+                                {adminRoles.map((roleOption) => (
                                   <option
                                     key={roleOption.key}
                                     value={roleOption.key}
@@ -7553,6 +7747,7 @@ function App() {
                                 onClick={() =>
                                   setSpecDraft({
                                     className: "",
+                                    game: adminGameKey,
                                     role: specDraft.role,
                                     specName: "",
                                   })
@@ -8248,6 +8443,33 @@ function App() {
                             maxLength={120}
                           />
                         </label>
+                        {/* Juego: define los roles de inscripción y el catálogo
+                            que se ofrecen en este evento. */}
+                        <label>
+                          <span>Juego</span>
+                          <select
+                            className="select"
+                            value={eventForm.game}
+                            onChange={(event) =>
+                              setEventForm((current) => ({
+                                ...current,
+                                game: event.target.value,
+                              }))
+                            }
+                          >
+                            {eventGames.length === 0 ? (
+                              <option value={eventForm.game}>
+                                {eventForm.game || "Cargando…"}
+                              </option>
+                            ) : (
+                              eventGames.map((game) => (
+                                <option key={game.key} value={game.key}>
+                                  {game.label}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </label>
                         <div className="event-form-wide event-tag-field">
                           <span className="event-tag-title">
                             Etiqueta del evento (opcional)
@@ -8870,7 +9092,8 @@ function App() {
                           onRemoveSignup={handleRemoveEventSignup}
                           onResetSignup={handleResetEventSignup}
                           onSignup={handleEventSignup}
-                          specs={eventSpecs}
+                          gameRoles={rolesForGame(event.game)}
+                          specs={specsForGame(event.game)}
                         />
                       ))}
                     </div>

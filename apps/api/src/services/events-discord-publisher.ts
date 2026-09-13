@@ -499,6 +499,7 @@ export function buildEventAnnouncementEmbeds(input: {
   discordEventId?: string;
   durationMinutes?: number;
   eventId?: string;
+  gameLabel?: string;
   guildId: string;
   guildIconUrl?: string;
   imageUrl?: string;
@@ -708,13 +709,20 @@ export function buildEventAnnouncementEmbeds(input: {
     descriptionText += `\n\n${input.description.trim().slice(0, 1024)}`;
   }
 
+  // Footer: deja claro de qué juego es el aviso (cada evento puede ser de uno
+  // distinto) y qué tipo de evento es.
+  const gameLabel = input.gameLabel?.trim();
+  const footerText = gameLabel
+    ? `Bonafide Hub · ${gameLabel} · ${typeLabel}`
+    : `Bonafide Hub · ${typeLabel}`;
+
   const embed: Record<string, unknown> = {
     title: input.title.slice(0, 250),
     // Gris si está pausado, rojo si ya no se puede anotar; azul el resto.
     color: isPaused ? 0x8b93a7 : signupsClosed ? 0xe5484d : 0x6aa8ff,
     description: descriptionText,
     fields,
-    footer: { text: `Bonafide Hub · ${typeLabel}` },
+    footer: { text: footerText },
     // Sello de tiempo abajo a la derecha (se actualiza solo con cada refresh).
     timestamp: new Date().toISOString(),
   };
@@ -724,7 +732,7 @@ export function buildEventAnnouncementEmbeds(input: {
     embed.thumbnail = { url: input.guildIconUrl };
     embed.footer = {
       icon_url: input.guildIconUrl,
-      text: `Bonafide Hub · ${typeLabel}`,
+      text: footerText,
     };
   }
   // Tag libre del evento (estilo comunicados): va como "autor" del embed para
@@ -961,6 +969,7 @@ export async function syncEventToDiscord(input: {
     messageIds?: string[];
     publishChannelId?: string;
   };
+  gameLabel?: string;
   guildIconUrl?: string;
   guildId: string;
   imageUrl?: string;
@@ -1039,6 +1048,7 @@ export async function syncEventToDiscord(input: {
       discordEventId: result.discordEventId ?? input.discordEventId,
       durationMinutes: input.durationMinutes,
       eventId: input.eventId,
+      gameLabel: input.gameLabel,
       guildIconUrl: input.guildIconUrl,
       guildId: input.guildId,
       imageUrl: input.imageUrl,

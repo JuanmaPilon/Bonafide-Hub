@@ -56,9 +56,14 @@ model GuildConfig {
   karutaUltraRarePrintMax      Int      @default(1)
   karutaUltraRareWishlistMin   Int      @default(25)
   // ── Eventos: ejes configurables (para que sirva en cualquier juego) ──
-  // Roles de inscripción: [{key,label,emoji,emojiId,emojiName,animated}].
-  // Vacío = los 4 clásicos (tank/healer/melee/ranged). Con esto se puede
-  // armar, por ejemplo, LoL (Top/Jungle/Mid/ADC/Support).
+  // Juegos del módulo de eventos: [{key,label,roles:[...]}]. Cada juego tiene
+  // sus roles de inscripción y su catálogo (RaidSpec.game). Un evento elige un
+  // juego y hereda los roles + el catálogo de ese juego. Si un juego no está
+  // acá, se usan los roles de la plantilla del código (event-templates.ts).
+  eventGames                   Json?
+  // LEGACY: era la lista única de roles de la guild. Se migró a `eventGames`
+  // (uno por juego) al introducir el juego por evento; se conserva la columna
+  // para no perder datos si hizo falta volver atrás.
   eventRoles                   Json?
   // Etiquetas de los ejes del catálogo (clase/spec). En LoL, por ejemplo:
   // "Rango" como clase. (Histórico: el segundo eje ya no se configura.)
@@ -189,6 +194,11 @@ model HubEvent {
   title             String
   description       String?
   type              String   @default("raid") // raid | mplus | pvp | social
+  // Juego del evento (wow | lol | ...): decide qué roles de inscripción y qué
+  // catálogo de clases/specs usa el selector, el roster y el aviso de Discord.
+  // Las claves salen de las plantillas (event-templates.ts) o de la config de
+  // la guild (GuildConfig.eventGames).
+  game              String   @default("wow")
   // Etiqueta libre del evento (estilo comunicados): el staff escribe el texto
   // y elige el color, sin categorías fijas. Se muestra en la web y en el
   // embed de Discord.
@@ -300,14 +310,15 @@ model EventPlayerProfile {
   @@map("event_player_profiles")
 }
 
-// Catálogo de specs configurable por guild (estilo Raid Helper): cada fila
-// es un (rol, clase, spec) con su emoji custom de Discord opcional. Lo
-// administra el staff desde el panel Admin y alimenta el selector y el
-// roster de inscripciones. Así sirve para cualquier juego sin tocar código.
+// Catálogo de specs configurable por guild y por JUEGO (estilo Raid Helper):
+// cada fila es un (juego, rol, clase, spec) con su emoji custom opcional. Lo
+// administra el staff desde el panel Admin y alimenta el selector y el roster
+// de inscripciones del evento según el juego que tenga elegido.
 model RaidSpec {
   id        String   @id @default(cuid())
   guildId   String
-  role      String // tank | healer | melee | ranged
+  game      String   @default("wow") // clave del juego (wow | lol | custom)
+  role      String // tank | healer | melee | ranged (o los del juego)
   className String
   specName  String
   emojiId   String?
@@ -317,8 +328,8 @@ model RaidSpec {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([guildId, role, className, specName])
-  @@index([guildId, role])
+  @@unique([guildId, game, role, className, specName])
+  @@index([guildId, game, role])
   @@map("raid_specs")
 }
 

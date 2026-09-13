@@ -103,6 +103,38 @@ Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
 
 Reminders (legacy): `GET/POST /guilds/:guildId/reminders`, `DELETE /guilds/:guildId/reminders/:reminderId`
 
+### Módulo de eventos ("Módulo X")
+
+Eventos con inscripciones estilo Raid Helper. Un evento puede publicarse como
+Scheduled Event de Discord y/o como aviso-embed en un canal (el bot maneja los
+botones de inscripción).
+
+**Juegos por evento (importante):** el módulo sirve para varios juegos a la vez.
+Cada evento elige un JUEGO y de ahí salen sus roles de inscripción y su catálogo:
+
+```text
+Evento (game: wow)  ->  roles de WoW      + catálogo RaidSpec.game = "wow"
+Evento (game: lol)  ->  roles de LoL      + catálogo RaidSpec.game = "lol"
+```
+
+Los roles de cada juego salen de `GuildConfig.eventGames`
+(`[{ key, label, roles: [{ key, label, emoji | emojiId+emojiName }] }]`). Si la
+guild no personalizó ese juego, se usan los roles de su plantilla
+(`apps/api/src/services/event-templates.ts`: `wow`, `lol`). El catálogo de
+clases/specs es `RaidSpec` con el mismo `game` como discriminador.
+
+1. `GET/POST /guilds/:guildId/events`
+2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
+3. `PATCH/DELETE /guilds/:guildId/events/:eventId`
+4. `PUT/DELETE /guilds/:guildId/events/:eventId/signups/me` (propia inscripción)
+5. `DELETE /guilds/:guildId/events/:eventId/signups/me/reset` (borra inscripción + personaje recordado)
+6. `GET/POST /guilds/:guildId/events/specs` (catálogo; `?game=` filtra por juego)
+7. `PATCH/DELETE /guilds/:guildId/events/specs/:specId`
+8. `GET /guilds/:guildId/events/templates` (plantillas disponibles)
+9. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada)
+10. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
+11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
+
 ## 4. Endpoint interno para bot
 
 Auth: header `x-bot-token` == `BOT_API_TOKEN`.
@@ -115,6 +147,11 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 6. `GET /internal/guilds/:guildId/daily-messages` (solo frases habilitadas)
 7. `POST /internal/guilds/:guildId/karuta/grabs` (transferencia de posesión de una carta rara)
 8. `POST /internal/guilds/:guildId/karuta/cards` / `.../cards/burn` / `.../transfers` / `.../albums`
+9. `GET /internal/guilds/:guildId/events/specs?game=<juego>` (roles del juego + catálogo: alimenta el asistente de inscripción del bot)
+10. `GET /internal/guilds/:guildId/events/:eventId` (evento con sus inscripciones: el bot decide si abre el asistente o aplica el estado directo)
+11. `PUT /internal/guilds/:guildId/events/:eventId/signups` / `DELETE .../signups` / `DELETE .../signups/reset`
+12. `GET /internal/guilds/:guildId/events/control` (recordatorios e informes pendientes)
+13. `POST /internal/guilds/:guildId/events/:eventId/reminders-sent` / `.../report-sent`
 
 > **Merge selectivo en el PUT de config**: el bot no conoce todos los campos que administra el hub (módulos, sugerencias, permisos de staff, logs de raid). El PUT interno **solo fusiona los campos propios del bot** (`temporaryVoiceChannelIds`, canales del loro, `defaultRoleId`, `musicRoleIds`, etc.) sobre la config actual. Los campos del hub se preservan y el bot nunca los resetea.
 
@@ -143,12 +180,19 @@ Tablas:
 10. `karuta_cards` — posesión de cartas raras (print/wishlist/dueño)
 11. `karuta_albums` — álbumes (`ka`) de cada usuario, con puntero al mensaje
 12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)
+13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`)
+14. `event_signups` — inscripciones por evento y usuario (`status`, `role`, `wowClass`, `spec`, `character`)
+15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild
+16. `raid_specs` — catálogo de clases/specs por guild y JUEGO (`game`, `role`, `className`, `specName`, emoji custom)
+17. `event_images` — biblioteca de imágenes del módulo (data URL)
 
 Campos relevantes de `guild_configs`:
 
 - `enabledModules` — módulos visibles del hub (vacío = todos visibles). Lo escribe solo el owner.
 - `suggestionsDmTiers` — rangos que reciben sugerencias por DM. El antiguo `suggestionsDmUserId` queda como columna legacy y ya no se usa.
 - `logsWatchGuild` / `logsWatchServer` / `logsWatchRegion` — vigilado de raid de Warcraft Logs (el viejo `logsWatchCharacter` quedó como legacy sin uso).
+- `eventGames` — juegos del módulo de eventos con sus roles (`[{ key, label, roles }]`). Un juego sin entrada acá usa los roles de su plantilla.
+- `eventRoles` — **legacy**: era la lista única de roles de la guild. Al pasar a "juego por evento" se migra a `eventGames` al arrancar el API (`apps/api/src/services/event-games-migration.ts`) y ya no se lee.
 
 Scripts (`apps/api/package.json`):
 

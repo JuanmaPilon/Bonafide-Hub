@@ -76,6 +76,24 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 7. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
 8. `MessageCreate`/`MessageUpdate` (Karuta) → detecta cartas raras (`kv`), su colección (`ka`) y transferencias (`kg`/grab) en el canal vigilado y las guarda en la API
 
+### Inscripciones a eventos (Módulo X)
+
+El API publica el aviso-embed del evento con botones (`eventsign:{eventId}:{accion}`);
+el bot maneja los clicks con mensajes efímeros y guarda por API interna:
+
+```text
+✅ Asistir / ⏰ Tarde / 🪑 Bench / ❌ No asisto
+   -> asistente: rol -> clase/spec (catálogo del juego del evento)
+   -> ⚙️ Clase y spec · ✏️ Personaje · 🔄 Resetear · 🗑️ Quitar inscripción
+```
+
+1. Los roles del asistente salen del **juego del evento**: el bot pide
+   `GET /internal/guilds/:g/events/specs?game=<juego>` con el `game` que trae el evento.
+2. Si el evento pide nombre de personaje y el jugador todavía no tiene uno, al
+   terminar de anotarse le avisa y le ofrece el botón para abrir el modal.
+3. Los recordatorios de asistencia y los informes de "no se anotaron" los dispara
+   el scheduler del bot consultando `GET /internal/.../events/control`.
+
 ## 4. Sistema de XP
 
 1. XP por mensaje (`messageXp`) y por minuto en voz (`voiceXpPerMinute`).

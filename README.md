@@ -38,6 +38,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 13. **Permisos de staff por rol de Discord** (`admin_role_modules`): qué módulos del Admin ve cada rol (tiers owner/admin/officer)
 14. **Sugerencias del hub**: se envían por DM al staff según los rangos configurados
 15. **Endpoint interno del bot con merge selectivo**: el bot solo escribe sus campos y ya no pisa módulos/sugerencias/permisos del hub
+16. **Eventos ("Módulo X") con juego por evento**: cada evento elige juego (WoW, LoL, …) y hereda sus roles de inscripción y su catálogo de clases/specs; el catálogo (`raid_specs`) se guarda por juego
 
 ### Web hub (`apps/web`)
 
@@ -46,7 +47,7 @@ Plataforma privada para una comunidad de Discord, construida como monorepo con t
 3. Tab Comunicados (publicados desde el admin)
 4. Tab Raids con card colapsable de Logs de Raid (sincronizados con Warcraft Logs)
 5. Tab Sugerencias: form que llega por DM al staff según su rango
-6. Panel Admin: configuración general, módulos, permisos de staff, comunicados, mensajes diarios (loro), logs de raid, sistema de XP y registro de auditoría
+6. Panel Admin: configuración general, módulos, permisos de staff, comunicados, mensajes diarios (loro), logs de raid, sistema de XP, **configuración de eventos por juego** (roles + catálogo) y registro de auditoría
 7. **Módulos activables/ocultables** desde Admin → Módulos (inicio y admin siempre visibles)
 8. **Permisos de staff por rango**: tarjetas del Admin coloreadas y ordenadas por tier (owner/admin/officer) y acceso filtrado por rol
 9. Perfil accesible desde el chip de usuario (no es una tab)

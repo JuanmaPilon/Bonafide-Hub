@@ -19,11 +19,12 @@ Este documento resume cómo se conectan bot, API, web y base de datos.
 - Registro de auditoría de cambios del Hub
 - Comunicados: publica en Discord vía REST + los muestra en el hub
 - Logs de raid: sincroniza con Warcraft Logs y publica en Discord/web
+- Módulo de eventos: eventos con inscripciones ("Módulo X"), publicación en Discord (scheduled event + aviso-embed con botones) y roster
 
 3. `apps/web`
 
 - UI de Guild Hub (React + Vite)
-- Home (podio + nitro), dashboard, panel admin
+- Home (podio + nitro), dashboard, tab Eventos, panel admin
 - Consume endpoints del API
 
 4. `PostgreSQL`
@@ -92,6 +93,30 @@ Web: leaderboard con colores/neón, niveles configurables en Admin
 
 La config vive en `xp_configs` (JSON `levelRoles` y `roleMultipliers`). Cada regla de nivel puede tener `color` para el hub.
 
+## 5. Módulo de eventos (juego por evento)
+
+El bot y la web comparten la misma lógica: el API es la fuente de verdad y el
+bot solo dibuja los botones del aviso y manda la inscripción.
+
+```text
+Evento            (hub_events.game = "wow" | "lol" | ...)
+   |
+   +-- roles     -> GuildConfig.eventGames[game].roles
+   |                 (o los de la plantilla del código si no se personalizó)
+   +-- catálogo  -> raid_specs WHERE game = <juego del evento>
+   |
+   v
+Aviso-embed (botones)  +  Tarjeta en la web
+   |
+   v
+event_signups (rol, clase, spec, personaje, estado)
+```
+
+1. La guild puede tener varios juegos configurados a la vez; cada evento elige uno.
+2. Las **plantillas** (`event-templates.ts`: `wow`, `lol`) son data pura: agregan un juego (roles + catálogo precargado) sin borrar los otros.
+3. Un juego que no está en `eventGames` usa los roles de su plantilla, así agregar un juego nuevo no requiere configurar nada.
+4. Los eventos anteriores al cambio tienen `game = "wow"` (default de la columna), así que sus inscripciones siguen cuadrando con los roles clásicos.
+
 ## 6. Registro de auditoría
 
 1. Modelo `AuditLogEntry` (tabla `audit_log_entries`).
@@ -114,6 +139,11 @@ Endpoints:
 7. `GET /internal/guilds/:guildId/daily-messages` (frases habilitadas del loro)
 8. `POST /internal/guilds/:guildId/karuta/grabs` (transferencia de posesión de una carta rara)
 9. `POST /internal/guilds/:guildId/karuta/cards|cards/burn|transfers|albums` (colección de cartas raras)
+10. `GET /internal/guilds/:guildId/events/specs?game=<juego>` (roles del juego + catálogo para el asistente de inscripción)
+11. `GET /internal/guilds/:guildId/events/:eventId`
+12. `PUT /internal/guilds/:guildId/events/:eventId/signups` / `DELETE` / `DELETE .../signups/reset`
+13. `GET /internal/guilds/:guildId/events/control`
+14. `POST /internal/guilds/:guildId/events/:eventId/reminders-sent` / `report-sent`
 
 ## 8. Persistencia actual
 
@@ -205,3 +235,23 @@ Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
 2. Karpindomo (web): FAB de chat flotante con burbuja de frases del asistente;
    aparece solo tras login. Usa clases tipo "widget" para no ser bloqueado por
    adblockers.
+
+## 16. Flujo del Módulo de eventos (web <-> Discord)
+
+```text
+Web (Admin → Configuración de eventos)
+   -> elige JUEGO (WoW / LoL / …) y edita sus roles + su catálogo
+   -> PATCH /guilds/:g/events/games (eventGames) y /events/specs (game)
+
+Web (tab Eventos) / Discord (/evento)
+   -> evento con game = <juego>  ->  roles y catálogo de ESE juego
+
+Inscripción
+   -> Web: PUT /guilds/:g/events/:id/signups/me
+   -> Discord: botones del embed -> PUT /internal/.../signups
+   -> el API valida el rol contra el juego del evento y re-renderiza el aviso
+```
+
+1. El aviso-embed muestra el juego en el footer y el roster agrupado por los roles del juego; quien no eligió rol aparece en la columna "Sin rol".
+2. Cambiar el juego de un evento no borra inscripciones: las que tienen un rol de otro juego pasan a columnas con su icono clásico (o "Sin rol").
+3. El catálogo se guarda por juego, así cargar emojis de LoL no toca los de WoW.
