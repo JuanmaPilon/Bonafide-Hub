@@ -438,6 +438,11 @@ model XpProfile {
   level        Int      @default(0)
   messageCount Int      @default(0)
   voiceMinutes Int      @default(0)
+  // Última identidad vista en Discord (nombre a mostrar y avatar). Sirve para
+  // que el leaderboard no caiga a "@id" cuando alguien sale del servidor o
+  // cuando la API no puede leer la lista de miembros (rate limit).
+  lastKnownName      String?
+  lastKnownAvatarUrl String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

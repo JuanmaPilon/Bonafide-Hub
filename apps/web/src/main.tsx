@@ -4799,11 +4799,24 @@ function App() {
                                       entry.level,
                                       entry.isBooster,
                                     )}
+                                    title={
+                                      entry.inGuild === false
+                                        ? "Ya no está en el servidor · nombre guardado la última vez que lo vimos"
+                                        : undefined
+                                    }
                                   >
                                     {entry.nickname ||
                                       entry.username ||
                                       `@${entry.userId}`}
                                   </span>
+                                  {entry.inGuild === false ? (
+                                    <span
+                                      className="left-server-tag"
+                                      title="Ya no está en el servidor"
+                                    >
+                                      salió
+                                    </span>
+                                  ) : null}
                                   {entry.isBooster ? (
                                     <span
                                       className="booster-badge"

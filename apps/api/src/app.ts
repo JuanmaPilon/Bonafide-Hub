@@ -138,6 +138,7 @@ import {
   listXpProfiles,
   resetAllXp,
   resetXpProfile,
+  saveLeaderboardIdentities,
   setXpLevel,
   type XpImportEntry,
 } from "./services/xp-store.js";
@@ -435,12 +436,56 @@ async function fetchGuildMembersForLeaderboard(
     result.set(member.user.id, {
       avatarUrl,
       isBooster: Boolean(member.premium_since),
-      nickname: member.nick ?? null,
+      // nick de servidor → nombre global (el que se ve en Discord) → handle.
+      // Antes se usaba solo `nick` y, si no había, el handle: por eso el
+      // dashboard mostraba "@usuario" aunque la persona hubiera cambiado su
+      // nombre para mostrar en Discord.
+      nickname: memberDisplayName(member),
       username: member.user.username,
     });
   }
 
   return result;
+}
+
+// Completa el leaderboard con la identidad de Discord de cada miembro.
+// - Si la persona está en el server: nombre/avatar/booster en vivo + guardamos
+//   esa identidad en su perfil (para el futuro).
+// - Si no está (salió/expulsada) o Discord no respondió: usamos la ÚLTIMA
+//   identidad guardada en vez de caer a "@id".
+async function enrichLeaderboardWithMembers(
+  guildId: string,
+  leaderboard: Awaited<ReturnType<typeof getLeaderboard>>,
+) {
+  const memberInfo = await fetchGuildMembersForLeaderboard(guildId).catch(
+    () => null,
+  );
+  // Si no pudimos leer la lista de miembros (rate limit, token, etc.) no
+  // sabemos quién sigue en el server: no marcamos a nadie como "salió".
+  const membersAvailable = (memberInfo?.size ?? 0) > 0;
+
+  const identities = [...(memberInfo ?? new Map<string, LeaderboardUserInfo>())]
+    .map(([userId, info]) => ({
+      avatarUrl: info.avatarUrl,
+      name: info.nickname ?? info.username,
+      userId,
+    }));
+  if (identities.length > 0) {
+    void saveLeaderboardIdentities(guildId, identities).catch(() => undefined);
+  }
+
+  return leaderboard.map((entry) => {
+    const info = memberInfo?.get(entry.userId);
+
+    return {
+      ...entry,
+      avatarUrl: info?.avatarUrl ?? entry.lastKnownAvatarUrl ?? null,
+      inGuild: membersAvailable ? Boolean(info) : undefined,
+      isBooster: info?.isBooster ?? false,
+      nickname: info?.nickname ?? entry.lastKnownName ?? null,
+      username: info?.username ?? null,
+    };
+  });
 }
 
 async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
@@ -462,7 +507,7 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
 
       return {
         avatarUrl,
-        nickname: member.nick ?? null,
+        nickname: memberDisplayName(member),
         premiumSince: member.premium_since as string,
         userId: member.user?.id ?? "",
         username: member.user?.username ?? "",
@@ -2635,22 +2680,10 @@ export function buildApp() {
     }
 
     const leaderboard = await getLeaderboard(params.guildId);
-
-    const memberInfo = await fetchGuildMembersForLeaderboard(
+    const enrichedLeaderboard = await enrichLeaderboardWithMembers(
       params.guildId,
-    ).catch(() => new Map<string, LeaderboardUserInfo>());
-
-    const enrichedLeaderboard = leaderboard.map((entry) => {
-      const info = memberInfo.get(entry.userId);
-
-      return {
-        ...entry,
-        avatarUrl: info?.avatarUrl ?? null,
-        isBooster: info?.isBooster ?? false,
-        nickname: info?.nickname ?? null,
-        username: info?.username ?? null,
-      };
-    });
+      leaderboard,
+    );
 
     return {
       ok: true,
@@ -2668,19 +2701,17 @@ export function buildApp() {
     }
 
     const leaderboard = await getLeaderboard(guildId);
-    const memberInfo = await fetchGuildMembersForLeaderboard(guildId).catch(
-      () => new Map<string, LeaderboardUserInfo>(),
-    );
-
-    const preview = leaderboard.slice(0, 30).map((entry) => {
-      const info = memberInfo.get(entry.userId);
-      return {
-        avatarUrl: info?.avatarUrl ?? null,
-        isBooster: info?.isBooster ?? false,
-        nickname: info?.nickname ?? null,
-        username: info?.username ?? null,
-      };
-    });
+    const preview = (
+      await enrichLeaderboardWithMembers(guildId, leaderboard)
+    )
+      .slice(0, 30)
+      .map((entry) => ({
+        avatarUrl: entry.avatarUrl,
+        inGuild: entry.inGuild,
+        isBooster: entry.isBooster,
+        nickname: entry.nickname,
+        username: entry.username,
+      }));
 
     return { ok: true, leaderboard: preview };
   });

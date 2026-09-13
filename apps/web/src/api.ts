@@ -481,6 +481,9 @@ export async function saveXpConfig(
 
 export type LeaderboardEntry = {
   avatarUrl: string | null;
+  // false = ya no está en el server (o Discord no respondió): el nombre y el
+  // avatar vienen de la última identidad que guardamos.
+  inGuild?: boolean;
   isBooster: boolean;
   level: number;
   messageCount: number;
@@ -507,6 +510,7 @@ export async function getLeaderboard(
 
 export type PublicLeaderboardEntry = {
   avatarUrl: string | null;
+  inGuild?: boolean;
   isBooster: boolean;
   nickname: string | null;
   username: string | null;

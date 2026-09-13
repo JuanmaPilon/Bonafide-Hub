@@ -158,6 +158,8 @@ export async function xpToNextLevel(
 }
 
 export type LeaderboardEntry = {
+  lastKnownAvatarUrl?: string;
+  lastKnownName?: string;
   level: number;
   messageCount: number;
   rank: number;
@@ -177,6 +179,8 @@ export async function getLeaderboard(
   });
 
   return records.map((record, index) => ({
+    lastKnownAvatarUrl: record.lastKnownAvatarUrl ?? undefined,
+    lastKnownName: record.lastKnownName ?? undefined,
     level: record.level,
     messageCount: record.messageCount,
     rank: index + 1,
@@ -184,6 +188,58 @@ export async function getLeaderboard(
     voiceMinutes: record.voiceMinutes,
     xp: record.xp,
   }));
+}
+
+// Guarda la última identidad vista de cada miembro (nombre + avatar) en los
+// perfiles que cambiaron. Es lo que evita que el leaderboard muestre "@id"
+// cuando alguien sale del server o cuando Discord nos rate-limitea: la próxima
+// carga ya tiene el último nombre/avatar conocido. Best-effort.
+export async function saveLeaderboardIdentities(
+  guildId: string,
+  identities: Array<{ avatarUrl?: string | null; name?: string | null; userId: string }>,
+): Promise<void> {
+  if (identities.length === 0) {
+    return;
+  }
+
+  const records = await prisma.xpProfile.findMany({
+    select: {
+      lastKnownAvatarUrl: true,
+      lastKnownName: true,
+      userId: true,
+    },
+    where: { guildId, userId: { in: identities.map((row) => row.userId) } },
+  });
+  const current = new Map(records.map((row) => [row.userId, row]));
+
+  const updates = identities.filter((identity) => {
+    const existing = current.get(identity.userId);
+    if (!existing) {
+      return false;
+    }
+    const name = identity.name?.trim() || null;
+    const avatarUrl = identity.avatarUrl ?? null;
+    return (
+      existing.lastKnownName !== name ||
+      existing.lastKnownAvatarUrl !== avatarUrl
+    );
+  });
+
+  if (updates.length === 0) {
+    return;
+  }
+
+  await prisma.$transaction(
+    updates.map((identity) =>
+      prisma.xpProfile.update({
+        data: {
+          lastKnownAvatarUrl: identity.avatarUrl ?? null,
+          lastKnownName: identity.name?.trim() || null,
+        },
+        where: { guildId_userId: { guildId, userId: identity.userId } },
+      }),
+    ),
+  );
 }
 
 /**
