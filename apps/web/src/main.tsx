@@ -4079,9 +4079,9 @@ function App() {
 
     setConfirmDialog({
       kind: "default",
-      title: "Re-sincronizar roles",
+      title: "Sincronizar todo",
       message:
-        "¿Re-sincronizar roles y prefijos de nombre de todos los miembros según su nivel actual? El bot lo procesará en unos segundos.",
+        "Se van a re-sincronizar los roles y prefijos de nombre de todos los miembros según su nivel actual, y se van a quitar del ranking los perfiles de quienes ya no están en el servidor. ¿Continuar?",
       onConfirm: () => {
         void performSyncRoles();
       },
@@ -4095,9 +4095,11 @@ function App() {
 
     setLoadingGuildData(true);
     try {
-      await requestXpSync(selectedGuildId);
+      const { removed } = await requestXpSync(selectedGuildId);
       pushToast(
-        "Sincronización encolada. El bot aplicará roles y prefijos en unos segundos.",
+        removed > 0
+          ? `Sincronización encolada. Se quitaron ${removed} perfil${removed === 1 ? "" : "es"} de gente que ya no está. El bot aplicará roles y prefijos en unos segundos.`
+          : "Sincronización encolada. No había perfiles de gente que ya no está. El bot aplicará roles y prefijos en unos segundos.",
         "success",
       );
     } catch (error) {
@@ -4799,24 +4801,11 @@ function App() {
                                       entry.level,
                                       entry.isBooster,
                                     )}
-                                    title={
-                                      entry.inGuild === false
-                                        ? "Ya no está en el servidor · nombre guardado la última vez que lo vimos"
-                                        : undefined
-                                    }
                                   >
                                     {entry.nickname ||
                                       entry.username ||
                                       `@${entry.userId}`}
                                   </span>
-                                  {entry.inGuild === false ? (
-                                    <span
-                                      className="left-server-tag"
-                                      title="Ya no está en el servidor"
-                                    >
-                                      salió
-                                    </span>
-                                  ) : null}
                                   {entry.isBooster ? (
                                     <span
                                       className="booster-badge"
@@ -6361,7 +6350,7 @@ function App() {
                               )}
 
                               <button
-                                className="ghost-button"
+                                className="primary-button"
                                 onClick={addXpRole}
                                 type="button"
                               >
@@ -6426,7 +6415,7 @@ function App() {
                               )}
 
                               <button
-                                className="ghost-button"
+                                className="primary-button"
                                 onClick={addXpMultiplier}
                                 type="button"
                               >
@@ -6436,14 +6425,14 @@ function App() {
 
                             <div className="import-export">
                               <button
-                                className="ghost-button"
+                                className="primary-button"
                                 onClick={() => void handleExportXp()}
                                 type="button"
                               >
                                 Exportar XP
                               </button>
                               <button
-                                className="ghost-button"
+                                className="primary-button"
                                 onClick={() => importFileRef.current?.click()}
                                 type="button"
                               >
@@ -6459,11 +6448,11 @@ function App() {
                                 }
                               />
                               <button
-                                className="ghost-button"
+                                className="primary-button"
                                 onClick={requestSyncRoles}
                                 type="button"
                               >
-                                Re-sincronizar roles
+                                Sincronizar todo
                               </button>
                               <button
                                 className="ghost-button danger"

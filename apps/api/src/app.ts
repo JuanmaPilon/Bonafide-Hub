@@ -132,9 +132,11 @@ import {
 } from "./services/xp-config-store.js";
 import {
   addXp,
+  deleteXpProfiles,
   getLeaderboard,
   getXpProfile,
   importXpEntries,
+  listXpGuildIds,
   listXpProfiles,
   resetAllXp,
   resetXpProfile,
@@ -460,16 +462,14 @@ async function enrichLeaderboardWithMembers(
   const memberInfo = await fetchGuildMembersForLeaderboard(guildId).catch(
     () => null,
   );
-  // Si no pudimos leer la lista de miembros (rate limit, token, etc.) no
-  // sabemos quién sigue en el server: no marcamos a nadie como "salió".
-  const membersAvailable = (memberInfo?.size ?? 0) > 0;
 
-  const identities = [...(memberInfo ?? new Map<string, LeaderboardUserInfo>())]
-    .map(([userId, info]) => ({
-      avatarUrl: info.avatarUrl,
-      name: info.nickname ?? info.username,
-      userId,
-    }));
+  const identities = [
+    ...(memberInfo ?? new Map<string, LeaderboardUserInfo>()),
+  ].map(([userId, info]) => ({
+    avatarUrl: info.avatarUrl,
+    name: info.nickname ?? info.username,
+    userId,
+  }));
   if (identities.length > 0) {
     void saveLeaderboardIdentities(guildId, identities).catch(() => undefined);
   }
@@ -480,12 +480,89 @@ async function enrichLeaderboardWithMembers(
     return {
       ...entry,
       avatarUrl: info?.avatarUrl ?? entry.lastKnownAvatarUrl ?? null,
-      inGuild: membersAvailable ? Boolean(info) : undefined,
       isBooster: info?.isBooster ?? false,
       nickname: info?.nickname ?? entry.lastKnownName ?? null,
       username: info?.username ?? null,
     };
   });
+}
+
+// ── Limpieza de XP de quienes ya no están ───────────────────────────
+// Corre al pedir "Sincronizar todo" y una vez por día. Seguridad: si no
+// pudimos leer la lista de miembros, si vino vacía o si se llevarían puestos
+// casi todos los perfiles (síntoma de una lectura a medias), no borra nada.
+const XP_EX_MEMBER_MAX_RATIO = 0.9;
+const XP_EX_MEMBER_MIN_MEMBERS = 3;
+
+async function pruneXpProfilesOfExMembers(guildId: string): Promise<number> {
+  const members = await fetchAllGuildMembers(guildId).catch(() => []);
+  const memberIds = new Set(
+    members
+      .map((member) => member.user?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  if (memberIds.size < XP_EX_MEMBER_MIN_MEMBERS) {
+    console.warn(
+      `[api] limpieza de XP omitida en ${guildId}: lista de miembros vacía o incompleta (${memberIds.size})`,
+    );
+    return 0;
+  }
+
+  const profiles = await listXpProfiles(guildId);
+  const gone = profiles.filter((profile) => !memberIds.has(profile.userId));
+  if (gone.length === 0) {
+    return 0;
+  }
+
+  if (gone.length > profiles.length * XP_EX_MEMBER_MAX_RATIO) {
+    console.warn(
+      `[api] limpieza de XP omitida en ${guildId}: ${gone.length}/${profiles.length} perfiles quedarían fuera (posible error al leer miembros)`,
+    );
+    return 0;
+  }
+
+  const removed = await deleteXpProfiles(
+    guildId,
+    gone.map((profile) => profile.userId),
+  );
+  console.log(
+    `[api] limpieza de XP: ${removed} perfil/es de gente que ya no está en ${guildId}`,
+  );
+  return removed;
+}
+
+const XP_EX_MEMBER_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+let xpExMemberTimer: NodeJS.Timeout | null = null;
+let xpExMemberSyncRunning = false;
+
+async function runXpExMemberCleanup(): Promise<void> {
+  if (xpExMemberSyncRunning) {
+    return;
+  }
+  xpExMemberSyncRunning = true;
+  try {
+    for (const guildId of await listXpGuildIds()) {
+      await pruneXpProfilesOfExMembers(guildId);
+      // Respiro entre guilds para no encadenar pedidos a Discord.
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  } catch (error) {
+    console.error("[api] xp ex-member cleanup failed", error);
+  } finally {
+    xpExMemberSyncRunning = false;
+  }
+}
+
+function startXpExMemberCleanup(): void {
+  if (xpExMemberTimer) {
+    return;
+  }
+  void runXpExMemberCleanup();
+  xpExMemberTimer = setInterval(
+    () => void runXpExMemberCleanup(),
+    XP_EX_MEMBER_SYNC_INTERVAL_MS,
+  );
 }
 
 async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
@@ -1119,7 +1196,8 @@ async function refreshStaleKarutaCardImages(
   karutaCardImageSyncRunning = true;
   try {
     const cards =
-      candidates ?? (await listKarutaCardsMissingArt(KARUTA_CARD_ART_CACHE_PER_PASS));
+      candidates ??
+      (await listKarutaCardsMissingArt(KARUTA_CARD_ART_CACHE_PER_PASS));
     if (cards.length === 0) {
       return;
     }
@@ -2701,13 +2779,10 @@ export function buildApp() {
     }
 
     const leaderboard = await getLeaderboard(guildId);
-    const preview = (
-      await enrichLeaderboardWithMembers(guildId, leaderboard)
-    )
+    const preview = (await enrichLeaderboardWithMembers(guildId, leaderboard))
       .slice(0, 30)
       .map((entry) => ({
         avatarUrl: entry.avatarUrl,
-        inGuild: entry.inGuild,
         isBooster: entry.isBooster,
         nickname: entry.nickname,
         username: entry.username,
@@ -2832,13 +2907,20 @@ export function buildApp() {
 
     await upsertGuildConfig(params.guildId, { xpSyncRequested: true });
 
+    // Además de encolar la re-sincronización de roles/prefijos en el bot,
+    // aprovechamos para limpiar del ranking a quienes ya no están en el server.
+    const removed = await pruneXpProfilesOfExMembers(params.guildId).catch(
+      () => 0,
+    );
+
     await logAdminAction(session, params.guildId, "xp:sync", {
-      details: "Re-sincronización de roles por nivel encolada.",
+      details: `Re-sincronización de roles por nivel encolada. Perfiles de ex-miembros limpiados: ${removed}.`,
     });
 
     return {
       ok: true,
       guildId: params.guildId,
+      removed,
     };
   });
 
@@ -5725,6 +5807,7 @@ export function buildApp() {
   startEventRecurrenceSync();
   startKarutaAlbumImageSync();
   startKarutaCardImageSync();
+  startXpExMemberCleanup();
 
   return app;
 }

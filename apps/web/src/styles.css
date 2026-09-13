@@ -527,19 +527,6 @@ a:hover {
   font-weight: 600;
 }
 
-/* Marca para quien ya no está en el servidor (su fila sobrevive por la XP
-   guardada; el nombre/avatar son los últimos que vimos). */
-.left-server-tag {
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 1px 7px;
-  text-transform: uppercase;
-}
-
 .leaderboard-user {
   display: inline-flex;
   align-items: center;

@@ -196,7 +196,11 @@ export async function getLeaderboard(
 // carga ya tiene el último nombre/avatar conocido. Best-effort.
 export async function saveLeaderboardIdentities(
   guildId: string,
-  identities: Array<{ avatarUrl?: string | null; name?: string | null; userId: string }>,
+  identities: Array<{
+    avatarUrl?: string | null;
+    name?: string | null;
+    userId: string;
+  }>,
 ): Promise<void> {
   if (identities.length === 0) {
     return;
@@ -391,4 +395,29 @@ export async function resetAllXp(guildId: string): Promise<{ reset: number }> {
   });
 
   return { reset: result.count };
+}
+
+/**
+ * Borra los perfiles de XP indicados (se usa para limpiar a quienes ya no
+ * están en el servidor).
+ */
+export async function deleteXpProfiles(
+  guildId: string,
+  userIds: string[],
+): Promise<number> {
+  if (userIds.length === 0) {
+    return 0;
+  }
+  const result = await prisma.xpProfile.deleteMany({
+    where: { guildId, userId: { in: userIds } },
+  });
+  return result.count;
+}
+
+/**
+ * Guilds que tienen perfiles de XP (para la limpieza periódica).
+ */
+export async function listXpGuildIds(): Promise<string[]> {
+  const rows = await prisma.xpProfile.groupBy({ by: ["guildId"] });
+  return rows.map((row) => row.guildId);
 }

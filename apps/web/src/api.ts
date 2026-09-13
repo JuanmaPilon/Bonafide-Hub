@@ -481,9 +481,6 @@ export async function saveXpConfig(
 
 export type LeaderboardEntry = {
   avatarUrl: string | null;
-  // false = ya no está en el server (o Discord no respondió): el nombre y el
-  // avatar vienen de la última identidad que guardamos.
-  inGuild?: boolean;
   isBooster: boolean;
   level: number;
   messageCount: number;
@@ -510,7 +507,6 @@ export async function getLeaderboard(
 
 export type PublicLeaderboardEntry = {
   avatarUrl: string | null;
-  inGuild?: boolean;
   isBooster: boolean;
   nickname: string | null;
   username: string | null;
@@ -612,11 +608,20 @@ export async function resetAllXp(guildId: string): Promise<{ reset: number }> {
   return data;
 }
 
-export async function requestXpSync(guildId: string): Promise<void> {
-  await requestJson<{ ok: boolean }>(`/guilds/${guildId}/xp/sync`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+// Encola la re-sincronización de roles/prefijos (la ejecuta el bot) y limpia
+// del ranking a quienes ya no están en el servidor. Devuelve cuántos perfiles
+// se quitaron.
+export async function requestXpSync(
+  guildId: string,
+): Promise<{ removed: number }> {
+  const data = await requestJson<{ ok: boolean; removed?: number }>(
+    `/guilds/${guildId}/xp/sync`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+  return { removed: data.removed ?? 0 };
 }
 
 export async function listDailyMessages(
