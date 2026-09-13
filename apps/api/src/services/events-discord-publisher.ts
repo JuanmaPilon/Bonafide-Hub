@@ -509,13 +509,14 @@ export function buildEventAnnouncementEmbeds(input: {
   roles?: EventRoleOption[];
   signupDeadline?: Date;
   signups: AnnouncementSignup[];
-  specEnabled?: boolean;
   specLabel?: string;
   specs: AnnouncementSpec[];
   startsAt: Date;
   tagLabel?: string;
   title: string;
   type?: string;
+  // Si el juego no usa personaje, el aviso no muestra el botón "Personaje".
+  characterEnabled?: boolean;
 }): Array<Record<string, unknown>> {
   const typeLabel = input.type ?? "evento";
   const timestamp = Math.floor(input.startsAt.getTime() / 1000);
@@ -791,21 +792,16 @@ type ButtonSpec = {
 export function buildEventSignupActionRows(
   eventId: string,
   options?: {
+    characterEnabled?: boolean;
     classLabel?: string;
     disableSignup?: boolean;
-    specEnabled?: boolean;
     specLabel?: string;
   },
 ): Array<Record<string, unknown>> {
   const disableSignup = options?.disableSignup ?? false;
   const classLabel = options?.classLabel ?? "Clase";
   const specLabel = options?.specLabel ?? "spec";
-  // Con el segundo eje desactivado (p. ej. LoL con solo "Rango"), el botón
-  // pide una sola cosa.
-  const pickLabel =
-    options?.specEnabled === false
-      ? classLabel
-      : `${classLabel} y ${specLabel}`;
+  const characterEnabled = options?.characterEnabled !== false;
   // disableWhenClosed: los botones de inscripción se grisan al cerrar; el de
   // "Quitar inscripción" sigue activo (sirve para avisar que no vas).
   const statusButtons: ButtonSpec[] = [
@@ -843,17 +839,22 @@ export function buildEventSignupActionRows(
       customId: "pick",
       disableWhenClosed: true,
       emoji: "⚙️",
-      label: pickLabel,
+      label: `${classLabel} y ${specLabel}`,
       style: 1,
     },
     // Personaje con color (Primary) para que no quede gris entre los demás.
-    {
-      customId: "character",
-      disableWhenClosed: true,
-      emoji: "✏️",
-      label: "Personaje",
-      style: 1,
-    },
+    // Solo en juegos con personaje (se apaga desde la config de roles).
+    ...(characterEnabled
+      ? [
+          {
+            customId: "character",
+            disableWhenClosed: true,
+            emoji: "✏️",
+            label: "Personaje",
+            style: 1,
+          },
+        ]
+      : []),
     {
       customId: "remove",
       disableWhenClosed: false,
@@ -904,12 +905,12 @@ async function postAnnouncement(
       body: {
         allowed_mentions: { parse: ["users", "roles"] },
         components: buildEventSignupActionRows(input.eventId, {
+          characterEnabled: input.characterEnabled,
           classLabel: input.classLabel,
           disableSignup:
             input.paused === true ||
             (input.signupDeadline !== undefined &&
               input.signupDeadline.getTime() <= Date.now()),
-          specEnabled: input.specEnabled,
           specLabel: input.specLabel,
         }),
         content: requiredRoleId ? `🛡️ <@&${requiredRoleId}>` : undefined,
@@ -932,6 +933,7 @@ async function postAnnouncement(
 // y publicar de nuevo. Así se reflejan los cambios sin perder el hilo del
 // canal ni re-notificar al rol.
 export async function syncEventToDiscord(input: {
+  characterEnabled?: boolean;
   classLabel?: string;
   description?: string;
   discordEventId?: string;
@@ -951,7 +953,6 @@ export async function syncEventToDiscord(input: {
   roles?: EventRoleOption[];
   signupDeadline?: Date;
   signups?: AnnouncementSignup[];
-  specEnabled?: boolean;
   specLabel?: string;
   specs?: AnnouncementSpec[];
   startsAt: Date;
@@ -1014,6 +1015,7 @@ export async function syncEventToDiscord(input: {
   if (options.publishMessage && options.publishChannelId) {
     const announcementInput = {
       channelId: options.publishChannelId,
+      characterEnabled: input.characterEnabled,
       classLabel: input.classLabel,
       description: input.description,
       discordEventId: result.discordEventId ?? input.discordEventId,
@@ -1030,7 +1032,6 @@ export async function syncEventToDiscord(input: {
       roles: input.roles,
       signupDeadline: input.signupDeadline,
       signups: input.signups ?? [],
-      specEnabled: input.specEnabled,
       specLabel: input.specLabel,
       specs: input.specs ?? [],
       startsAt: input.startsAt,
@@ -1057,12 +1058,12 @@ export async function syncEventToDiscord(input: {
       const edited = await patchAnnouncement({
         channelId: options.publishChannelId,
         components: buildEventSignupActionRows(input.eventId, {
+          characterEnabled: input.characterEnabled,
           classLabel: input.classLabel,
           disableSignup:
             input.paused === true ||
             (input.signupDeadline !== undefined &&
               input.signupDeadline.getTime() <= Date.now()),
-          specEnabled: input.specEnabled,
           specLabel: input.specLabel,
         }),
         content,

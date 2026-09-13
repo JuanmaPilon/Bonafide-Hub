@@ -1261,10 +1261,11 @@ function EventCard({
     ? event.signups.find((signup) => signup.userId === meId)
     : undefined;
 
-  // Roles de evento configurados por la guild (o los 4 clásicos) y si el
-  // segundo eje (spec/clase) se usa.
+  // Roles de evento configurados por la guild (o los 4 clásicos). El catálogo
+  // siempre tiene los dos ejes: rol/clase/spec. `characterEnabled` permite
+  // ocultar el personaje en juegos que no usan PJ (p. ej. LoL).
   const eventRoles = resolveEventRoles(config);
-  const specEnabled = config.eventSpecEnabled !== false;
+  const characterEnabled = config.eventCharacterEnabled !== false;
   const roleLabelFor = (key: string): string =>
     eventRoleMeta(key, config)?.label ?? key;
 
@@ -1284,7 +1285,7 @@ function EventCard({
   // "Cambiar" vuelve a abrir el editor.
   const [editingSignup, setEditingSignup] = useState(false);
   const hasFullSignup = Boolean(
-    mySignup?.status && mySignup?.wowClass && (!specEnabled || mySignup?.spec),
+    mySignup?.status && mySignup?.wowClass && mySignup?.spec,
   );
   const showSignupSummary = hasFullSignup && !editingSignup;
   const signupDirty =
@@ -1341,7 +1342,7 @@ function EventCard({
   function chooseSpec(row: RaidSpec): void {
     setRole(row.role);
     setWowClass(row.className);
-    setSpec(specEnabled ? row.specName : "");
+    setSpec(row.specName);
     setCatalogRole(row.role);
   }
 
@@ -1349,7 +1350,7 @@ function EventCard({
     setSubmitting(true);
     try {
       await onSignup(event.id, {
-        character: character.trim() || undefined,
+        character: character.trim(),
         role: role || undefined,
         spec: spec || undefined,
         status,
@@ -1658,9 +1659,7 @@ function EventCard({
                         </div>
                       ) : catalogClasses.length === 0 ? (
                         <div className="event-signup-no-catalog">
-                          Todavía no hay{" "}
-                          {config.eventClassLabel?.toLowerCase() ?? "clases"}{" "}
-                          cargadas para ese rol.
+                          Todavía no hay clases cargadas para ese rol.
                         </div>
                       ) : (
                         <div className="event-signup-specs">
@@ -1670,39 +1669,29 @@ function EventCard({
                                 {className}
                               </span>
                               <div className="event-signup-spec-row">
-                                {(specEnabled ? rows : rows.slice(0, 1)).map(
-                                  (row) => {
-                                    const selected =
-                                      role === row.role &&
-                                      wowClass === row.className &&
-                                      spec === row.specName;
-                                    return (
-                                      <button
-                                        className={`event-signup-spec${selected ? " active" : ""}`}
-                                        key={row.id}
-                                        onClick={() => chooseSpec(row)}
-                                        title={
-                                          specEnabled
-                                            ? `${row.specName} — ${row.className} (${roleLabelFor(row.role)})`
-                                            : `${row.className} (${roleLabelFor(row.role)})`
-                                        }
-                                        type="button"
-                                      >
-                                        <DiscordEmojiImage
-                                          animated={row.animated}
-                                          emojiId={row.emojiId}
-                                          name={row.specName}
-                                          size={24}
-                                        />
-                                        <span>
-                                          {specEnabled
-                                            ? row.specName
-                                            : row.className}
-                                        </span>
-                                      </button>
-                                    );
-                                  },
-                                )}
+                                {rows.map((row) => {
+                                  const selected =
+                                    role === row.role &&
+                                    wowClass === row.className &&
+                                    spec === row.specName;
+                                  return (
+                                    <button
+                                      className={`event-signup-spec${selected ? " active" : ""}`}
+                                      key={row.id}
+                                      onClick={() => chooseSpec(row)}
+                                      title={`${row.specName} — ${row.className} (${roleLabelFor(row.role)})`}
+                                      type="button"
+                                    >
+                                      <DiscordEmojiImage
+                                        animated={row.animated}
+                                        emojiId={row.emojiId}
+                                        name={row.specName}
+                                        size={24}
+                                      />
+                                      <span>{row.specName}</span>
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           ))}
@@ -1717,10 +1706,8 @@ function EventCard({
                             name={currentSpecRow?.specName}
                           />
                           <span>
-                            {roleLabelFor(role)}
-                            {specEnabled && spec
-                              ? ` · ${wowClass} · ${spec}`
-                              : ` · ${wowClass}`}
+                            {roleLabelFor(role)} · {wowClass}
+                            {spec ? ` · ${spec}` : ""}
                           </span>
                           <button
                             className="ghost-button small"
@@ -1735,13 +1722,15 @@ function EventCard({
                           </button>
                         </div>
                       ) : null}
-                      <input
-                        className="input"
-                        value={character}
-                        onChange={(event) => setCharacter(event.target.value)}
-                        maxLength={40}
-                        placeholder="Nombre de tu personaje"
-                      />
+                      {characterEnabled ? (
+                        <input
+                          className="input"
+                          value={character}
+                          onChange={(event) => setCharacter(event.target.value)}
+                          maxLength={40}
+                          placeholder="Nombre de tu personaje"
+                        />
+                      ) : null}
                     </div>
                     <div className="event-signup-actions">
                       <button
@@ -3313,7 +3302,7 @@ function App() {
     setSavingAction("eventRoles");
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
-        eventClassLabel: config.eventClassLabel?.trim() || undefined,
+        eventCharacterEnabled: config.eventCharacterEnabled !== false,
         eventRoles: resolveEventRoles(config).map((entry) => ({
           animated: entry.animated,
           emoji: entry.emoji,
@@ -3322,8 +3311,6 @@ function App() {
           key: entry.key,
           label: entry.label.trim() || entry.key,
         })),
-        eventSpecEnabled: config.eventSpecEnabled !== false,
-        eventSpecLabel: config.eventSpecLabel?.trim() || undefined,
       });
       setConfig(nextConfig);
       pushToast("Roles de evento guardados.", "success");
@@ -3367,10 +3354,7 @@ function App() {
     if (!selectedGuildId) {
       return;
     }
-    if (
-      !specDraft.className.trim() ||
-      (config.eventSpecEnabled !== false && !specDraft.specName.trim())
-    ) {
+    if (!specDraft.className.trim() || !specDraft.specName.trim()) {
       pushToast("Faltan datos del catálogo.", "error");
       return;
     }
@@ -7118,12 +7102,13 @@ function App() {
                       </summary>
                       <div className="admin-card-body">
                         <p className="admin-card-hint">
-                          Estos roles alimentan las inscripciones de los eventos
-                          (web y Discord). Lo más rápido es arrancar con una
-                          plantilla del juego y después ajustar a mano.
+                          Los roles y el catálogo alimentan las inscripciones de
+                          los eventos (web y Discord). Se ajustan sobre la
+                          plantilla activa: se cambia el nombre y el emoji de
+                          cada rol y se agregan las clases con sus specs.
                         </p>
 
-                        {/* Plantilla del juego: roles + ejes + catálogo de una */}
+                        {/* Plantilla del juego: roles + catálogo de una */}
                         <h4 className="karuta-threshold-title">
                           Plantilla del juego
                         </h4>
@@ -7181,8 +7166,11 @@ function App() {
                                   </div>
                                   <p className="event-template-note">
                                     {selectedTemplate.specCount > 0
-                                      ? `Precarga ${selectedTemplate.specCount} ${selectedTemplate.classLabel.toLowerCase()}/spec. `
+                                      ? `Precarga ${selectedTemplate.specCount} clases/specs. `
                                       : "No precarga catálogo. "}
+                                    {selectedTemplate.characterEnabled
+                                      ? "Pide nombre de personaje. "
+                                      : "Sin campo de personaje. "}
                                     Reemplaza los roles de inscripción y en el
                                     catálogo solo agrega lo que falta (no borra
                                     ni pisa emojis ya cargados).
@@ -7346,106 +7334,55 @@ function App() {
                                 )}
                               </div>
                               <button
-                                className="ghost-button danger"
+                                className="ghost-button"
                                 onClick={() =>
                                   setConfig((current) => {
-                                    const roles = (
-                                      current.eventRoles &&
-                                      current.eventRoles.length > 0
-                                        ? current.eventRoles
-                                        : DEFAULT_EVENT_ROLES
-                                    ).filter(
-                                      (_role, position) => position !== index,
+                                    // Quita el emoji custom de la fila (vuelve
+                                    // al unicode o al de la plantilla).
+                                    const roles = resolveEventRoles(
+                                      current,
+                                    ).map((role, position) =>
+                                      position === index
+                                        ? {
+                                            ...role,
+                                            animated: false,
+                                            emoji:
+                                              role.emoji ?? "⭐",
+                                            emojiId: undefined,
+                                            emojiName: undefined,
+                                          }
+                                        : role,
                                     );
                                     return { ...current, eventRoles: roles };
                                   })
                                 }
                                 type="button"
                               >
-                                Quitar
+                                Usar emoji unicode
                               </button>
                             </div>
                           ))}
-                          <button
-                            className="primary-button"
-                            onClick={() =>
-                              setConfig((current) => {
-                                const roles =
-                                  current.eventRoles &&
-                                  current.eventRoles.length > 0
-                                    ? current.eventRoles
-                                    : DEFAULT_EVENT_ROLES;
-                                return {
-                                  ...current,
-                                  eventRoles: [
-                                    ...roles,
-                                    {
-                                      animated: false,
-                                      emoji: "⭐",
-                                      key: `rol${roles.length + 1}`,
-                                      label: `Rol ${roles.length + 1}`,
-                                    },
-                                  ],
-                                };
-                              })
-                            }
-                            type="button"
-                          >
-                            + Agregar rol
-                          </button>
                         </div>
 
-                        {/* Ejes del catálogo */}
-                        <h4 className="karuta-threshold-title">
-                          Ejes del catálogo
-                        </h4>
-                        <div className="form-grid">
-                          <label>
-                            <span>Etiqueta del 1° eje</span>
-                            <input
-                              className="input"
-                              value={config.eventClassLabel ?? "Clase"}
-                              maxLength={24}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  eventClassLabel: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                          <label>
-                            <span>Etiqueta del 2° eje (spec)</span>
-                            <input
-                              className="input"
-                              value={config.eventSpecLabel ?? "Spec"}
-                              maxLength={24}
-                              disabled={config.eventSpecEnabled === false}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  eventSpecLabel: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                        </div>
+                        {/* Personaje: en juegos con PJ (WoW) se pide al anotarse;
+                            en los que no (LoL) se oculta el campo. */}
+                        <h4 className="karuta-threshold-title">Personaje</h4>
                         <label className="module-toggle event-reminder-toggle">
                           <span className="module-toggle-text">
-                            <strong>Usar el 2° eje (spec)</strong>
+                            <strong>Pedir el nombre de personaje</strong>
                             <span className="meta-text">
-                              Desactivalo si con un solo eje alcanza (p. ej.
-                              "Rango" en LoL).
+                              La web y Discord piden el PJ al anotarse (y lo
+                              recuerdan para los próximos eventos).
                             </span>
                           </span>
                           <span className="module-switch">
                             <input
                               type="checkbox"
-                              checked={config.eventSpecEnabled !== false}
+                              checked={config.eventCharacterEnabled !== false}
                               onChange={(event) =>
                                 setConfig((current) => ({
                                   ...current,
-                                  eventSpecEnabled: event.target.checked,
+                                  eventCharacterEnabled: event.target.checked,
                                 }))
                               }
                             />
@@ -7466,16 +7403,12 @@ function App() {
                           >
                             {savingAction === "eventRoles"
                               ? "Guardando…"
-                              : "Guardar roles y ejes"}
+                              : "Guardar roles"}
                           </button>
                         </div>
 
                         <h4 className="karuta-threshold-title">
-                          Catálogo ({config.eventClassLabel ?? "Clase"}
-                          {config.eventSpecEnabled !== false
-                            ? ` · ${config.eventSpecLabel ?? "Spec"}`
-                            : ""}
-                          )
+                          Catálogo (Clase · Spec)
                         </h4>
                         {eventSpecsLoading ? (
                           <span className="muted-text">Cargando…</span>
@@ -7581,7 +7514,7 @@ function App() {
                               </select>
                             </label>
                             <label>
-                              <span>{config.eventClassLabel ?? "Clase"}</span>
+                              <span>Clase</span>
                               <input
                                 className="input"
                                 value={specDraft.className}
@@ -7594,22 +7527,20 @@ function App() {
                                 maxLength={40}
                               />
                             </label>
-                            {config.eventSpecEnabled !== false ? (
-                              <label>
-                                <span>{config.eventSpecLabel ?? "Spec"}</span>
-                                <input
-                                  className="input"
-                                  value={specDraft.specName}
-                                  onChange={(event) =>
-                                    setSpecDraft((current) => ({
-                                      ...current,
-                                      specName: event.target.value,
-                                    }))
-                                  }
-                                  maxLength={40}
-                                />
-                              </label>
-                            ) : null}
+                            <label>
+                              <span>Spec</span>
+                              <input
+                                className="input"
+                                value={specDraft.specName}
+                                onChange={(event) =>
+                                  setSpecDraft((current) => ({
+                                    ...current,
+                                    specName: event.target.value,
+                                  }))
+                                }
+                                maxLength={40}
+                              />
+                            </label>
                           </div>
                           <div className="spec-emoji-picker">
                             <span className="label">Emoji custom</span>
@@ -8886,7 +8817,9 @@ function App() {
                                 }))
                               }
                             >
-                              <option value="">Seleccionar canal de texto…</option>
+                              <option value="">
+                                Seleccionar canal de texto…
+                              </option>
                               {textChannels.map((channel) => (
                                 <option key={channel.id} value={channel.id}>
                                   {channel.name}

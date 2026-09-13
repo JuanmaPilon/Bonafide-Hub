@@ -811,7 +811,35 @@ export async function deleteEvent(
   return result.count > 0;
 }
 
+// Personaje recordado de un jugador en la guild (para precargar los signups).
+export async function getEventPlayerCharacter(
+  guildId: string,
+  userId: string,
+): Promise<string | undefined> {
+  const record = await prisma.eventPlayerProfile.findUnique({
+    where: { guildId_userId: { guildId, userId } },
+    select: { character: true },
+  });
+  return record?.character?.trim() || undefined;
+}
+
+// Guarda (o borra, con null) el personaje recordado del jugador.
+async function setEventPlayerCharacter(
+  guildId: string,
+  userId: string,
+  character: string | null,
+): Promise<void> {
+  await prisma.eventPlayerProfile.upsert({
+    where: { guildId_userId: { guildId, userId } },
+    create: { character, guildId, userId },
+    update: { character },
+  });
+}
+
 // Upsert de la inscripción del usuario actual. Devuelve la inscripción.
+// El personaje se recuerda por jugador: si no viene en el request se hereda el
+// último que usó (así no hay que escribirlo en cada evento); si viene vacío se
+// olvida.
 export async function upsertSignup(input: {
   character?: string;
   eventId: string;
@@ -824,12 +852,34 @@ export async function upsertSignup(input: {
   username: string;
   wowClass?: string;
 }): Promise<EventSignup> {
+  const existing = await prisma.eventSignup.findUnique({
+    where: {
+      eventId_userId: { eventId: input.eventId, userId: input.userId },
+    },
+    select: { character: true },
+  });
+  const providedCharacter = input.character?.trim();
+  let character: string | null;
+  if (providedCharacter) {
+    // Vino un personaje: se guarda en la inscripción y se recuerda.
+    character = providedCharacter;
+    await setEventPlayerCharacter(input.guildId, input.userId, character);
+  } else if (input.character !== undefined && existing?.character) {
+    // Lo vaciaron a propósito en una inscripción que ya tenía personaje.
+    character = null;
+    await setEventPlayerCharacter(input.guildId, input.userId, null);
+  } else {
+    // No lo mandaron (o es una inscripción nueva sin personaje): heredamos el
+    // que el jugador usó la última vez, así no hay que escribirlo de nuevo.
+    character =
+      (await getEventPlayerCharacter(input.guildId, input.userId)) ?? null;
+  }
   const record = await prisma.eventSignup.upsert({
     where: {
       eventId_userId: { eventId: input.eventId, userId: input.userId },
     },
     create: {
-      character: input.character,
+      character,
       eventId: input.eventId,
       guildId: input.guildId,
       note: input.note,
@@ -841,7 +891,7 @@ export async function upsertSignup(input: {
       wowClass: input.wowClass,
     },
     update: {
-      character: input.character,
+      character,
       note: input.note,
       role: input.role,
       spec: input.spec,

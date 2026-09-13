@@ -102,6 +102,7 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  eventCharacterEnabled?: boolean;
   eventClassLabel?: string;
   eventRoles?: EventRoleOption[];
   eventSpecEnabled?: boolean;
@@ -139,6 +140,7 @@ function toGuildConfig(
     defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
+    eventCharacterEnabled: boolean;
     eventClassLabel: string | null;
     eventRoles: unknown;
     eventSpecEnabled: boolean;
@@ -185,6 +187,7 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
+    eventCharacterEnabled: record.eventCharacterEnabled,
     eventClassLabel: record.eventClassLabel ?? undefined,
     eventRoles: normalizeEventRoles(record.eventRoles) ?? undefined,
     eventSpecEnabled: record.eventSpecEnabled,
@@ -223,6 +226,7 @@ type NormalizedGuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
+  eventCharacterEnabled: boolean;
   eventClassLabel?: string;
   eventRoles?: EventRoleOption[];
   eventSpecEnabled: boolean;
@@ -273,6 +277,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
+    eventCharacterEnabled: config.eventCharacterEnabled ?? true,
     eventClassLabel: config.eventClassLabel?.trim().slice(0, 24) || undefined,
     eventRoles: normalizeEventRoles(config.eventRoles) ?? [],
     eventSpecEnabled: config.eventSpecEnabled ?? true,
@@ -346,6 +351,7 @@ export async function replaceGuildConfig(
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
+        eventCharacterEnabled: normalized.eventCharacterEnabled,
         eventClassLabel: normalized.eventClassLabel,
         eventRoles: normalized.eventRoles ?? [],
         eventSpecEnabled: normalized.eventSpecEnabled,
@@ -381,6 +387,7 @@ export async function replaceGuildConfig(
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
+        eventCharacterEnabled: normalized.eventCharacterEnabled,
         eventClassLabel: normalized.eventClassLabel,
         eventRoles: normalized.eventRoles ?? [],
         eventSpecEnabled: normalized.eventSpecEnabled,

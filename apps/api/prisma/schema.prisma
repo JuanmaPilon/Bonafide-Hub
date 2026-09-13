@@ -65,6 +65,9 @@ model GuildConfig {
   eventClassLabel              String?
   eventSpecEnabled             Boolean  @default(true)
   eventSpecLabel               String?
+  // Pedir el nombre de personaje al anotarse (juegos con PJ, p. ej. WoW). En
+  // juegos sin personajes se apaga y se oculta el campo.
+  eventCharacterEnabled        Boolean  @default(true)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
@@ -280,6 +283,21 @@ model EventSignup {
   @@unique([eventId, userId])
   @@index([guildId, eventId])
   @@map("event_signups")
+}
+
+// Memoria por jugador de los eventos: guarda el nombre de personaje que usó
+// la última vez (por guild), así los próximos signups ya lo traen sin volver
+// a escribirlo. Se actualiza con cada inscripción: si manda un personaje se
+// guarda, si manda vacío se olvida, y si no manda nada se hereda.
+model EventPlayerProfile {
+  guildId   String
+  userId    String
+  character String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, userId])
+  @@map("event_player_profiles")
 }
 
 // Catálogo de specs configurable por guild (estilo Raid Helper): cada fila

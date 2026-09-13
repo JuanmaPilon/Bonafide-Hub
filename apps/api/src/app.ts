@@ -1376,6 +1376,7 @@ async function syncAndStoreEventDiscord(input: {
   const specs = await listRaidSpecs(event.guildId);
   const eventConfig = await getGuildConfig(event.guildId);
   const result = await syncEventToDiscord({
+    characterEnabled: eventConfig.eventCharacterEnabled !== false,
     classLabel: eventConfig.eventClassLabel,
     description: event.description,
     durationMinutes: event.durationMinutes,
@@ -1390,7 +1391,6 @@ async function syncAndStoreEventDiscord(input: {
     roles: resolveEventRoles(eventConfig),
     signupDeadline: event.signupDeadline,
     signups: event.signups,
-    specEnabled: eventConfig.eventSpecEnabled !== false,
     specLabel: eventConfig.eventSpecLabel,
     specs,
     startsAt: event.startsAt,
@@ -1444,6 +1444,7 @@ async function refreshEventAnnouncement(
     const specs = await listRaidSpecs(guildId);
     const eventConfig = await getGuildConfig(guildId);
     const embeds = buildEventAnnouncementEmbeds({
+      characterEnabled: eventConfig.eventCharacterEnabled !== false,
       classLabel: eventConfig.eventClassLabel,
       description: event.description,
       discordEventId: event.discordEventId,
@@ -1463,7 +1464,6 @@ async function refreshEventAnnouncement(
       roles: resolveEventRoles(eventConfig),
       signupDeadline: event.signupDeadline,
       signups: event.signups,
-      specEnabled: eventConfig.eventSpecEnabled !== false,
       specLabel: eventConfig.eventSpecLabel,
       specs,
       startsAt: event.startsAt,
@@ -1477,9 +1477,9 @@ async function refreshEventAnnouncement(
     return await updateEventAnnouncement({
       channelId: event.publishChannelId,
       components: buildEventSignupActionRows(event.id, {
+        characterEnabled: eventConfig.eventCharacterEnabled !== false,
         classLabel: eventConfig.eventClassLabel,
         disableSignup: event.paused || signupsClosed,
-        specEnabled: eventConfig.eventSpecEnabled !== false,
         specLabel: eventConfig.eventSpecLabel,
       }),
       // Si el evento ya no tiene rol mínimo, limpiamos la mención vieja del
@@ -3849,10 +3849,8 @@ export function buildApp() {
       }
 
       const config = await upsertGuildConfig(params.guildId, {
-        eventClassLabel: template.classLabel,
+        eventCharacterEnabled: template.characterEnabled,
         eventRoles: template.roles,
-        eventSpecEnabled: template.specEnabled,
-        eventSpecLabel: template.specLabel,
       });
 
       // Precarga del catálogo: comparamos por rol + clase + spec para no
@@ -3950,14 +3948,12 @@ export function buildApp() {
     const specName = body.specName?.trim() ?? "";
     const config = await getGuildConfig(params.guildId);
     const allowedRoles = resolveEventRoles(config);
-    // Si el segundo eje (spec) está desactivado, la fila es solo rol + clase.
-    const specRequired = config.eventSpecEnabled !== false;
 
     if (
       !role ||
       !allowedRoles.some((entry) => entry.key === role) ||
       !className ||
-      (specRequired && !specName)
+      !specName
     ) {
       return reply.code(400).send({
         ok: false,
@@ -4053,11 +4049,7 @@ export function buildApp() {
     if (className !== undefined && !className) {
       return reply.code(400).send({ ok: false, error: "Falta la clase" });
     }
-    if (
-      config.eventSpecEnabled !== false &&
-      specName !== undefined &&
-      !specName
-    ) {
+    if (specName !== undefined && !specName) {
       return reply.code(400).send({ ok: false, error: "Falta la spec" });
     }
 
@@ -4283,8 +4275,12 @@ export function buildApp() {
         member,
         event.requiredRoleId,
       );
+      // Personaje: si el cliente lo manda (aunque sea vacío) se guarda/olvida;
+      // si no lo manda, el store hereda el último que usó el jugador.
+      const characterInput =
+        body.character === undefined ? undefined : body.character.trim();
       const signup = await upsertSignup({
-        character: body.character?.trim() || undefined,
+        character: characterInput,
         eventId: params.eventId,
         guildId: params.guildId,
         note: body.note?.trim() || undefined,
@@ -4357,13 +4353,13 @@ export function buildApp() {
     const specs = await listRaidSpecs(params.guildId);
     const config = await getGuildConfig(params.guildId);
     // El bot arma el asistente de inscripción con esto: roles configurados,
-    // etiquetas de los ejes y si el segundo eje (spec) se usa.
+    // etiquetas de los ejes y si el juego usa personaje.
     return {
       ok: true,
       guildId: params.guildId,
+      characterEnabled: config.eventCharacterEnabled !== false,
       classLabel: config.eventClassLabel ?? "Clase",
       roles: resolveEventRoles(config),
-      specEnabled: config.eventSpecEnabled !== false,
       specLabel: config.eventSpecLabel ?? "Spec",
       specs,
     };
@@ -4570,8 +4566,10 @@ export function buildApp() {
         event.requiredRoleId,
       );
 
+      const characterInput =
+        body.character === undefined ? undefined : body.character.trim();
       const signup = await upsertSignup({
-        character: body.character?.trim() || undefined,
+        character: characterInput,
         eventId: params.eventId,
         guildId: params.guildId,
         role: body.role?.trim() || undefined,
@@ -5273,16 +5271,8 @@ export function buildApp() {
       allowedBody.eventRoles = body.eventRoles;
     }
 
-    if (body.eventClassLabel !== undefined) {
-      allowedBody.eventClassLabel = body.eventClassLabel;
-    }
-
-    if (body.eventSpecLabel !== undefined) {
-      allowedBody.eventSpecLabel = body.eventSpecLabel;
-    }
-
-    if (body.eventSpecEnabled !== undefined) {
-      allowedBody.eventSpecEnabled = body.eventSpecEnabled;
+    if (body.eventCharacterEnabled !== undefined) {
+      allowedBody.eventCharacterEnabled = body.eventCharacterEnabled;
     }
 
     if (body.musicEnabled !== undefined) {
@@ -5307,14 +5297,12 @@ export function buildApp() {
 
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
-    // Si cambió algo que se ve en los avisos de Discord (roles de
-    // inscripción, nombres de los ejes o si el 2° eje está activo),
-    // re-renderizamos los avisos de los próximos eventos publicados.
+    // Si cambió algo que se ve en los avisos de Discord (roles de inscripción
+    // o si el juego usa personaje), re-renderizamos los avisos de los próximos
+    // eventos publicados.
     if (
       allowedBody.eventRoles !== undefined ||
-      allowedBody.eventClassLabel !== undefined ||
-      allowedBody.eventSpecLabel !== undefined ||
-      allowedBody.eventSpecEnabled !== undefined
+      allowedBody.eventCharacterEnabled !== undefined
     ) {
       refreshUpcomingAnnouncements(params.guildId);
     }

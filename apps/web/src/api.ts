@@ -22,10 +22,8 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
-  eventClassLabel?: string;
+  eventCharacterEnabled?: boolean;
   eventRoles?: EventRoleOption[];
-  eventSpecEnabled?: boolean;
-  eventSpecLabel?: string;
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
   karutaRareWishlistMin?: number;
@@ -1184,14 +1182,12 @@ export async function updateEventSpec(
 // nombres de los ejes y el catálogo de clases/specs precargado.
 
 export type EventTemplateSummary = {
-  classLabel: string;
+  characterEnabled: boolean;
   description: string;
   key: string;
   label: string;
   roles: EventRoleOption[];
   specCount: number;
-  specEnabled: boolean;
-  specLabel: string;
 };
 
 export async function getEventTemplates(

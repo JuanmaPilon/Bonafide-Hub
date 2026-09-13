@@ -61,12 +61,12 @@ type RemoteSpec = {
   specName: string;
 };
 
-// Config del asistente: roles, etiquetas de los ejes y si se usa el segundo
-// eje (spec). Lo define el panel Admin y lo sirve el API.
+// Config del asistente: roles, etiquetas de los ejes y si el juego usa
+// personaje. Lo define el panel Admin y lo sirve el API.
 type SignupContext = {
+  characterEnabled: boolean;
   classLabel: string;
   roles: RemoteRole[];
-  specEnabled: boolean;
   specLabel: string;
   specs: RemoteSpec[];
 };
@@ -191,9 +191,9 @@ async function fetchSignupContext(guildId: string): Promise<SignupContext> {
   );
   if (!response.ok) {
     return {
+      characterEnabled: true,
       classLabel: "Clase",
       roles: DEFAULT_ROLES,
-      specEnabled: true,
       specLabel: "Spec",
       specs: [],
     };
@@ -205,9 +205,9 @@ async function fetchSignupContext(guildId: string): Promise<SignupContext> {
       : DEFAULT_ROLES;
 
   return {
+    characterEnabled: payload.characterEnabled !== false,
     classLabel: payload.classLabel ?? "Clase",
     roles: roles.length > 0 ? roles : DEFAULT_ROLES,
-    specEnabled: payload.specEnabled !== false,
     specLabel: payload.specLabel ?? "Spec",
     specs: payload.specs ?? [],
   };
@@ -348,7 +348,9 @@ export async function handleEventSignupCharacterSubmit(
   }
 
   const result = await putSignup({
-    character: character || undefined,
+    // Se manda el valor tal cual (aunque sea vacío): el API lo interpreta como
+    // "olvidar el personaje recordado" y si no se mandara, lo heredaría.
+    character,
     guildId,
     eventId: parsed.eventId,
     role: mine.role,
@@ -404,36 +406,15 @@ function specSelectRow(
 
   const select = new StringSelectMenuBuilder()
     .setCustomId(`eventsign:${eventId}:spec:${role}:${status}`)
-    .setPlaceholder(
-      context.specEnabled
-        ? `Elegir una ${context.specLabel.toLowerCase()}`
-        : `Elegir una ${context.classLabel.toLowerCase()}`,
-    );
+    .setPlaceholder(`Elegir una ${context.specLabel.toLowerCase()}`);
 
-  if (context.specEnabled) {
-    for (const spec of roleSpecs) {
-      select.addOptions({
-        description: spec.className,
-        emoji: specEmoji(spec),
-        label: spec.specName.slice(0, 100),
-        value: `${spec.className}|${spec.specName}`,
-      });
-    }
-  } else {
-    // Una opción por clase (sin repetir).
-    const byClass = new Map<string, RemoteSpec>();
-    for (const spec of roleSpecs) {
-      if (!byClass.has(spec.className)) {
-        byClass.set(spec.className, spec);
-      }
-    }
-    for (const spec of byClass.values()) {
-      select.addOptions({
-        emoji: specEmoji(spec),
-        label: spec.className.slice(0, 100),
-        value: `${spec.className}|`,
-      });
-    }
+  for (const spec of roleSpecs) {
+    select.addOptions({
+      description: spec.className,
+      emoji: specEmoji(spec),
+      label: spec.specName.slice(0, 100),
+      value: `${spec.className}|${spec.specName}`,
+    });
   }
 
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
@@ -567,17 +548,14 @@ export async function handleEventSignupInteraction(
     if (!selectRow) {
       await updateWizard(
         interaction,
-        `No hay ${context.classLabel.toLowerCase()}s cargadas para ese rol en el catálogo.`,
+        "No hay clases cargadas para ese rol en el catálogo.",
         [],
       );
       return;
     }
     await updateWizard(
       interaction,
-      `Rol elegido: **${role.label}**. Ahora elegir ${(context.specEnabled
-        ? context.specLabel
-        : context.classLabel
-      ).toLowerCase()}:`,
+      `Rol elegido: **${role.label}**. Ahora elegir ${context.specLabel.toLowerCase()}:`,
       [selectRow],
     );
     return;
@@ -601,12 +579,12 @@ export async function handleEventSignupInteraction(
 
     const event = await fetchEvent(guildId, eventId);
     const mine = event?.signups?.find((signup) => signup.userId === userId);
-    const result = await putSignup({      character: mine?.character,
+    const result = await putSignup({
+      character: mine?.character,
       guildId,
       eventId,
       role,
-      // Con el segundo eje desactivado se guarda solo la clase.
-      spec: context.specEnabled && specName ? specName : undefined,
+      spec: specName || undefined,
       status,
       userId,
       username,
@@ -620,10 +598,7 @@ export async function handleEventSignupInteraction(
       );
       return;
     }
-    const detail =
-      context.specEnabled && specName
-        ? `${className} — ${specName}`
-        : className;
+    const detail = specName ? `${className} — ${specName}` : className;
     await updateWizard(
       interaction,
       `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${detail}**. ✅`,
