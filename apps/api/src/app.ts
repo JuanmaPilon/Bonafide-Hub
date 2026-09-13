@@ -803,6 +803,7 @@ async function createRecurrenceCopy(
     ? head.signupDeadline.getTime() - head.startsAt.getTime()
     : null;
   const created = await createEvent({
+    characterEnabled: head.characterEnabled,
     createdByUserId: head.createdByUserId,
     createdByUsername: head.createdByUsername,
     description: head.description,
@@ -1347,6 +1348,7 @@ function validateDiscordOptions(options: EventDiscordOptions): string | null {
 async function syncAndStoreEventDiscord(input: {
   discordOpts: EventDiscordOptions;
   event: {
+    characterEnabled: boolean;
     description?: string;
     durationMinutes?: number;
     guildId: string;
@@ -1376,7 +1378,7 @@ async function syncAndStoreEventDiscord(input: {
   const specs = await listRaidSpecs(event.guildId);
   const eventConfig = await getGuildConfig(event.guildId);
   const result = await syncEventToDiscord({
-    characterEnabled: eventConfig.eventCharacterEnabled !== false,
+    characterEnabled: event.characterEnabled !== false,
     classLabel: eventConfig.eventClassLabel,
     description: event.description,
     durationMinutes: event.durationMinutes,
@@ -1444,7 +1446,7 @@ async function refreshEventAnnouncement(
     const specs = await listRaidSpecs(guildId);
     const eventConfig = await getGuildConfig(guildId);
     const embeds = buildEventAnnouncementEmbeds({
-      characterEnabled: eventConfig.eventCharacterEnabled !== false,
+      characterEnabled: event.characterEnabled !== false,
       classLabel: eventConfig.eventClassLabel,
       description: event.description,
       discordEventId: event.discordEventId,
@@ -1477,7 +1479,7 @@ async function refreshEventAnnouncement(
     return await updateEventAnnouncement({
       channelId: event.publishChannelId,
       components: buildEventSignupActionRows(event.id, {
-        characterEnabled: eventConfig.eventCharacterEnabled !== false,
+        characterEnabled: event.characterEnabled !== false,
         classLabel: eventConfig.eventClassLabel,
         disableSignup: event.paused || signupsClosed,
         specLabel: eventConfig.eventSpecLabel,
@@ -3438,6 +3440,7 @@ export function buildApp() {
     }
 
     const body = (request.body ?? {}) as {
+      characterEnabled?: boolean;
       description?: string;
       discord?: {
         createScheduledEvent?: boolean;
@@ -3491,6 +3494,7 @@ export function buildApp() {
     };
 
     const event = await createEvent({
+      characterEnabled: body.characterEnabled !== false,
       createdByUserId: user.id,
       createdByUsername: user.global_name ?? user.username ?? undefined,
       description: body.description?.trim() || undefined,
@@ -3560,6 +3564,7 @@ export function buildApp() {
     }
 
     const body = (request.body ?? {}) as {
+      characterEnabled?: boolean;
       description?: string;
       discord?: {
         createScheduledEvent?: boolean;
@@ -3655,6 +3660,10 @@ export function buildApp() {
     }
 
     const event = await updateEvent(params.guildId, params.eventId, {
+      characterEnabled:
+        body.characterEnabled === undefined
+          ? undefined
+          : body.characterEnabled !== false,
       description: body.description?.trim() || undefined,
       discordCleanupOnComplete:
         body.discordCleanupOnComplete === undefined
@@ -3849,7 +3858,6 @@ export function buildApp() {
       }
 
       const config = await upsertGuildConfig(params.guildId, {
-        eventCharacterEnabled: template.characterEnabled,
         eventRoles: template.roles,
       });
 
@@ -4352,12 +4360,11 @@ export function buildApp() {
     }
     const specs = await listRaidSpecs(params.guildId);
     const config = await getGuildConfig(params.guildId);
-    // El bot arma el asistente de inscripción con esto: roles configurados,
-    // etiquetas de los ejes y si el juego usa personaje.
+    // El bot arma el asistente de inscripción con esto: roles configurados y
+    // etiquetas de los ejes del catálogo.
     return {
       ok: true,
       guildId: params.guildId,
-      characterEnabled: config.eventCharacterEnabled !== false,
       classLabel: config.eventClassLabel ?? "Clase",
       roles: resolveEventRoles(config),
       specLabel: config.eventSpecLabel ?? "Spec",
@@ -5271,10 +5278,6 @@ export function buildApp() {
       allowedBody.eventRoles = body.eventRoles;
     }
 
-    if (body.eventCharacterEnabled !== undefined) {
-      allowedBody.eventCharacterEnabled = body.eventCharacterEnabled;
-    }
-
     if (body.musicEnabled !== undefined) {
       allowedBody.musicEnabled = body.musicEnabled;
     }
@@ -5297,13 +5300,10 @@ export function buildApp() {
 
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
-    // Si cambió algo que se ve en los avisos de Discord (roles de inscripción
-    // o si el juego usa personaje), re-renderizamos los avisos de los próximos
-    // eventos publicados.
-    if (
-      allowedBody.eventRoles !== undefined ||
-      allowedBody.eventCharacterEnabled !== undefined
-    ) {
+    // Si cambió algo que se ve en los avisos de Discord (roles de
+    // inscripción), re-renderizamos los avisos de los próximos eventos
+    // publicados.
+    if (allowedBody.eventRoles !== undefined) {
       refreshUpcomingAnnouncements(params.guildId);
     }
 

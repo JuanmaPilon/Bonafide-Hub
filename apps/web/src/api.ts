@@ -22,7 +22,6 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
-  eventCharacterEnabled?: boolean;
   eventRoles?: EventRoleOption[];
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
@@ -924,6 +923,8 @@ export type EventDiscordOptions = {
 };
 
 export type HubEvent = {
+  // Si el evento pide (y recuerda) el nombre de personaje al anotarse.
+  characterEnabled?: boolean;
   createdAt: string;
   createdByUserId?: string;
   createdByUsername?: string;
@@ -995,6 +996,7 @@ export async function getEvents(guildId: string): Promise<HubEvent[]> {
 export async function createEvent(
   guildId: string,
   input: {
+    characterEnabled?: boolean;
     description?: string;
     discord?: EventDiscordOptions;
     discordCleanupOnComplete?: boolean;
@@ -1028,6 +1030,7 @@ export async function updateEvent(
   guildId: string,
   eventId: string,
   input: {
+    characterEnabled?: boolean;
     description?: string;
     discord?: EventDiscordOptions;
     discordCleanupOnComplete?: boolean;
@@ -1182,7 +1185,6 @@ export async function updateEventSpec(
 // nombres de los ejes y el catálogo de clases/specs precargado.
 
 export type EventTemplateSummary = {
-  characterEnabled: boolean;
   description: string;
   key: string;
   label: string;

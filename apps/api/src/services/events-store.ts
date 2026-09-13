@@ -190,6 +190,8 @@ export async function updateRaidSpec(
 }
 
 export type HubEvent = {
+  // Si se pide (y se recuerda) el nombre de personaje al anotarse.
+  characterEnabled: boolean;
   completedAt?: Date;
   createdAt: Date;
   createdByUserId?: string;
@@ -256,6 +258,7 @@ export type EventSignup = {
 };
 
 type EventRecord = {
+  characterEnabled: boolean;
   completedAt: Date | null;
   createdAt: Date;
   createdByUserId: string | null;
@@ -327,6 +330,7 @@ function toSignup(record: SignupRecord): EventSignup {
 
 function toEvent(record: EventRecord): HubEvent {
   return {
+    characterEnabled: record.characterEnabled,
     completedAt: record.completedAt ?? undefined,
     createdAt: record.createdAt,
     createdByUserId: record.createdByUserId ?? undefined,
@@ -464,6 +468,7 @@ export async function getEvent(
 export async function createEvent(input: {
   createdByUserId?: string;
   createdByUsername?: string;
+  characterEnabled?: boolean;
   description?: string;
   discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
@@ -485,6 +490,7 @@ export async function createEvent(input: {
   const everyDays = input.recurrenceEveryDays ?? null;
   const record = await prisma.hubEvent.create({
     data: {
+      characterEnabled: input.characterEnabled ?? true,
       createdByUserId: input.createdByUserId,
       createdByUsername: input.createdByUsername,
       description: input.description,
@@ -523,6 +529,7 @@ export async function updateEvent(
   guildId: string,
   eventId: string,
   input: {
+    characterEnabled?: boolean;
     description?: string;
     discordCleanupOnComplete?: boolean;
     durationMinutes?: number | null;
@@ -584,6 +591,7 @@ export async function updateEvent(
   const record = await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
     data: {
+      characterEnabled: input.characterEnabled,
       completedAt: input.status === "completed" ? new Date() : undefined,
       description: input.description,
       discordCleanupOnComplete: input.discordCleanupOnComplete,

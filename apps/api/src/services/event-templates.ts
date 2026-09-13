@@ -15,9 +15,6 @@ export type EventTemplateSpec = {
 };
 
 export type EventTemplate = {
-  // Si el juego usa personaje (WoW sí, LoL no): controla el campo/botón de
-  // "Personaje" en la web y en Discord.
-  characterEnabled: boolean;
   description: string;
   key: string;
   label: string;
@@ -155,7 +152,6 @@ function role(key: string, label: string, emoji: string): EventRoleOption {
 
 export const EVENT_TEMPLATES: EventTemplate[] = [
   {
-    characterEnabled: true,
     description:
       "Tank, Healer, Melee y Range + el catálogo de las 13 clases con sus specs.",
     key: "wow",
@@ -169,7 +165,6 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     specs: buildSpecs(WOW_CLASSES),
   },
   {
-    characterEnabled: false,
     description:
       "Top, Jungle, Mid, ADC y Support. Placeholder: se ajustan los roles y se cargan los campeones a mano.",
     key: "lol",
@@ -200,7 +195,6 @@ export function findEventTemplate(
 
 // Resumen para el listado (sin mandar todo el catálogo de specs al front).
 export function summarizeEventTemplate(template: EventTemplate): {
-  characterEnabled: boolean;
   description: string;
   key: string;
   label: string;
@@ -208,7 +202,6 @@ export function summarizeEventTemplate(template: EventTemplate): {
   specCount: number;
 } {
   return {
-    characterEnabled: template.characterEnabled,
     description: template.description,
     key: template.key,
     label: template.label,

@@ -1265,7 +1265,7 @@ function EventCard({
   // siempre tiene los dos ejes: rol/clase/spec. `characterEnabled` permite
   // ocultar el personaje en juegos que no usan PJ (p. ej. LoL).
   const eventRoles = resolveEventRoles(config);
-  const characterEnabled = config.eventCharacterEnabled !== false;
+  const characterEnabled = event.characterEnabled !== false;
   const roleLabelFor = (key: string): string =>
     eventRoleMeta(key, config)?.label ?? key;
 
@@ -2503,6 +2503,7 @@ function App() {
   // Indica que el form abrió en modo "duplicar" (para el título del form).
   const [duplicatingEvent, setDuplicatingEvent] = useState(false);
   const [eventForm, setEventForm] = useState<{
+    characterEnabled: boolean;
     discord: {
       createScheduledEvent: boolean;
       entityType: "voice" | "external";
@@ -2529,6 +2530,7 @@ function App() {
     title: string;
     type: string;
   }>({
+    characterEnabled: true,
     discord: defaultEventDiscord(),
     discordCleanupOnComplete: false,
     durationMinutes: "",
@@ -3302,7 +3304,6 @@ function App() {
     setSavingAction("eventRoles");
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
-        eventCharacterEnabled: config.eventCharacterEnabled !== false,
         eventRoles: resolveEventRoles(config).map((entry) => ({
           animated: entry.animated,
           emoji: entry.emoji,
@@ -3324,21 +3325,21 @@ function App() {
     }
   }
 
-  // Aplica una plantilla de juego: deja los roles/ejes configurados y
-  // precarga el catálogo de clases y specs (solo agrega lo que falta).
-  async function handleApplyEventTemplate(): Promise<void> {
-    if (!selectedGuildId || !templateKey) {
+  // Cambia la plantilla del juego: ajusta los roles del módulo y precarga en
+  // el catálogo las clases/specs que falten (no borra ni pisa lo existente).
+  async function handleApplyEventTemplate(
+    key = templateKey,
+  ): Promise<void> {
+    if (!selectedGuildId || !key) {
       return;
     }
     setSavingAction("eventTemplate");
     try {
-      const result = await applyEventTemplate(selectedGuildId, templateKey);
+      const result = await applyEventTemplate(selectedGuildId, key);
       setConfig(result.config);
       setEventSpecs(result.specs);
-      pushToast(
-        `Plantilla ${result.applied.label} aplicada · ${result.created} clases/specs agregadas`,
-        "success",
-      );
+      setTemplateKey(key);
+      pushToast("Plantilla aplicada.", "success");
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "No se pudo aplicar.",
@@ -3469,6 +3470,7 @@ function App() {
     setEditingEventId(null);
     setDuplicatingEvent(false);
     setEventForm({
+      characterEnabled: true,
       discord: defaultEventDiscord(),
       discordCleanupOnComplete: false,
       durationMinutes: "",
@@ -3493,6 +3495,7 @@ function App() {
     setEditingEventId(event.id);
     setDuplicatingEvent(false);
     setEventForm({
+      characterEnabled: event.characterEnabled !== false,
       discord: {
         createScheduledEvent:
           event.discordEventConfig?.createScheduledEvent ??
@@ -3542,6 +3545,7 @@ function App() {
     setEditingEventId(null);
     setDuplicatingEvent(true);
     setEventForm({
+      characterEnabled: event.characterEnabled !== false,
       discord: {
         createScheduledEvent:
           event.discordEventConfig?.createScheduledEvent ??
@@ -3683,6 +3687,7 @@ function App() {
     try {
       if (editingEventId) {
         const result = await updateEvent(selectedGuildId, editingEventId, {
+          characterEnabled: eventForm.characterEnabled,
           discord: discordPayload,
           durationMinutes: eventForm.durationMinutes
             ? Number(eventForm.durationMinutes)
@@ -3721,6 +3726,7 @@ function App() {
         notifyDiscordError(result.discordError);
       } else {
         const result = await createEvent(selectedGuildId, {
+          characterEnabled: eventForm.characterEnabled,
           discord: discordPayload,
           durationMinutes: eventForm.durationMinutes
             ? Number(eventForm.durationMinutes)
@@ -7101,299 +7107,155 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <p className="admin-card-hint">
-                          Los roles y el catálogo alimentan las inscripciones de
-                          los eventos (web y Discord). Se ajustan sobre la
-                          plantilla activa: se cambia el nombre y el emoji de
-                          cada rol y se agregan las clases con sus specs.
-                        </p>
-
-                        {/* Plantilla del juego: roles + catálogo de una */}
-                        <h4 className="karuta-threshold-title">
-                          Plantilla del juego
-                        </h4>
-                        {eventTemplates.length === 0 ? (
-                          <div className="empty-state">
-                            Todavía no hay plantillas disponibles.
-                          </div>
-                        ) : (
-                          <div className="event-template-picker">
-                            <label className="event-role-field">
-                              <span>Juego</span>
-                              <select
-                                className="select"
-                                value={templateKey}
-                                onChange={(event) =>
-                                  setTemplateKey(event.target.value)
-                                }
-                              >
-                                {eventTemplates.map((template) => (
-                                  <option
-                                    key={template.key}
-                                    value={template.key}
-                                  >
-                                    {template.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            {(() => {
-                              const selectedTemplate = eventTemplates.find(
-                                (template) => template.key === templateKey,
-                              );
-                              if (!selectedTemplate) {
-                                return null;
-                              }
-                              return (
-                                <div className="event-template-preview">
-                                  <p>{selectedTemplate.description}</p>
-                                  <div className="event-template-roles">
-                                    {selectedTemplate.roles.map((role) => (
-                                      <span
-                                        className="event-template-role"
-                                        key={role.key}
-                                      >
-                                        <DiscordEmojiImage
-                                          animated={role.animated}
-                                          emojiId={role.emojiId}
-                                          fallback={role.emoji ?? "❔"}
-                                          name={role.label}
-                                          size={18}
-                                        />
-                                        {role.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                  <p className="event-template-note">
-                                    {selectedTemplate.specCount > 0
-                                      ? `Precarga ${selectedTemplate.specCount} clases/specs. `
-                                      : "No precarga catálogo. "}
-                                    {selectedTemplate.characterEnabled
-                                      ? "Pide nombre de personaje. "
-                                      : "Sin campo de personaje. "}
-                                    Reemplaza los roles de inscripción y en el
-                                    catálogo solo agrega lo que falta (no borra
-                                    ni pisa emojis ya cargados).
-                                  </p>
-                                </div>
-                              );
-                            })()}
-                            <button
-                              className="primary-button"
-                              disabled={
-                                !templateKey || savingAction === "eventTemplate"
-                              }
-                              onClick={() => void handleApplyEventTemplate()}
-                              type="button"
+                        <div className="admin-card-hint-row">
+                          <label className="event-role-field">
+                            <span>Plantilla de juego</span>
+                            <select
+                              className="select"
+                              value={templateKey}
+                              disabled={savingAction === "eventTemplate"}
+                              onChange={(event) => {
+                                setTemplateKey(event.target.value);
+                                void handleApplyEventTemplate(
+                                  event.target.value,
+                                );
+                              }}
                             >
-                              {savingAction === "eventTemplate"
-                                ? "Aplicando…"
-                                : "Aplicar plantilla"}
-                            </button>
-                          </div>
-                        )}
+                              {eventTemplates.map((template) => (
+                                <option key={template.key} value={template.key}>
+                                  {template.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {savingAction === "eventTemplate" ? (
+                            <span className="muted-text">Guardando…</span>
+                          ) : null}
+                        </div>
 
-                        {/* Roles de inscripción (label + emoji) */}
+                        {/* Roles de inscripción (label + emoji), en acordeones
+                            para que la sección no crezca hacia abajo. */}
                         <h4 className="karuta-threshold-title">
                           Roles de evento
                         </h4>
                         <div className="event-role-editor">
                           {resolveEventRoles(config).map((entry, index) => (
-                            <div
+                            <details
                               className="event-role-row"
                               key={`${entry.key}-${index}`}
                             >
-                              <span className="event-role-preview">
+                              <summary className="event-role-summary">
                                 <EventRoleEmoji
                                   config={{ ...config, eventRoles: [entry] }}
                                   role={entry.key}
                                   size={22}
                                 />
-                              </span>
-                              <label className="event-role-field">
-                                <span>Etiqueta</span>
-                                <input
-                                  className="input"
-                                  value={entry.label}
-                                  maxLength={24}
-                                  onChange={(event) =>
-                                    setConfig((current) => {
-                                      const roles = (
-                                        current.eventRoles &&
-                                        current.eventRoles.length > 0
-                                          ? current.eventRoles
-                                          : DEFAULT_EVENT_ROLES
-                                      ).map((role, position) =>
-                                        position === index
-                                          ? {
-                                              ...role,
-                                              label: event.target.value,
-                                            }
-                                          : role,
-                                      );
-                                      return { ...current, eventRoles: roles };
-                                    })
-                                  }
-                                />
-                              </label>
-                              <label className="event-role-field">
-                                <span>Emoji</span>
-                                <input
-                                  className="input"
-                                  value={entry.emoji ?? ""}
-                                  maxLength={4}
-                                  placeholder="🛡️"
-                                  onChange={(event) =>
-                                    setConfig((current) => {
-                                      const roles = (
-                                        current.eventRoles &&
-                                        current.eventRoles.length > 0
-                                          ? current.eventRoles
-                                          : DEFAULT_EVENT_ROLES
-                                      ).map((role, position) =>
-                                        position === index
-                                          ? {
-                                              ...role,
-                                              animated: false,
-                                              emoji:
-                                                event.target.value || undefined,
-                                              emojiId: undefined,
-                                              emojiName: undefined,
-                                            }
-                                          : role,
-                                      );
-                                      return { ...current, eventRoles: roles };
-                                    })
-                                  }
-                                />
-                              </label>
-                              <div className="spec-emoji-picker">
-                                <span className="label">
-                                  Emoji custom (opcional)
+                                <strong>{entry.label}</strong>
+                                <span
+                                  className="admin-acc-chevron"
+                                  aria-hidden="true"
+                                >
+                                  ▸
                                 </span>
-                                {guildEmojis.length === 0 ? (
-                                  <span className="muted-text">
-                                    Sin emojis custom en el servidor.
+                              </summary>
+                              <div className="event-role-body">
+                                <label className="event-role-field">
+                                  <span>Etiqueta</span>
+                                  <input
+                                    className="input"
+                                    value={entry.label}
+                                    maxLength={24}
+                                    onChange={(event) =>
+                                      setConfig((current) => {
+                                        const roles = resolveEventRoles(
+                                          current,
+                                        ).map((role, position) =>
+                                          position === index
+                                            ? {
+                                                ...role,
+                                                label: event.target.value,
+                                              }
+                                            : role,
+                                        );
+                                        return {
+                                          ...current,
+                                          eventRoles: roles,
+                                        };
+                                      })
+                                    }
+                                  />
+                                </label>
+                                <div className="spec-emoji-picker">
+                                  <span className="label">
+                                    Emoji (del servidor)
                                   </span>
-                                ) : (
-                                  <div className="spec-emoji-grid">
-                                    {guildEmojis.map((emoji) => {
-                                      const selected =
-                                        entry.emojiId === emoji.id;
-                                      return (
-                                        <button
-                                          className={`spec-emoji-option${selected ? " active" : ""}`}
-                                          key={emoji.id}
-                                          onClick={() =>
-                                            setConfig((current) => {
-                                              const roles = (
-                                                current.eventRoles &&
-                                                current.eventRoles.length > 0
-                                                  ? current.eventRoles
-                                                  : DEFAULT_EVENT_ROLES
-                                              ).map((role, position) =>
-                                                position === index
-                                                  ? selected
-                                                    ? {
-                                                        ...role,
-                                                        animated: false,
-                                                        emojiId: undefined,
-                                                        emojiName: undefined,
-                                                      }
-                                                    : {
-                                                        ...role,
-                                                        animated:
-                                                          emoji.animated,
-                                                        emoji: undefined,
-                                                        emojiId: emoji.id,
-                                                        emojiName: emoji.name,
-                                                      }
-                                                  : role,
-                                              );
-                                              return {
-                                                ...current,
-                                                eventRoles: roles,
-                                              };
-                                            })
-                                          }
-                                          title={`:${emoji.name}:`}
-                                          type="button"
-                                        >
-                                          <img
-                                            alt={emoji.name}
-                                            src={discordEmojiUrl(
-                                              emoji.id,
-                                              emoji.animated,
-                                              22,
-                                            )}
-                                          />
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                  {guildEmojisLoading ? (
+                                    <span className="muted-text">
+                                      Cargando…
+                                    </span>
+                                  ) : guildEmojis.length === 0 ? (
+                                    <span className="muted-text">
+                                      No hay emojis custom en este servidor.
+                                    </span>
+                                  ) : (
+                                    <div className="spec-emoji-grid">
+                                      {guildEmojis.map((emoji) => {
+                                        const selected =
+                                          entry.emojiId === emoji.id;
+                                        return (
+                                          <button
+                                            className={`spec-emoji-option${selected ? " active" : ""}`}
+                                            key={emoji.id}
+                                            onClick={() =>
+                                              setConfig((current) => {
+                                                const roles =
+                                                  resolveEventRoles(
+                                                    current,
+                                                  ).map((role, position) =>
+                                                    position === index
+                                                      ? selected
+                                                        ? {
+                                                            ...role,
+                                                            animated: false,
+                                                            emojiId: undefined,
+                                                            emojiName:
+                                                              undefined,
+                                                          }
+                                                        : {
+                                                            ...role,
+                                                            animated:
+                                                              emoji.animated,
+                                                            emojiId: emoji.id,
+                                                            emojiName:
+                                                              emoji.name,
+                                                          }
+                                                      : role,
+                                                  );
+                                                return {
+                                                  ...current,
+                                                  eventRoles: roles,
+                                                };
+                                              })
+                                            }
+                                            title={`:${emoji.name}:`}
+                                            type="button"
+                                          >
+                                            <DiscordEmojiImage
+                                              animated={emoji.animated}
+                                              emojiId={emoji.id}
+                                              name={emoji.name}
+                                              size={22}
+                                            />
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <button
-                                className="ghost-button"
-                                onClick={() =>
-                                  setConfig((current) => {
-                                    // Quita el emoji custom de la fila (vuelve
-                                    // al unicode o al de la plantilla).
-                                    const roles = resolveEventRoles(
-                                      current,
-                                    ).map((role, position) =>
-                                      position === index
-                                        ? {
-                                            ...role,
-                                            animated: false,
-                                            emoji:
-                                              role.emoji ?? "⭐",
-                                            emojiId: undefined,
-                                            emojiName: undefined,
-                                          }
-                                        : role,
-                                    );
-                                    return { ...current, eventRoles: roles };
-                                  })
-                                }
-                                type="button"
-                              >
-                                Usar emoji unicode
-                              </button>
-                            </div>
+                            </details>
                           ))}
                         </div>
-
-                        {/* Personaje: en juegos con PJ (WoW) se pide al anotarse;
-                            en los que no (LoL) se oculta el campo. */}
-                        <h4 className="karuta-threshold-title">Personaje</h4>
-                        <label className="module-toggle event-reminder-toggle">
-                          <span className="module-toggle-text">
-                            <strong>Pedir el nombre de personaje</strong>
-                            <span className="meta-text">
-                              La web y Discord piden el PJ al anotarse (y lo
-                              recuerdan para los próximos eventos).
-                            </span>
-                          </span>
-                          <span className="module-switch">
-                            <input
-                              type="checkbox"
-                              checked={config.eventCharacterEnabled !== false}
-                              onChange={(event) =>
-                                setConfig((current) => ({
-                                  ...current,
-                                  eventCharacterEnabled: event.target.checked,
-                                }))
-                              }
-                            />
-                            <span
-                              className="module-switch-track"
-                              aria-hidden="true"
-                            >
-                              <span className="module-switch-thumb" />
-                            </span>
-                          </span>
-                        </label>
                         <div className="spec-cat-form-actions">
                           <button
                             className="primary-button"
@@ -8400,6 +8262,29 @@ function App() {
                               </option>
                             ))}
                           </select>
+                        </label>
+                        <label className="module-toggle event-reminder-toggle">
+                          <span className="module-toggle-text">
+                            <strong>Pedir nombre de personaje</strong>
+                          </span>
+                          <span className="module-switch">
+                            <input
+                              type="checkbox"
+                              checked={eventForm.characterEnabled}
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  characterEnabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span
+                              className="module-switch-track"
+                              aria-hidden="true"
+                            >
+                              <span className="module-switch-thumb" />
+                            </span>
+                          </span>
                         </label>
                         <div className="event-form-wide event-reminders">
                           <span className="event-reminders-title">

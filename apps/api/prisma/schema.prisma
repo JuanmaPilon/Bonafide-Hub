@@ -60,14 +60,11 @@ model GuildConfig {
   // Vacío = los 4 clásicos (tank/healer/melee/ranged). Con esto se puede
   // armar, por ejemplo, LoL (Top/Jungle/Mid/ADC/Support).
   eventRoles                   Json?
-  // Etiquetas de los ejes del catálogo (clase/spec) y si el segundo eje se
-  // usa. En LoL, por ejemplo: "Rango" como clase y spec desactivado.
+  // Etiquetas de los ejes del catálogo (clase/spec). En LoL, por ejemplo:
+  // "Rango" como clase. (Histórico: el segundo eje ya no se configura.)
   eventClassLabel              String?
   eventSpecEnabled             Boolean  @default(true)
   eventSpecLabel               String?
-  // Pedir el nombre de personaje al anotarse (juegos con PJ, p. ej. WoW). En
-  // juegos sin personajes se apaga y se oculta el campo.
-  eventCharacterEnabled        Boolean  @default(true)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
@@ -202,6 +199,9 @@ model HubEvent {
   durationMinutes   Int?
   // Cierre de inscripciones: a partir de acá ya no se puede anotar.
   signupDeadline    DateTime?
+  // Si se pide (y se recuerda) el nombre de personaje al anotarse. Se elige
+  // por evento: no todos los eventos usan PJ.
+  characterEnabled  Boolean  @default(true)
   imageUrl          String?
   // Rol de Discord mínimo para entrar al roster principal: quien no lo tiene
   // y marca "Voy" se guarda como Bench (estilo Raid Helper).

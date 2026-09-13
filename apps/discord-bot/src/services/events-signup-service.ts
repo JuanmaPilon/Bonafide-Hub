@@ -61,10 +61,9 @@ type RemoteSpec = {
   specName: string;
 };
 
-// Config del asistente: roles, etiquetas de los ejes y si el juego usa
-// personaje. Lo define el panel Admin y lo sirve el API.
+// Config del asistente: roles y etiquetas de los ejes del catálogo. Lo define
+// el panel Admin y lo sirve el API.
 type SignupContext = {
-  characterEnabled: boolean;
   classLabel: string;
   roles: RemoteRole[];
   specLabel: string;
@@ -191,7 +190,6 @@ async function fetchSignupContext(guildId: string): Promise<SignupContext> {
   );
   if (!response.ok) {
     return {
-      characterEnabled: true,
       classLabel: "Clase",
       roles: DEFAULT_ROLES,
       specLabel: "Spec",
@@ -205,7 +203,6 @@ async function fetchSignupContext(guildId: string): Promise<SignupContext> {
       : DEFAULT_ROLES;
 
   return {
-    characterEnabled: payload.characterEnabled !== false,
     classLabel: payload.classLabel ?? "Clase",
     roles: roles.length > 0 ? roles : DEFAULT_ROLES,
     specLabel: payload.specLabel ?? "Spec",

@@ -3504,12 +3504,70 @@ textarea {
   border-top: 1px dashed rgba(136, 159, 216, 0.3);
 }
 
-/* Editor de roles de evento (Admin → Configuración de roles): label + emoji
-   unicode o emoji custom del servidor. */
+/* Editor de roles de evento (Admin → Configuración de roles): cada rol es un
+   acordeón (emoji + nombre en el header) para que la sección no crezca. */
 .event-role-editor {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 14px;
+}
+
+/* Selector de plantilla (arriba del editor de roles). */
+.admin-card-hint-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.event-role-row {
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.event-role-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.event-role-summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-role-summary .admin-acc-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.event-role-row[open] .event-role-summary .admin-acc-chevron {
+  transform: rotate(90deg);
+}
+
+.event-role-summary img {
+  width: 22px;
+  height: 22px;
+}
+
+.event-role-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.event-role-row .spec-emoji-grid {
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+:root[data-theme="light"] .event-role-row {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(67, 81, 109, 0.18);
 }
 
 /* Plantillas de juego: elegís el preset, ves un resumen y lo aplicás. */
