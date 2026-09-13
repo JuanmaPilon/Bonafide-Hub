@@ -1410,65 +1410,108 @@ function EventCard({
                 {event.status === "cancelled" ? "Cancelado" : "Completado"}
               </span>
             ) : null}
-            <span className="event-card-type">
-              {typeMeta.emoji} {typeMeta.label}
-            </span>
+            {event.signupDeadline && signupsClosed && !paused ? (
+              <span className="event-card-status closed">🔒 Cerradas</span>
+            ) : null}
             <ComunicadoTag color={event.tagColor} label={event.tagLabel} />
           </div>
         </div>
-        <div className="event-card-date">
-          📅 {formatDateTime24(event.startsAt)}
-          {endAt ? ` → ${formatTime24(endAt)}` : ""}
-        </div>
-        {event.requiredRoleId ? (
-          <div className="event-required-role">
-            🛡️ Requiere{" "}
-            <strong>
-              {guildRoles.find((role) => role.id === event.requiredRoleId)
-                ?.name ?? "un rol"}
-            </strong>{" "}
-            para entrar al roster principal.
+        {/* Misma info que el aviso de Discord (mismos emojis y etiquetas),
+            para que la web y el canal cuenten lo mismo. */}
+        <div className="event-info-grid">
+          <div className="event-info-item">
+            <span className="event-info-label">🕒 Empieza</span>
+            <span className="event-info-value">
+              {formatDateTime24(event.startsAt)}
+            </span>
           </div>
-        ) : null}
-        {event.signupDeadline && !signupsClosed ? (
-          <div className="event-deadline">
-            ⏳ Cierre de inscripciones: {formatDateTime24(event.signupDeadline)}
+          <div className="event-info-item">
+            <span className="event-info-label">⏱️ Duración</span>
+            <span className="event-info-value">
+              {event.durationMinutes
+                ? `${event.durationMinutes} min${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
+                : "—"}
+            </span>
           </div>
-        ) : null}
-        {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
-          <div className="event-discord-status">
-            {event.discordEventId ? (
-              <a
-                className="raid-log-link"
-                href={`https://discord.com/events/${event.guildId}/${event.discordEventId}`}
-                rel="noreferrer"
-                target="_blank"
-              >
-                📅 Ver evento en Discord
-              </a>
-            ) : (
-              <span className="muted-text">📢 Aviso publicado en Discord</span>
-            )}
-            {recurrenceLabel(event.discordEventConfig?.recurrence) ? (
-              <span className="event-recurrence-badge">
-                🔁 {recurrenceLabel(event.discordEventConfig?.recurrence)}
+          <div className="event-info-item">
+            <span className="event-info-label">
+              ⏳ Cierre de inscripciones
+            </span>
+            <span
+              className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
+            >
+              {event.signupDeadline
+                ? `${formatDateTime24(event.signupDeadline)}${
+                    signupsClosed ? " · ya cerró" : ""
+                  }`
+                : "—"}
+            </span>
+          </div>
+          <div className="event-info-item">
+            <span className="event-info-label">🔁 Repetición</span>
+            <span className="event-info-value">
+              {recurrenceLabel(event.discordEventConfig?.recurrence) ?? "—"}
+            </span>
+          </div>
+          {event.discordEventConfig?.entityType === "external" &&
+          event.discordEventConfig.location ? (
+            <div className="event-info-item">
+              <span className="event-info-label">📍 Ubicación</span>
+              <span className="event-info-value">
+                {event.discordEventConfig.location}
               </span>
-            ) : null}
-          </div>
-        ) : null}
-        {/* Último dato del evento: si está pausado o ya cerraron las
-            inscripciones, se avisa acá antes del roster. */}
+            </div>
+          ) : null}
+          {event.requiredRoleId ? (
+            <div className="event-info-item wide">
+              <span className="event-info-label">👥 Roster principal</span>
+              <span className="event-info-value">
+                Requiere{" "}
+                <strong>
+                  {guildRoles.find((role) => role.id === event.requiredRoleId)
+                    ?.name ?? "un rol"}
+                </strong>
+                <em className="event-info-note">
+                  Sin el rol quedás como Bench.
+                </em>
+              </span>
+            </div>
+          ) : null}
+          {event.discordEventId || (event.discordMessageIds?.length ?? 0) > 0 ? (
+            <div className="event-info-item wide">
+              <span className="event-info-label">📣 Discord</span>
+              <span className="event-info-value">
+                {event.discordEventId ? (
+                  <a
+                    className="raid-log-link"
+                    href={`https://discord.com/events/${event.guildId}/${event.discordEventId}`}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Ver evento en Discord
+                  </a>
+                ) : (
+                  <span className="muted-text">Aviso publicado</span>
+                )}
+              </span>
+            </div>
+          ) : null}
+        </div>
         {paused ? (
           <div className="event-deadline paused">⏸️ Evento pausado</div>
-        ) : event.signupDeadline && signupsClosed ? (
-          <div className="event-deadline closed">🔒 Inscripciones cerradas</div>
         ) : null}
-        <div className="event-card-counts">
-          {SIGNUP_OPTIONS.map((option) => (
-            <span className={`event-count ${option.key}`} key={option.key}>
-              {option.emoji} {counts[option.key]}
-            </span>
-          ))}
+        {event.description?.trim() ? (
+          <p className="event-card-desc">{event.description.trim()}</p>
+        ) : null}
+        <div className="event-card-assistance">
+          <span className="event-info-label">📊 Asistencia</span>
+          <div className="event-card-counts">
+            {SIGNUP_OPTIONS.map((option) => (
+              <span className={`event-count ${option.key}`} key={option.key}>
+                {option.emoji} {counts[option.key]}
+              </span>
+            ))}
+          </div>
         </div>
 
         {event.signups.length > 0 ? (

@@ -382,13 +382,6 @@ const STATUS_META: Record<string, { emoji: string; label: string }> = {
   no: { emoji: "❌", label: "No asiste" },
 };
 
-const EVENT_TYPE_EMOJI: Record<string, string> = {
-  raid: "⚔️",
-  mplus: "🗝️",
-  pvp: "🏆",
-  social: "🎉",
-};
-
 const RECURRENCE_LABEL: Record<EventRecurrence, string | undefined> = {
   none: undefined,
   daily: "Repite todos los días",
@@ -415,11 +408,13 @@ function signupDisplay(signup: AnnouncementSignup): string {
 }
 
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars
-// (límite de Discord para el value de un field).
+// (límite de Discord para el value de un field). `inline` los pone en
+// columnas (3 por fila), que es lo que mantiene el embed "horizontal".
 function pushField(
-  fields: Array<{ name: string; value: string }>,
+  fields: Array<{ inline?: boolean; name: string; value: string }>,
   name: string,
   lines: string[],
+  inline = false,
 ): void {
   if (lines.length === 0) {
     return;
@@ -427,13 +422,13 @@ function pushField(
   let value = "";
   for (const line of lines) {
     if (value.length + line.length + 1 > 1024) {
-      fields.push({ name, value });
+      fields.push({ inline, name, value });
       value = "";
     }
     value = value ? `${value}\n${line}` : line;
   }
   if (value) {
-    fields.push({ name, value });
+    fields.push({ inline, name, value });
   }
 }
 
@@ -573,34 +568,42 @@ export function buildEventAnnouncementEmbeds(input: {
     }
   }
 
-  const fields: Array<{ name: string; value: string }> = [];
+  const fields: Array<{ inline?: boolean; name: string; value: string }> = [];
   // Fila de datos rápidos, en columnas de a 3 (Discord las acomoda solo).
-  fields.push({ name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
+  fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
   fields.push({
+    inline: true,
     name: "⏱️ Duración",
     value: endTimestamp
       ? `${input.durationMinutes} min\n(termina <t:${endTimestamp}:t>)`
       : "—",
   });
   fields.push({
-    name: "⏳ Cierre",
+    inline: true,
+    name: "⏳ Cierre de inscripciones",
     value: input.signupDeadline
       ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
       : "—",
   });
   if (recurrenceLabel) {
-    fields.push({ name: "🔁 Repetición", value: recurrenceLabel });
+    fields.push({
+      inline: true,
+      name: "🔁 Repetición",
+      value: recurrenceLabel,
+    });
   }
   // Requisito de rol: caja aparte (bien visible) + el mensaje menciona al rol
   // para que notifique a todos los que lo tienen.
   const requiredRoleId = input.requiredRoleId?.trim();
   if (requiredRoleId) {
     fields.push({
-      name: "🛡️ Roster principal",
+      inline: true,
+      name: "👥 Roster principal",
       value: `Requiere <@&${requiredRoleId}>\n*Sin el rol quedás como Bench.*`,
     });
   }
   fields.push({
+    inline: true,
     name: "📊 Asistencia",
     value: counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía",
   });
@@ -655,24 +658,32 @@ export function buildEventAnnouncementEmbeds(input: {
     if (members.length === 0) {
       continue;
     }
+    // Inline: cada rol es una columna, así el roster crece a lo ancho y no
+    // empuja el embed hacia abajo cuando se anota mucha gente.
     pushField(
       fields,
       `${roleEmoji(role)} ${role.label} (${members.length})`,
       linesFor(members),
+      true,
     );
   }
   const bench = input.signups.filter((signup) => signup.status === "bench");
   if (bench.length > 0) {
-    pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench));
+    pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench), true);
   }
   const late = input.signups.filter((signup) => signup.status === "late");
   if (late.length > 0) {
-    pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late));
+    pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late), true);
   }
   // Igual que en la web: los que marcaron "no asisto" también se listan.
   const absent = input.signups.filter((signup) => signup.status === "no");
   if (absent.length > 0) {
-    pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
+    pushField(
+      fields,
+      `❌ No asisten (${absent.length})`,
+      linesFor(absent),
+      true,
+    );
   }
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción
@@ -700,7 +711,7 @@ export function buildEventAnnouncementEmbeds(input: {
   }
 
   const embed: Record<string, unknown> = {
-    title: `${EVENT_TYPE_EMOJI[input.type ?? ""] ?? "📅"} ${input.title.slice(0, 250)}`,
+    title: input.title.slice(0, 250),
     // Gris si está pausado, rojo si ya no se puede anotar; azul el resto.
     color: isPaused ? 0x8b93a7 : signupsClosed ? 0xe5484d : 0x6aa8ff,
     description: descriptionText,
