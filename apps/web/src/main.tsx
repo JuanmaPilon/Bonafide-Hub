@@ -59,7 +59,6 @@ import {
   deleteEventSpec,
   deleteMyEventSignup,
   apiAssetUrl,
-  DEFAULT_EVENT_ROLES,
   discordEmojiUrl,
   eventRoleMeta,
   getEventImages,
