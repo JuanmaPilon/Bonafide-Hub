@@ -338,7 +338,8 @@ export async function handleEventSignupCharacterSubmit(
   const mine = event.signups?.find((signup) => signup.userId === userId);
   if (!mine) {
     await interaction.reply({
-      content: "Primero anotate con los botones del evento (✅ / 🪑 / ⏰ / ❌).",
+      content:
+        "Primero anotate con los botones del evento (✅ / 🪑 / ⏰ / ❌).",
       ephemeral: true,
     });
     return;
@@ -524,7 +525,10 @@ async function handleQuickStatus(
     );
     return;
   }
-  await replyOnce(interaction, `Listo: te ${STATUS_LABEL[status] ?? "anotaste"}. ✅`);
+  await replyOnce(
+    interaction,
+    `Listo: te ${STATUS_LABEL[status] ?? "anotaste"}. ✅`,
+  );
 }
 
 export async function handleEventSignupInteraction(
@@ -536,7 +540,10 @@ export async function handleEventSignupInteraction(
   }
   const { action, eventId, rest } = parsed;
   if (!interaction.inGuild() || !interaction.guildId) {
-    await replyOnce(interaction, "Este evento solo funciona dentro del servidor.");
+    await replyOnce(
+      interaction,
+      "Este evento solo funciona dentro del servidor.",
+    );
     return;
   }
   const guildId = interaction.guildId;
@@ -565,10 +572,10 @@ export async function handleEventSignupInteraction(
     }
     await updateWizard(
       interaction,
-      `Elegiste **${role.label}**. Ahora elegí tu ${
-        (context.specEnabled ? context.specLabel : context.classLabel)
-          .toLowerCase()
-      }:`,
+      `Elegiste **${role.label}**. Ahora elegí tu ${(context.specEnabled
+        ? context.specLabel
+        : context.classLabel
+      ).toLowerCase()}:`,
       [selectRow],
     );
     return;
