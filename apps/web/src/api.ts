@@ -954,6 +954,9 @@ export type HubEvent = {
   recurrenceNextAt?: string;
   // Rol de Discord mínimo para entrar al roster principal (yes sin rol→bench).
   requiredRoleId?: string;
+  // Nombre del rol mínimo, resuelto por el API (así la tarjeta no muestra
+  // primero un placeholder y después el nombre real).
+  requiredRoleName?: string;
   // Recordatorios de asistencia (horas antes de startsAt) que eligió el staff
   // para este evento. Vacío = sin recordatorios.
   reminderHours?: number[];

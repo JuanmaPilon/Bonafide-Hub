@@ -306,6 +306,47 @@ const guildMembersCache = new Map<
 >();
 const GUILD_MEMBERS_TTL_MS = 4 * 60 * 1000;
 
+// Caché corta de roles de la guild: la usa el listado de eventos para mandar
+// el NOMBRE del rol mínimo junto al evento (así la tarjeta no muestra primero
+// "un rol" y después el nombre, que era un parpadeo feo).
+const guildRolesCache = new Map<
+  string,
+  { at: number; names: Map<string, string> }
+>();
+const GUILD_ROLES_TTL_MS = 5 * 60 * 1000;
+
+async function fetchGuildRoleNames(
+  guildId: string,
+): Promise<Map<string, string>> {
+  const cached = guildRolesCache.get(guildId);
+  if (cached && Date.now() - cached.at < GUILD_ROLES_TTL_MS) {
+    return cached.names;
+  }
+  const names = new Map<string, string>();
+  if (!env.DISCORD_BOT_TOKEN) {
+    return names;
+  }
+  try {
+    const response = await fetchWithDiscordRetry(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/roles`,
+      { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
+    );
+    if (response.ok) {
+      const roles = (await response.json()) as Array<{
+        id: string;
+        name: string;
+      }>;
+      for (const role of roles) {
+        names.set(role.id, role.name);
+      }
+      guildRolesCache.set(guildId, { at: Date.now(), names });
+    }
+  } catch {
+    // Sin nombres: la tarjeta cae al fallback de la web.
+  }
+  return names;
+}
+
 async function fetchAllGuildMembers(
   guildId: string,
 ): Promise<DiscordGuildMember[]> {
@@ -1356,6 +1397,8 @@ async function syncAndStoreEventDiscord(input: {
     id: string;
     imageUrl?: string;
     paused?: boolean;
+    recurrenceEnabled?: boolean;
+    recurrenceEveryDays?: number;
     requiredRoleId?: string;
     signupDeadline?: Date;
     signups: AnnouncementSignup[];
@@ -1389,6 +1432,10 @@ async function syncAndStoreEventDiscord(input: {
     guildId: event.guildId,
     imageUrl: event.imageUrl,
     options: discordOpts,
+    ownRecurrenceEveryDays:
+      event.recurrenceEnabled && event.recurrenceEveryDays
+        ? event.recurrenceEveryDays
+        : undefined,
     paused: event.paused,
     requiredRoleId: event.requiredRoleId,
     roles: resolveEventRoles(eventConfig),
@@ -1463,6 +1510,10 @@ async function refreshEventAnnouncement(
       paused: event.paused,
       recurrence: (event.discordEventConfig?.recurrence ??
         "none") as EventRecurrence,
+      ownRecurrenceEveryDays:
+        event.recurrenceEnabled && event.recurrenceEveryDays
+          ? event.recurrenceEveryDays
+          : undefined,
       requiredRoleId: event.requiredRoleId,
       roles: resolveEventRoles(eventConfig),
       signupDeadline: event.signupDeadline,
@@ -3422,7 +3473,19 @@ export function buildApp() {
     }
 
     const events = await listEvents(params.guildId);
-    return { ok: true, guildId: params.guildId, events };
+    // Mandamos el nombre del rol mínimo ya resuelto (cacheado 5 min): sin esto
+    // la tarjeta dibujaba "un rol" y después el nombre real (parpadeo).
+    const roleNames = await fetchGuildRoleNames(params.guildId);
+    return {
+      ok: true,
+      guildId: params.guildId,
+      events: events.map((event) => ({
+        ...event,
+        requiredRoleName: event.requiredRoleId
+          ? (roleNames.get(event.requiredRoleId) ?? undefined)
+          : undefined,
+      })),
+    };
   });
 
   app.post("/guilds/:guildId/events", async (request, reply) => {
@@ -3541,10 +3604,16 @@ export function buildApp() {
       targetId: event.id,
     });
 
+    const createRoleNames = await fetchGuildRoleNames(params.guildId);
     return {
       ok: true,
       guildId: params.guildId,
-      event: savedEvent,
+      event: {
+        ...savedEvent,
+        requiredRoleName: savedEvent.requiredRoleId
+          ? (createRoleNames.get(savedEvent.requiredRoleId) ?? undefined)
+          : undefined,
+      },
       discordError,
     };
   });
@@ -3757,10 +3826,16 @@ export function buildApp() {
       targetId: event.id,
     });
 
+    const updateRoleNames = await fetchGuildRoleNames(params.guildId);
     return {
       ok: true,
       guildId: params.guildId,
-      event: savedEvent,
+      event: {
+        ...savedEvent,
+        requiredRoleName: savedEvent.requiredRoleId
+          ? (updateRoleNames.get(savedEvent.requiredRoleId) ?? undefined)
+          : undefined,
+      },
       discordError,
     };
   });

@@ -505,6 +505,9 @@ export function buildEventAnnouncementEmbeds(input: {
   location?: string;
   paused?: boolean;
   recurrence: EventRecurrence;
+  // Recurrencia PROPIA del evento (cada X días, la maneja el API). Manda sobre
+  // la recurrencia del evento agendado de Discord.
+  ownRecurrenceEveryDays?: number;
   requiredRoleId?: string;
   roles?: EventRoleOption[];
   signupDeadline?: Date;
@@ -539,7 +542,9 @@ export function buildEventAnnouncementEmbeds(input: {
     `**🗓️ <t:${timestamp}:F>**`,
     `<t:${timestamp}:R>`,
   ];
-  const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
+  const recurrenceLabel = input.ownRecurrenceEveryDays
+    ? `Cada ${input.ownRecurrenceEveryDays} días`
+    : RECURRENCE_LABEL[input.recurrence];
   const endTimestamp =
     input.durationMinutes && input.durationMinutes > 0
       ? Math.floor(
@@ -953,6 +958,7 @@ export async function syncEventToDiscord(input: {
   guildId: string;
   imageUrl?: string;
   options: EventDiscordOptions;
+  ownRecurrenceEveryDays?: number;
   paused?: boolean;
   requiredRoleId?: string;
   roles?: EventRoleOption[];
@@ -1032,6 +1038,7 @@ export async function syncEventToDiscord(input: {
       location:
         options.entityType === "external" ? options.location : undefined,
       recurrence: options.recurrence,
+      ownRecurrenceEveryDays: input.ownRecurrenceEveryDays,
       paused: input.paused,
       requiredRoleId: input.requiredRoleId,
       roles: input.roles,

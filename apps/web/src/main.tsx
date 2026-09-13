@@ -1435,8 +1435,7 @@ function EventCard({
                 ? `${event.durationMinutes} min${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
                 : "—"}
             </span>
-          </div>
-          <div className="event-info-item">
+          </div>          <div className="event-info-item">
             <span className="event-info-label">⏳ Cierre de inscripciones</span>
             <span
               className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
@@ -1448,12 +1447,21 @@ function EventCard({
                 : "—"}
             </span>
           </div>
-          <div className="event-info-item">
-            <span className="event-info-label">🔁 Repetición</span>
-            <span className="event-info-value">
-              {recurrenceLabel(event.discordEventConfig?.recurrence) ?? "—"}
-            </span>
-          </div>
+          {event.recurrenceEnabled && event.recurrenceEveryDays ? (
+            <div className="event-info-item">
+              <span className="event-info-label">🔁 Repetición</span>
+              <span className="event-info-value">
+                {`Cada ${event.recurrenceEveryDays} días`}
+              </span>
+            </div>
+          ) : recurrenceLabel(event.discordEventConfig?.recurrence) ? (
+            <div className="event-info-item">
+              <span className="event-info-label">🔁 Repetición</span>
+              <span className="event-info-value">
+                {recurrenceLabel(event.discordEventConfig?.recurrence)}
+              </span>
+            </div>
+          ) : null}
           {event.discordEventConfig?.entityType === "external" &&
           event.discordEventConfig.location ? (
             <div className="event-info-item">
@@ -1469,8 +1477,10 @@ function EventCard({
               <span className="event-info-value">
                 Requiere{" "}
                 <strong>
-                  {guildRoles.find((role) => role.id === event.requiredRoleId)
-                    ?.name ?? "un rol"}
+                  {event.requiredRoleName ??
+                    guildRoles.find((role) => role.id === event.requiredRoleId)
+                      ?.name ??
+                    "el rol mínimo"}
                 </strong>
                 <em className="event-info-note">
                   Sin el rol, la inscripción queda como Bench.
