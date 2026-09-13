@@ -696,6 +696,28 @@ export async function listEventsPendingCloseAnnouncement(
   return records.map((record) => toEvent(record));
 }
 
+// Eventos ya publicados en Discord que todavía no empezaron. Se usan para
+// re-renderizar los avisos cuando cambia algo global del módulo (roles, ejes
+// o emojis del catálogo): el roster del embed queda "congelado" hasta que
+// alguien se anota, así que hay que refrescarlo a mano.
+export async function listPublishedUpcomingEvents(
+  guildId: string,
+  now: Date = new Date(),
+): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    where: {
+      guildId,
+      publishChannelId: { not: null },
+      startsAt: { gt: now },
+      status: "scheduled",
+    },
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+    orderBy: { startsAt: "asc" },
+    take: 25,
+  });
+  return records.map((record) => toEvent(record));
+}
+
 // Marca que el aviso ya fue actualizado por cierre de inscripciones.
 export async function markEventSignupClosed(
   guildId: string,

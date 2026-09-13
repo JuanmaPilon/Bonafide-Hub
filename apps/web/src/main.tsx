@@ -686,6 +686,18 @@ function toDateTimeLocal(value: Date | string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+// Convierte el string local del formulario (YYYY-MM-DDTHH:mm) al instante
+// absoluto en ISO/UTC. IMPORTANTE: si mandáramos el string "pelado", el
+// servidor (que corre en UTC) lo interpretaría como UTC y el evento se
+// guardaría 3 h corrido; con toISOString() viaja el momento exacto.
+function toIsoInstant(value: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 // ── Fechas y horas en formato fijo (dd/mm/aaaa + 24 hs) ─────────────
 // No usamos toLocaleString/toLocaleDateString porque dependen del idioma del
 // navegador: con el navegador en inglés muestran mm/dd y AM/PM.
@@ -3372,6 +3384,15 @@ function App() {
       pushToast("Faltan título o fecha/hora.", "error");
       return;
     }
+    // Fecha/hora y cierre viajan como instante absoluto (UTC): el form trabaja
+    // en hora local y el API en UTC, así que mandamos el ISO de la conversión
+    // para que la hora elegida sea la misma en los dos lados.
+    const startsAtIso = toIsoInstant(eventForm.startsAt);
+    if (!startsAtIso) {
+      pushToast("La fecha/hora no es válida.", "error");
+      return;
+    }
+    const signupDeadlineIso = toIsoInstant(eventForm.signupDeadline);
 
     const discordPayload: EventDiscordOptions = {
       createScheduledEvent: eventForm.discord.createScheduledEvent,
@@ -3409,8 +3430,8 @@ function App() {
             : undefined,
           reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
-          signupDeadline: eventForm.signupDeadline || null,
-          startsAt: eventForm.startsAt,
+          signupDeadline: signupDeadlineIso ?? null,
+          startsAt: startsAtIso,
           status: eventForm.status,
           tagColor: eventForm.tagColor || undefined,
           tagLabel: eventForm.tagLabel.trim() || undefined,
@@ -3446,8 +3467,8 @@ function App() {
             : undefined,
           reminderHours: [...eventForm.reminderHours],
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
-          signupDeadline: eventForm.signupDeadline || undefined,
-          startsAt: eventForm.startsAt,
+          signupDeadline: signupDeadlineIso,
+          startsAt: startsAtIso,
           tagColor: eventForm.tagColor || undefined,
           tagLabel: eventForm.tagLabel.trim() || undefined,
           title: eventForm.title.trim(),

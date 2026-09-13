@@ -1,4 +1,9 @@
-import { Client, Guild } from "discord.js";
+import {
+  Client,
+  EmbedBuilder,
+  Guild,
+  type MessageCreateOptions,
+} from "discord.js";
 import { env } from "../config/env.js";
 
 // ── Control de asistencia de eventos ────────────────────────────────
@@ -164,33 +169,7 @@ function formatEventDate(iso: string): string {
   if (Number.isNaN(date.getTime())) {
     return iso;
   }
-  const formatter = new Intl.DateTimeFormat("es-AR", {
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short",
-    weekday: "short",
-  });
-  return formatter.format(date);
-}
-
-// "faltan 23 h", "falta 1 h", "faltan 45 min".
-function formatRemaining(ms: number): string {
-  const minutes = Math.max(0, Math.round(ms / 60000));
-  if (minutes < 60) {
-    return minutes <= 1 ? "menos de 1 min" : `faltan ${minutes} min`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const restMinutes = minutes % 60;
-  if (hours < 48) {
-    const parts = [`faltan ${hours} h`];
-    if (restMinutes >= 5) {
-      parts.push(`${restMinutes} min`);
-    }
-    return parts.join(" ");
-  }
-  const days = Math.floor(hours / 24);
-  return `faltan ${days} día${days === 1 ? "" : "s"}`;
+  return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
 }
 
 // Devuelve el id del mensaje enviado (o null si no se pudo). Guardamos el id
@@ -198,14 +177,14 @@ function formatRemaining(ms: number): string {
 async function sendToChannel(
   guild: Guild,
   channelId: string,
-  content: string,
+  payload: MessageCreateOptions | string,
 ): Promise<string | null> {
   try {
     const channel = await guild.channels.fetch(channelId).catch(() => null);
     if (!channel || !("send" in channel)) {
       return null;
     }
-    const message = await channel.send(content);
+    const message = await channel.send(payload as MessageCreateOptions);
     return message.id ?? null;
   } catch (error) {
     console.warn(
@@ -218,7 +197,7 @@ async function sendToChannel(
 async function sendDm(
   guild: Guild,
   userId: string | undefined,
-  content: string,
+  payload: MessageCreateOptions | string,
 ): Promise<boolean> {
   if (!userId) {
     return false;
@@ -228,7 +207,7 @@ async function sendDm(
     if (!user) {
       return false;
     }
-    await user.send(content);
+    await user.send(payload);
     return true;
   } catch (error) {
     console.warn(
@@ -258,13 +237,24 @@ async function processReminder(
 
     if (missing.length > 0) {
       const startsMs = new Date(event.startsAt).getTime();
-      const content = [
-        `⏰ **${event.title}** — ${formatRemaining(startsMs - Date.now())}`,
-        `🗓️ ${formatEventDate(event.startsAt)}`,
-        "**Estas personas faltan anotarse:**",
-        missing.map((member) => `<@${member.id}>`).join(" "),
-      ].join("\n");
-      const sentId = await sendToChannel(guild, channelId, content);
+      const mentions = missing.map((member) => `<@${member.id}>`).join(" ");
+      // Las menciones van en el CONTENIDO: dentro de un embed no notifican.
+      const embed = new EmbedBuilder()
+        .setColor(0xffb454)
+        .setTitle(`⏰ ${event.title}`.slice(0, 256))
+        .setDescription(
+          [
+            `🗓️ ${formatEventDate(event.startsAt)} · <t:${Math.floor(startsMs / 1000)}:R>`,
+            "",
+            "**Faltan anotarse:**",
+          ].join("\n"),
+        )
+        .setFooter({ text: "Bonafide Hub · Recordatorio de asistencia" });
+      const sentId = await sendToChannel(guild, channelId, {
+        allowedMentions: { parse: ["users"] },
+        content: mentions.slice(0, 1900),
+        embeds: [embed],
+      });
       if (!sentId) {
         // Canal inválido: no lo marcamos para no perder el aviso, se reintenta.
         return;
@@ -313,11 +303,37 @@ async function processReport(guild: Guild, event: RemoteEvent): Promise<void> {
         : "• Nadie: todos con el rol respondieron. 🎉",
     ].join("\n");
 
-    const delivered = await sendDm(guild, event.createdByUserId, lines);
+    const embed = new EmbedBuilder()
+      .setColor(0x6aa8ff)
+      .setTitle(`📋 Informe de asistencia — ${event.title}`.slice(0, 256))
+      .setDescription(`🗓️ ${formatEventDate(event.startsAt)}`)
+      .addFields(
+        {
+          name: "📊 Anotados",
+          value: `✅ ${confirmed} · 🪑 ${bench} · ⏰ ${late} · ❌ ${countNo}`,
+        },
+        {
+          name: `🛡️ No se anotaron (${missing.length} con el rol)`,
+          value:
+            missing.length > 0
+              ? missing
+                  .map((m) => `• ${m.displayName}`)
+                  .join("\n")
+                  .slice(0, 1024)
+              : "Nadie: todos con el rol respondieron. 🎉",
+        },
+      )
+      .setFooter({ text: "Bonafide Hub · Informe de asistencia" });
+
+    const delivered = await sendDm(guild, event.createdByUserId, {
+      embeds: [embed],
+    });
     let channelDelivered = false;
     if (!delivered && event.publishChannelId) {
       channelDelivered =
-        (await sendToChannel(guild, event.publishChannelId, lines)) !== null;
+        (await sendToChannel(guild, event.publishChannelId, {
+          embeds: [embed],
+        })) !== null;
     }
 
     if (delivered || channelDelivered) {

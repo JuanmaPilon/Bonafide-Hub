@@ -31,7 +31,9 @@ type ScheduledEventPayload = {
   channel_id?: string;
   description?: string;
   entity_metadata?: { location: string };
-  entity_type: number;
+  // Solo al CREAR: Discord no permite cambiar el entity_type de un evento
+  // agendado existente (el PATCH lo rechaza).
+  entity_type?: number;
   image?: string;
   name: string;
   privacy_level: number;
@@ -211,6 +213,67 @@ async function createScheduledEvent(input: {
   return { id: data.id };
 }
 
+// Actualiza un Scheduled Event existente (título, fecha, duración, lugar).
+// Se usa cuando el staff edita el evento: en vez de borrar y recrear el
+// evento agendado (lo que pierde los "interesados" de Discord y cambia su
+// id), lo parcheamos.
+async function updateScheduledEvent(input: {
+  description?: string;
+  discordEventId: string;
+  durationMinutes?: number;
+  entityType: "voice" | "external";
+  guildId: string;
+  location?: string;
+  recurrence: EventRecurrence;
+  startsAt: Date;
+  title: string;
+  voiceChannelId?: string;
+}): Promise<{ error?: string; id?: string }> {
+  const payload: ScheduledEventPayload = {
+    name: input.title.slice(0, 100),
+    privacy_level: 2,
+    scheduled_start_time: input.startsAt.toISOString(),
+  };
+
+  if (input.description?.trim()) {
+    payload.description = input.description.trim().slice(0, 1000);
+  }
+  if (input.entityType === "voice" && input.voiceChannelId) {
+    payload.channel_id = input.voiceChannelId;
+  }
+  if (input.entityType === "external" && input.location) {
+    payload.entity_metadata = { location: input.location.slice(0, 100) };
+  }
+  if (input.durationMinutes && input.durationMinutes > 0) {
+    payload.scheduled_end_time = new Date(
+      input.startsAt.getTime() + input.durationMinutes * 60_000,
+    ).toISOString();
+  } else if (input.entityType === "external") {
+    payload.scheduled_end_time = new Date(
+      input.startsAt.getTime() + 60 * 60_000,
+    ).toISOString();
+  }
+  const rule = buildRecurrenceRule(input.startsAt, input.recurrence);
+  if (rule) {
+    payload.recurrence_rule = rule;
+  }
+
+  const response = await discordFetch(
+    `/guilds/${encodeURIComponent(input.guildId)}/scheduled-events/${encodeURIComponent(input.discordEventId)}`,
+    { method: "PATCH", body: payload },
+  );
+  if (!response.ok) {
+    // 404 = el evento agendado ya no existe (lo borraron a mano): avisamos y
+    // el caller decide (publicar de nuevo / recrear).
+    if (response.status === 404) {
+      return { error: "not_found" };
+    }
+    const detail = await errorMessage(response);
+    return { error: `Discord no pudo actualizar el evento: ${detail}` };
+  }
+  return { id: input.discordEventId };
+}
+
 // ── Roster estilo Raid Helper dentro del embed del evento ───────────
 
 export type AnnouncementSignup = {
@@ -329,6 +392,43 @@ function pushField(
   }
 }
 
+// Icono de la guild, para usarlo como thumbnail + icono del footer (le da
+// "cara" al aviso). Se cachea en memoria: cambia poco y no queremos pedirlo
+// en cada refresco del roster.
+const guildIconCache = new Map<
+  string,
+  { expiresAt: number; url: string | undefined }
+>();
+
+export async function fetchGuildIconUrl(
+  guildId: string,
+): Promise<string | undefined> {
+  const cached = guildIconCache.get(guildId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.url;
+  }
+  let url: string | undefined;
+  try {
+    const response = await discordFetch(
+      `/guilds/${encodeURIComponent(guildId)}`,
+    );
+    if (response.ok) {
+      const data = (await response.json()) as { icon?: string | null };
+      if (data.icon) {
+        const extension = data.icon.startsWith("a_") ? "gif" : "png";
+        url = `https://cdn.discordapp.com/icons/${guildId}/${data.icon}.${extension}?size=128`;
+      }
+    }
+  } catch {
+    // Sin icono: el embed se arma igual.
+  }
+  guildIconCache.set(guildId, {
+    expiresAt: Date.now() + 60 * 60 * 1000,
+    url,
+  });
+  return url;
+}
+
 // URL que Discord puede mostrar para la imagen del evento. Si la imagen es
 // una data URL (la que sube la web a la biblioteca), la exponemos por una
 // ruta pública del API (PUBLIC_API_URL) para que Discord pueda renderizarla.
@@ -367,10 +467,12 @@ export function buildEventAnnouncementEmbeds(input: {
   durationMinutes?: number;
   eventId?: string;
   guildId: string;
+  guildIconUrl?: string;
   imageUrl?: string;
   location?: string;
   paused?: boolean;
   recurrence: EventRecurrence;
+  requiredRoleId?: string;
   roles?: EventRoleOption[];
   signupDeadline?: Date;
   signups: AnnouncementSignup[];
@@ -395,25 +497,31 @@ export function buildEventAnnouncementEmbeds(input: {
   // inscripciones hasta reactivarlo.
   const isPaused = input.paused === true;
 
-  const lines: string[] = [`🕒 <t:${timestamp}:F> (<t:${timestamp}:R>)`];
+  // Bloque de "cuándo": la fecha va como subtítulo grande (Discord renderiza
+  // ## en la descripción de un embed) y abajo el contexto en una línea.
+  const metaBits: string[] = [`<t:${timestamp}:R>`];
   const recurrenceLabel = RECURRENCE_LABEL[input.recurrence];
-  if (recurrenceLabel) {
-    lines.push(`🔁 ${recurrenceLabel}`);
-  }
   if (input.durationMinutes && input.durationMinutes > 0) {
     const end = Math.floor(
       (input.startsAt.getTime() + input.durationMinutes * 60_000) / 1000,
     );
-    lines.push(
-      `⏱️ Duración: ${input.durationMinutes} min (hasta <t:${end}:t>)`,
-    );
+    metaBits.push(`⏱️ ${input.durationMinutes} min (hasta <t:${end}:t>)`);
+  }
+  if (recurrenceLabel) {
+    metaBits.push(`🔁 ${recurrenceLabel}`);
+  }
+  const whenLines: string[] = [
+    `## 🗓️ <t:${timestamp}:F>`,
+    metaBits.join(" · "),
+  ];
+  if (input.location) {
+    whenLines.push(`📍 ${input.location}`);
   }
   if (input.signupDeadline && !signupsClosed && !isPaused) {
     const dl = Math.floor(input.signupDeadline.getTime() / 1000);
-    lines.push(`⏳ Inscripciones abiertas hasta <t:${dl}:F> (<t:${dl}:R>)`);
-  }
-  if (input.location) {
-    lines.push(`📍 ${input.location}`);
+    whenLines.push(
+      `⏳ **Inscripciones abiertas hasta <t:${dl}:F>** (<t:${dl}:R>)`,
+    );
   }
 
   // Conteo por estado (solo los que tengan al menos uno). Se muestra aparte
@@ -499,8 +607,9 @@ export function buildEventAnnouncementEmbeds(input: {
     pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
   }
 
-  // Descripción separada en bloques (con línea en blanco entre ellos) para
-  // que el embed respire y no se vea todo junto. Al final, link a la web.
+  // Descripción en bloques (con línea en blanco entre ellos) para que el
+  // embed respire: fecha + contexto, requisito de rol, asistencia y link.
+  // El detalle del roster va en fields (se ve en columnas).
   const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
   const descriptionParts: string[] = [];
   if (isPaused) {
@@ -513,9 +622,23 @@ export function buildEventAnnouncementEmbeds(input: {
       `🔒 **INSCRIPCIONES CERRADAS** — ya no se puede anotar (cerró <t:${dl}:R>).`,
     );
   }
-  descriptionParts.push(lines.join("\n"));
+  descriptionParts.push(whenLines.join("\n"));
+  // Rol mínimo para entrar al roster principal: se avisa acá y además el
+  // mensaje menciona al rol (así le llega la notificación a todos los que lo
+  // tienen; una mención dentro de un embed no notifica).
+  const requiredRoleId = input.requiredRoleId?.trim();
+  if (requiredRoleId) {
+    descriptionParts.push(
+      [
+        `> 🛡️ **Roster principal:** hay que tener <@&${requiredRoleId}>`,
+        "> *Si no tenés el rol, tu anotación queda como Bench.*",
+      ].join("\n"),
+    );
+  }
   descriptionParts.push(
-    counts.length > 0 ? counts.join(" · ") : "Sin anotados todavía.",
+    counts.length > 0
+      ? `📊 **Asistencia:** ${counts.join(" · ")}`
+      : "📊 **Sin anotados todavía** — ¡anotate con los botones de abajo!",
   );
   if (webBase) {
     descriptionParts.push(`[🌐 Ver el evento en la web](${webBase}/#/eventos)`);
@@ -533,6 +656,15 @@ export function buildEventAnnouncementEmbeds(input: {
     fields,
     footer: { text: `Bonafide Hub · ${typeLabel}` },
   };
+  // Icono de la guild: thumbnail a la derecha + icono del footer. Le da
+  // identidad al aviso (sin pisar la imagen grande del evento).
+  if (input.guildIconUrl) {
+    embed.thumbnail = { url: input.guildIconUrl };
+    embed.footer = {
+      icon_url: input.guildIconUrl,
+      text: `Bonafide Hub · ${typeLabel}`,
+    };
+  }
   // Tag libre del evento (estilo comunicados): va como "autor" del embed para
   // que se vea arriba del título con su color de acento.
   const tagLabel = input.tagLabel?.trim();
@@ -556,23 +688,38 @@ export function buildEventAnnouncementEmbeds(input: {
 }
 
 // Edita un mensaje-aviso existente con embeds nuevos (auto-refresh del
-// roster cuando cambian las inscripciones). Devuelve si Discord lo aceptó.
-export async function updateEventAnnouncement(input: {
+// roster cuando cambian las inscripciones). Devuelve la respuesta cruda de
+// Discord para que el caller distinga "mensaje borrado" de otros errores.
+async function patchAnnouncement(input: {
   channelId: string;
   // Si se pasa, reemplaza los botones del mensaje (p. ej. deshabilitados
   // cuando ya cerró la inscripción). Si se omite, no toca los componentes.
   components?: Array<Record<string, unknown>>;
+  // Si se pasa, reemplaza el texto del mensaje (se usa para limpiar una
+  // mención de rol vieja; con rol vigente se omite para no re-notificar).
+  content?: string;
   embeds: Array<Record<string, unknown>>;
   messageId: string;
-}): Promise<boolean> {
+}): Promise<Response> {
   const body: Record<string, unknown> = { embeds: input.embeds };
   if (input.components) {
     body.components = input.components;
   }
-  const response = await discordFetch(
+  if (input.content !== undefined) {
+    body.content = input.content;
+    body.allowed_mentions = { parse: [] };
+  }
+  return discordFetch(
     `/channels/${encodeURIComponent(input.channelId)}/messages/${encodeURIComponent(input.messageId)}`,
     { method: "PATCH", body },
   );
+}
+
+// Edita un mensaje-aviso existente. Devuelve si Discord lo aceptó.
+export async function updateEventAnnouncement(
+  input: Parameters<typeof patchAnnouncement>[0],
+): Promise<boolean> {
+  const response = await patchAnnouncement(input);
   return response.ok;
 }
 
@@ -692,6 +839,11 @@ async function postAnnouncement(
   messageId?: string;
 }> {
   const embeds = buildEventAnnouncementEmbeds(input);
+  // Mención del rol mínimo en el contenido del mensaje: es la única forma de
+  // que Discord NOTIFIQUE a todos los que tienen ese rol (las menciones dentro
+  // del embed no avisan). Solo al publicar: los refrescos editan solo el
+  // embed, así no se vuelve a mencionar (y no spamea).
+  const requiredRoleId = input.requiredRoleId?.trim();
   const response = await discordFetch(
     `/channels/${encodeURIComponent(input.channelId)}/messages`,
     {
@@ -707,6 +859,7 @@ async function postAnnouncement(
           specEnabled: input.specEnabled,
           specLabel: input.specLabel,
         }),
+        content: requiredRoleId ? `🛡️ <@&${requiredRoleId}>` : undefined,
         embeds,
       },
     },
@@ -721,16 +874,28 @@ async function postAnnouncement(
 
 // Sincroniza un evento hacia Discord según las opciones elegidas. No toca
 // la DB: devuelve ids + errores para que el caller los persista.
+// Con `existing` (evento que ya estaba publicado) se ACTUALIZA en el lugar:
+// se parchea el scheduled event y se edita el mensaje-aviso, en vez de borrar
+// y publicar de nuevo. Así se reflejan los cambios sin perder el hilo del
+// canal ni re-notificar al rol.
 export async function syncEventToDiscord(input: {
   classLabel?: string;
   description?: string;
   discordEventId?: string;
   durationMinutes?: number;
   eventId: string;
+  existing?: {
+    discordEventId?: string;
+    messageIds?: string[];
+    publishChannelId?: string;
+    requiredRoleId?: string;
+  };
+  guildIconUrl?: string;
   guildId: string;
   imageUrl?: string;
   options: EventDiscordOptions;
   paused?: boolean;
+  requiredRoleId?: string;
   roles?: EventRoleOption[];
   signupDeadline?: Date;
   signups?: AnnouncementSignup[];
@@ -745,9 +910,9 @@ export async function syncEventToDiscord(input: {
   const { options } = input;
   const result: EventPublishResult = { messageIds: [] };
 
-  // 1) Scheduled Event (si se pidió).
+  // 1) Scheduled Event (si se pidió). Si ya existía, lo parcheamos.
   if (options.createScheduledEvent) {
-    const created = await createScheduledEvent({
+    const payload = {
       description: input.description,
       durationMinutes: input.durationMinutes,
       entityType: options.entityType,
@@ -757,29 +922,59 @@ export async function syncEventToDiscord(input: {
       startsAt: input.startsAt,
       title: input.title,
       voiceChannelId: options.voiceChannelId,
-    });
-    if (created.error) {
-      result.error = created.error;
-      return result;
+    };
+    if (input.existing?.discordEventId) {
+      const updated = await updateScheduledEvent({
+        ...payload,
+        discordEventId: input.existing.discordEventId,
+      });
+      if (updated.error && updated.error !== "not_found") {
+        result.error = updated.error;
+        return result;
+      }
+      // not_found: el evento agendado ya no está en Discord → creamos uno
+      // nuevo para que el evento vuelva a aparecer en la guild.
+      if (updated.error === "not_found") {
+        const recreated = await createScheduledEvent(payload);
+        if (recreated.error) {
+          result.error = recreated.error;
+          return result;
+        }
+        result.discordEventId = recreated.id;
+      } else {
+        result.discordEventId = input.existing.discordEventId;
+      }
+    } else {
+      const created = await createScheduledEvent(payload);
+      if (created.error) {
+        result.error = created.error;
+        return result;
+      }
+      result.discordEventId = created.id;
     }
-    result.discordEventId = created.id;
+  } else {
+    // Ya no se pide scheduled event: conservamos el id previo (si venía) por
+    // si el caller decidió limpiarlo antes.
+    result.discordEventId = input.discordEventId;
   }
 
   // 2) Aviso en canal (si se pidió).
   if (options.publishMessage && options.publishChannelId) {
-    const announcement = await postAnnouncement({
+    const announcementInput = {
       channelId: options.publishChannelId,
       classLabel: input.classLabel,
       description: input.description,
       discordEventId: result.discordEventId ?? input.discordEventId,
       durationMinutes: input.durationMinutes,
       eventId: input.eventId,
+      guildIconUrl: input.guildIconUrl,
       guildId: input.guildId,
       imageUrl: input.imageUrl,
       location:
         options.entityType === "external" ? options.location : undefined,
       recurrence: options.recurrence,
       paused: input.paused,
+      requiredRoleId: input.requiredRoleId,
       roles: input.roles,
       signupDeadline: input.signupDeadline,
       signups: input.signups ?? [],
@@ -790,11 +985,62 @@ export async function syncEventToDiscord(input: {
       tagLabel: input.tagLabel,
       title: input.title,
       type: input.type,
-    });
-    if (announcement.error) {
-      result.error = result.error ?? announcement.error;
-    } else if (announcement.messageId) {
-      result.messageIds = [announcement.messageId];
+    };
+    // Aviso ya publicado en el mismo canal → editamos ese mensaje (no se
+    // pierde la posición ni se vuelve a mencionar el rol). Si el canal cambió
+    // o no hay mensaje previo, se publica uno nuevo.
+    const previousMessages =
+      input.existing?.publishChannelId === options.publishChannelId
+        ? (input.existing?.messageIds ?? [])
+        : [];
+    if (previousMessages.length > 0) {
+      const embeds = buildEventAnnouncementEmbeds(announcementInput);
+      const roleId = input.requiredRoleId?.trim();
+      const edited = await patchAnnouncement({
+        channelId: options.publishChannelId,
+        components: buildEventSignupActionRows(input.eventId, {
+          classLabel: input.classLabel,
+          disableSignup:
+            input.paused === true ||
+            (input.signupDeadline !== undefined &&
+              input.signupDeadline.getTime() <= Date.now()),
+          specEnabled: input.specEnabled,
+          specLabel: input.specLabel,
+        }),
+        // La mención del rol solo se reescribe si CAMBIÓ el rol mínimo (es el
+        // único caso en el que vale la pena volver a notificar); sin rol,
+        // vaciamos el contenido por si quedó una mención vieja.
+        content: roleId
+          ? input.existing?.requiredRoleId?.trim() === roleId
+            ? undefined
+            : `🛡️ <@&${roleId}>`
+          : "",
+        embeds,
+        messageId: previousMessages[0],
+      });
+      if (edited.ok) {
+        result.messageIds = previousMessages;
+      } else if (edited.status === 404) {
+        // El mensaje lo borraron a mano en Discord: publicamos uno nuevo.
+        const announcement = await postAnnouncement(announcementInput);
+        if (announcement.error) {
+          result.error = result.error ?? announcement.error;
+        } else if (announcement.messageId) {
+          result.messageIds = [announcement.messageId];
+        }
+      } else {
+        result.error =
+          result.error ??
+          `No se pudo actualizar el aviso en Discord: ${await errorMessage(edited)}`;
+        result.messageIds = previousMessages;
+      }
+    } else {
+      const announcement = await postAnnouncement(announcementInput);
+      if (announcement.error) {
+        result.error = result.error ?? announcement.error;
+      } else if (announcement.messageId) {
+        result.messageIds = [announcement.messageId];
+      }
     }
   }
 

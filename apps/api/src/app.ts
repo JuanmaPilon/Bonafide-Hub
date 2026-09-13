@@ -98,6 +98,7 @@ import {
   listRaidSpecs,
   listReminderDueEvents,
   listReportPendingEvents,
+  listPublishedUpcomingEvents,
   markEventRemindersSent,
   markEventReportSent,
   markEventSignupClosed,
@@ -112,6 +113,7 @@ import {
   buildEventAnnouncementEmbeds,
   buildEventSignupActionRows,
   cleanupEventDiscord,
+  fetchGuildIconUrl,
   syncEventToDiscord,
   updateEventAnnouncement,
   type AnnouncementSignup,
@@ -1345,12 +1347,21 @@ async function syncAndStoreEventDiscord(input: {
     id: string;
     imageUrl?: string;
     paused?: boolean;
+    requiredRoleId?: string;
     signupDeadline?: Date;
     signups: AnnouncementSignup[];
     startsAt: Date;
     tagLabel?: string;
     title: string;
     type?: string;
+  };
+  // Evento ya publicado: se actualiza en el lugar (scheduled event + aviso)
+  // en vez de borrar y publicar de nuevo.
+  existing?: {
+    discordEventId?: string;
+    messageIds?: string[];
+    publishChannelId?: string;
+    requiredRoleId?: string;
   };
 }): Promise<{
   discordError?: string;
@@ -1364,10 +1375,13 @@ async function syncAndStoreEventDiscord(input: {
     description: event.description,
     durationMinutes: event.durationMinutes,
     eventId: event.id,
+    existing: input.existing,
+    guildIconUrl: await fetchGuildIconUrl(event.guildId),
     guildId: event.guildId,
     imageUrl: event.imageUrl,
     options: discordOpts,
     paused: event.paused,
+    requiredRoleId: event.requiredRoleId,
     roles: resolveEventRoles(eventConfig),
     signupDeadline: event.signupDeadline,
     signups: event.signups,
@@ -1430,6 +1444,7 @@ async function refreshEventAnnouncement(
       discordEventId: event.discordEventId,
       durationMinutes: event.durationMinutes,
       eventId: event.id,
+      guildIconUrl: await fetchGuildIconUrl(guildId),
       guildId,
       imageUrl: event.imageUrl,
       location:
@@ -1439,9 +1454,11 @@ async function refreshEventAnnouncement(
       paused: event.paused,
       recurrence: (event.discordEventConfig?.recurrence ??
         "none") as EventRecurrence,
+      requiredRoleId: event.requiredRoleId,
       roles: resolveEventRoles(eventConfig),
       signupDeadline: event.signupDeadline,
       signups: event.signups,
+      specEnabled: eventConfig.eventSpecEnabled !== false,
       specLabel: eventConfig.eventSpecLabel,
       specs,
       startsAt: event.startsAt,
@@ -1460,6 +1477,9 @@ async function refreshEventAnnouncement(
         specEnabled: eventConfig.eventSpecEnabled !== false,
         specLabel: eventConfig.eventSpecLabel,
       }),
+      // Si el evento ya no tiene rol mínimo, limpiamos la mención vieja del
+      // contenido; si la tiene, no la tocamos (evita re-notificar al rol).
+      content: event.requiredRoleId ? undefined : "",
       embeds,
       messageId,
     });
@@ -1470,6 +1490,34 @@ async function refreshEventAnnouncement(
     );
     return false;
   }
+}
+
+// Re-renderiza (en segundo plano) los avisos de Discord de los próximos
+// eventos publicados de la guild. Se usa cuando cambia algo global del módulo
+// de eventos: roles de inscripción, nombres de los ejes o emojis del catálogo
+// de specs. Es "fire and forget" para no demorar la respuesta al staff.
+function refreshUpcomingAnnouncements(guildId: string): void {
+  void (async () => {
+    try {
+      const events = await listPublishedUpcomingEvents(guildId);
+      const pending = events.filter(
+        (event) => (event.discordMessageIds ?? []).length > 0,
+      );
+      for (const event of pending) {
+        await refreshEventAnnouncement(guildId, event.id);
+      }
+      if (pending.length > 0) {
+        console.log(
+          `[eventos] avisos de Discord refrescados por cambio de configuración: ${pending.length}`,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "[eventos] no se pudieron refrescar los avisos publicados",
+        error,
+      );
+    }
+  })();
 }
 
 // Horas de recordatorio válidas (p. ej. 48, 24, 2). Normaliza: números
@@ -3543,22 +3591,58 @@ export function buildApp() {
       });
     }
 
-    // Publicación en Discord: primero limpiamos lo viejo (si la web mandó
-    // el bloque discord) y después sincronizamos según la nueva config.
+    // Publicación en Discord: si la config de publicación NO cambió,
+    // actualizamos lo que ya está publicado en el lugar (parcheamos el
+    // scheduled event y editamos el aviso) para que los cambios se reflejen
+    // sin borrar/republicar. Si cambió (otro canal, otra sala, otro tipo…),
+    // limpiamos lo viejo y publicamos de nuevo.
     const discordOpts = normalizeDiscordOptions(body.discord);
     const previous = await getEvent(params.guildId, params.eventId);
+    let existingPublication:
+      | {
+          discordEventId?: string;
+          messageIds?: string[];
+          publishChannelId?: string;
+          requiredRoleId?: string;
+        }
+      | undefined;
     if (discordOpts) {
       const validationError = validateDiscordOptions(discordOpts);
       if (validationError) {
         return reply.code(400).send({ ok: false, error: validationError });
       }
       if (previous) {
-        await cleanupEventDiscord({
-          discordEventId: previous.discordEventId,
-          discordMessageIds: previous.discordMessageIds,
-          guildId: params.guildId,
-          publishChannelId: previous.publishChannelId,
-        });
+        const previousConfig = previous.discordEventConfig;
+        const samePublication =
+          (previous.publishChannelId ?? null) ===
+            (discordOpts.publishMessage
+              ? (discordOpts.publishChannelId ?? null)
+              : null) &&
+          (previousConfig?.createScheduledEvent ?? false) ===
+            discordOpts.createScheduledEvent &&
+          (previousConfig?.entityType ?? "voice") === discordOpts.entityType &&
+          (previousConfig?.location ?? "") === (discordOpts.location ?? "") &&
+          (previous.voiceChannelId ?? null) ===
+            (discordOpts.createScheduledEvent &&
+            discordOpts.entityType === "voice"
+              ? (discordOpts.voiceChannelId ?? null)
+              : null) &&
+          (previousConfig?.recurrence ?? "none") === discordOpts.recurrence;
+        if (samePublication) {
+          existingPublication = {
+            discordEventId: previous.discordEventId,
+            messageIds: previous.discordMessageIds,
+            publishChannelId: previous.publishChannelId,
+            requiredRoleId: previous.requiredRoleId,
+          };
+        } else {
+          await cleanupEventDiscord({
+            discordEventId: previous.discordEventId,
+            discordMessageIds: previous.discordMessageIds,
+            guildId: params.guildId,
+            publishChannelId: previous.publishChannelId,
+          });
+        }
       }
     }
 
@@ -3638,7 +3722,11 @@ export function buildApp() {
         `[eventos] evento completado: aviso/evento de Discord eliminado (${event.title})`,
       );
     } else if (discordOpts) {
-      const synced = await syncAndStoreEventDiscord({ discordOpts, event });
+      const synced = await syncAndStoreEventDiscord({
+        discordOpts,
+        event,
+        existing: existingPublication,
+      });
       discordError = synced.discordError;
       if (synced.event) {
         savedEvent = synced.event;
@@ -3779,6 +3867,10 @@ export function buildApp() {
       });
     }
 
+    // El catálogo cambia lo que se ve en el roster del aviso (emoji + clase
+    // + spec), así que re-renderizamos los avisos ya publicados.
+    refreshUpcomingAnnouncements(params.guildId);
+
     return { ok: true, guildId: params.guildId, spec };
   });
 
@@ -3802,6 +3894,9 @@ export function buildApp() {
       }
 
       const deleted = await deleteRaidSpec(params.guildId, params.specId);
+      if (deleted) {
+        refreshUpcomingAnnouncements(params.guildId);
+      }
       return { ok: true, guildId: params.guildId, deleted };
     },
   );
@@ -3866,6 +3961,7 @@ export function buildApp() {
         error: "No se pudo actualizar: puede que esa rol/clase/spec ya exista",
       });
     }
+    refreshUpcomingAnnouncements(params.guildId);
     return { ok: true, guildId: params.guildId, spec };
   });
 
@@ -5096,6 +5192,18 @@ export function buildApp() {
     }
 
     const config = await upsertGuildConfig(params.guildId, allowedBody);
+
+    // Si cambió algo que se ve en los avisos de Discord (roles de
+    // inscripción, nombres de los ejes o si el 2° eje está activo),
+    // re-renderizamos los avisos de los próximos eventos publicados.
+    if (
+      allowedBody.eventRoles !== undefined ||
+      allowedBody.eventClassLabel !== undefined ||
+      allowedBody.eventSpecLabel !== undefined ||
+      allowedBody.eventSpecEnabled !== undefined
+    ) {
+      refreshUpcomingAnnouncements(params.guildId);
+    }
 
     await logAdminAction(session, params.guildId, "update:guild-config", {
       details: "Se guardó la configuración general del servidor.",
