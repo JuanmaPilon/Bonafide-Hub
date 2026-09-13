@@ -852,6 +852,14 @@ export function buildEventSignupActionRows(
           },
         ]
       : []),
+    // Resetear: borra la inscripción y el personaje recordado.
+    {
+      customId: "reset",
+      disableWhenClosed: true,
+      emoji: "🔄",
+      label: "Resetear registro",
+      style: 2,
+    },
     {
       customId: "remove",
       disableWhenClosed: false,

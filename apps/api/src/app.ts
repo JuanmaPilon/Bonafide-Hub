@@ -102,6 +102,7 @@ import {
   markEventRemindersSent,
   markEventReportSent,
   markEventSignupClosed,
+  resetSignup,
   setEventDiscordInfo,
   setEventRecurrenceNext,
   type HubEvent,
@@ -4339,6 +4340,34 @@ export function buildApp() {
     },
   );
 
+  // Resetear la inscripción propia: borra la inscripción Y el personaje
+  // recordado, así la próxima vez se anota desde cero (rol, clase/spec,
+  // personaje). Es distinto de "quitar inscripción", que solo la borra.
+  app.delete(
+    "/guilds/:guildId/events/:eventId/signups/me/reset",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      const user = session.user as { id?: string };
+      if (!user.id) {
+        return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+      }
+
+      await resetSignup(params.guildId, params.eventId, user.id);
+      await refreshEventAnnouncement(params.guildId, params.eventId);
+
+      return { ok: true, guildId: params.guildId, reset: true };
+    },
+  );
+
   // ── Inscripciones desde Discord (bot) ──────────────────────────────
   // El bot llama estos endpoints internos (x-bot-token) cuando un miembro
   // toca los botones del embed del evento. Reutilizan la misma lógica que
@@ -4620,6 +4649,35 @@ export function buildApp() {
       );
       await refreshEventAnnouncement(params.guildId, params.eventId);
       return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
+
+  // Resetear la inscripción de un miembro (botones del embed de Discord):
+  // borra la inscripción + el personaje recordado.
+  app.delete(
+    "/internal/guilds/:guildId/events/:eventId/signups/reset",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const body = (request.body ?? {}) as { userId?: string };
+      if (!body.userId) {
+        return reply.code(400).send({ ok: false, error: "Falta el usuario" });
+      }
+
+      await resetSignup(params.guildId, params.eventId, body.userId);
+      await refreshEventAnnouncement(params.guildId, params.eventId);
+      return { ok: true, guildId: params.guildId, reset: true };
     },
   );
 

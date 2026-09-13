@@ -922,6 +922,20 @@ export async function deleteSignup(
   return result.count > 0;
 }
 
+// Resetear la inscripción: borra la fila de este evento Y olvida el personaje
+// recordado del jugador, así la próxima vez se anota desde cero (rol,
+// clase/spec y personaje). Distinto de "quitar inscripción", que solo borra la
+// fila (el personaje recordado se mantiene).
+export async function resetSignup(
+  guildId: string,
+  eventId: string,
+  userId: string,
+): Promise<boolean> {
+  const deleted = await deleteSignup(guildId, eventId, userId);
+  await setEventPlayerCharacter(guildId, userId, null);
+  return deleted;
+}
+
 export type EventImage = {
   createdAt: Date;
   dataUrl: string;

@@ -2927,6 +2927,11 @@ textarea {
 
 .event-card-body {
   display: grid;
+  /* align-content: start evita que las filas auto se ESTIREN cuando la
+     tarjeta es más alta que su contenido (el grid de eventos estira las
+     tarjetas de una misma fila): sin esto, los botones quedaban altos y
+     deformes (óvalos). */
+  align-content: start;
   gap: 10px;
   padding: 14px;
 }
@@ -3214,12 +3219,16 @@ textarea {
 .event-signup-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
 .event-card-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .event-deadline {

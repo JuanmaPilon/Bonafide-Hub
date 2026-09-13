@@ -58,6 +58,7 @@ import {
   applyEventTemplate,
   deleteEventSpec,
   deleteMyEventSignup,
+  resetMyEventSignup,
   apiAssetUrl,
   discordEmojiUrl,
   eventRoleMeta,
@@ -1232,6 +1233,7 @@ function EventCard({
   onDuplicate,
   onEdit,
   onRemoveSignup,
+  onResetSignup,
   onSignup,
   specs,
 }: {
@@ -1244,6 +1246,7 @@ function EventCard({
   onDuplicate: (event: HubEvent) => void;
   onEdit: (event: HubEvent) => void;
   onRemoveSignup: (eventId: string) => Promise<void>;
+  onResetSignup: (eventId: string) => Promise<void>;
   onSignup: (
     eventId: string,
     input: {
@@ -1754,6 +1757,14 @@ function EventCard({
                               Cancelar
                             </button>
                           ) : null}
+                          <button
+                            className="ghost-button"
+                            onClick={() => void onResetSignup(event.id)}
+                            title="Borra tu inscripción y el personaje recordado"
+                            type="button"
+                          >
+                            🔄 Resetear registro
+                          </button>
                           <button
                             className="danger-button"
                             onClick={() => void onRemoveSignup(event.id)}
@@ -3290,6 +3301,39 @@ function App() {
         error instanceof Error
           ? error.message
           : "No se pudo quitar la inscripción.",
+        "error",
+      );
+    }
+  }
+
+  // Resetear la inscripción: borra la inscripción y el personaje recordado,
+  // así la próxima vez se anota desde cero.
+  async function handleResetEventSignup(eventId: string): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await resetMyEventSignup(selectedGuildId, eventId);
+      if (me) {
+        setEvents((current) =>
+          current.map((event) =>
+            event.id === eventId
+              ? {
+                  ...event,
+                  signups: event.signups.filter(
+                    (signup) => signup.userId !== me.id,
+                  ),
+                }
+              : event,
+          ),
+        );
+      }
+      pushToast("Registro reseteado: se borró tu inscripción.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo resetear el registro.",
         "error",
       );
     }
@@ -8779,6 +8823,7 @@ function App() {
                           onDuplicate={handleDuplicateEvent}
                           onEdit={handleEditEvent}
                           onRemoveSignup={handleRemoveEventSignup}
+                          onResetSignup={handleResetEventSignup}
                           onSignup={handleEventSignup}
                           specs={eventSpecs}
                         />

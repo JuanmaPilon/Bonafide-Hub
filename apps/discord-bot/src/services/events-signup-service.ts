@@ -270,6 +270,24 @@ async function removeSignup(input: {
   return { ok: true };
 }
 
+async function resetSignup(input: {
+  guildId: string;
+  eventId: string;
+  userId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const response = await remoteRequest(
+    `/internal/guilds/${encodeURIComponent(input.guildId)}/events/${encodeURIComponent(input.eventId)}/signups/reset`,
+    {
+      body: { userId: input.userId },
+      method: "DELETE",
+    },
+  );
+  if (!response.ok) {
+    return { error: getErrorMessage(response.data), ok: false };
+  }
+  return { ok: true };
+}
+
 // ── Personaje del jugador (modal) ───────────────────────────────────
 // Botón "Personaje" del embed: abre un modal para poner/editar el nombre
 // del personaje con el que el usuario está anotado (igual que en la web).
@@ -285,9 +303,11 @@ async function openCharacterModal(
   );
   const input = new TextInputBuilder()
     .setCustomId("character")
-    .setLabel("Personaje (opcional)")
+    .setLabel("Nombre de personaje")
     .setStyle(TextInputStyle.Short)
-    .setRequired(false)
+    // Si todavía no cargó ninguno, se pide sí o sí (el evento tiene activado
+    // "pedir nombre de personaje"); si ya tiene, puede editarlo o vaciarlo.
+    .setRequired(!mine?.character)
     .setMaxLength(40)
     .setPlaceholder("Ej: Ruidia");
   if (mine?.character) {
@@ -609,6 +629,22 @@ export async function handleEventSignupInteraction(
       return;
     }
     await openCharacterModal(interaction, guildId, eventId);
+    return;
+  }
+
+  if (action === "reset") {
+    const result = await resetSignup({ guildId, eventId, userId });
+    if (!result.ok) {
+      await replyOnce(
+        interaction,
+        `No se pudo resetear el registro: ${result.error}`,
+      );
+      return;
+    }
+    await replyOnce(
+      interaction,
+      "Registro reseteado: se borró tu inscripción y el personaje. ✅",
+    );
     return;
   }
 

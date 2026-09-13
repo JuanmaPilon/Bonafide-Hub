@@ -1103,6 +1103,18 @@ export async function deleteMyEventSignup(
   );
 }
 
+// Resetear la inscripción: borra la inscripción Y el personaje recordado, así
+// la próxima vez se anota desde cero (distinto de quitar la inscripción).
+export async function resetMyEventSignup(
+  guildId: string,
+  eventId: string,
+): Promise<{ reset: boolean }> {
+  return requestJson<{ reset: boolean }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/me/reset`,
+    { method: "DELETE" },
+  );
+}
+
 // ── Catálogo de specs de inscripción (estilo Raid Helper) ───────────
 
 export type RaidSpec = {
