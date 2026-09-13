@@ -3326,9 +3326,7 @@ function App() {
 
   // Cambia la plantilla del juego: ajusta los roles del módulo y precarga en
   // el catálogo las clases/specs que falten (no borra ni pisa lo existente).
-  async function handleApplyEventTemplate(
-    key = templateKey,
-  ): Promise<void> {
+  async function handleApplyEventTemplate(key = templateKey): Promise<void> {
     if (!selectedGuildId || !key) {
       return;
     }
@@ -7207,29 +7205,26 @@ function App() {
                                             key={emoji.id}
                                             onClick={() =>
                                               setConfig((current) => {
-                                                const roles =
-                                                  resolveEventRoles(
-                                                    current,
-                                                  ).map((role, position) =>
-                                                    position === index
-                                                      ? selected
-                                                        ? {
-                                                            ...role,
-                                                            animated: false,
-                                                            emojiId: undefined,
-                                                            emojiName:
-                                                              undefined,
-                                                          }
-                                                        : {
-                                                            ...role,
-                                                            animated:
-                                                              emoji.animated,
-                                                            emojiId: emoji.id,
-                                                            emojiName:
-                                                              emoji.name,
-                                                          }
-                                                      : role,
-                                                  );
+                                                const roles = resolveEventRoles(
+                                                  current,
+                                                ).map((role, position) =>
+                                                  position === index
+                                                    ? selected
+                                                      ? {
+                                                          ...role,
+                                                          animated: false,
+                                                          emojiId: undefined,
+                                                          emojiName: undefined,
+                                                        }
+                                                      : {
+                                                          ...role,
+                                                          animated:
+                                                            emoji.animated,
+                                                          emojiId: emoji.id,
+                                                          emojiName: emoji.name,
+                                                        }
+                                                    : role,
+                                                );
                                                 return {
                                                   ...current,
                                                   eventRoles: roles,
@@ -8262,7 +8257,13 @@ function App() {
                             ))}
                           </select>
                         </label>
-                        <label className="module-toggle event-reminder-toggle">
+                        {/* OJO: el estado visual del switch lo da la clase
+                            "checked" en el label (el input está oculto). */}
+                        <label
+                          className={`module-toggle event-reminder-toggle${
+                            eventForm.characterEnabled ? " checked" : ""
+                          }`}
+                        >
                           <span className="module-toggle-text">
                             <strong>Pedir nombre de personaje</strong>
                           </span>
