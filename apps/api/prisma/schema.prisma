@@ -55,6 +55,16 @@ model GuildConfig {
   // Tercer umbral (el tope): "ultra raras", con un brillo holográfico.
   karutaUltraRarePrintMax      Int      @default(1)
   karutaUltraRareWishlistMin   Int      @default(25)
+  // ── Eventos: ejes configurables (para que sirva en cualquier juego) ──
+  // Roles de inscripción: [{key,label,emoji,emojiId,emojiName,animated}].
+  // Vacío = los 4 clásicos (tank/healer/melee/ranged). Con esto se puede
+  // armar, por ejemplo, LoL (Top/Jungle/Mid/ADC/Support).
+  eventRoles                   Json?
+  // Etiquetas de los ejes del catálogo (clase/spec) y si el segundo eje se
+  // usa. En LoL, por ejemplo: "Rango" como clase y spec desactivado.
+  eventClassLabel              String?
+  eventSpecEnabled             Boolean  @default(true)
+  eventSpecLabel               String?
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 

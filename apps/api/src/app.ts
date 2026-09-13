@@ -120,6 +120,8 @@ import {
 } from "./services/events-discord-publisher.js";
 import {
   getGuildConfig,
+  resolveEventRoles,
+  type EventRoleOption,
   type GuildConfig,
   replaceGuildConfig,
   upsertGuildConfig,
@@ -563,6 +565,19 @@ function startXpExMemberCleanup(): void {
     () => void runXpExMemberCleanup(),
     XP_EX_MEMBER_SYNC_INTERVAL_MS,
   );
+}
+
+// ¿El rol es válido para esta guild? Acepta los roles configurados, los 4
+// clásicos y el "dps" legacy de inscripciones viejas.
+async function isValidEventRole(
+  guildId: string,
+  role: string,
+): Promise<boolean> {
+  if (SIGNUP_ROLES.includes(role as never)) {
+    return true;
+  }
+  const config = await getGuildConfig(guildId);
+  return resolveEventRoles(config).some((entry) => entry.key === role);
 }
 
 async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
@@ -1340,7 +1355,9 @@ async function syncAndStoreEventDiscord(input: {
 }> {
   const { discordOpts, event } = input;
   const specs = await listRaidSpecs(event.guildId);
+  const eventConfig = await getGuildConfig(event.guildId);
   const result = await syncEventToDiscord({
+    classLabel: eventConfig.eventClassLabel,
     description: event.description,
     durationMinutes: event.durationMinutes,
     eventId: event.id,
@@ -1348,8 +1365,11 @@ async function syncAndStoreEventDiscord(input: {
     imageUrl: event.imageUrl,
     options: discordOpts,
     paused: event.paused,
+    roles: resolveEventRoles(eventConfig),
     signupDeadline: event.signupDeadline,
     signups: event.signups,
+    specEnabled: eventConfig.eventSpecEnabled !== false,
+    specLabel: eventConfig.eventSpecLabel,
     specs,
     startsAt: event.startsAt,
     title: event.title,
@@ -1399,7 +1419,9 @@ async function refreshEventAnnouncement(
       return true;
     }
     const specs = await listRaidSpecs(guildId);
+    const eventConfig = await getGuildConfig(guildId);
     const embeds = buildEventAnnouncementEmbeds({
+      classLabel: eventConfig.eventClassLabel,
       description: event.description,
       discordEventId: event.discordEventId,
       durationMinutes: event.durationMinutes,
@@ -1413,8 +1435,10 @@ async function refreshEventAnnouncement(
       paused: event.paused,
       recurrence: (event.discordEventConfig?.recurrence ??
         "none") as EventRecurrence,
+      roles: resolveEventRoles(eventConfig),
       signupDeadline: event.signupDeadline,
       signups: event.signups,
+      specLabel: eventConfig.eventSpecLabel,
       specs,
       startsAt: event.startsAt,
       title: event.title,
@@ -1426,7 +1450,10 @@ async function refreshEventAnnouncement(
     return await updateEventAnnouncement({
       channelId: event.publishChannelId,
       components: buildEventSignupActionRows(event.id, {
+        classLabel: eventConfig.eventClassLabel,
         disableSignup: event.paused || signupsClosed,
+        specEnabled: eventConfig.eventSpecEnabled !== false,
+        specLabel: eventConfig.eventSpecLabel,
       }),
       embeds,
       messageId,
@@ -3688,7 +3715,8 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+    // Configuración de roles = admin/super admin (módulo "config"), no officer.
+    if (!(await canManageModule(session, params.guildId, "config"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -3702,17 +3730,21 @@ export function buildApp() {
     };
     const role = body.role?.trim().toLowerCase();
     const className = body.className?.trim();
-    const specName = body.specName?.trim();
+    const specName = body.specName?.trim() ?? "";
+    const config = await getGuildConfig(params.guildId);
+    const allowedRoles = resolveEventRoles(config);
+    // Si el segundo eje (spec) está desactivado, la fila es solo rol + clase.
+    const specRequired = config.eventSpecEnabled !== false;
 
     if (
       !role ||
-      !RAID_ROLES.includes(role as never) ||
+      !allowedRoles.some((entry) => entry.key === role) ||
       !className ||
-      !specName
+      (specRequired && !specName)
     ) {
       return reply.code(400).send({
         ok: false,
-        error: "Faltan rol (tank/healer/melee/ranged), clase o spec válidos",
+        error: `Faltan rol (${allowedRoles.map((entry) => entry.key).join("/")}), clase o spec válidos`,
       });
     }
 
@@ -3749,7 +3781,8 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
 
-      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      // Configuración de roles = admin/super admin (módulo "config").
+      if (!(await canManageModule(session, params.guildId, "config"))) {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
@@ -3770,7 +3803,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing params" });
     }
 
-    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+    if (!(await canManageModule(session, params.guildId, "config"))) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -3785,16 +3818,22 @@ export function buildApp() {
     const role = body.role?.trim().toLowerCase();
     const className = body.className?.trim();
     const specName = body.specName?.trim();
-    if (role && !RAID_ROLES.includes(role as never)) {
+    const config = await getGuildConfig(params.guildId);
+    const allowedRoles = resolveEventRoles(config);
+    if (role && !allowedRoles.some((entry) => entry.key === role)) {
       return reply.code(400).send({
         ok: false,
-        error: "Rol inválido (tank/healer/melee/ranged)",
+        error: `Rol inválido (${allowedRoles.map((entry) => entry.key).join("/")})`,
       });
     }
     if (className !== undefined && !className) {
       return reply.code(400).send({ ok: false, error: "Falta la clase" });
     }
-    if (specName !== undefined && !specName) {
+    if (
+      config.eventSpecEnabled !== false &&
+      specName !== undefined &&
+      !specName
+    ) {
       return reply.code(400).send({ ok: false, error: "Falta la spec" });
     }
 
@@ -4001,7 +4040,10 @@ export function buildApp() {
       if (!SIGNUP_STATUSES.includes(status as never)) {
         return reply.code(400).send({ ok: false, error: "Estado inválido" });
       }
-      if (body.role && !SIGNUP_ROLES.includes(body.role as never)) {
+      if (
+        body.role &&
+        !(await isValidEventRole(params.guildId, body.role))
+      ) {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
@@ -4091,7 +4133,18 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
     const specs = await listRaidSpecs(params.guildId);
-    return { ok: true, guildId: params.guildId, specs };
+    const config = await getGuildConfig(params.guildId);
+    // El bot arma el asistente de inscripción con esto: roles configurados,
+    // etiquetas de los ejes y si el segundo eje (spec) se usa.
+    return {
+      ok: true,
+      guildId: params.guildId,
+      classLabel: config.eventClassLabel ?? "Clase",
+      roles: resolveEventRoles(config),
+      specEnabled: config.eventSpecEnabled !== false,
+      specLabel: config.eventSpecLabel ?? "Spec",
+      specs,
+    };
   });
 
   // El bot necesita el evento (con sus signups) para decidir si abre el
@@ -4283,7 +4336,10 @@ export function buildApp() {
       if (!SIGNUP_STATUSES.includes(status as never)) {
         return reply.code(400).send({ ok: false, error: "Estado inválido" });
       }
-      if (body.role && !SIGNUP_ROLES.includes(body.role as never)) {
+      if (
+        body.role &&
+        !(await isValidEventRole(params.guildId, body.role))
+      ) {
         return reply.code(400).send({ ok: false, error: "Rol inválido" });
       }
 
@@ -4992,6 +5048,22 @@ export function buildApp() {
 
     if (isOwner && body.enabledModules !== undefined) {
       allowedBody.enabledModules = body.enabledModules;
+    }
+
+    if (body.eventRoles !== undefined) {
+      allowedBody.eventRoles = body.eventRoles;
+    }
+
+    if (body.eventClassLabel !== undefined) {
+      allowedBody.eventClassLabel = body.eventClassLabel;
+    }
+
+    if (body.eventSpecLabel !== undefined) {
+      allowedBody.eventSpecLabel = body.eventSpecLabel;
+    }
+
+    if (body.eventSpecEnabled !== undefined) {
+      allowedBody.eventSpecEnabled = body.eventSpecEnabled;
     }
 
     if (body.musicEnabled !== undefined) {

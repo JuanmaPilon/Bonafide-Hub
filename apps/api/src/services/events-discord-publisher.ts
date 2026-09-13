@@ -231,6 +231,17 @@ export type AnnouncementSpec = {
   specName: string;
 };
 
+// Rol de inscripción configurable (lo define el panel; p. ej. tank/healer o
+// Top/Jungle/Mid/ADC/Support si la guild juega LoL).
+export type EventRoleOption = {
+  animated: boolean;
+  emoji?: string;
+  emojiId?: string;
+  emojiName?: string;
+  key: string;
+  label: string;
+};
+
 const ROLE_ORDER = ["tank", "healer", "melee", "ranged"] as const;
 
 const ROLE_META: Record<string, { emoji: string; label: string }> = {
@@ -239,6 +250,22 @@ const ROLE_META: Record<string, { emoji: string; label: string }> = {
   melee: { emoji: "⚔️", label: "Melee" },
   ranged: { emoji: "🏹", label: "Ranged" },
 };
+
+const DEFAULT_ROLE_OPTIONS: EventRoleOption[] = ROLE_ORDER.map((key) => ({
+  animated: false,
+  emoji: ROLE_META[key].emoji,
+  key,
+  label: ROLE_META[key].label,
+}));
+
+// Emoji visible de un rol: custom de Discord inline (`<:nombre:id>`) o el
+// unicode configurado.
+function roleEmoji(role: EventRoleOption): string {
+  if (role.emojiId && role.emojiName) {
+    return `<${role.animated ? "a" : ""}:${role.emojiName}:${role.emojiId}>`;
+  }
+  return role.emoji ?? ROLE_META[role.key]?.emoji ?? "❔";
+}
 
 const STATUS_META: Record<string, { emoji: string; label: string }> = {
   yes: { emoji: "✅", label: "Voy" },
@@ -334,6 +361,7 @@ function resolveEmbedImageUrl(
 
 // Construye el/los embeds del aviso con info del evento + roster.
 export function buildEventAnnouncementEmbeds(input: {
+  classLabel?: string;
   description?: string;
   discordEventId?: string;
   durationMinutes?: number;
@@ -343,8 +371,11 @@ export function buildEventAnnouncementEmbeds(input: {
   location?: string;
   paused?: boolean;
   recurrence: EventRecurrence;
+  roles?: EventRoleOption[];
   signupDeadline?: Date;
   signups: AnnouncementSignup[];
+  specEnabled?: boolean;
+  specLabel?: string;
   specs: AnnouncementSpec[];
   startsAt: Date;
   title: string;
@@ -404,7 +435,8 @@ export function buildEventAnnouncementEmbeds(input: {
       (spec) =>
         spec.role === signup.role &&
         spec.className === signup.wowClass &&
-        spec.specName === signup.spec,
+        // El segundo eje puede estar desactivado (se guarda vacío).
+        spec.specName === (signup.spec ?? ""),
     );
 
   const linesFor = (members: AnnouncementSignup[]): string[] =>
@@ -416,15 +448,39 @@ export function buildEventAnnouncementEmbeds(input: {
     });
 
   const confirmed = input.signups.filter((signup) => signup.status === "yes");
-  for (const role of ROLE_ORDER) {
-    const members = confirmed.filter((signup) => signup.role === role);
+  // Orden y etiquetas de los roles: los configurados por la guild; cualquier
+  // rol viejo (p. ej. "dps" legacy o un rol borrado de la config) va al final
+  // para no perder a nadie del roster.
+  const roles =
+    input.roles && input.roles.length > 0 ? input.roles : DEFAULT_ROLE_OPTIONS;
+  const knownKeys = new Set(roles.map((role) => role.key));
+  const leftoverKeys = [
+    ...new Set(
+      confirmed
+        .map((signup) => signup.role)
+        .filter(
+          (role): role is string => role !== undefined && !knownKeys.has(role),
+        ),
+    ),
+  ];
+  const orderedRoles: EventRoleOption[] = [
+    ...roles,
+    ...leftoverKeys.map((key) => ({
+      animated: false,
+      emoji: ROLE_META[key]?.emoji,
+      key,
+      label: ROLE_META[key]?.label ?? key,
+    })),
+  ];
+
+  for (const role of orderedRoles) {
+    const members = confirmed.filter((signup) => signup.role === role.key);
     if (members.length === 0) {
       continue;
     }
-    const meta = ROLE_META[role];
     pushField(
       fields,
-      `${meta.emoji} ${meta.label} (${members.length})`,
+      `${roleEmoji(role)} ${role.label} (${members.length})`,
       linesFor(members),
     );
   }
@@ -525,9 +581,22 @@ type ButtonSpec = {
 
 export function buildEventSignupActionRows(
   eventId: string,
-  options?: { disableSignup?: boolean },
+  options?: {
+    classLabel?: string;
+    disableSignup?: boolean;
+    specEnabled?: boolean;
+    specLabel?: string;
+  },
 ): Array<Record<string, unknown>> {
   const disableSignup = options?.disableSignup ?? false;
+  const classLabel = options?.classLabel ?? "Clase";
+  const specLabel = options?.specLabel ?? "spec";
+  // Con el segundo eje desactivado (p. ej. LoL con solo "Rango"), el botón
+  // pide una sola cosa.
+  const pickLabel =
+    options?.specEnabled === false
+      ? classLabel
+      : `${classLabel} y ${specLabel}`;
   // disableWhenClosed: los botones de inscripción se grisan al cerrar; el de
   // "Quitar inscripción" sigue activo (sirve para avisar que no vas).
   const statusButtons: ButtonSpec[] = [
@@ -565,7 +634,7 @@ export function buildEventSignupActionRows(
       customId: "pick",
       disableWhenClosed: true,
       emoji: "⚙️",
-      label: "Clase y spec",
+      label: pickLabel,
       style: 1,
     },
     // Personaje con color (Primary) para que no quede gris entre los demás.
@@ -621,10 +690,13 @@ async function postAnnouncement(
       body: {
         allowed_mentions: { parse: ["users", "roles"] },
         components: buildEventSignupActionRows(input.eventId, {
+          classLabel: input.classLabel,
           disableSignup:
             input.paused === true ||
             (input.signupDeadline !== undefined &&
               input.signupDeadline.getTime() <= Date.now()),
+          specEnabled: input.specEnabled,
+          specLabel: input.specLabel,
         }),
         embeds,
       },
@@ -641,6 +713,7 @@ async function postAnnouncement(
 // Sincroniza un evento hacia Discord según las opciones elegidas. No toca
 // la DB: devuelve ids + errores para que el caller los persista.
 export async function syncEventToDiscord(input: {
+  classLabel?: string;
   description?: string;
   discordEventId?: string;
   durationMinutes?: number;
@@ -649,8 +722,11 @@ export async function syncEventToDiscord(input: {
   imageUrl?: string;
   options: EventDiscordOptions;
   paused?: boolean;
+  roles?: EventRoleOption[];
   signupDeadline?: Date;
   signups?: AnnouncementSignup[];
+  specEnabled?: boolean;
+  specLabel?: string;
   specs?: AnnouncementSpec[];
   startsAt: Date;
   title: string;
@@ -683,6 +759,7 @@ export async function syncEventToDiscord(input: {
   if (options.publishMessage && options.publishChannelId) {
     const announcement = await postAnnouncement({
       channelId: options.publishChannelId,
+      classLabel: input.classLabel,
       description: input.description,
       discordEventId: result.discordEventId ?? input.discordEventId,
       durationMinutes: input.durationMinutes,
@@ -693,8 +770,11 @@ export async function syncEventToDiscord(input: {
         options.entityType === "external" ? options.location : undefined,
       recurrence: options.recurrence,
       paused: input.paused,
+      roles: input.roles,
       signupDeadline: input.signupDeadline,
       signups: input.signups ?? [],
+      specEnabled: input.specEnabled,
+      specLabel: input.specLabel,
       specs: input.specs ?? [],
       startsAt: input.startsAt,
       title: input.title,

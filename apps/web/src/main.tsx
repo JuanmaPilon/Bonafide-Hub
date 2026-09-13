@@ -48,7 +48,6 @@ import {
   updateCommunication,
   updateCommunicationInstance,
   updateDailyMessage,
-  COMBAT_ROLES,
   EVENT_TYPES,
   classColor,
   classEmoji,
@@ -59,12 +58,14 @@ import {
   deleteEventSpec,
   deleteMyEventSignup,
   apiAssetUrl,
+  DEFAULT_EVENT_ROLES,
   discordEmojiUrl,
+  eventRoleMeta,
   getEventImages,
   getEventSpecs,
   getEvents,
   getGuildEmojis,
-  roleMeta,
+  resolveEventRoles,
   updateEvent,
   updateEventSpec,
   uploadEventImage,
@@ -846,10 +847,34 @@ function karutaCardTier(
   return superRare ? "super" : null;
 }
 
+// Emoji de un rol de evento: custom de Discord (imagen) o unicode.
+function EventRoleEmoji({
+  config,
+  role,
+  size = 18,
+}: {
+  config: GuildConfig;
+  role: string;
+  size?: number;
+}) {
+  const meta = eventRoleMeta(role, config);
+  if (meta?.emojiId) {
+    return (
+      <img
+        alt=""
+        className="signup-spec-emoji"
+        src={discordEmojiUrl(meta.emojiId, meta.animated, size)}
+      />
+    );
+  }
+  return <span aria-hidden="true">{meta?.emoji ?? "❔"}</span>;
+}
+
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
 function EventCard({
   canManage,
+  config,
   event,
   guildRoles,
   meId,
@@ -861,6 +886,7 @@ function EventCard({
   specs,
 }: {
   canManage: boolean;
+  config: GuildConfig;
   event: HubEvent;
   guildRoles: GuildRole[];
   meId?: string;
@@ -884,14 +910,21 @@ function EventCard({
     ? event.signups.find((signup) => signup.userId === meId)
     : undefined;
 
+  // Roles de evento configurados por la guild (o los 4 clásicos) y si el
+  // segundo eje (spec/clase) se usa.
+  const eventRoles = resolveEventRoles(config);
+  const specEnabled = config.eventSpecEnabled !== false;
+  const roleLabelFor = (key: string): string =>
+    eventRoleMeta(key, config)?.label ?? key;
+
   const [wowClass, setWowClass] = useState(mySignup?.wowClass ?? "");
   const [role, setRole] = useState(mySignup?.role ?? "");
   const [spec, setSpec] = useState(mySignup?.spec ?? "");
   // Rol que se está explorando en el selector (empieza por el actual).
   const [catalogRole, setCatalogRole] = useState<string>(
-    mySignup?.role && COMBAT_ROLES.includes(mySignup.role as never)
+    mySignup?.role && eventRoles.some((entry) => entry.key === mySignup.role)
       ? mySignup.role
-      : "tank",
+      : (eventRoles[0]?.key ?? "tank"),
   );
   const [character, setCharacter] = useState(mySignup?.character ?? "");
   const [status, setStatus] = useState(mySignup?.status ?? "yes");
@@ -900,7 +933,9 @@ function EventCard({
   // "Cambiar" vuelve a abrir el editor.
   const [editingSignup, setEditingSignup] = useState(false);
   const hasFullSignup = Boolean(
-    mySignup?.status && mySignup?.wowClass && mySignup?.spec,
+    mySignup?.status &&
+      mySignup?.wowClass &&
+      (!specEnabled || mySignup?.spec),
   );
   const showSignupSummary = hasFullSignup && !editingSignup;
   const signupDirty =
@@ -949,13 +984,15 @@ function EventCard({
   // Spec actualmente elegido en el formulario (para mostrar su emoji).
   const currentSpecRow = specs.find(
     (row) =>
-      row.role === role && row.className === wowClass && row.specName === spec,
+      row.role === role &&
+      row.className === wowClass &&
+      row.specName === (spec ?? ""),
   );
 
   function chooseSpec(row: RaidSpec): void {
     setRole(row.role);
     setWowClass(row.className);
-    setSpec(row.specName);
+    setSpec(specEnabled ? row.specName : "");
     setCatalogRole(row.role);
   }
 
@@ -984,7 +1021,7 @@ function EventCard({
       (row) =>
         row.role === signup.role &&
         row.className === signup.wowClass &&
-        row.specName === signup.spec,
+        row.specName === (signup.spec ?? ""),
     );
     const emojiUrl = discordEmojiUrl(specRow?.emojiId, specRow?.animated);
     return (
@@ -1089,19 +1126,19 @@ function EventCard({
             {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
                 con sus confirmados (solo nombres). */}
             <div className="event-roster-columns">
-              {COMBAT_ROLES.map((groupKey) => {
+              {eventRoles.map((entry) => {
                 const roleSignups = event.signups.filter(
                   (signup) =>
-                    signup.status === "yes" && signup.role === groupKey,
+                    signup.status === "yes" && signup.role === entry.key,
                 );
                 if (roleSignups.length === 0) {
                   return null;
                 }
-                const meta = roleMeta(groupKey);
                 return (
-                  <div className="event-roster-column" key={groupKey}>
+                  <div className="event-roster-column" key={entry.key}>
                     <span className="event-roster-role">
-                      {meta?.emoji} {meta?.label} ({roleSignups.length})
+                      <EventRoleEmoji config={config} role={entry.key} />{" "}
+                      {entry.label} ({roleSignups.length})
                     </span>
                     <div className="event-roster-members">
                       {roleSignups.map((signup) => renderMember(signup))}
@@ -1204,15 +1241,15 @@ function EventCard({
                     </div>
                     <div className="event-signup-picker">
                       <div className="event-signup-role-row">
-                        {COMBAT_ROLES.map((combatRole) => (
+                        {eventRoles.map((entry) => (
                           <button
-                            className={`event-status-btn role${catalogRole === combatRole ? " active" : ""}`}
-                            key={combatRole}
-                            onClick={() => setCatalogRole(combatRole)}
-                            title={roleMeta(combatRole)?.label}
+                            className={`event-status-btn role${catalogRole === entry.key ? " active" : ""}`}
+                            key={entry.key}
+                            onClick={() => setCatalogRole(entry.key)}
+                            title={entry.label}
                             type="button"
                           >
-                            {roleMeta(combatRole)?.emoji}
+                            <EventRoleEmoji config={config} role={entry.key} />
                           </button>
                         ))}
                       </div>
@@ -1223,7 +1260,7 @@ function EventCard({
                         </div>
                       ) : catalogClasses.length === 0 ? (
                         <div className="event-signup-no-catalog">
-                          Todavía no hay specs cargados para ese rol.
+                          Todavía no hay {config.eventClassLabel?.toLowerCase() ?? "clases"} cargadas para ese rol.
                         </div>
                       ) : (
                         <div className="event-signup-specs">
@@ -1233,35 +1270,45 @@ function EventCard({
                                 {className}
                               </span>
                               <div className="event-signup-spec-row">
-                                {rows.map((row) => {
-                                  const selected =
-                                    role === row.role &&
-                                    wowClass === row.className &&
-                                    spec === row.specName;
-                                  const emojiUrl = discordEmojiUrl(
-                                    row.emojiId,
-                                    row.animated,
-                                    24,
-                                  );
-                                  return (
-                                    <button
-                                      className={`event-signup-spec${selected ? " active" : ""}`}
-                                      key={row.id}
-                                      onClick={() => chooseSpec(row)}
-                                      title={`${row.specName} — ${row.className} (${roleMeta(row.role)?.label ?? row.role})`}
-                                      type="button"
-                                    >
-                                      {emojiUrl ? (
-                                        <img
-                                          alt=""
-                                          className="signup-spec-emoji"
-                                          src={emojiUrl}
-                                        />
-                                      ) : null}
-                                      <span>{row.specName}</span>
-                                    </button>
-                                  );
-                                })}
+                                {(specEnabled ? rows : rows.slice(0, 1)).map(
+                                  (row) => {
+                                    const selected =
+                                      role === row.role &&
+                                      wowClass === row.className &&
+                                      spec === row.specName;
+                                    const emojiUrl = discordEmojiUrl(
+                                      row.emojiId,
+                                      row.animated,
+                                      24,
+                                    );
+                                    return (
+                                      <button
+                                        className={`event-signup-spec${selected ? " active" : ""}`}
+                                        key={row.id}
+                                        onClick={() => chooseSpec(row)}
+                                        title={
+                                          specEnabled
+                                            ? `${row.specName} — ${row.className} (${roleLabelFor(row.role)})`
+                                            : `${row.className} (${roleLabelFor(row.role)})`
+                                        }
+                                        type="button"
+                                      >
+                                        {emojiUrl ? (
+                                          <img
+                                            alt=""
+                                            className="signup-spec-emoji"
+                                            src={emojiUrl}
+                                          />
+                                        ) : null}
+                                        <span>
+                                          {specEnabled
+                                            ? row.specName
+                                            : row.className}
+                                        </span>
+                                      </button>
+                                    );
+                                  },
+                                )}
                               </div>
                             </div>
                           ))}
@@ -1284,8 +1331,10 @@ function EventCard({
                             </span>
                           )}
                           <span>
-                            {roleMeta(role)?.label ?? role} · {wowClass} ·{" "}
-                            {spec}
+                            {roleLabelFor(role)}
+                            {specEnabled && spec
+                              ? ` · ${wowClass} · ${spec}`
+                              : ` · ${wowClass}`}
                           </span>
                           <button
                             className="ghost-button small"
@@ -2143,6 +2192,7 @@ function App() {
     | "xp"
     | "panel"
     | "daily"
+    | "eventRoles"
     | "modules"
     | "permissions"
     | "karuta"
@@ -2578,7 +2628,7 @@ function App() {
   // (selector de inscripción y roster) o en Admin → Configuración de roles.
   useEffect(() => {
     const adminOpen =
-      activeTab === "admin" && showSpecEditor && canAccess("eventos");
+      activeTab === "admin" && showSpecEditor && canAccess("config");
     if (!selectedGuildId || (activeTab !== "eventos" && !adminOpen)) {
       setEventSpecs([]);
       setEventSpecsLoading(false);
@@ -2836,13 +2886,53 @@ function App() {
     }
   }
 
+  // Guarda los roles de evento, las etiquetas de los ejes y si el segundo eje
+  // (spec) se usa. Es config de admin/super admin.
+  async function handleSaveEventRoleConfig(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setSavingAction("eventRoles");
+    try {
+      const nextConfig = await saveGuildConfig(selectedGuildId, {
+        eventClassLabel: config.eventClassLabel?.trim() || undefined,
+        eventRoles: (
+          config.eventRoles && config.eventRoles.length > 0
+            ? config.eventRoles
+            : DEFAULT_EVENT_ROLES
+        ).map((entry) => ({
+          animated: entry.animated,
+          emoji: entry.emoji,
+          emojiId: entry.emojiId,
+          emojiName: entry.emojiName,
+          key: entry.key,
+          label: entry.label.trim() || entry.key,
+        })),
+        eventSpecEnabled: config.eventSpecEnabled !== false,
+        eventSpecLabel: config.eventSpecLabel?.trim() || undefined,
+      });
+      setConfig(nextConfig);
+      pushToast("Roles de evento guardados.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo guardar.",
+        "error",
+      );
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
   // Agrega o edita una clase/spec (rol + emoji) de la configuración de roles.
   async function handleSaveEventSpec(): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
-    if (!specDraft.className.trim() || !specDraft.specName.trim()) {
-      pushToast("Faltan clase o spec.", "error");
+    if (
+      !specDraft.className.trim() ||
+      (config.eventSpecEnabled !== false && !specDraft.specName.trim())
+    ) {
+      pushToast("Faltan datos del catálogo.", "error");
       return;
     }
     const editing = Boolean(specDraft.id);
@@ -6556,9 +6646,9 @@ function App() {
                       </div>
                     </details>
                   ) : null}
-                  {canAccess("eventos") ? (
+                  {canAccess("config") ? (
                     <details
-                      className="admin-card admin-card-acc admin-card--officer"
+                      className="admin-card admin-card-acc admin-card--admin"
                       onToggle={(event) =>
                         setShowSpecEditor(event.currentTarget.open)
                       }
@@ -6567,8 +6657,8 @@ function App() {
                         <div>
                           <h3>
                             Configuración de roles{" "}
-                            <span className="admin-tier-badge tier-officer">
-                              Officer
+                            <span className="admin-tier-badge tier-admin">
+                              Admin
                             </span>
                           </h3>
                         </div>
@@ -6579,9 +6669,286 @@ function App() {
                       <div className="admin-card-body">
                         <p className="admin-card-hint">
                           Estos roles alimentan las inscripciones de los eventos
-                          (web y Discord): rol, clase y spec con su emoji custom
-                          del servidor.
+                          (web y Discord). Se puede adaptar a cualquier juego:
+                          los roles son libres y el catálogo tiene dos ejes
+                          configurables.
                         </p>
+
+                        {/* Roles de inscripción (label + emoji) */}
+                        <h4 className="karuta-threshold-title">
+                          Roles de evento
+                        </h4>
+                        <div className="event-role-editor">
+                          {(config.eventRoles &&
+                          config.eventRoles.length > 0
+                            ? config.eventRoles
+                            : DEFAULT_EVENT_ROLES
+                          ).map((entry, index) => (
+                            <div
+                              className="event-role-row"
+                              key={`${entry.key}-${index}`}
+                            >
+                              <span className="event-role-preview">
+                                <EventRoleEmoji
+                                  config={{ ...config, eventRoles: [entry] }}
+                                  role={entry.key}
+                                  size={22}
+                                />
+                              </span>
+                              <label className="event-role-field">
+                                <span>Etiqueta</span>
+                                <input
+                                  className="input"
+                                  value={entry.label}
+                                  maxLength={24}
+                                  onChange={(event) =>
+                                    setConfig((current) => {
+                                      const roles = (
+                                        current.eventRoles &&
+                                        current.eventRoles.length > 0
+                                          ? current.eventRoles
+                                          : DEFAULT_EVENT_ROLES
+                                      ).map((role, position) =>
+                                        position === index
+                                          ? {
+                                              ...role,
+                                              label: event.target.value,
+                                            }
+                                          : role,
+                                      );
+                                      return { ...current, eventRoles: roles };
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="event-role-field">
+                                <span>Emoji</span>
+                                <input
+                                  className="input"
+                                  value={entry.emoji ?? ""}
+                                  maxLength={4}
+                                  placeholder="🛡️"
+                                  onChange={(event) =>
+                                    setConfig((current) => {
+                                      const roles = (
+                                        current.eventRoles &&
+                                        current.eventRoles.length > 0
+                                          ? current.eventRoles
+                                          : DEFAULT_EVENT_ROLES
+                                      ).map((role, position) =>
+                                        position === index
+                                          ? {
+                                              ...role,
+                                              animated: false,
+                                              emoji: event.target.value || undefined,
+                                              emojiId: undefined,
+                                              emojiName: undefined,
+                                            }
+                                          : role,
+                                      );
+                                      return { ...current, eventRoles: roles };
+                                    })
+                                  }
+                                />
+                              </label>
+                              <div className="spec-emoji-picker">
+                                <span className="label">
+                                  Emoji custom (opcional)
+                                </span>
+                                {guildEmojis.length === 0 ? (
+                                  <span className="muted-text">
+                                    Sin emojis custom en el servidor.
+                                  </span>
+                                ) : (
+                                  <div className="spec-emoji-grid">
+                                    {guildEmojis.map((emoji) => {
+                                      const selected =
+                                        entry.emojiId === emoji.id;
+                                      return (
+                                        <button
+                                          className={`spec-emoji-option${selected ? " active" : ""}`}
+                                          key={emoji.id}
+                                          onClick={() =>
+                                            setConfig((current) => {
+                                              const roles = (
+                                                current.eventRoles &&
+                                                current.eventRoles.length > 0
+                                                  ? current.eventRoles
+                                                  : DEFAULT_EVENT_ROLES
+                                              ).map((role, position) =>
+                                                position === index
+                                                  ? selected
+                                                    ? {
+                                                        ...role,
+                                                        animated: false,
+                                                        emojiId: undefined,
+                                                        emojiName: undefined,
+                                                      }
+                                                    : {
+                                                        ...role,
+                                                        animated:
+                                                          emoji.animated,
+                                                        emoji: undefined,
+                                                        emojiId: emoji.id,
+                                                        emojiName: emoji.name,
+                                                      }
+                                                  : role,
+                                              );
+                                              return {
+                                                ...current,
+                                                eventRoles: roles,
+                                              };
+                                            })
+                                          }
+                                          title={`:${emoji.name}:`}
+                                          type="button"
+                                        >
+                                          <img
+                                            alt={emoji.name}
+                                            src={discordEmojiUrl(
+                                              emoji.id,
+                                              emoji.animated,
+                                              22,
+                                            )}
+                                          />
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                className="ghost-button danger"
+                                onClick={() =>
+                                  setConfig((current) => {
+                                    const roles = (
+                                      current.eventRoles &&
+                                      current.eventRoles.length > 0
+                                        ? current.eventRoles
+                                        : DEFAULT_EVENT_ROLES
+                                    ).filter(
+                                      (_role, position) => position !== index,
+                                    );
+                                    return { ...current, eventRoles: roles };
+                                  })
+                                }
+                                type="button"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            className="primary-button"
+                            onClick={() =>
+                              setConfig((current) => {
+                                const roles =
+                                  current.eventRoles &&
+                                  current.eventRoles.length > 0
+                                    ? current.eventRoles
+                                    : DEFAULT_EVENT_ROLES;
+                                return {
+                                  ...current,
+                                  eventRoles: [
+                                    ...roles,
+                                    {
+                                      animated: false,
+                                      emoji: "⭐",
+                                      key: `rol${roles.length + 1}`,
+                                      label: `Rol ${roles.length + 1}`,
+                                    },
+                                  ],
+                                };
+                              })
+                            }
+                            type="button"
+                          >
+                            + Agregar rol
+                          </button>
+                        </div>
+
+                        {/* Ejes del catálogo */}
+                        <h4 className="karuta-threshold-title">
+                          Ejes del catálogo
+                        </h4>
+                        <div className="form-grid">
+                          <label>
+                            <span>Etiqueta del 1° eje</span>
+                            <input
+                              className="input"
+                              value={config.eventClassLabel ?? "Clase"}
+                              maxLength={24}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  eventClassLabel: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label>
+                            <span>Etiqueta del 2° eje (spec)</span>
+                            <input
+                              className="input"
+                              value={config.eventSpecLabel ?? "Spec"}
+                              maxLength={24}
+                              disabled={config.eventSpecEnabled === false}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  eventSpecLabel: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <label className="module-toggle event-reminder-toggle">
+                          <span className="module-toggle-text">
+                            <strong>Usar el 2° eje (spec)</strong>
+                            <span className="meta-text">
+                              Desactivalo si con un solo eje alcanza (p. ej.
+                              "Rango" en LoL).
+                            </span>
+                          </span>
+                          <span className="module-switch">
+                            <input
+                              type="checkbox"
+                              checked={config.eventSpecEnabled !== false}
+                              onChange={(event) =>
+                                setConfig((current) => ({
+                                  ...current,
+                                  eventSpecEnabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span
+                              className="module-switch-track"
+                              aria-hidden="true"
+                            >
+                              <span className="module-switch-thumb" />
+                            </span>
+                          </span>
+                        </label>
+                        <div className="spec-cat-form-actions">
+                          <button
+                            className="primary-button"
+                            onClick={() => void handleSaveEventRoleConfig()}
+                            disabled={savingAction !== null}
+                            type="button"
+                          >
+                            {savingAction === "eventRoles"
+                              ? "Guardando…"
+                              : "Guardar roles y ejes"}
+                          </button>
+                        </div>
+
+                        <h4 className="karuta-threshold-title">
+                          Catálogo ({config.eventClassLabel ?? "Clase"}
+                          {config.eventSpecEnabled !== false
+                            ? ` · ${config.eventSpecLabel ?? "Spec"}`
+                            : ""}
+                          )
+                        </h4>
                         {eventSpecsLoading ? (
                           <span className="muted-text">Cargando…</span>
                         ) : eventSpecs.length === 0 ? (
@@ -6590,18 +6957,24 @@ function App() {
                             cada clase/spec con su emoji.
                           </div>
                         ) : (
-                          COMBAT_ROLES.map((combatRole) => {
+                          resolveEventRoles(config).map((roleOption) => {
                             const roleSpecs = eventSpecs.filter(
-                              (entry) => entry.role === combatRole,
+                              (entry) => entry.role === roleOption.key,
                             );
                             if (roleSpecs.length === 0) {
                               return null;
                             }
                             return (
-                              <div className="spec-cat-role" key={combatRole}>
+                              <div
+                                className="spec-cat-role"
+                                key={roleOption.key}
+                              >
                                 <strong>
-                                  {roleMeta(combatRole)?.emoji}{" "}
-                                  {roleMeta(combatRole)?.label}
+                                  <EventRoleEmoji
+                                    config={config}
+                                    role={roleOption.key}
+                                  />{" "}
+                                  {roleOption.label}
                                 </strong>
                                 <div className="spec-cat-list">
                                   {roleSpecs.map((spec) => (
@@ -6669,16 +7042,20 @@ function App() {
                                   }))
                                 }
                               >
-                                {COMBAT_ROLES.map((combatRole) => (
-                                  <option key={combatRole} value={combatRole}>
-                                    {roleMeta(combatRole)?.emoji}{" "}
-                                    {roleMeta(combatRole)?.label}
-                                  </option>
-                                ))}
+                                {resolveEventRoles(config).map(
+                                  (roleOption) => (
+                                    <option
+                                      key={roleOption.key}
+                                      value={roleOption.key}
+                                    >
+                                      {roleOption.label}
+                                    </option>
+                                  ),
+                                )}
                               </select>
                             </label>
                             <label>
-                              <span>Clase</span>
+                              <span>{config.eventClassLabel ?? "Clase"}</span>
                               <input
                                 className="input"
                                 value={specDraft.className}
@@ -6691,20 +7068,22 @@ function App() {
                                 maxLength={40}
                               />
                             </label>
-                            <label>
-                              <span>Spec</span>
-                              <input
-                                className="input"
-                                value={specDraft.specName}
-                                onChange={(event) =>
-                                  setSpecDraft((current) => ({
-                                    ...current,
-                                    specName: event.target.value,
-                                  }))
-                                }
-                                maxLength={40}
-                              />
-                            </label>
+                            {config.eventSpecEnabled !== false ? (
+                              <label>
+                                <span>{config.eventSpecLabel ?? "Spec"}</span>
+                                <input
+                                  className="input"
+                                  value={specDraft.specName}
+                                  onChange={(event) =>
+                                    setSpecDraft((current) => ({
+                                      ...current,
+                                      specName: event.target.value,
+                                    }))
+                                  }
+                                  maxLength={40}
+                                />
+                              </label>
+                            ) : null}
                           </div>
                           <div className="spec-emoji-picker">
                             <span className="label">Emoji custom</span>
@@ -8057,6 +8436,7 @@ function App() {
                       {events.map((event) => (
                         <EventCard
                           canManage={canAccess("eventos")}
+                          config={config}
                           event={event}
                           guildRoles={guildRoles}
                           key={event.id}

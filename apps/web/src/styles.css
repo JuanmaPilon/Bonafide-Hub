@@ -3275,6 +3275,55 @@ textarea {
   border-top: 1px dashed rgba(136, 159, 216, 0.3);
 }
 
+/* Editor de roles de evento (Admin → Configuración de roles): label + emoji
+   unicode o emoji custom del servidor. */
+.event-role-editor {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.event-role-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.event-role-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(8, 13, 24, 0.6);
+  border: 1px solid rgba(134, 158, 214, 0.2);
+  font-size: 1.1rem;
+}
+
+.event-role-field {
+  display: grid;
+  gap: 6px;
+}
+
+.event-role-field > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.event-role-field .input {
+  width: 150px;
+}
+
+.event-role-row .spec-emoji-picker {
+  flex: 1 1 220px;
+}
+
 .spec-emoji-picker {
   display: grid;
   gap: 8px;

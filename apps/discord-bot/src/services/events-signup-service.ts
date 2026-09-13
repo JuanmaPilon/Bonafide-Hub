@@ -25,18 +25,29 @@ type EventInteraction = ButtonInteraction | StringSelectMenuInteraction;
 const REMOTE_BASE = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
 const REMOTE_TOKEN = env.BOT_CONFIG_API_TOKEN?.trim();
 
-const ROLE_META: Record<string, { emoji: string; label: string }> = {
-  tank: { emoji: "🛡️", label: "Tank" },
-  healer: { emoji: "💚", label: "Healer" },
-  melee: { emoji: "⚔️", label: "Melee" },
-  ranged: { emoji: "🏹", label: "Ranged" },
-};
+// Roles por defecto (los clásicos). La guild puede reemplazarlos desde el
+// panel Admin (p. ej. Top/Jungle/Mid/ADC/Support para LoL).
+const DEFAULT_ROLES: RemoteRole[] = [
+  { animated: false, emoji: "🛡️", key: "tank", label: "Tank" },
+  { animated: false, emoji: "💚", key: "healer", label: "Healer" },
+  { animated: false, emoji: "⚔️", key: "melee", label: "Melee" },
+  { animated: false, emoji: "🏹", key: "ranged", label: "Ranged" },
+];
 
 const STATUS_LABEL: Record<string, string> = {
   bench: "anotarte de bench",
   late: "avisar que llegás tarde",
   no: "marcar que no asistís",
   yes: "anotarte como asistente",
+};
+
+type RemoteRole = {
+  animated: boolean;
+  emoji?: string;
+  emojiId?: string;
+  emojiName?: string;
+  key: string;
+  label: string;
 };
 
 type RemoteSpec = {
@@ -46,6 +57,16 @@ type RemoteSpec = {
   emojiName?: string;
   role: string;
   specName: string;
+};
+
+// Config del asistente: roles, etiquetas de los ejes y si se usa el segundo
+// eje (spec). Lo define el panel Admin y lo sirve el API.
+type SignupContext = {
+  classLabel: string;
+  roles: RemoteRole[];
+  specEnabled: boolean;
+  specLabel: string;
+  specs: RemoteSpec[];
 };
 
 type RemoteSignup = {
@@ -162,17 +183,42 @@ async function fetchEvent(
   return payload.event ?? null;
 }
 
-async function fetchSpecs(
-  guildId: string,
-): Promise<RemoteSpec[]> {
+async function fetchSignupContext(guildId: string): Promise<SignupContext> {
   const response = await remoteRequest(
     `/internal/guilds/${encodeURIComponent(guildId)}/events/specs`,
   );
   if (!response.ok) {
-    return [];
+    return {
+      classLabel: "Clase",
+      roles: DEFAULT_ROLES,
+      specEnabled: true,
+      specLabel: "Spec",
+      specs: [],
+    };
   }
-  const payload = response.data as { specs?: RemoteSpec[] };
-  return payload.specs ?? [];
+  const payload = response.data as Partial<SignupContext>;
+  const roles =
+    Array.isArray(payload.roles) && payload.roles.length > 0
+      ? payload.roles.filter((role) => role?.key && role?.label)
+      : DEFAULT_ROLES;
+
+  return {
+    classLabel: payload.classLabel ?? "Clase",
+    roles: roles.length > 0 ? roles : DEFAULT_ROLES,
+    specEnabled: payload.specEnabled !== false,
+    specLabel: payload.specLabel ?? "Spec",
+    specs: payload.specs ?? [],
+  };
+}
+
+// Emoji del rol como componente de Discord (custom con id, o unicode).
+function roleEmojiComponent(
+  role: RemoteRole,
+): string | { animated?: boolean; id: string; name: string } {
+  if (role.emojiId && role.emojiName) {
+    return { animated: role.animated, id: role.emojiId, name: role.emojiName };
+  }
+  return role.emoji ?? "❔";
 }
 
 async function putSignup(input: {
@@ -324,38 +370,74 @@ export async function handleEventSignupCharacterSubmit(
   });
 }
 
-function roleSelectRow(
-  guildId: string,
+// Emoji de una fila del catálogo (custom con id, o nada).
+function specEmoji(
+  spec: RemoteSpec,
+): { animated: boolean; id: string; name: string } | undefined {
+  if (!spec.emojiId) {
+    return undefined;
+  }
+  return {
+    animated: spec.animated,
+    id: spec.emojiId,
+    name: spec.emojiName ?? "emoji",
+  };
+}
+
+// Select del segundo paso. Con el segundo eje desactivado (p. ej. LoL con
+// solo "Rango"), listamos directamente las clases.
+function specSelectRow(
+  context: SignupContext,
   eventId: string,
   role: string,
   status: string,
-  specs: RemoteSpec[],
 ): ActionRowBuilder<StringSelectMenuBuilder> | null {
-  const roleSpecs = specs.filter((spec) => spec.role === role).slice(0, 25);
+  const roleSpecs = context.specs
+    .filter((spec) => spec.role === role)
+    .slice(0, 25);
   if (roleSpecs.length === 0) {
     return null;
   }
+
   const select = new StringSelectMenuBuilder()
     .setCustomId(`eventsign:${eventId}:spec:${role}:${status}`)
-    .setPlaceholder(`Elegí tu spec (${ROLE_META[role]?.label ?? role})`);
-  for (const spec of roleSpecs) {
-    select.addOptions({
-      description: spec.className,
-      emoji: spec.emojiId
-        ? {
-            animated: spec.animated,
-            id: spec.emojiId,
-            name: spec.emojiName ?? "emoji",
-          }
-        : undefined,
-      label: spec.specName.slice(0, 100),
-      value: `${spec.className}|${spec.specName}`,
-    });
+    .setPlaceholder(
+      context.specEnabled
+        ? `Elegí tu ${context.specLabel.toLowerCase()}`
+        : `Elegí tu ${context.classLabel.toLowerCase()}`,
+    );
+
+  if (context.specEnabled) {
+    for (const spec of roleSpecs) {
+      select.addOptions({
+        description: spec.className,
+        emoji: specEmoji(spec),
+        label: spec.specName.slice(0, 100),
+        value: `${spec.className}|${spec.specName}`,
+      });
+    }
+  } else {
+    // Una opción por clase (sin repetir).
+    const byClass = new Map<string, RemoteSpec>();
+    for (const spec of roleSpecs) {
+      if (!byClass.has(spec.className)) {
+        byClass.set(spec.className, spec);
+      }
+    }
+    for (const spec of byClass.values()) {
+      select.addOptions({
+        emoji: specEmoji(spec),
+        label: spec.className.slice(0, 100),
+        value: `${spec.className}|`,
+      });
+    }
   }
+
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
 }
 
-// Arranca el asistente efímero: primero rol, después spec.
+// Arranca el asistente efímero: primero rol, después (si corresponde) el
+// segundo eje.
 async function startRoleWizard(
   interaction: EventInteraction,
   guildId: string,
@@ -371,14 +453,15 @@ async function startRoleWizard(
     await replyOnce(interaction, "Este evento ya no acepta inscripciones.");
     return;
   }
+  const context = await fetchSignupContext(guildId);
 
   const row = new ActionRowBuilder<ButtonBuilder>();
-  for (const [role, meta] of Object.entries(ROLE_META)) {
+  for (const role of context.roles) {
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`eventsign:${eventId}:pickrole:${role}:${status}`)
-        .setEmoji(meta.emoji)
-        .setLabel(meta.label)
+        .setCustomId(`eventsign:${eventId}:pickrole:${role.key}:${status}`)
+        .setEmoji(roleEmojiComponent(role))
+        .setLabel(role.label.slice(0, 80))
         .setStyle(ButtonStyle.Secondary),
     );
   }
@@ -461,25 +544,31 @@ export async function handleEventSignupInteraction(
   const username = fetchMemberName(interaction);
 
   if (action === "pickrole") {
-    const role = rest[0];
+    const roleKey = rest[0];
     const status = rest[1] ?? "yes";
-    if (!role || !ROLE_META[role]) {
+    const context = await fetchSignupContext(guildId);
+    const role =
+      context.roles.find((entry) => entry.key === roleKey) ??
+      DEFAULT_ROLES.find((entry) => entry.key === roleKey);
+    if (!roleKey || !role) {
       await replyOnce(interaction, "Rol inválido.");
       return;
     }
-    const specs = await fetchSpecs(guildId);
-    const selectRow = roleSelectRow(guildId, eventId, role, status, specs);
+    const selectRow = specSelectRow(context, eventId, roleKey, status);
     if (!selectRow) {
       await updateWizard(
         interaction,
-        "No hay specs cargadas para ese rol en el catálogo.",
+        `No hay ${context.classLabel.toLowerCase()}s cargadas para ese rol en el catálogo.`,
         [],
       );
       return;
     }
     await updateWizard(
       interaction,
-      `Elegiste **${ROLE_META[role].emoji} ${ROLE_META[role].label}**. Ahora elegí tu spec:`,
+      `Elegiste **${role.label}**. Ahora elegí tu ${
+        (context.specEnabled ? context.specLabel : context.classLabel)
+          .toLowerCase()
+      }:`,
       [selectRow],
     );
     return;
@@ -499,6 +588,7 @@ export async function handleEventSignupInteraction(
     }
     const className = value.slice(0, separator);
     const specName = value.slice(separator + 1);
+    const context = await fetchSignupContext(guildId);
 
     const event = await fetchEvent(guildId, eventId);
     const mine = event?.signups?.find((signup) => signup.userId === userId);
@@ -507,7 +597,8 @@ export async function handleEventSignupInteraction(
       guildId,
       eventId,
       role,
-      spec: specName,
+      // Con el segundo eje desactivado se guarda solo la clase.
+      spec: context.specEnabled && specName ? specName : undefined,
       status,
       userId,
       username,
@@ -521,10 +612,13 @@ export async function handleEventSignupInteraction(
       );
       return;
     }
-    const meta = ROLE_META[role];
+    const detail =
+      context.specEnabled && specName
+        ? `${className} — ${specName}`
+        : className;
     await updateWizard(
       interaction,
-      `Te ${STATUS_LABEL[status] ?? "anotaste"} como **${meta?.emoji ?? ""} ${className} — ${specName}**. ✅`,
+      `Te ${STATUS_LABEL[status] ?? "anotaste"} como **${detail}**. ✅`,
       [],
     );
     return;

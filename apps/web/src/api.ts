@@ -22,6 +22,10 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  eventClassLabel?: string;
+  eventRoles?: EventRoleOption[];
+  eventSpecEnabled?: boolean;
+  eventSpecLabel?: string;
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
   karutaRareWishlistMin?: number;
@@ -802,6 +806,43 @@ export const ROLE_META: Array<{
   { key: "melee", emoji: "⚔️", label: "Melee" },
   { key: "ranged", emoji: "🏹", label: "Ranged" },
 ];
+
+// ── Roles de evento configurables ──────────────────────────────────
+// Cada guild define sus roles de inscripción (label + emoji, unicode o custom
+// de Discord). Vacío = los 4 clásicos, así el módulo sirve para cualquier
+// juego: WoW (tank/healer/melee/ranged) o LoL (Top/Jungle/Mid/ADC/Support).
+export type EventRoleOption = {
+  animated: boolean;
+  emoji?: string;
+  emojiId?: string;
+  emojiName?: string;
+  key: string;
+  label: string;
+};
+
+export const DEFAULT_EVENT_ROLES: EventRoleOption[] = ROLE_META.map((entry) => ({
+  animated: false,
+  emoji: entry.emoji,
+  key: entry.key,
+  label: entry.label,
+}));
+
+export function resolveEventRoles(config: GuildConfig): EventRoleOption[] {
+  const roles = config.eventRoles;
+  return roles && roles.length > 0 ? roles : DEFAULT_EVENT_ROLES;
+}
+
+// Meta de un rol según la config de la guild, con fallback a los clásicos
+// (y al "dps" legacy de inscripciones viejas).
+export function eventRoleMeta(
+  role: string | undefined,
+  config: GuildConfig,
+): EventRoleOption | undefined {
+  if (role === "dps") {
+    return { animated: false, emoji: "⚔️", key: "dps", label: "DPS" };
+  }
+  return resolveEventRoles(config).find((entry) => entry.key === role);
+}
 
 export function roleMeta(
   role?: string,

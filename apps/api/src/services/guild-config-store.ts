@@ -7,6 +7,79 @@ export type AdminRoleRule = {
   modules: string[];
 };
 
+// Rol de inscripción de eventos (configurable). Con los 4 clásicos como
+// default, se puede adaptar a cualquier juego (LoL: Top/Jungle/Mid/ADC/Support).
+export type EventRoleOption = {
+  animated: boolean;
+  emoji?: string;
+  emojiId?: string;
+  emojiName?: string;
+  key: string;
+  label: string;
+};
+
+export const DEFAULT_EVENT_ROLES: EventRoleOption[] = [
+  { animated: false, emoji: "🛡️", key: "tank", label: "Tank" },
+  { animated: false, emoji: "💚", key: "healer", label: "Healer" },
+  { animated: false, emoji: "⚔️", key: "melee", label: "Melee" },
+  { animated: false, emoji: "🏹", key: "ranged", label: "Ranged" },
+];
+
+// Sanea la lista de roles que manda el panel: claves únicas y en minúscula,
+// labels cortos, emoji unicode o custom de Discord (id + nombre).
+export function normalizeEventRoles(value: unknown): EventRoleOption[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const roles: EventRoleOption[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const raw = entry as Record<string, unknown>;
+    const key = String(raw.key ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "");
+    const label = String(raw.label ?? "").trim().slice(0, 24);
+    if (!key || !label || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+
+    const emojiId = String(raw.emojiId ?? "").trim() || undefined;
+    const emojiName = String(raw.emojiName ?? "").trim() || undefined;
+    const emoji = String(raw.emoji ?? "").trim().slice(0, 8) || undefined;
+
+    roles.push({
+      animated: emojiId ? Boolean(raw.animated) : false,
+      // El emoji custom manda; el unicode queda como texto alternativo.
+      emoji: emojiId ? undefined : emoji,
+      emojiId,
+      emojiName: emojiName ?? (emojiId ? "emoji" : undefined),
+      key,
+      label,
+    });
+
+    if (roles.length >= 12) {
+      break;
+    }
+  }
+
+  return roles;
+}
+
+// Roles efectivos de una guild (los configurados o los clásicos).
+export function resolveEventRoles(
+  config: { eventRoles?: unknown } | null | undefined,
+): EventRoleOption[] {
+  const roles = normalizeEventRoles(config?.eventRoles);
+  return roles && roles.length > 0 ? roles : DEFAULT_EVENT_ROLES;
+}
+
 export type GuildConfig = {
   adminRoleModules?: AdminRoleRule[];
   bannedVoiceRoleIds?: string[];
@@ -17,6 +90,10 @@ export type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules?: string[];
+  eventClassLabel?: string;
+  eventRoles?: EventRoleOption[];
+  eventSpecEnabled?: boolean;
+  eventSpecLabel?: string;
   karutaBotUserId?: string;
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
@@ -50,6 +127,10 @@ function toGuildConfig(
     defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
     enabledModules: string[];
+    eventClassLabel: string | null;
+    eventRoles: unknown;
+    eventSpecEnabled: boolean;
+    eventSpecLabel: string | null;
     karutaBotUserId: string | null;
     karutaChannelId: string | null;
     karutaRarePrintMax: number;
@@ -92,6 +173,10 @@ function toGuildConfig(
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
     enabledModules: record.enabledModules,
+    eventClassLabel: record.eventClassLabel ?? undefined,
+    eventRoles: normalizeEventRoles(record.eventRoles) ?? undefined,
+    eventSpecEnabled: record.eventSpecEnabled,
+    eventSpecLabel: record.eventSpecLabel ?? undefined,
     karutaBotUserId: record.karutaBotUserId ?? undefined,
     karutaChannelId: record.karutaChannelId ?? undefined,
     karutaRarePrintMax: record.karutaRarePrintMax,
@@ -126,6 +211,10 @@ type NormalizedGuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   enabledModules: string[];
+  eventClassLabel?: string;
+  eventRoles?: EventRoleOption[];
+  eventSpecEnabled: boolean;
+  eventSpecLabel?: string;
   karutaBotUserId?: string;
   karutaChannelId?: string;
   karutaRarePrintMax: number;
@@ -172,6 +261,10 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
     enabledModules: config.enabledModules ?? [],
+    eventClassLabel: config.eventClassLabel?.trim().slice(0, 24) || undefined,
+    eventRoles: normalizeEventRoles(config.eventRoles) ?? [],
+    eventSpecEnabled: config.eventSpecEnabled ?? true,
+    eventSpecLabel: config.eventSpecLabel?.trim().slice(0, 24) || undefined,
     karutaBotUserId: config.karutaBotUserId,
     karutaChannelId: config.karutaChannelId,
     karutaRarePrintMax: config.karutaRarePrintMax ?? 10,
@@ -241,6 +334,10 @@ export async function replaceGuildConfig(
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
+        eventClassLabel: normalized.eventClassLabel,
+        eventRoles: normalized.eventRoles ?? [],
+        eventSpecEnabled: normalized.eventSpecEnabled,
+        eventSpecLabel: normalized.eventSpecLabel,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
         musicEnabled: normalized.musicEnabled,
         musicRoleIds: normalized.musicRoleIds,
@@ -272,6 +369,10 @@ export async function replaceGuildConfig(
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
+        eventClassLabel: normalized.eventClassLabel,
+        eventRoles: normalized.eventRoles ?? [],
+        eventSpecEnabled: normalized.eventSpecEnabled,
+        eventSpecLabel: normalized.eventSpecLabel,
         temporaryVoiceChannelIds: normalized.temporaryVoiceChannelIds,
         musicEnabled: normalized.musicEnabled,
         musicRoleIds: normalized.musicRoleIds,
