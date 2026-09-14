@@ -704,9 +704,11 @@ export function buildEventAnnouncementEmbeds(input: {
     if (members.length === 0) {
       continue;
     }
-    // Más aire antes del primer estado (para despegarlo del roster) y uno
-    // entre estados.
-    pushSpacer(fields, firstStatus ? 2 : 1);
+    // Un renglón de aire antes del primer estado (para despegarlo del roster);
+    // entre estados alcanza con la separación propia de Discord.
+    if (firstStatus) {
+      pushSpacer(fields);
+    }
     firstStatus = false;
     pushField(fields, label, linesFor(members));
   }
