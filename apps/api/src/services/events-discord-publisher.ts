@@ -641,27 +641,40 @@ export function buildEventAnnouncementEmbeds(input: {
     })),
   ];
 
+  // Columnas del roster: un bloque por rol con gente (incluye los roles que ya
+  // no están en la config y los que se anotaron sin elegir rol).
+  const columns: Array<{ label: string; lines: string[] }> = [];
   for (const role of orderedRoles) {
     const members = confirmed.filter((signup) => signup.role === role.key);
     if (members.length === 0) {
       continue;
     }
-    // Horizontal: cada rol es una COLUMNA (hasta 3 por fila), así el roster no
-    // empuja el embed hacia abajo. El nick va sin repetir el personaje cuando
-    // es el mismo, que es lo que hacía que el texto se partiera en dos líneas.
-    pushField(
-      fields,
-      `${roleEmoji(role)} ${role.label} (${members.length})`,
-      linesFor(members),
-      true,
-    );
+    columns.push({
+      label: `${roleEmoji(role)} ${role.label} (${members.length})`,
+      lines: linesFor(members),
+    });
   }
   // Quien se anotó sin elegir rol (p. ej. con los botones rápidos de estado)
   // no puede desaparecer del roster: va en su columna al final, igual que la web.
   const noRole = confirmed.filter((signup) => !signup.role);
   if (noRole.length > 0) {
-    pushField(fields, `❔ Sin rol (${noRole.length})`, linesFor(noRole), true);
+    columns.push({
+      label: `❔ Sin rol (${noRole.length})`,
+      lines: linesFor(noRole),
+    });
   }
+
+  // Cuántas columnas por fila: hasta 3, Discord las empaqueta solo. Con 4 o más
+  // se muestran de a DOS para que cada columna ocupe la mitad del ancho (de a
+  // tres quedan de un tercio y "nick (personaje)" se parte); el salto se fuerza
+  // con un campo separador invisible.
+  const perRow = columns.length <= 3 ? 3 : 2;
+  columns.forEach((column, index) => {
+    if (perRow === 2 && index > 0 && index % 2 === 0) {
+      fields.push({ inline: false, name: "\u200b", value: "\u200b" });
+    }
+    pushField(fields, column.label, column.lines, true);
+  });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten.
   if (late.length > 0) {
