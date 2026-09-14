@@ -89,8 +89,11 @@ el bot maneja los clicks con mensajes efímeros y guarda por API interna:
 
 1. Los roles del asistente salen del **juego del evento**: el bot pide
    `GET /internal/guilds/:g/events/specs?game=<juego>` con el `game` que trae el evento.
-2. Si el evento pide nombre de personaje y el jugador todavía no tiene uno, al
-   terminar de anotarse le avisa y le ofrece el botón para abrir el modal.
+2. **Nombre de personaje obligatorio**: si el evento lo pide y el jugador no tiene
+   ninguno (ni en este evento ni recordado de antes), NO se guarda la inscripción:
+   se abre el modal (obligatorio) y la inscripción se completa cuando lo envía.
+   Al pedir el evento con `?userId=` el API devuelve `event.playerCharacter`, así
+   no se lo volvemos a pedir a quien ya lo cargó en otro evento.
 3. Los recordatorios de asistencia y los informes de "no se anotaron" los dispara
    el scheduler del bot consultando `GET /internal/.../events/control`.
 

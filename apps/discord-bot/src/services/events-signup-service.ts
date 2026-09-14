@@ -86,6 +86,9 @@ type RemoteEvent = {
     // Juego del evento (wow | lol | ...): define los roles del asistente y el
     // catálogo de clases/specs que se ofrece.
     game?: string;
+    // Personaje que el jugador usó la última vez (lo manda el API cuando se
+    // pide el evento con ?userId=): así no lo volvemos a pedir en cada evento.
+    playerCharacter?: string | null;
     signups?: RemoteSignup[];
     status?: string;
   };
@@ -169,38 +172,59 @@ async function updateWizard(
   }
 }
 
-// Botón para completar el nombre de personaje: cuando el evento lo pide y el
-// jugador todavía no lo tiene, se lo pedimos al terminar de anotarse (abre el
-// mismo modal que el botón del aviso).
-function characterPromptRow(
-  eventId: string,
-): ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`eventsign:${eventId}:character`)
-      .setEmoji("✏️")
-      .setLabel("Poner nombre de personaje")
-      .setStyle(ButtonStyle.Primary),
-  );
-}
-
 function fetchMemberName(interaction: EventInteraction): string {
   const member = interaction.member as { displayName?: string } | null;
   return member?.displayName?.trim() || interaction.user.username;
 }
 
+// Trae el evento. Con `userId` el API además devuelve el personaje recordado
+// de ese jugador (`event.playerCharacter`), que se usa para no pedirlo de nuevo.
 async function fetchEvent(
   guildId: string,
   eventId: string,
+  userId?: string,
 ): Promise<RemoteEvent["event"] | null> {
+  const suffix = userId
+    ? `?userId=${encodeURIComponent(userId)}`
+    : "";
   const response = await remoteRequest(
-    `/internal/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}`,
+    `/internal/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}${suffix}`,
   );
   if (!response.ok) {
     return null;
   }
   const payload = response.data as { event?: RemoteEvent["event"] };
   return payload.event ?? null;
+}
+
+// ¿Hay que pedirle el personaje ANTES de guardar la inscripción? Solo si el
+// evento lo pide y el jugador no tiene ninguno: ni en este evento ni recordado
+// de antes. En ese caso no se guarda nada hasta que lo complete.
+function needsCharacter(
+  event: RemoteEvent["event"] | null,
+  userId: string,
+): boolean {
+  if (!event || event.characterEnabled === false) {
+    return false;
+  }
+  const mine = event.signups?.find((signup) => signup.userId === userId);
+  return !mine?.character && !event.playerCharacter;
+}
+
+// Inscripción que quedó esperando el personaje: el modal no puede llevar
+// payload, así que guardamos lo que el jugador ya eligió (estado, rol y
+// clase/spec) y la completamos cuando envía el nombre.
+type PendingSignup = {
+  className?: string;
+  role?: string;
+  specName?: string;
+  status: string;
+};
+
+const pendingSignups = new Map<string, PendingSignup>();
+
+function pendingKey(userId: string, eventId: string): string {
+  return `${userId}:${eventId}`;
 }
 
 // Config del asistente del juego del evento: roles y etiquetas de los ejes del
@@ -321,26 +345,25 @@ async function resetSignup(input: {
 // Botón "Personaje" del embed: abre un modal para poner/editar el nombre
 // del personaje con el que el usuario está anotado (igual que en la web).
 
+// Modal del personaje. `required` lo hace obligatorio: se usa cuando la
+// inscripción está esperando el nombre para poder guardarse.
 async function openCharacterModal(
-  interaction: ButtonInteraction,
-  guildId: string,
+  interaction: EventInteraction,
   eventId: string,
+  options: { required?: boolean; value?: string } = {},
 ): Promise<void> {
-  const event = await fetchEvent(guildId, eventId);
-  const mine = event?.signups?.find(
-    (signup) => signup.userId === interaction.user.id,
-  );
   const input = new TextInputBuilder()
     .setCustomId("character")
     .setLabel("Nombre de personaje")
     .setStyle(TextInputStyle.Short)
-    // Si todavía no cargó ninguno, se pide sí o sí (el evento tiene activado
-    // "pedir nombre de personaje"); si ya tiene, puede editarlo o vaciarlo.
-    .setRequired(!mine?.character)
+    // Obligatorio cuando la inscripción lo está esperando (o cuando el jugador
+    // todavía no tiene ninguno y el evento pide personaje); si ya tiene uno,
+    // puede editarlo o vaciarlo para olvidarlo.
+    .setRequired(options.required === true)
     .setMaxLength(40)
     .setPlaceholder("Ej: Ruidia");
-  if (mine?.character) {
-    input.setValue(mine.character);
+  if (options.value) {
+    input.setValue(options.value);
   }
   const row = new ActionRowBuilder<TextInputBuilder>().addComponents(input);
   const modal = new ModalBuilder()
@@ -383,6 +406,42 @@ export async function handleEventSignupCharacterSubmit(
     });
     return;
   }
+
+  // Si la inscripción estaba esperando el personaje, la completamos ahora: es
+  // el paso obligatorio del flujo (nada se guardó hasta acá).
+  const pending = pendingSignups.get(pendingKey(userId, parsed.eventId));
+  if (pending) {
+    pendingSignups.delete(pendingKey(userId, parsed.eventId));
+    const saved = await putSignup({
+      character,
+      eventId: parsed.eventId,
+      guildId,
+      role: pending.role,
+      spec: pending.specName,
+      status: pending.status,
+      userId,
+      username,
+      wowClass: pending.className,
+    });
+    if (!saved.ok) {
+      await interaction.reply({
+        content: `No se pudo guardar la inscripción: ${saved.error}`,
+        ephemeral: true,
+      });
+      return;
+    }
+    const detail = [pending.className, pending.specName]
+      .filter(Boolean)
+      .join(" — ");
+    await interaction.reply({
+      content: [
+        `Registrado: **${STATUS_TITLE[pending.status] ?? "Asistir"}**${detail ? ` · **${detail}**` : ""} · **${character}**. ✅`,
+      ].join("\n"),
+      ephemeral: true,
+    });
+    return;
+  }
+
   const mine = event.signups?.find((signup) => signup.userId === userId);
   if (!mine) {
     await interaction.reply({
@@ -517,7 +576,7 @@ async function handleQuickStatus(
 ): Promise<void> {
   const userId = interaction.user.id;
   const username = fetchMemberName(interaction);
-  const event = await fetchEvent(guildId, eventId);
+  const event = await fetchEvent(guildId, eventId, userId);
   if (!event) {
     await replyOnce(interaction, "No encontré ese evento.");
     return;
@@ -533,6 +592,21 @@ async function handleQuickStatus(
 
   if (needsWizard && !mine?.wowClass) {
     await startRoleWizard(interaction, guildId, eventId, status);
+    return;
+  }
+
+  // El evento pide personaje y el jugador no tiene ninguno: no guardamos nada
+  // todavía; se lo pedimos con el modal (obligatorio) y la inscripción se
+  // completa cuando lo envía. Solo para los estados que van al roster: quien
+  // marca "no asisto" no necesita personaje.
+  if (needsWizard && needsCharacter(event, userId)) {
+    pendingSignups.set(pendingKey(userId, eventId), {
+      className: mine?.wowClass,
+      role: mine?.role,
+      specName: mine?.spec,
+      status,
+    });
+    await openCharacterModal(interaction, eventId, { required: true });
     return;
   }
 
@@ -552,31 +626,6 @@ async function handleQuickStatus(
       interaction,
       `No se pudo actualizar la inscripción: ${result.error}`,
     );
-    return;
-  }
-  // El evento pide personaje y el jugador no tiene ninguno: lo pedimos acá.
-  if (event.characterEnabled !== false && !result.character) {
-    const content = [
-      `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}**. ✅`,
-      "",
-      "⚠️ **Falta el nombre de personaje** — completalo con el botón de abajo.",
-    ].join("\n");
-    try {
-      await interaction.reply({
-        components: [characterPromptRow(eventId)],
-        content,
-        ephemeral: true,
-      });
-    } catch {
-      try {
-        await interaction.update({
-          components: [characterPromptRow(eventId)],
-          content,
-        });
-      } catch {
-        // Nada más que hacer.
-      }
-    }
     return;
   }
   await replyOnce(
@@ -647,11 +696,26 @@ export async function handleEventSignupInteraction(
     }
     const className = value.slice(0, separator);
     const specName = value.slice(separator + 1);
-    const event = await fetchEvent(guildId, eventId);
+    const event = await fetchEvent(guildId, eventId, userId);
     // El catálogo del juego del evento es el que valida la spec que eligió.
     const context = await fetchSignupContext(guildId, event?.game);
 
     const mine = event?.signups?.find((signup) => signup.userId === userId);
+
+    // El evento pide personaje y el jugador no tiene ninguno (ni recordado):
+    // NO guardamos todavía. Se lo pedimos con el modal (obligatorio) y la
+    // inscripción se completa cuando lo envía.
+    if (needsCharacter(event, userId)) {
+      pendingSignups.set(pendingKey(userId, eventId), {
+        className,
+        role,
+        specName: specName || undefined,
+        status,
+      });
+      await openCharacterModal(interaction, eventId, { required: true });
+      return;
+    }
+
     const result = await putSignup({
       character: mine?.character,
       guildId,
@@ -672,21 +736,6 @@ export async function handleEventSignupInteraction(
       return;
     }
     const detail = specName ? `${className} — ${specName}` : className;
-    // Si el evento pide nombre de personaje y el jugador todavía no tiene uno
-    // (ni recordado), se lo pedimos acá mismo con un botón que abre el modal.
-    const asksCharacter = event?.characterEnabled !== false;
-    if (asksCharacter && !result.character) {
-      await updateWizard(
-        interaction,
-        [
-          `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${detail}**. ✅`,
-          "",
-          "⚠️ **Falta el nombre de personaje** — completalo con el botón de abajo.",
-        ].join("\n"),
-        [characterPromptRow(eventId)],
-      );
-      return;
-    }
     await updateWizard(
       interaction,
       `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${detail}**. ✅`,
@@ -699,7 +748,14 @@ export async function handleEventSignupInteraction(
     if (!interaction.isButton()) {
       return;
     }
-    await openCharacterModal(interaction, guildId, eventId);
+    const event = await fetchEvent(guildId, eventId, userId);
+    const mine = event?.signups?.find((signup) => signup.userId === userId);
+    await openCharacterModal(interaction, eventId, {
+      // Si el evento pide personaje, el campo es obligatorio (para olvidarlo
+      // está el botón "Resetear registro").
+      required: event?.characterEnabled !== false,
+      value: mine?.character ?? event?.playerCharacter ?? undefined,
+    });
     return;
   }
 

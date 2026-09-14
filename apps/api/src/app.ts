@@ -91,6 +91,7 @@ import {
   deleteRaidSpec,
   deleteSignup,
   getEvent,
+  getEventPlayerCharacter,
   listEventImages,
   listEvents,
   listEventsPendingCloseAnnouncement,
@@ -4647,7 +4648,18 @@ export function buildApp() {
           .code(404)
           .send({ ok: false, error: "Evento no encontrado" });
       }
-      return { ok: true, guildId: params.guildId, event };
+      // Con `?userId=` el bot recibe además el personaje RECORDADO de ese
+      // jugador, así puede exigirlo solo cuando de verdad falta (y no pedirlo
+      // de nuevo a quien ya lo cargó en otro evento).
+      const query = request.query as { userId?: string };
+      const playerCharacter = query.userId
+        ? ((await getEventPlayerCharacter(params.guildId, query.userId)) ?? null)
+        : null;
+      return {
+        ok: true,
+        guildId: params.guildId,
+        event: { ...event, playerCharacter },
+      };
     },
   );
 

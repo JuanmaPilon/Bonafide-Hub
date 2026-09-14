@@ -2887,7 +2887,9 @@ textarea {
 
 .events-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  /* Mínimo ancho a propósito: el roster tiene las columnas por rol y necesita
+     lugar para "nick (personaje)" en una sola línea. */
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
   gap: 18px;
 }
 
@@ -3092,12 +3094,11 @@ textarea {
   gap: 10px;
 }
 
-/* Columnas por rol (estilo Raid Helper). El mínimo es ancho a propósito: si la
-   columna es más angosta que "nick (personaje)", el nombre se parte en dos
-   renglones, que es justo lo que no queremos. */
+/* Columnas por rol (estilo Raid Helper). El mínimo deja entrar "nick
+   (personaje)" en una línea sin que se caiga a la fila de abajo. */
 .event-roster-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 8px;
 }
 
@@ -3105,7 +3106,7 @@ textarea {
   display: grid;
   align-content: start;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 8px;
   border-radius: 10px;
   background: rgba(134, 158, 214, 0.07);
 }
@@ -3148,9 +3149,9 @@ textarea {
 }
 
 .event-roster-member {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   /* El nick y el personaje van SIEMPRE en la misma línea: si no entran, se
-     recorta el final con “…” en vez de bajar el personaje a otro renglón. */
+     recorta el final con "..." en vez de bajar el personaje a otro renglón. */
   white-space: nowrap;
 }
 
@@ -3407,6 +3408,12 @@ textarea {
   color: var(--muted);
   font-size: 0.85rem;
   padding: 4px 0;
+}
+
+/* Error de validación de la inscripción (p. ej. falta el nombre de personaje). */
+.event-signup-error {
+  color: #ffb3b3;
+  font-size: 0.82rem;
 }
 
 .event-signup-specs {

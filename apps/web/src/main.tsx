@@ -1281,6 +1281,8 @@ function EventCard({
   const [character, setCharacter] = useState(mySignup?.character ?? "");
   const [status, setStatus] = useState(mySignup?.status ?? "yes");
   const [submitting, setSubmitting] = useState(false);
+  // Error de validación del formulario de inscripción (p. ej. falta personaje).
+  const [signupError, setSignupError] = useState<string | null>(null);
   // Si ya elegí spec y estado muestro un resumen en vez del editor completo;
   // "Cambiar" vuelve a abrir el editor.
   const [editingSignup, setEditingSignup] = useState(false);
@@ -1347,6 +1349,13 @@ function EventCard({
   }
 
   const submit = async (): Promise<void> => {
+    // El evento pide personaje: no se guarda la inscripción sin él (ni en
+    // Discord ni acá).
+    if (characterEnabled && !character.trim()) {
+      setSignupError("Falta el nombre de personaje.");
+      return;
+    }
+    setSignupError(null);
     setSubmitting(true);
     try {
       await onSignup(event.id, {
@@ -1777,6 +1786,11 @@ function EventCard({
                           maxLength={40}
                           placeholder="Nombre de tu personaje"
                         />
+                      ) : null}
+                      {signupError ? (
+                        <span className="event-signup-error">
+                          ⚠️ {signupError}
+                        </span>
                       ) : null}
                     </div>
                     <div className="event-signup-actions">

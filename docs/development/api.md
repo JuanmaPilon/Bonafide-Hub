@@ -155,7 +155,7 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 7. `POST /internal/guilds/:guildId/karuta/grabs` (transferencia de posesión de una carta rara)
 8. `POST /internal/guilds/:guildId/karuta/cards` / `.../cards/burn` / `.../transfers` / `.../albums`
 9. `GET /internal/guilds/:guildId/events/specs?game=<juego>` (roles del juego + catálogo: alimenta el asistente de inscripción del bot)
-10. `GET /internal/guilds/:guildId/events/:eventId` (evento con sus inscripciones: el bot decide si abre el asistente o aplica el estado directo)
+10. `GET /internal/guilds/:guildId/events/:eventId` (evento con sus inscripciones: el bot decide si abre el asistente o aplica el estado directo). Con `?userId=` agrega `event.playerCharacter` (el personaje recordado de ese jugador)
 11. `PUT /internal/guilds/:guildId/events/:eventId/signups` / `DELETE .../signups` / `DELETE .../signups/reset`
 12. `GET /internal/guilds/:guildId/events/control` (recordatorios e informes pendientes)
 13. `POST /internal/guilds/:guildId/events/:eventId/reminders-sent` / `.../report-sent`
