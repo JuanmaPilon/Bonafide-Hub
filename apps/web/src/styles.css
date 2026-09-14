@@ -3121,6 +3121,14 @@ textarea {
   gap: 3px;
 }
 
+/* Estados (tarde / bench / no asisten): uno por fila y con aire entre ellos y
+   respecto del roster, que es el bloque principal. */
+.event-roster-statuses {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .event-roster-group {
   display: grid;
   grid-template-columns: auto 1fr;

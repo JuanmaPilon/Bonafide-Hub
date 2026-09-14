@@ -416,6 +416,22 @@ function pushField(
   }
 }
 
+// Espacio vertical entre bloques del embed. Discord no tiene márgenes en los
+// fields, así que se empuja un campo "vacío" (ancho cero): cada línea del value
+// suma la altura de un renglón, y así se regula cuánto aire queda.
+function pushSpacer(
+  fields: Array<{ inline?: boolean; name: string; value: string }>,
+  lines = 1,
+): void {
+  fields.push({
+    inline: false,
+    name: "\u200b",
+    value: Array.from({ length: Math.max(1, lines) }, () => "\u200b").join(
+      "\n",
+    ),
+  });
+}
+
 // Icono de la guild, para usarlo como thumbnail + icono del footer (le da
 // "cara" al aviso). Se cachea en memoria: cambia poco y no queremos pedirlo
 // en cada refresco del roster.
@@ -667,24 +683,32 @@ export function buildEventAnnouncementEmbeds(input: {
   // Cuántas columnas por fila: hasta 3, Discord las empaqueta solo. Con 4 o más
   // se muestran de a DOS para que cada columna ocupe la mitad del ancho (de a
   // tres quedan de un tercio y "nick (personaje)" se parte); el salto se fuerza
-  // con un campo separador invisible.
+  // con un espacio en blanco.
   const perRow = columns.length <= 3 ? 3 : 2;
   columns.forEach((column, index) => {
     if (perRow === 2 && index > 0 && index % 2 === 0) {
-      fields.push({ inline: false, name: "\u200b", value: "\u200b" });
+      pushSpacer(fields);
     }
     pushField(fields, column.label, column.lines, true);
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
-  // de la otra) y en este orden: tarde → bench → no asisten.
-  if (late.length > 0) {
-    pushField(fields, `⏰ Llegan tarde (${late.length})`, linesFor(late));
-  }
-  if (bench.length > 0) {
-    pushField(fields, `🪑 Bench (${bench.length})`, linesFor(bench));
-  }
-  if (absent.length > 0) {
-    pushField(fields, `❌ No asisten (${absent.length})`, linesFor(absent));
+  // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
+  // roster (y entre ellos) con un poco de aire.
+  const statusGroups: Array<[string, AnnouncementSignup[]]> = [
+    [`⏰ Llegan tarde (${late.length})`, late],
+    [`🪑 Bench (${bench.length})`, bench],
+    [`❌ No asisten (${absent.length})`, absent],
+  ];
+  let firstStatus = true;
+  for (const [label, members] of statusGroups) {
+    if (members.length === 0) {
+      continue;
+    }
+    // Más aire antes del primer estado (para despegarlo del roster) y uno
+    // entre estados.
+    pushSpacer(fields, firstStatus ? 2 : 1);
+    firstStatus = false;
+    pushField(fields, label, linesFor(members));
   }
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción
