@@ -10,6 +10,8 @@ import {
   Message,
   Partials,
   PermissionFlagsBits,
+  type Guild,
+  type Role,
 } from "discord.js";
 import {
   createCanvas,
@@ -2279,12 +2281,7 @@ async function awardXpForVoiceMinutes(input: {
       console.log(
         `[discord-bot] User ${input.userId} leveled up to level ${result.level} via voice (guild ${input.guildId}).`,
       );
-      void applyNicknameForLevel({
-        guildId: input.guildId,
-        level: result.level,
-        userId: input.userId,
-      });
-      void applyLevelRoles({
+      void applyMemberLevelRewards({
         guildId: input.guildId,
         level: result.level,
         userId: input.userId,
@@ -2446,12 +2443,75 @@ async function applyNicknameForLevel(input: {
       return;
     }
 
-    await member.setNickname(nextNickname, `Level up to ${input.level}`);
+    await withDiscordRetry(`cambiar el nick de <@${input.userId}>`, () =>
+      member.setNickname(nextNickname, `Level up to ${input.level}`),
+    );
   } catch (error: unknown) {
     console.warn(
       `[discord-bot] Failed to apply nickname prefix: ${getErrorMessage(error)}`,
     );
   }
+}
+
+// Rol de la guild por id: primero el cache y, si no está, se lo pide a
+// Discord. El cache puede no tenerlo (rol nuevo o guild sin GUILD_CREATE
+// completo) y antes eso hacía que el rol se descartara en silencio.
+async function resolveGuildRole(
+  guild: Guild,
+  roleId: string,
+): Promise<Role | null> {
+  const cached = guild.roles.cache.get(roleId);
+  if (cached) {
+    return cached;
+  }
+  return await guild.roles.fetch(roleId).catch(() => null);
+}
+
+// Reintenta una llamada a Discord ante rate limit (429) o error transitorio
+// (5xx). Discord comparte bucket entre las ediciones de un mismo miembro, así
+// que cuando el nick y los roles se pedían en paralelo una de las dos podía
+// fallar: el aviso de Karpindomo llegaba pero el rol nunca se asignaba.
+async function withDiscordRetry<T>(
+  label: string,
+  run: () => Promise<T>,
+  attempts = 3,
+): Promise<T | null> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await run();
+    } catch (error: unknown) {
+      const status = (error as { status?: number }).status;
+      if (status === 50013) {
+        // Falta de permisos o jerarquía: no se arregla reintentando.
+        console.warn(
+          `[discord-bot] ${label}: Discord rechazó la operación por permisos (50013). Revisá que el rol del bot esté POR ENCIMA del rol y del miembro.`,
+        );
+        return null;
+      }
+      const retryable =
+        status === 429 || (status !== undefined && status >= 500);
+      if (!retryable || attempt === attempts) {
+        console.warn(
+          `[discord-bot] ${label} falló en el intento ${attempt}: ${getErrorMessage(error)}`,
+        );
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+    }
+  }
+  return null;
+}
+
+// Aplica los premios de nivel al miembro: PRIMERO los roles y después el
+// prefijo del nick. Va en serie a propósito: en paralelo, Discord rate-limita
+// una de las dos ediciones y el rango quedaba sin asignar.
+async function applyMemberLevelRewards(input: {
+  guildId: string;
+  level: number;
+  userId: string;
+}): Promise<void> {
+  await applyLevelRoles(input);
+  await applyNicknameForLevel(input);
 }
 
 async function applyLevelRoles(input: {
@@ -2528,33 +2588,66 @@ async function applyLevelRoles(input: {
       roleIdsToRemove.delete(roleId);
     }
 
-    const roleIdsToActuallyAdd = [...roleIdsToAdd].filter((roleId) => {
-      const role = guild.roles.cache.get(roleId);
-      if (!role || role.position >= botHighestPosition) {
-        return false;
+    // Resolvemos cada rol (cache o API) y nos quedamos con los que el bot puede
+    // tocar de verdad. Antes, si el rol no estaba en el cache, se descartaba
+    // EN SILENCIO y el miembro nunca recibía el rango.
+    const roleIdsToActuallyAdd: string[] = [];
+    for (const roleId of roleIdsToAdd) {
+      const role = await resolveGuildRole(guild, roleId);
+      if (!role) {
+        console.warn(
+          `[discord-bot] No encontré el rol ${roleId} del nivel ${input.level} (guild ${input.guildId}).`,
+        );
+        continue;
       }
-      return !memberRoleIds.has(roleId);
-    });
+      if (role.position >= botHighestPosition) {
+        console.warn(
+          `[discord-bot] El rol "${role.name}" está por encima del rol del bot: no puedo asignarlo (guild ${input.guildId}).`,
+        );
+        continue;
+      }
+      if (!memberRoleIds.has(roleId)) {
+        roleIdsToActuallyAdd.push(roleId);
+      }
+    }
 
-    const roleIdsToActuallyRemove = [...roleIdsToRemove].filter((roleId) => {
-      const role = guild.roles.cache.get(roleId);
+    const roleIdsToActuallyRemove: string[] = [];
+    for (const roleId of roleIdsToRemove) {
+      const role = await resolveGuildRole(guild, roleId);
       if (!role || role.position >= botHighestPosition) {
-        return false;
+        continue;
       }
-      return memberRoleIds.has(roleId);
-    });
+      if (memberRoleIds.has(roleId)) {
+        roleIdsToActuallyRemove.push(roleId);
+      }
+    }
 
     if (roleIdsToActuallyAdd.length > 0) {
-      await member.roles.add(
-        roleIdsToActuallyAdd,
-        `Level up to ${input.level}`,
+      const updated = await withDiscordRetry(
+        `asignar los roles de nivel a <@${input.userId}>`,
+        () => member.roles.add(roleIdsToActuallyAdd, `Level up to ${input.level}`),
       );
+      // Verificación barata: Discord devuelve el miembro actualizado, así que
+      // si algún rol no quedó, lo dejamos en el log (antes esto pasaba en
+      // silencio y había que correr la sincronización a mano).
+      const missing = roleIdsToActuallyAdd.filter(
+        (roleId) => !updated?.roles.cache.has(roleId),
+      );
+      if (missing.length > 0) {
+        console.warn(
+          `[discord-bot] Discord no aplicó ${missing.length} rol(es) de nivel a <@${input.userId}> en la guild ${input.guildId}: ${missing.join(", ")}`,
+        );
+      }
     }
 
     if (roleIdsToActuallyRemove.length > 0) {
-      await member.roles.remove(
-        roleIdsToActuallyRemove,
-        `Level up to ${input.level}`,
+      await withDiscordRetry(
+        `quitar los roles de nivel viejos de <@${input.userId}>`,
+        () =>
+          member.roles.remove(
+            roleIdsToActuallyRemove,
+            `Level up to ${input.level}`,
+          ),
       );
     }
   } catch (error: unknown) {
@@ -2609,12 +2702,7 @@ async function awardXpForMessage(
       console.log(
         `[discord-bot] User ${message.author.id} leveled up to level ${result.level} (guild ${message.guildId}).`,
       );
-      void applyNicknameForLevel({
-        guildId: message.guildId,
-        level: result.level,
-        userId: message.author.id,
-      });
-      void applyLevelRoles({
+      void applyMemberLevelRewards({
         guildId: message.guildId,
         level: result.level,
         userId: message.author.id,
