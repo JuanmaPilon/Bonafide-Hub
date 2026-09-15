@@ -11,6 +11,7 @@ import {
   Partials,
   PermissionFlagsBits,
   type Guild,
+  type GuildMember,
   type Role,
 } from "discord.js";
 import {
@@ -794,10 +795,7 @@ async function syncGuildRoles(guildId: string): Promise<void> {
 
       const level = profileByUser.get(member.id)?.level ?? 0;
 
-      await applyLevelRoles({ guildId, level, userId: member.id }).catch(
-        () => undefined,
-      );
-      await applyNicknameForLevel({ guildId, level, userId: member.id }).catch(
+      await applyMemberLevelRewards({ guildId, level, userId: member.id }).catch(
         () => undefined,
       );
 
@@ -816,9 +814,11 @@ async function syncGuildRoles(guildId: string): Promise<void> {
       });
 
       if (rolesAboveLevel.length > 0) {
-        await member.roles
-          .remove(rolesAboveLevel, "XP sync: nivel actualizado")
-          .catch(() => undefined);
+        // También por la cola: si el miembro está subiendo de nivel justo
+        // ahora, no queremos pisarle los roles nuevos.
+        await enqueueMemberWrite(guildId, member.id, () =>
+          member.roles.remove(rolesAboveLevel, "XP sync: nivel actualizado"),
+        ).catch(() => undefined);
       }
 
       synced += 1;
@@ -2467,6 +2467,49 @@ async function resolveGuildRole(
   return await guild.roles.fetch(roleId).catch(() => null);
 }
 
+// Cuántas veces intentamos dejar el miembro con los roles que le tocan. Cada
+// intento relee el miembro: si otra escritura pisó el resultado, se corrige.
+const MAX_ROLE_ATTEMPTS = 3;
+
+// Miembro SIEMPRE fresco (sin cache). Para escribir roles hay que partir del
+// estado real: discord.js calcula la lista completa de roles desde su copia
+// en memoria y manda un PATCH con esa lista, así que una copia vieja borra
+// roles que ya se habían dado.
+async function fetchMemberFresh(
+  guild: Guild,
+  userId: string,
+): Promise<GuildMember | null> {
+  return await guild.members
+    .fetch({ force: true, user: userId })
+    .catch(() => null);
+}
+
+// Cola de escrituras por miembro. El level up y la sincronización de XP pueden
+// correr a la vez sobre el MISMO miembro, y las dos escriben roles y nick: la
+// segunda pisaba a la primera (el 15/09/2026 el bot asignó Rank 4 + 🎵DJ y
+// 121 ms después otra escritura los quitó). Encolarlas garantiza orden.
+const memberWriteQueues = new Map<string, Promise<unknown>>();
+
+function enqueueMemberWrite<T>(
+  guildId: string,
+  userId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const key = `${guildId}:${userId}`;
+  const previous = memberWriteQueues.get(key) ?? Promise.resolve();
+  // Sigue aunque la escritura anterior haya fallado.
+  const next = previous.then(run, run);
+  const guard = next.catch(() => undefined);
+  memberWriteQueues.set(key, guard);
+  void guard.then(() => {
+    // Limpieza: si nadie se encoló después, liberamos la entrada.
+    if (memberWriteQueues.get(key) === guard) {
+      memberWriteQueues.delete(key);
+    }
+  });
+  return next;
+}
+
 // Reintenta una llamada a Discord ante rate limit (429) o error transitorio
 // (5xx). Discord comparte bucket entre las ediciones de un mismo miembro, así
 // que cuando el nick y los roles se pedían en paralelo una de las dos podía
@@ -2510,8 +2553,12 @@ async function applyMemberLevelRewards(input: {
   level: number;
   userId: string;
 }): Promise<void> {
-  await applyLevelRoles(input);
-  await applyNicknameForLevel(input);
+  // Roles y nick van juntos y EN COLA: son dos escrituras sobre el mismo
+  // miembro y Discord rate-limita / pisa la segunda.
+  await enqueueMemberWrite(input.guildId, input.userId, async () => {
+    await applyLevelRoles(input);
+    await applyNicknameForLevel(input);
+  });
 }
 
 async function applyLevelRoles(input: {
@@ -2544,7 +2591,7 @@ async function applyLevelRoles(input: {
       return;
     }
 
-    const member = await guild.members.fetch(input.userId).catch(() => null);
+    const member = await fetchMemberFresh(guild, input.userId);
     if (!member) {
       return;
     }
@@ -2622,34 +2669,66 @@ async function applyLevelRoles(input: {
       }
     }
 
-    if (roleIdsToActuallyAdd.length > 0) {
-      const updated = await withDiscordRetry(
-        `asignar los roles de nivel a <@${input.userId}>`,
-        () => member.roles.add(roleIdsToActuallyAdd, `Level up to ${input.level}`),
+    // Plan en el log: sin esto, cuando algo sale mal no hay forma de saber qué
+    // regla se evaluó. Fue justo lo que faltó el 15/09/2026.
+    const roleName = (roleId: string): string =>
+      guild.roles.cache.get(roleId)?.name ?? roleId;
+    console.log(
+      `[discord-bot] Nivel ${input.level} de <@${input.userId}> (guild ${input.guildId}): regla nivel ${currentRule.level} → dar [${roleIdsToActuallyAdd.map(roleName).join(", ") || "—"}] · quitar [${roleIdsToActuallyRemove.map(roleName).join(", ") || "—"}]`,
+    );
+
+    const reason = `Level up to ${input.level}`;
+    const expectedRoleIds = new Set(roleIdsToActuallyAdd);
+    const unwantedRoleIds = new Set(roleIdsToActuallyRemove);
+
+    // Escritura con verificación y autoreparación. Discord recalcula la lista
+    // COMPLETA de roles del miembro, así que una escritura que corre en
+    // paralelo puede pisar lo recién aplicado. Después de escribir releemos el
+    // miembro sin cache y, si el plan no se cumplió, reintentamos.
+    for (let attempt = 1; attempt <= MAX_ROLE_ATTEMPTS; attempt += 1) {
+      const freshMember = await fetchMemberFresh(guild, input.userId);
+      if (!freshMember) {
+        return;
+      }
+
+      const missing = [...expectedRoleIds].filter(
+        (roleId) => !freshMember.roles.cache.has(roleId),
       );
-      // Verificación barata: Discord devuelve el miembro actualizado, así que
-      // si algún rol no quedó, lo dejamos en el log (antes esto pasaba en
-      // silencio y había que correr la sincronización a mano).
-      const missing = roleIdsToActuallyAdd.filter(
-        (roleId) => !updated?.roles.cache.has(roleId),
+      const lingering = [...unwantedRoleIds].filter((roleId) =>
+        freshMember.roles.cache.has(roleId),
       );
+
+      if (missing.length === 0 && lingering.length === 0) {
+        if (attempt > 1) {
+          console.log(
+            `[discord-bot] Roles de nivel de <@${input.userId}> verificados en el intento ${attempt}.`,
+          );
+        }
+        return;
+      }
+
+      console.log(
+        `[discord-bot] Aplicando roles de nivel a <@${input.userId}> (intento ${attempt}/${MAX_ROLE_ATTEMPTS}): dar [${missing.map(roleName).join(", ") || "—"}] · quitar [${lingering.map(roleName).join(", ") || "—"}]`,
+      );
+
       if (missing.length > 0) {
-        console.warn(
-          `[discord-bot] Discord no aplicó ${missing.length} rol(es) de nivel a <@${input.userId}> en la guild ${input.guildId}: ${missing.join(", ")}`,
+        await withDiscordRetry(
+          `asignar los roles de nivel a <@${input.userId}>`,
+          () => freshMember.roles.add(missing, reason),
+        );
+      }
+
+      if (lingering.length > 0) {
+        await withDiscordRetry(
+          `quitar los roles de nivel viejos de <@${input.userId}>`,
+          () => freshMember.roles.remove(lingering, reason),
         );
       }
     }
 
-    if (roleIdsToActuallyRemove.length > 0) {
-      await withDiscordRetry(
-        `quitar los roles de nivel viejos de <@${input.userId}>`,
-        () =>
-          member.roles.remove(
-            roleIdsToActuallyRemove,
-            `Level up to ${input.level}`,
-          ),
-      );
-    }
+    console.warn(
+      `[discord-bot] No pude dejar los roles de nivel de <@${input.userId}> como correspondía (guild ${input.guildId}) después de ${MAX_ROLE_ATTEMPTS} intentos.`,
+    );
   } catch (error: unknown) {
     console.warn(
       `[discord-bot] Failed to apply level roles: ${getErrorMessage(error)}`,
