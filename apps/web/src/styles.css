@@ -3144,16 +3144,45 @@ textarea {
   flex-wrap: wrap;
 }
 
-/* En los grupos por estado los nombres se separan con coma. */
+/* En los grupos por estado los nombres se separan con coma. Cada miembro va
+   envuelto en .event-roster-entry (nombre + botón de edición), así que la coma
+   se aplica al nombre de la entrada siguiente. */
 .event-roster-group-members
-  .event-roster-member
-  + .event-roster-member::before {
+  .event-roster-entry
+  + .event-roster-entry
+  .event-roster-member::before {
   content: ", ";
 }
 
 .event-roster-role {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+/* Envoltorio de cada miembro del roster: el nombre y, para el staff, el botón
+   que abre el editor manual de la inscripción. */
+.event-roster-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.event-roster-edit {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+.event-roster-entry:hover .event-roster-edit,
+.event-roster-edit:focus-visible {
+  opacity: 1;
 }
 
 .event-roster-member {
@@ -3241,6 +3270,42 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+/* ---- Editor manual del staff (modal de inscripción) ---- */
+
+.modal-wide {
+  width: min(640px, 100%);
+}
+
+.staff-edit-row {
+  display: grid;
+  gap: 6px;
+}
+
+.staff-edit-row .event-signup-status {
+  flex-wrap: wrap;
+}
+
+.staff-edit-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* En el modal los botones de estado muestran emoji + texto, así que dejan de
+   ser círculos de tamaño fijo. */
+.staff-edit-row .event-status-btn {
+  width: auto;
+  height: auto;
+  padding: 7px 12px;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+
+.staff-edit-row .event-status-btn.active {
+  opacity: 1;
 }
 
 .event-card-actions {

@@ -4581,6 +4581,141 @@ export function buildApp() {
     },
   );
 
+  // ── Edición manual de inscripciones por el staff ───────────────────
+  // El staff con acceso al módulo de eventos puede corregir la inscripción de
+  // CUALQUIER miembro: estado, rol, clase/spec, personaje y nota. Sirve para
+  // arreglar anotaciones mal hechas sin tener que pedirle al jugador que lo
+  // haga. No aplicamos el "rol mínimo" automático (yes sin rol → bench): es una
+  // corrección manual y manda lo que decide el staff.
+  app.put(
+    "/guilds/:guildId/events/:eventId/signups/:userId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        eventId?: string;
+        guildId?: string;
+        userId?: string;
+      };
+      if (!params.guildId || !params.eventId || !params.userId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+
+      const body = (request.body ?? {}) as {
+        character?: string;
+        note?: string;
+        role?: string;
+        spec?: string;
+        status?: string;
+        wowClass?: string;
+      };
+
+      const status = body.status ?? "yes";
+      if (!SIGNUP_STATUSES.includes(status as never)) {
+        return reply.code(400).send({ ok: false, error: "Estado inválido" });
+      }
+      if (
+        body.role &&
+        !(await isValidEventRole(params.guildId, body.role, event.game))
+      ) {
+        return reply.code(400).send({ ok: false, error: "Rol inválido" });
+      }
+
+      // El nombre visible es el que ya tenía la inscripción (no lo pisamos con
+      // el del staff) o, si es una inscripción nueva, el de Discord.
+      const existing = event.signups.find(
+        (signup) => signup.userId === params.userId,
+      );
+      let username = existing?.username;
+      if (!username) {
+        const member = await fetchGuildMemberRecord(
+          params.guildId,
+          params.userId,
+        );
+        username = memberDisplayName(member) ?? params.userId;
+      }
+
+      const characterInput =
+        body.character === undefined ? undefined : body.character.trim();
+      const signup = await upsertSignup({
+        character: characterInput,
+        eventId: params.eventId,
+        guildId: params.guildId,
+        note: body.note?.trim() || undefined,
+        role: body.role?.trim() || undefined,
+        spec: body.spec?.trim() || undefined,
+        status,
+        userId: params.userId,
+        username,
+        wowClass: body.wowClass?.trim() || undefined,
+      });
+
+      // Si el evento está publicado en Discord, actualiza su embed (roster).
+      await refreshEventAnnouncement(params.guildId, params.eventId);
+
+      await logAdminAction(session, params.guildId, "event:signup-edit", {
+        details: `Inscripción editada a mano: ${username} (${status})`,
+        targetId: params.userId,
+        targetType: "event-signup",
+      });
+
+      return { ok: true, guildId: params.guildId, signup };
+    },
+  );
+
+  // El staff quita la inscripción de otro miembro.
+  app.delete(
+    "/guilds/:guildId/events/:eventId/signups/:userId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        eventId?: string;
+        guildId?: string;
+        userId?: string;
+      };
+      if (!params.guildId || !params.eventId || !params.userId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteSignup(
+        params.guildId,
+        params.eventId,
+        params.userId,
+      );
+      await refreshEventAnnouncement(params.guildId, params.eventId);
+
+      await logAdminAction(session, params.guildId, "event:signup-remove", {
+        details: "Inscripción quitada a mano",
+        targetId: params.userId,
+        targetType: "event-signup",
+      });
+
+      return { ok: true, guildId: params.guildId, deleted };
+    },
+  );
+
   // ── Inscripciones desde Discord (bot) ──────────────────────────────
   // El bot llama estos endpoints internos (x-bot-token) cuando un miembro
   // toca los botones del embed del evento. Reutilizan la misma lógica que

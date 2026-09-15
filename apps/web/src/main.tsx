@@ -57,6 +57,7 @@ import {
   deleteEventImage,
   deleteEventSpec,
   deleteMyEventSignup,
+  deleteMemberEventSignup,
   resetMyEventSignup,
   apiAssetUrl,
   DEFAULT_EVENT_ROLES,
@@ -72,6 +73,7 @@ import {
   updateEventSpec,
   uploadEventImage,
   upsertEventSignup,
+  upsertMemberEventSignup,
   type ApiGuild,
   type AdminAccess,
   type AuditLogEntry,
@@ -1231,6 +1233,8 @@ function EventCard({
   onRemoveSignup,
   onResetSignup,
   onSignup,
+  onStaffRemoveSignup,
+  onStaffSignup,
   specs,
 }: {
   canManage: boolean;
@@ -1247,6 +1251,23 @@ function EventCard({
   onResetSignup: (eventId: string) => Promise<void>;
   onSignup: (
     eventId: string,
+    input: {
+      character?: string;
+      role?: string;
+      spec?: string;
+      status: string;
+      wowClass?: string;
+    },
+  ) => Promise<void>;
+  // Edición manual del staff: cambia la inscripción de cualquier miembro.
+  onStaffRemoveSignup: (
+    eventId: string,
+    userId: string,
+    username: string,
+  ) => Promise<void>;
+  onStaffSignup: (
+    eventId: string,
+    userId: string,
     input: {
       character?: string;
       role?: string;
@@ -1283,6 +1304,17 @@ function EventCard({
   const [submitting, setSubmitting] = useState(false);
   // Error de validación del formulario de inscripción (p. ej. falta personaje).
   const [signupError, setSignupError] = useState<string | null>(null);
+  // Edición manual del staff: qué miembro y con qué valores.
+  const [staffEdit, setStaffEdit] = useState<{
+    character: string;
+    role: string;
+    spec: string;
+    status: string;
+    userId: string;
+    username: string;
+    wowClass: string;
+  } | null>(null);
+  const [staffSaving, setStaffSaving] = useState(false);
   // Si ya elegí spec y estado muestro un resumen en vez del editor completo;
   // "Cambiar" vuelve a abrir el editor.
   const [editingSignup, setEditingSignup] = useState(false);
@@ -1402,8 +1434,9 @@ function EventCard({
   }, [event.signups, eventRoles]);
 
   // Render de un miembro del roster: emoji de la spec (si tiene uno
-  // configurado) + nick y personaje.
-  const renderMember = (signup: EventSignup) => {
+  // configurado) + nick y personaje. El staff además ve el botón para editar
+  // esa inscripción a mano.
+  const renderRosterEntry = (signup: EventSignup) => {
     const specRow = specs.find(
       (row) =>
         row.role === signup.role &&
@@ -1411,20 +1444,86 @@ function EventCard({
         row.specName === (signup.spec ?? ""),
     );
     return (
-      <span className="event-roster-member" key={signup.id}>
-        <DiscordEmojiImage
-          animated={specRow?.animated}
-          emojiId={specRow?.emojiId}
-          name={specRow?.specName}
-        />
-        {signup.username}
-        {signup.character ? ` (${signup.character})` : ""}
+      <span className="event-roster-entry" key={signup.id}>
+        <span className="event-roster-member">
+          <DiscordEmojiImage
+            animated={specRow?.animated}
+            emojiId={specRow?.emojiId}
+            name={specRow?.specName}
+          />
+          {signup.username}
+          {signup.character ? ` (${signup.character})` : ""}
+        </span>
+        {canManage ? (
+          <button
+            className="event-roster-edit"
+            onClick={() =>
+              setStaffEdit({
+                character: signup.character ?? "",
+                role: signup.role ?? "",
+                spec: signup.spec ?? "",
+                status: signup.status,
+                userId: signup.userId,
+                username: signup.username,
+                wowClass: signup.wowClass ?? "",
+              })
+            }
+            title={`Editar la inscripción de ${signup.username}`}
+            type="button"
+          >
+            ✏️
+          </button>
+        ) : null}
       </span>
     );
   };
 
+  // Opciones del editor del staff: clases y specs del rol elegido.
+  const staffRoleSpecs = staffEdit
+    ? specs.filter((row) => row.role === staffEdit.role)
+    : [];
+  const staffClasses = [...new Set(staffRoleSpecs.map((row) => row.className))]
+    .sort((a, b) => a.localeCompare(b));
+
+  const saveStaffEdit = async (): Promise<void> => {
+    if (!staffEdit) {
+      return;
+    }
+    setStaffSaving(true);
+    try {
+      await onStaffSignup(event.id, staffEdit.userId, {
+        character: characterEnabled ? staffEdit.character.trim() : undefined,
+        role: staffEdit.role || undefined,
+        spec: staffEdit.spec || undefined,
+        status: staffEdit.status,
+        wowClass: staffEdit.wowClass || undefined,
+      });
+      setStaffEdit(null);
+    } finally {
+      setStaffSaving(false);
+    }
+  };
+
+  const removeStaffSignup = async (): Promise<void> => {
+    if (!staffEdit) {
+      return;
+    }
+    setStaffSaving(true);
+    try {
+      await onStaffRemoveSignup(
+        event.id,
+        staffEdit.userId,
+        staffEdit.username,
+      );
+      setStaffEdit(null);
+    } finally {
+      setStaffSaving(false);
+    }
+  };
+
   return (
-    <article className="event-card">
+    <>
+      <article className="event-card">
       {event.imageUrl ? (
         <img
           className="event-card-image"
@@ -1592,7 +1691,9 @@ function EventCard({
                       {entry.label} ({roleSignups.length})
                     </span>
                     <div className="event-roster-members">
-                      {roleSignups.map((signup) => renderMember(signup))}
+                      {roleSignups.map((signup) =>
+                        renderRosterEntry(signup),
+                      )}
                     </div>
                   </div>
                 );
@@ -1620,7 +1721,7 @@ function EventCard({
                       {emoji} {label} ({members.length})
                     </span>
                     <span className="event-roster-group-members">
-                      {members.map((signup) => renderMember(signup))}
+                      {members.map((signup) => renderRosterEntry(signup))}
                     </span>
                   </div>
                 );
@@ -1866,7 +1967,174 @@ function EventCard({
           </div>
         ) : null}
       </div>
-    </article>
+      </article>
+
+      {/* Edición manual del staff: corrige la inscripción de cualquier miembro
+          (estado, rol, clase/spec y personaje). El botón ✏️ de cada nombre del
+          roster abre este modal. */}
+      {staffEdit ? (
+        <div className="modal-overlay" onClick={() => setStaffEdit(null)}>
+          <div
+            className="modal modal-wide"
+            onClick={(clickEvent) => clickEvent.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h4>Editar la inscripción de {staffEdit.username}</h4>
+
+            <div className="staff-edit-row">
+              <span className="staff-edit-label">Estado</span>
+              <div className="event-signup-status">
+                {SIGNUP_OPTIONS.map((option) => (
+                  <button
+                    className={`event-status-btn ${option.key}${staffEdit.status === option.key ? " active" : ""}`}
+                    key={option.key}
+                    onClick={() =>
+                      setStaffEdit((current) =>
+                        current ? { ...current, status: option.key } : current,
+                      )
+                    }
+                    title={option.label}
+                    type="button"
+                  >
+                    {option.emoji} {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="staff-edit-row">
+              <span className="staff-edit-label">Rol</span>
+              <div className="event-signup-role-row">
+                {eventRoles.map((entry) => (
+                  <button
+                    className={`event-status-btn role${staffEdit.role === entry.key ? " active" : ""}`}
+                    key={entry.key}
+                    onClick={() =>
+                      setStaffEdit((current) =>
+                        current
+                          ? {
+                              ...current,
+                              role: entry.key,
+                              spec: "",
+                              wowClass: "",
+                            }
+                          : current,
+                      )
+                    }
+                    type="button"
+                  >
+                    <EventRoleEmoji role={entry.key} roles={eventRoles} />{" "}
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="staff-edit-row">
+              <span className="staff-edit-label">Clase y spec</span>
+              {staffRoleSpecs.length === 0 ? (
+                <span className="muted-text">
+                  Ese rol no tiene clases cargadas en el catálogo.
+                </span>
+              ) : (
+                <div className="event-signup-specs">
+                  {staffClasses.map((className) => (
+                    <div className="event-signup-class" key={className}>
+                      <span className="event-signup-class-name">
+                        {className}
+                      </span>
+                      <div className="event-signup-spec-row">
+                        {staffRoleSpecs
+                          .filter((row) => row.className === className)
+                          .map((row) => {
+                            const selected =
+                              staffEdit.wowClass === row.className &&
+                              staffEdit.spec === row.specName;
+                            return (
+                              <button
+                                className={`event-signup-spec${selected ? " active" : ""}`}
+                                key={row.id}
+                                onClick={() =>
+                                  setStaffEdit((current) =>
+                                    current
+                                      ? {
+                                          ...current,
+                                          role: row.role,
+                                          spec: row.specName,
+                                          wowClass: row.className,
+                                        }
+                                      : current,
+                                  )
+                                }
+                                type="button"
+                              >
+                                <DiscordEmojiImage
+                                  animated={row.animated}
+                                  emojiId={row.emojiId}
+                                  name={row.specName}
+                                  size={24}
+                                />
+                                <span>{row.specName}</span>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {characterEnabled ? (
+              <div className="staff-edit-row">
+                <span className="staff-edit-label">Personaje</span>
+                <input
+                  className="input"
+                  value={staffEdit.character}
+                  onChange={(event) =>
+                    setStaffEdit((current) =>
+                      current
+                        ? { ...current, character: event.target.value }
+                        : current,
+                    )
+                  }
+                  maxLength={40}
+                  placeholder="Nombre del personaje"
+                />
+              </div>
+            ) : null}
+
+            <div className="event-signup-actions">
+              <button
+                className="primary-button"
+                disabled={staffSaving}
+                onClick={() => void saveStaffEdit()}
+                type="button"
+              >
+                {staffSaving ? "Guardando…" : "Guardar"}
+              </button>
+              <button
+                className="danger-button"
+                disabled={staffSaving}
+                onClick={() => void removeStaffSignup()}
+                type="button"
+              >
+                Quitar inscripción
+              </button>
+              <button
+                className="ghost-button"
+                disabled={staffSaving}
+                onClick={() => setStaffEdit(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -3328,6 +3596,59 @@ function App() {
         error instanceof Error
           ? error.message
           : "No se pudo guardar la inscripción.",
+        "error",
+      );
+    }
+  }
+
+  // El staff corrige la inscripción de OTRO miembro (estado, rol, clase/spec,
+  // personaje): misma información que la inscripción propia, pero para
+  // cualquiera y sin pasar por el "rol mínimo" automático.
+  async function handleStaffEventSignup(
+    eventId: string,
+    userId: string,
+    input: {
+      character?: string;
+      role?: string;
+      spec?: string;
+      status: string;
+      wowClass?: string;
+    },
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await upsertMemberEventSignup(selectedGuildId, eventId, userId, input);
+      setEvents(await getEvents(selectedGuildId));
+      pushToast("Inscripción actualizada.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la inscripción.",
+        "error",
+      );
+    }
+  }
+
+  async function handleStaffRemoveEventSignup(
+    eventId: string,
+    userId: string,
+    username: string,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteMemberEventSignup(selectedGuildId, eventId, userId);
+      setEvents(await getEvents(selectedGuildId));
+      pushToast(`Inscripción de ${username} quitada.`, "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo quitar la inscripción.",
         "error",
       );
     }
@@ -9012,6 +9333,8 @@ function App() {
                           onRemoveSignup={handleRemoveEventSignup}
                           onResetSignup={handleResetEventSignup}
                           onSignup={handleEventSignup}
+                          onStaffRemoveSignup={handleStaffRemoveEventSignup}
+                          onStaffSignup={handleStaffEventSignup}
                           gameRoles={rolesForGame(event.game)}
                           specs={specsForGame(event.game)}
                         />

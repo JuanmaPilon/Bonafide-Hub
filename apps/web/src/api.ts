@@ -1118,6 +1118,43 @@ export async function deleteEvent(
   );
 }
 
+// ── Edición manual de inscripciones (staff) ────────────────────────
+// El staff con acceso a eventos puede corregir la inscripción de cualquier
+// miembro: estado, rol, clase/spec, personaje y nota.
+export async function upsertMemberEventSignup(
+  guildId: string,
+  eventId: string,
+  userId: string,
+  input: {
+    character?: string;
+    note?: string;
+    role?: string;
+    spec?: string;
+    status: string;
+    wowClass?: string;
+  },
+): Promise<EventSignup> {
+  const data = await requestJson<{ signup: EventSignup }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/${encodeURIComponent(userId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.signup;
+}
+
+export async function deleteMemberEventSignup(
+  guildId: string,
+  eventId: string,
+  userId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function upsertEventSignup(
   guildId: string,
   eventId: string,
