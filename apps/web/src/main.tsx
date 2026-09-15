@@ -1315,6 +1315,8 @@ function EventCard({
     wowClass: string;
   } | null>(null);
   const [staffSaving, setStaffSaving] = useState(false);
+  // Quitar la inscripción de otro miembro es destructivo: pide confirmación.
+  const [staffConfirmRemove, setStaffConfirmRemove] = useState(false);
   // Si ya elegí spec y estado muestro un resumen en vez del editor completo;
   // "Cambiar" vuelve a abrir el editor.
   const [editingSignup, setEditingSignup] = useState(false);
@@ -1457,7 +1459,8 @@ function EventCard({
         {canManage ? (
           <button
             className="event-roster-edit"
-            onClick={() =>
+            onClick={() => {
+              setStaffConfirmRemove(false);
               setStaffEdit({
                 character: signup.character ?? "",
                 role: signup.role ?? "",
@@ -1466,8 +1469,8 @@ function EventCard({
                 userId: signup.userId,
                 username: signup.username,
                 wowClass: signup.wowClass ?? "",
-              })
-            }
+              });
+            }}
             title={`Editar la inscripción de ${signup.username}`}
             type="button"
           >
@@ -1515,6 +1518,7 @@ function EventCard({
         staffEdit.userId,
         staffEdit.username,
       );
+      setStaffConfirmRemove(false);
       setStaffEdit(null);
     } finally {
       setStaffSaving(false);
@@ -1973,7 +1977,13 @@ function EventCard({
           (estado, rol, clase/spec y personaje). El botón ✏️ de cada nombre del
           roster abre este modal. */}
       {staffEdit ? (
-        <div className="modal-overlay" onClick={() => setStaffEdit(null)}>
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setStaffConfirmRemove(false);
+            setStaffEdit(null);
+          }}
+        >
           <div
             className="modal modal-wide"
             onClick={(clickEvent) => clickEvent.stopPropagation()}
@@ -2114,18 +2124,45 @@ function EventCard({
               >
                 {staffSaving ? "Guardando…" : "Guardar"}
               </button>
-              <button
-                className="danger-button"
-                disabled={staffSaving}
-                onClick={() => void removeStaffSignup()}
-                type="button"
-              >
-                Quitar inscripción
-              </button>
+              {staffConfirmRemove ? (
+                <>
+                  <span className="staff-edit-confirm">
+                    ¿Quitar la inscripción de {staffEdit.username}?
+                  </span>
+                  <button
+                    className="danger-button"
+                    disabled={staffSaving}
+                    onClick={() => void removeStaffSignup()}
+                    type="button"
+                  >
+                    Sí, quitar
+                  </button>
+                  <button
+                    className="ghost-button"
+                    disabled={staffSaving}
+                    onClick={() => setStaffConfirmRemove(false)}
+                    type="button"
+                  >
+                    No
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="danger-button"
+                  disabled={staffSaving}
+                  onClick={() => setStaffConfirmRemove(true)}
+                  type="button"
+                >
+                  Quitar inscripción
+                </button>
+              )}
               <button
                 className="ghost-button"
                 disabled={staffSaving}
-                onClick={() => setStaffEdit(null)}
+                onClick={() => {
+                  setStaffConfirmRemove(false);
+                  setStaffEdit(null);
+                }}
                 type="button"
               >
                 Cancelar

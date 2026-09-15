@@ -3294,6 +3294,12 @@ textarea {
   color: var(--muted);
 }
 
+/* Aviso dentro del modal cuando el staff va a quitar una inscripción. */
+.staff-edit-confirm {
+  color: #ffb3b3;
+  font-size: 0.85rem;
+}
+
 /* En el modal los botones de estado muestran emoji + texto, así que dejan de
    ser círculos de tamaño fijo. */
 .staff-edit-row .event-status-btn {
