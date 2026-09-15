@@ -1120,7 +1120,14 @@ export async function deleteEvent(
 
 // ── Edición manual de inscripciones (staff) ────────────────────────
 // El staff con acceso a eventos puede corregir la inscripción de cualquier
-// miembro: estado, rol, clase/spec, personaje y nota.
+// miembro: estado, rol, clase/spec, personaje y nota. Con `notify` además le
+// avisa por mensaje directo de Discord qué le cambiaron.
+export type StaffSignupResult = {
+  notified: boolean;
+  notifyError?: string;
+  signup: EventSignup;
+};
+
 export async function upsertMemberEventSignup(
   guildId: string,
   eventId: string,
@@ -1128,31 +1135,51 @@ export async function upsertMemberEventSignup(
   input: {
     character?: string;
     note?: string;
+    notify?: boolean;
     role?: string;
     spec?: string;
     status: string;
     wowClass?: string;
   },
-): Promise<EventSignup> {
-  const data = await requestJson<{ signup: EventSignup }>(
+): Promise<StaffSignupResult> {
+  const data = await requestJson<{
+    notified?: boolean;
+    notifyError?: string;
+    signup: EventSignup;
+  }>(
     `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/${encodeURIComponent(userId)}`,
     {
       method: "PUT",
       body: JSON.stringify(input),
     },
   );
-  return data.signup;
+  return {
+    notified: data.notified ?? false,
+    notifyError: data.notifyError,
+    signup: data.signup,
+  };
 }
 
 export async function deleteMemberEventSignup(
   guildId: string,
   eventId: string,
   userId: string,
-): Promise<{ deleted: boolean }> {
-  return requestJson<{ deleted: boolean }>(
-    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/${encodeURIComponent(userId)}`,
+  notify = false,
+): Promise<{ deleted: boolean; notified: boolean; notifyError?: string }> {
+  const query = notify ? "?notify=1" : "";
+  const data = await requestJson<{
+    deleted: boolean;
+    notified?: boolean;
+    notifyError?: string;
+  }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/signups/${encodeURIComponent(userId)}${query}`,
     { method: "DELETE" },
   );
+  return {
+    deleted: data.deleted,
+    notified: data.notified ?? false,
+    notifyError: data.notifyError,
+  };
 }
 
 export async function upsertEventSignup(

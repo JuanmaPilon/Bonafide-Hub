@@ -1260,16 +1260,19 @@ function EventCard({
     },
   ) => Promise<void>;
   // Edición manual del staff: cambia la inscripción de cualquier miembro.
+  // `notify` = además avisarle por mensaje directo qué le cambió.
   onStaffRemoveSignup: (
     eventId: string,
     userId: string,
     username: string,
+    notify: boolean,
   ) => Promise<void>;
   onStaffSignup: (
     eventId: string,
     userId: string,
     input: {
       character?: string;
+      notify?: boolean;
       role?: string;
       spec?: string;
       status: string;
@@ -1315,6 +1318,9 @@ function EventCard({
     wowClass: string;
   } | null>(null);
   const [staffSaving, setStaffSaving] = useState(false);
+  // Avisar por MD al miembro de qué le cambió (arranca encendido: es el
+  // motivo por el que el staff abre el editor).
+  const [staffNotify, setStaffNotify] = useState(true);
   // Quitar la inscripción de otro miembro es destructivo: pide confirmación.
   const [staffConfirmRemove, setStaffConfirmRemove] = useState(false);
   // Si ya elegí spec y estado muestro un resumen en vez del editor completo;
@@ -1461,6 +1467,7 @@ function EventCard({
             className="event-roster-edit"
             onClick={() => {
               setStaffConfirmRemove(false);
+              setStaffNotify(true);
               setStaffEdit({
                 character: signup.character ?? "",
                 role: signup.role ?? "",
@@ -1485,8 +1492,9 @@ function EventCard({
   const staffRoleSpecs = staffEdit
     ? specs.filter((row) => row.role === staffEdit.role)
     : [];
-  const staffClasses = [...new Set(staffRoleSpecs.map((row) => row.className))]
-    .sort((a, b) => a.localeCompare(b));
+  const staffClasses = [
+    ...new Set(staffRoleSpecs.map((row) => row.className)),
+  ].sort((a, b) => a.localeCompare(b));
 
   const saveStaffEdit = async (): Promise<void> => {
     if (!staffEdit) {
@@ -1496,6 +1504,7 @@ function EventCard({
     try {
       await onStaffSignup(event.id, staffEdit.userId, {
         character: characterEnabled ? staffEdit.character.trim() : undefined,
+        notify: staffNotify,
         role: staffEdit.role || undefined,
         spec: staffEdit.spec || undefined,
         status: staffEdit.status,
@@ -1517,6 +1526,7 @@ function EventCard({
         event.id,
         staffEdit.userId,
         staffEdit.username,
+        staffNotify,
       );
       setStaffConfirmRemove(false);
       setStaffEdit(null);
@@ -1528,449 +1538,455 @@ function EventCard({
   return (
     <>
       <article className="event-card">
-      {event.imageUrl ? (
-        <img
-          className="event-card-image"
-          src={event.imageUrl}
-          alt={event.title}
-        />
-      ) : (
-        <div className="event-card-image event-card-image-placeholder">
-          <span aria-hidden="true">{typeMeta.emoji}</span>
-        </div>
-      )}
-      <div className="event-card-body">
-        <div className="event-card-head">
-          <strong>{event.title}</strong>
-          <div className="event-card-badges">
-            {paused ? (
-              <span className="event-card-status paused">⏸️ Pausado</span>
-            ) : null}
-            {event.status !== "scheduled" ? (
-              <span className={`event-card-status ${event.status}`}>
-                {event.status === "cancelled" ? "Cancelado" : "Completado"}
-              </span>
-            ) : null}
-            {event.signupDeadline && signupsClosed && !paused ? (
-              <span className="event-card-status closed">🔒 Cerradas</span>
-            ) : null}
-            <ComunicadoTag color={event.tagColor} label={event.tagLabel} />
-          </div>
-        </div>
-        {/* Misma info que el aviso de Discord (mismos emojis y etiquetas),
-            para que la web y el canal cuenten lo mismo. */}
-        <div className="event-info-grid">
-          <div className="event-info-item">
-            <span className="event-info-label">🕒 Empieza</span>
-            <span className="event-info-value">
-              {formatDateTime24(event.startsAt)}
-            </span>
-          </div>
-          <div className="event-info-item">
-            <span className="event-info-label">⏱️ Duración</span>
-            <span className="event-info-value">
-              {event.durationMinutes
-                ? `${event.durationMinutes} min${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
-                : "—"}
-            </span>
-          </div>{" "}
-          <div className="event-info-item">
-            <span className="event-info-label">⏳ Cierre de inscripciones</span>
-            <span
-              className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
-            >
-              {event.signupDeadline
-                ? `${formatDateTime24(event.signupDeadline)}${
-                    signupsClosed ? " · ya cerró" : ""
-                  }`
-                : "—"}
-            </span>
-          </div>
-          {event.recurrenceEnabled && event.recurrenceEveryDays ? (
-            <div className="event-info-item">
-              <span className="event-info-label">🔁 Repetición</span>
-              <span className="event-info-value">
-                {`Cada ${event.recurrenceEveryDays} días`}
-              </span>
-            </div>
-          ) : recurrenceLabel(event.discordEventConfig?.recurrence) ? (
-            <div className="event-info-item">
-              <span className="event-info-label">🔁 Repetición</span>
-              <span className="event-info-value">
-                {recurrenceLabel(event.discordEventConfig?.recurrence)}
-              </span>
-            </div>
-          ) : null}
-          {event.discordEventConfig?.entityType === "external" &&
-          event.discordEventConfig.location ? (
-            <div className="event-info-item">
-              <span className="event-info-label">📍 Ubicación</span>
-              <span className="event-info-value">
-                {event.discordEventConfig.location}
-              </span>
-            </div>
-          ) : null}
-          {event.requiredRoleId ? (
-            <div className="event-info-item wide">
-              <span className="event-info-label">👥 Roster principal</span>
-              <span className="event-info-value">
-                Requiere{" "}
-                <strong>
-                  {event.requiredRoleName ??
-                    guildRoles.find((role) => role.id === event.requiredRoleId)
-                      ?.name ??
-                    "el rol mínimo"}
-                </strong>
-                <em className="event-info-note">
-                  Sin el rol, la inscripción queda como Bench.
-                </em>
-              </span>
-            </div>
-          ) : null}
-          {event.discordEventId ||
-          (event.discordMessageIds?.length ?? 0) > 0 ? (
-            <div className="event-info-item wide">
-              <span className="event-info-label">📣 Discord</span>
-              <span className="event-info-value">
-                {event.discordEventId ? (
-                  <a
-                    className="raid-log-link"
-                    href={`https://discord.com/events/${event.guildId}/${event.discordEventId}`}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Ver evento en Discord
-                  </a>
-                ) : (
-                  <span className="muted-text">Aviso publicado</span>
-                )}
-              </span>
-            </div>
-          ) : null}
-        </div>
-        {paused ? (
-          <div className="event-deadline paused">⏸️ Evento pausado</div>
-        ) : null}
-        {event.description?.trim() ? (
-          <p className="event-card-desc">{event.description.trim()}</p>
-        ) : null}
-        <div className="event-card-assistance">
-          <span className="event-info-label">📊 Asistencia</span>
-          <div className="event-card-counts">
-            <span className="event-count total">
-              👥 {counts.yes}
-              {counts.bench + counts.late > 0
-                ? ` (+${counts.bench + counts.late})`
-                : ""}
-            </span>
-            {SIGNUP_OPTIONS.map((option) => (
-              <span className={`event-count ${option.key}`} key={option.key}>
-                {option.emoji} {counts[option.key]}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {event.signups.length > 0 ? (
-          <div className="event-roster">
-            {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
-                con sus confirmados (nombre, personaje y clase/spec). */}
-            <div className="event-roster-columns">
-              {rosterColumns.map((entry) => {
-                const roleSignups = event.signups.filter(
-                  (signup) =>
-                    signup.status === "yes" &&
-                    (signup.role?.trim() ?? "") === entry.role,
-                );
-                if (roleSignups.length === 0) {
-                  return null;
-                }
-                return (
-                  <div className="event-roster-column" key={entry.key}>
-                    <span className="event-roster-role">
-                      <EventRoleEmoji
-                        role={entry.role || "sin-rol"}
-                        roles={eventRoles}
-                      />{" "}
-                      {entry.label} ({roleSignups.length})
-                    </span>
-                    <div className="event-roster-members">
-                      {roleSignups.map((signup) =>
-                        renderRosterEntry(signup),
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Grupos por estado (uno por fila, debajo del roster): tarde,
-                bench y al final los que no asisten. */}
-            <div className="event-roster-statuses">
-              {(
-                [
-                  ["late", "⏰", "Llegan tarde"],
-                  ["bench", "🪑", "Bench"],
-                  ["no", "❌", "No asisten"],
-                ] as const
-              ).map(([statusKey, emoji, label]) => {
-                const members = event.signups.filter(
-                  (signup) => signup.status === statusKey,
-                );
-                if (members.length === 0) {
-                  return null;
-                }
-                return (
-                  <div className="event-roster-group" key={statusKey}>
-                    <span className="event-roster-role">
-                      {emoji} {label} ({members.length})
-                    </span>
-                    <span className="event-roster-group-members">
-                      {members.map((signup) => renderRosterEntry(signup))}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+        {event.imageUrl ? (
+          <img
+            className="event-card-image"
+            src={event.imageUrl}
+            alt={event.title}
+          />
         ) : (
-          <div className="event-roster-empty">Sin inscripciones todavía.</div>
+          <div className="event-card-image event-card-image-placeholder">
+            <span aria-hidden="true">{typeMeta.emoji}</span>
+          </div>
         )}
-
-        {meId ? (
-          <div className="event-signup">
-            {signupsClosed ? (
-              <div className="event-signup-closed">
-                {paused
-                  ? "⏸️ El evento está pausado."
-                  : "🔒 Las inscripciones están cerradas."}
-                {mySignup ? " Tu inscripción actual queda guardada." : ""}
+        <div className="event-card-body">
+          <div className="event-card-head">
+            <strong>{event.title}</strong>
+            <div className="event-card-badges">
+              {paused ? (
+                <span className="event-card-status paused">⏸️ Pausado</span>
+              ) : null}
+              {event.status !== "scheduled" ? (
+                <span className={`event-card-status ${event.status}`}>
+                  {event.status === "cancelled" ? "Cancelado" : "Completado"}
+                </span>
+              ) : null}
+              {event.signupDeadline && signupsClosed && !paused ? (
+                <span className="event-card-status closed">🔒 Cerradas</span>
+              ) : null}
+              <ComunicadoTag color={event.tagColor} label={event.tagLabel} />
+            </div>
+          </div>
+          {/* Misma info que el aviso de Discord (mismos emojis y etiquetas),
+            para que la web y el canal cuenten lo mismo. */}
+          <div className="event-info-grid">
+            <div className="event-info-item">
+              <span className="event-info-label">🕒 Empieza</span>
+              <span className="event-info-value">
+                {formatDateTime24(event.startsAt)}
+              </span>
+            </div>
+            <div className="event-info-item">
+              <span className="event-info-label">⏱️ Duración</span>
+              <span className="event-info-value">
+                {event.durationMinutes
+                  ? `${event.durationMinutes} min${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
+                  : "—"}
+              </span>
+            </div>{" "}
+            <div className="event-info-item">
+              <span className="event-info-label">
+                ⏳ Cierre de inscripciones
+              </span>
+              <span
+                className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
+              >
+                {event.signupDeadline
+                  ? `${formatDateTime24(event.signupDeadline)}${
+                      signupsClosed ? " · ya cerró" : ""
+                    }`
+                  : "—"}
+              </span>
+            </div>
+            {event.recurrenceEnabled && event.recurrenceEveryDays ? (
+              <div className="event-info-item">
+                <span className="event-info-label">🔁 Repetición</span>
+                <span className="event-info-value">
+                  {`Cada ${event.recurrenceEveryDays} días`}
+                </span>
               </div>
-            ) : (
-              <>
-                {showSignupSummary ? (
-                  <div className="event-signup-summary">
-                    <div className="event-signup-summary-row">
-                      <span className="event-signup-summary-status">
-                        {SIGNUP_OPTIONS.find(
-                          (option) => option.key === mySignup?.status,
-                        )?.emoji ?? "❔"}{" "}
-                        {SIGNUP_OPTIONS.find(
-                          (option) => option.key === mySignup?.status,
-                        )?.label ?? mySignup?.status}
+            ) : recurrenceLabel(event.discordEventConfig?.recurrence) ? (
+              <div className="event-info-item">
+                <span className="event-info-label">🔁 Repetición</span>
+                <span className="event-info-value">
+                  {recurrenceLabel(event.discordEventConfig?.recurrence)}
+                </span>
+              </div>
+            ) : null}
+            {event.discordEventConfig?.entityType === "external" &&
+            event.discordEventConfig.location ? (
+              <div className="event-info-item">
+                <span className="event-info-label">📍 Ubicación</span>
+                <span className="event-info-value">
+                  {event.discordEventConfig.location}
+                </span>
+              </div>
+            ) : null}
+            {event.requiredRoleId ? (
+              <div className="event-info-item wide">
+                <span className="event-info-label">👥 Roster principal</span>
+                <span className="event-info-value">
+                  Requiere{" "}
+                  <strong>
+                    {event.requiredRoleName ??
+                      guildRoles.find(
+                        (role) => role.id === event.requiredRoleId,
+                      )?.name ??
+                      "el rol mínimo"}
+                  </strong>
+                  <em className="event-info-note">
+                    Sin el rol, la inscripción queda como Bench.
+                  </em>
+                </span>
+              </div>
+            ) : null}
+            {event.discordEventId ||
+            (event.discordMessageIds?.length ?? 0) > 0 ? (
+              <div className="event-info-item wide">
+                <span className="event-info-label">📣 Discord</span>
+                <span className="event-info-value">
+                  {event.discordEventId ? (
+                    <a
+                      className="raid-log-link"
+                      href={`https://discord.com/events/${event.guildId}/${event.discordEventId}`}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Ver evento en Discord
+                    </a>
+                  ) : (
+                    <span className="muted-text">Aviso publicado</span>
+                  )}
+                </span>
+              </div>
+            ) : null}
+          </div>
+          {paused ? (
+            <div className="event-deadline paused">⏸️ Evento pausado</div>
+          ) : null}
+          {event.description?.trim() ? (
+            <p className="event-card-desc">{event.description.trim()}</p>
+          ) : null}
+          <div className="event-card-assistance">
+            <span className="event-info-label">📊 Asistencia</span>
+            <div className="event-card-counts">
+              <span className="event-count total">
+                👥 {counts.yes}
+                {counts.bench + counts.late > 0
+                  ? ` (+${counts.bench + counts.late})`
+                  : ""}
+              </span>
+              {SIGNUP_OPTIONS.map((option) => (
+                <span className={`event-count ${option.key}`} key={option.key}>
+                  {option.emoji} {counts[option.key]}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {event.signups.length > 0 ? (
+            <div className="event-roster">
+              {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
+                con sus confirmados (nombre, personaje y clase/spec). */}
+              <div className="event-roster-columns">
+                {rosterColumns.map((entry) => {
+                  const roleSignups = event.signups.filter(
+                    (signup) =>
+                      signup.status === "yes" &&
+                      (signup.role?.trim() ?? "") === entry.role,
+                  );
+                  if (roleSignups.length === 0) {
+                    return null;
+                  }
+                  return (
+                    <div className="event-roster-column" key={entry.key}>
+                      <span className="event-roster-role">
+                        <EventRoleEmoji
+                          role={entry.role || "sin-rol"}
+                          roles={eventRoles}
+                        />{" "}
+                        {entry.label} ({roleSignups.length})
+                      </span>
+                      <div className="event-roster-members">
+                        {roleSignups.map((signup) => renderRosterEntry(signup))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Grupos por estado (uno por fila, debajo del roster): tarde,
+                bench y al final los que no asisten. */}
+              <div className="event-roster-statuses">
+                {(
+                  [
+                    ["late", "⏰", "Llegan tarde"],
+                    ["bench", "🪑", "Bench"],
+                    ["no", "❌", "No asisten"],
+                  ] as const
+                ).map(([statusKey, emoji, label]) => {
+                  const members = event.signups.filter(
+                    (signup) => signup.status === statusKey,
+                  );
+                  if (members.length === 0) {
+                    return null;
+                  }
+                  return (
+                    <div className="event-roster-group" key={statusKey}>
+                      <span className="event-roster-role">
+                        {emoji} {label} ({members.length})
+                      </span>
+                      <span className="event-roster-group-members">
+                        {members.map((signup) => renderRosterEntry(signup))}
                       </span>
                     </div>
-                    {mySignup?.character ? (
-                      <div className="event-signup-summary-line">
-                        Personaje: {mySignup.character}
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="event-roster-empty">Sin inscripciones todavía.</div>
+          )}
+
+          {meId ? (
+            <div className="event-signup">
+              {signupsClosed ? (
+                <div className="event-signup-closed">
+                  {paused
+                    ? "⏸️ El evento está pausado."
+                    : "🔒 Las inscripciones están cerradas."}
+                  {mySignup ? " Tu inscripción actual queda guardada." : ""}
+                </div>
+              ) : (
+                <>
+                  {showSignupSummary ? (
+                    <div className="event-signup-summary">
+                      <div className="event-signup-summary-row">
+                        <span className="event-signup-summary-status">
+                          {SIGNUP_OPTIONS.find(
+                            (option) => option.key === mySignup?.status,
+                          )?.emoji ?? "❔"}{" "}
+                          {SIGNUP_OPTIONS.find(
+                            (option) => option.key === mySignup?.status,
+                          )?.label ?? mySignup?.status}
+                        </span>
                       </div>
-                    ) : null}
-                    <div className="event-signup-actions">
-                      <button
-                        className="primary-button"
-                        onClick={() => setEditingSignup(true)}
-                        type="button"
-                      >
-                        Cambiar
-                      </button>
-                      <button
-                        className="danger-button"
-                        onClick={() => void onRemoveSignup(event.id)}
-                        type="button"
-                      >
-                        Quitar inscripción
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="event-signup-status">
-                      {SIGNUP_OPTIONS.map((option) => (
+                      {mySignup?.character ? (
+                        <div className="event-signup-summary-line">
+                          Personaje: {mySignup.character}
+                        </div>
+                      ) : null}
+                      <div className="event-signup-actions">
                         <button
-                          className={`event-status-btn ${option.key}${status === option.key ? " active" : ""}`}
-                          key={option.key}
-                          onClick={() => setStatus(option.key)}
-                          title={option.label}
+                          className="primary-button"
+                          onClick={() => setEditingSignup(true)}
                           type="button"
                         >
-                          {option.emoji}
+                          Cambiar
                         </button>
-                      ))}
+                        <button
+                          className="danger-button"
+                          onClick={() => void onRemoveSignup(event.id)}
+                          type="button"
+                        >
+                          Quitar inscripción
+                        </button>
+                      </div>
                     </div>
-                    <div className="event-signup-picker">
-                      <div className="event-signup-role-row">
-                        {eventRoles.map((entry) => (
+                  ) : (
+                    <>
+                      <div className="event-signup-status">
+                        {SIGNUP_OPTIONS.map((option) => (
                           <button
-                            className={`event-status-btn role${catalogRole === entry.key ? " active" : ""}`}
-                            key={entry.key}
-                            onClick={() => setCatalogRole(entry.key)}
-                            title={entry.label}
+                            className={`event-status-btn ${option.key}${status === option.key ? " active" : ""}`}
+                            key={option.key}
+                            onClick={() => setStatus(option.key)}
+                            title={option.label}
                             type="button"
                           >
-                            <EventRoleEmoji
-                              role={entry.key}
-                              roles={eventRoles}
-                            />
+                            {option.emoji}
                           </button>
                         ))}
                       </div>
-                      {specs.length === 0 ? (
-                        <div className="event-signup-no-catalog">
-                          El staff todavía no configuró los roles de evento
-                          (Admin → Configuración de eventos).
-                        </div>
-                      ) : catalogClasses.length === 0 ? (
-                        <div className="event-signup-no-catalog">
-                          Todavía no hay clases cargadas para ese rol.
-                        </div>
-                      ) : (
-                        <div className="event-signup-specs">
-                          {catalogClasses.map(([className, rows]) => (
-                            <div className="event-signup-class" key={className}>
-                              <span className="event-signup-class-name">
-                                {className}
-                              </span>
-                              <div className="event-signup-spec-row">
-                                {rows.map((row) => {
-                                  const selected =
-                                    role === row.role &&
-                                    wowClass === row.className &&
-                                    spec === row.specName;
-                                  return (
-                                    <button
-                                      className={`event-signup-spec${selected ? " active" : ""}`}
-                                      key={row.id}
-                                      onClick={() => chooseSpec(row)}
-                                      title={`${row.specName} — ${row.className} (${roleLabelFor(row.role)})`}
-                                      type="button"
-                                    >
-                                      <DiscordEmojiImage
-                                        animated={row.animated}
-                                        emojiId={row.emojiId}
-                                        name={row.specName}
-                                        size={24}
-                                      />
-                                      <span>{row.specName}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {role && wowClass && spec ? (
-                        <div className="event-signup-selected">
-                          <DiscordEmojiImage
-                            animated={currentSpecRow?.animated}
-                            emojiId={currentSpecRow?.emojiId}
-                            fallback={classEmoji(wowClass)}
-                            name={currentSpecRow?.specName}
-                          />
-                          <span>
-                            {roleLabelFor(role)} · {wowClass}
-                            {spec ? ` · ${spec}` : ""}
-                          </span>
-                          <button
-                            className="ghost-button small"
-                            onClick={() => {
-                              setRole("");
-                              setWowClass("");
-                              setSpec("");
-                            }}
-                            type="button"
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ) : null}
-                      {characterEnabled ? (
-                        <input
-                          className="input"
-                          value={character}
-                          onChange={(event) => setCharacter(event.target.value)}
-                          maxLength={40}
-                          placeholder="Nombre de tu personaje"
-                        />
-                      ) : null}
-                      {signupError ? (
-                        <span className="event-signup-error">
-                          ⚠️ {signupError}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="event-signup-actions">
-                      <button
-                        className="primary-button"
-                        onClick={() => void submit()}
-                        disabled={
-                          submitting || (Boolean(mySignup) && !signupDirty)
-                        }
-                        type="button"
-                      >
-                        {submitting ? "Guardando…" : "Guardar inscripción"}
-                      </button>
-                      {mySignup ? (
-                        <>
-                          {hasFullSignup ? (
+                      <div className="event-signup-picker">
+                        <div className="event-signup-role-row">
+                          {eventRoles.map((entry) => (
                             <button
-                              className="ghost-button"
-                              onClick={() => setEditingSignup(false)}
+                              className={`event-status-btn role${catalogRole === entry.key ? " active" : ""}`}
+                              key={entry.key}
+                              onClick={() => setCatalogRole(entry.key)}
+                              title={entry.label}
                               type="button"
                             >
-                              Cancelar
+                              <EventRoleEmoji
+                                role={entry.key}
+                                roles={eventRoles}
+                              />
                             </button>
-                          ) : null}
-                          <button
-                            className="ghost-button"
-                            onClick={() => void onResetSignup(event.id)}
-                            title="Borra tu inscripción y el personaje recordado"
-                            type="button"
-                          >
-                            🔄 Resetear registro
-                          </button>
-                          <button
-                            className="danger-button"
-                            onClick={() => void onRemoveSignup(event.id)}
-                            type="button"
-                          >
-                            Quitar inscripción
-                          </button>
-                        </>
-                      ) : null}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        ) : null}
+                          ))}
+                        </div>
+                        {specs.length === 0 ? (
+                          <div className="event-signup-no-catalog">
+                            El staff todavía no configuró los roles de evento
+                            (Admin → Configuración de eventos).
+                          </div>
+                        ) : catalogClasses.length === 0 ? (
+                          <div className="event-signup-no-catalog">
+                            Todavía no hay clases cargadas para ese rol.
+                          </div>
+                        ) : (
+                          <div className="event-signup-specs">
+                            {catalogClasses.map(([className, rows]) => (
+                              <div
+                                className="event-signup-class"
+                                key={className}
+                              >
+                                <span className="event-signup-class-name">
+                                  {className}
+                                </span>
+                                <div className="event-signup-spec-row">
+                                  {rows.map((row) => {
+                                    const selected =
+                                      role === row.role &&
+                                      wowClass === row.className &&
+                                      spec === row.specName;
+                                    return (
+                                      <button
+                                        className={`event-signup-spec${selected ? " active" : ""}`}
+                                        key={row.id}
+                                        onClick={() => chooseSpec(row)}
+                                        title={`${row.specName} — ${row.className} (${roleLabelFor(row.role)})`}
+                                        type="button"
+                                      >
+                                        <DiscordEmojiImage
+                                          animated={row.animated}
+                                          emojiId={row.emojiId}
+                                          name={row.specName}
+                                          size={24}
+                                        />
+                                        <span>{row.specName}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {role && wowClass && spec ? (
+                          <div className="event-signup-selected">
+                            <DiscordEmojiImage
+                              animated={currentSpecRow?.animated}
+                              emojiId={currentSpecRow?.emojiId}
+                              fallback={classEmoji(wowClass)}
+                              name={currentSpecRow?.specName}
+                            />
+                            <span>
+                              {roleLabelFor(role)} · {wowClass}
+                              {spec ? ` · ${spec}` : ""}
+                            </span>
+                            <button
+                              className="ghost-button small"
+                              onClick={() => {
+                                setRole("");
+                                setWowClass("");
+                                setSpec("");
+                              }}
+                              type="button"
+                            >
+                              Quitar
+                            </button>
+                          </div>
+                        ) : null}
+                        {characterEnabled ? (
+                          <input
+                            className="input"
+                            value={character}
+                            onChange={(event) =>
+                              setCharacter(event.target.value)
+                            }
+                            maxLength={40}
+                            placeholder="Nombre de tu personaje"
+                          />
+                        ) : null}
+                        {signupError ? (
+                          <span className="event-signup-error">
+                            ⚠️ {signupError}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="event-signup-actions">
+                        <button
+                          className="primary-button"
+                          onClick={() => void submit()}
+                          disabled={
+                            submitting || (Boolean(mySignup) && !signupDirty)
+                          }
+                          type="button"
+                        >
+                          {submitting ? "Guardando…" : "Guardar inscripción"}
+                        </button>
+                        {mySignup ? (
+                          <>
+                            {hasFullSignup ? (
+                              <button
+                                className="ghost-button"
+                                onClick={() => setEditingSignup(false)}
+                                type="button"
+                              >
+                                Cancelar
+                              </button>
+                            ) : null}
+                            <button
+                              className="ghost-button"
+                              onClick={() => void onResetSignup(event.id)}
+                              title="Borra tu inscripción y el personaje recordado"
+                              type="button"
+                            >
+                              🔄 Resetear registro
+                            </button>
+                            <button
+                              className="danger-button"
+                              onClick={() => void onRemoveSignup(event.id)}
+                              type="button"
+                            >
+                              Quitar inscripción
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          ) : null}
 
-        {canManage ? (
-          <div className="event-card-actions">
-            <button
-              className="primary-button"
-              onClick={() => onEdit(event)}
-              type="button"
-            >
-              Editar
-            </button>
-            <button
-              className="primary-button"
-              onClick={() => onDuplicate(event)}
-              type="button"
-            >
-              Duplicar
-            </button>
-            <button
-              className="danger-button"
-              onClick={() => onDelete(event)}
-              type="button"
-            >
-              Eliminar evento
-            </button>
-          </div>
-        ) : null}
-      </div>
+          {canManage ? (
+            <div className="event-card-actions">
+              <button
+                className="primary-button"
+                onClick={() => onEdit(event)}
+                type="button"
+              >
+                Editar
+              </button>
+              <button
+                className="primary-button"
+                onClick={() => onDuplicate(event)}
+                type="button"
+              >
+                Duplicar
+              </button>
+              <button
+                className="danger-button"
+                onClick={() => onDelete(event)}
+                type="button"
+              >
+                Eliminar evento
+              </button>
+            </div>
+          ) : null}
+        </div>
       </article>
 
       {/* Edición manual del staff: corrige la inscripción de cualquier miembro
@@ -2115,6 +2131,28 @@ function EventCard({
               </div>
             ) : null}
 
+            <label
+              className={`module-toggle${staffNotify ? " checked" : ""}`}
+            >
+              <span className="module-toggle-text">
+                <strong>🔔 Avisarle por mensaje directo</strong>
+                <small>
+                  Le llega un MD con lo que cambió. Si no cambió nada, no se
+                  envía.
+                </small>
+              </span>
+              <span className="module-switch">
+                <input
+                  type="checkbox"
+                  checked={staffNotify}
+                  onChange={() => setStaffNotify((current) => !current)}
+                />
+                <span className="module-switch-track" aria-hidden="true">
+                  <span className="module-switch-thumb" />
+                </span>
+              </span>
+            </label>
+
             <div className="event-signup-actions">
               <button
                 className="primary-button"
@@ -2128,6 +2166,7 @@ function EventCard({
                 <>
                   <span className="staff-edit-confirm">
                     ¿Quitar la inscripción de {staffEdit.username}?
+                    {staffNotify ? " Se le avisa por MD." : ""}
                   </span>
                   <button
                     className="danger-button"
@@ -3646,6 +3685,7 @@ function App() {
     userId: string,
     input: {
       character?: string;
+      notify?: boolean;
       role?: string;
       spec?: string;
       status: string;
@@ -3656,9 +3696,22 @@ function App() {
       return;
     }
     try {
-      await upsertMemberEventSignup(selectedGuildId, eventId, userId, input);
+      const result = await upsertMemberEventSignup(
+        selectedGuildId,
+        eventId,
+        userId,
+        input,
+      );
       setEvents(await getEvents(selectedGuildId));
-      pushToast("Inscripción actualizada.", "success");
+      pushToast(
+        result.notified
+          ? "Inscripción actualizada y avisada por MD."
+          : "Inscripción actualizada.",
+        "success",
+      );
+      if (input.notify && result.notifyError) {
+        pushToast(`No se pudo avisar: ${result.notifyError}`, "error");
+      }
     } catch (error) {
       pushToast(
         error instanceof Error
@@ -3673,14 +3726,28 @@ function App() {
     eventId: string,
     userId: string,
     username: string,
+    notify: boolean,
   ): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     try {
-      await deleteMemberEventSignup(selectedGuildId, eventId, userId);
+      const result = await deleteMemberEventSignup(
+        selectedGuildId,
+        eventId,
+        userId,
+        notify,
+      );
       setEvents(await getEvents(selectedGuildId));
-      pushToast(`Inscripción de ${username} quitada.`, "success");
+      pushToast(
+        result.notified
+          ? `Inscripción de ${username} quitada y avisada por MD.`
+          : `Inscripción de ${username} quitada.`,
+        "success",
+      );
+      if (notify && result.notifyError) {
+        pushToast(`No se pudo avisar: ${result.notifyError}`, "error");
+      }
     } catch (error) {
       pushToast(
         error instanceof Error

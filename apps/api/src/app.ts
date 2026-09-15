@@ -123,6 +123,7 @@ import {
   cleanupEventDiscord,
   fetchGuildIconUrl,
   resolveAnnouncementContent,
+  sendDirectMessage,
   syncEventToDiscord,
   updateEventAnnouncement,
   type AnnouncementSignup,
@@ -4581,6 +4582,140 @@ export function buildApp() {
     },
   );
 
+  // ── Aviso al miembro cuando el staff le toca la inscripción ────────
+  // Etiquetas de estado del roster (espejo de SIGNUP_OPTIONS de la web).
+  const SIGNUP_STATUS_LABELS: Record<string, string> = {
+    bench: "🪑 Bench",
+    late: "⏰ Llega tarde",
+    no: "❌ No asisto",
+    tentative: "❔ Tentativo",
+    yes: "✅ Asisto",
+  };
+
+  // Datos mínimos de una inscripción para armar el aviso (sirve tanto para el
+  // registro guardado como para los valores nuevos que manda la web).
+  type SignupSnapshot = {
+    character?: string | null;
+    role?: string | null;
+    spec?: string | null;
+    status?: string | null;
+    wowClass?: string | null;
+  };
+
+  const describeLabel = (value?: string | null): string => value || "—";
+
+  const classSpecLabel = (
+    wowClass?: string | null,
+    spec?: string | null,
+  ): string => {
+    const parts = [wowClass, spec].filter((value) => Boolean(value));
+    return parts.length > 0 ? parts.join(" · ") : "—";
+  };
+
+  // Manda un MD al miembro contando qué cambió el staff. Solo avisa si algo
+  // cambió de verdad (así un "Guardar" sin tocar nada no molesta a nadie) y
+  // devuelve el motivo cuando Discord no dejó entregarlo.
+  async function sendStaffSignupDm(input: {
+    event: HubEvent;
+    next?: SignupSnapshot;
+    previous?: SignupSnapshot;
+    removed?: boolean;
+    userId: string;
+  }): Promise<{ error?: string; notified: boolean }> {
+    const { event } = input;
+    const config = await getGuildConfig(event.guildId);
+    const roles = resolveEventRoles(config, event.game);
+
+    const roleLabel = (key?: string | null): string => {
+      if (!key) {
+        return "Sin rol";
+      }
+      const found = roles.find((entry) => entry.key === key);
+      // Solo el emoji unicode: los custom (`<:nombre:id>`) no se ven igual en
+      // todos los clientes y ensucian el mensaje.
+      const emoji = found?.emoji && !found.emojiId ? `${found.emoji} ` : "";
+      return `${emoji}${found?.label ?? key}`;
+    };
+    const statusLabel = (status?: string | null): string =>
+      status ? (SIGNUP_STATUS_LABELS[status] ?? status) : "—";
+
+    const changes: string[] = [];
+    if (input.previous && input.next) {
+      const { next, previous } = input;
+      if (previous.status !== next.status) {
+        changes.push(
+          `• **Estado:** ${statusLabel(previous.status)} → ${statusLabel(next.status)}`,
+        );
+      }
+      if ((previous.role ?? "") !== (next.role ?? "")) {
+        changes.push(
+          `• **Rol:** ${roleLabel(previous.role)} → ${roleLabel(next.role)}`,
+        );
+      }
+      if (
+        (previous.wowClass ?? "") !== (next.wowClass ?? "") ||
+        (previous.spec ?? "") !== (next.spec ?? "")
+      ) {
+        changes.push(
+          `• **Clase / Spec:** ${classSpecLabel(previous.wowClass, previous.spec)} → ${classSpecLabel(next.wowClass, next.spec)}`,
+        );
+      }
+      if ((previous.character ?? "") !== (next.character ?? "")) {
+        changes.push(
+          `• **Personaje:** ${describeLabel(previous.character)} → ${describeLabel(next.character)}`,
+        );
+      }
+    }
+
+    if (!input.removed && changes.length === 0) {
+      // Nada cambió: no hay nada que avisar.
+      return { notified: false };
+    }
+
+    const startsAtUnix = Math.floor(event.startsAt.getTime() / 1000);
+    const blocks: string[] = [
+      `**${event.title}**`,
+      `🗓️ <t:${startsAtUnix}:F> · <t:${startsAtUnix}:R>`,
+      "",
+      input.removed
+        ? "El staff quitó tu inscripción a este evento."
+        : `**Cambios del staff**\n${changes.join("\n")}`,
+    ];
+
+    if (input.next) {
+      blocks.push(
+        "",
+        "**Tu inscripción ahora**",
+        `• **Estado:** ${statusLabel(input.next.status)}`,
+        `• **Rol:** ${roleLabel(input.next.role)}`,
+        `• **Clase / Spec:** ${classSpecLabel(input.next.wowClass, input.next.spec)}`,
+        `• **Personaje:** ${describeLabel(input.next.character)}`,
+      );
+    }
+
+    const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
+    if (webBase) {
+      blocks.push("", `[🌐 Ver los eventos en la web](${webBase}/#/eventos)`);
+    }
+
+    const result = await sendDirectMessage(input.userId, {
+      embeds: [
+        {
+          color: 0x6aa8ff,
+          description: blocks.join("\n"),
+          footer: { text: "Bonafide Hub · Eventos" },
+          title: input.removed
+            ? "✏️ El staff quitó tu inscripción"
+            : "✏️ El staff cambió tu inscripción",
+        },
+      ],
+    });
+
+    return result.ok
+      ? { notified: true }
+      : { error: result.error, notified: false };
+  }
+
   // ── Edición manual de inscripciones por el staff ───────────────────
   // El staff con acceso al módulo de eventos puede corregir la inscripción de
   // CUALQUIER miembro: estado, rol, clase/spec, personaje y nota. Sirve para
@@ -4618,6 +4753,8 @@ export function buildApp() {
       const body = (request.body ?? {}) as {
         character?: string;
         note?: string;
+        // Toggle de la web: avisar por MD al miembro de qué le cambiaron.
+        notify?: boolean;
         role?: string;
         spec?: string;
         status?: string;
@@ -4667,13 +4804,41 @@ export function buildApp() {
       // Si el evento está publicado en Discord, actualiza su embed (roster).
       await refreshEventAnnouncement(params.guildId, params.eventId);
 
+      // Aviso opcional al miembro. Va DESPUÉS de guardar (y de refrescar el
+      // embed): si Discord falla, la corrección igual quedó hecha y la web
+      // muestra el motivo del aviso fallido.
+      let notified = false;
+      let notifyError: string | undefined;
+      if (body.notify) {
+        const result = await sendStaffSignupDm({
+          event,
+          next: {
+            character: signup.character,
+            role: signup.role,
+            spec: signup.spec,
+            status: signup.status,
+            wowClass: signup.wowClass,
+          },
+          previous: existing,
+          userId: params.userId,
+        });
+        notified = result.notified;
+        notifyError = result.error;
+      }
+
       await logAdminAction(session, params.guildId, "event:signup-edit", {
-        details: `Inscripción editada a mano: ${username} (${status})`,
+        details: `Inscripción editada a mano: ${username} (${status})${notified ? " + aviso por MD" : ""}`,
         targetId: params.userId,
         targetType: "event-signup",
       });
 
-      return { ok: true, guildId: params.guildId, signup };
+      return {
+        ok: true,
+        guildId: params.guildId,
+        notified,
+        notifyError,
+        signup,
+      };
     },
   );
 
@@ -4699,6 +4864,20 @@ export function buildApp() {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
+      // `?notify=1` = avisar por MD al miembro (toggle de la web). Se lee el
+      // evento ANTES de borrar para saber a quién y qué avisar.
+      const query = request.query as { notify?: string };
+      const shouldNotify = query.notify === "1" || query.notify === "true";
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+      const existing = event.signups.find(
+        (signup) => signup.userId === params.userId,
+      );
+
       const deleted = await deleteSignup(
         params.guildId,
         params.eventId,
@@ -4706,13 +4885,26 @@ export function buildApp() {
       );
       await refreshEventAnnouncement(params.guildId, params.eventId);
 
+      let notified = false;
+      let notifyError: string | undefined;
+      if (shouldNotify && existing) {
+        const result = await sendStaffSignupDm({
+          event,
+          removed: true,
+          previous: existing,
+          userId: params.userId,
+        });
+        notified = result.notified;
+        notifyError = result.error;
+      }
+
       await logAdminAction(session, params.guildId, "event:signup-remove", {
-        details: "Inscripción quitada a mano",
+        details: `Inscripción quitada a mano: ${existing?.username ?? params.userId}${notified ? " + aviso por MD" : ""}`,
         targetId: params.userId,
         targetType: "event-signup",
       });
 
-      return { ok: true, guildId: params.guildId, deleted };
+      return { ok: true, guildId: params.guildId, deleted, notified, notifyError };
     },
   );
 
@@ -4788,7 +4980,8 @@ export function buildApp() {
       // de nuevo a quien ya lo cargó en otro evento).
       const query = request.query as { userId?: string };
       const playerCharacter = query.userId
-        ? ((await getEventPlayerCharacter(params.guildId, query.userId)) ?? null)
+        ? ((await getEventPlayerCharacter(params.guildId, query.userId)) ??
+          null)
         : null;
       return {
         ok: true,

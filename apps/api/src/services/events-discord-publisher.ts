@@ -140,6 +140,54 @@ async function errorMessage(response: Response): Promise<string> {
   }
 }
 
+// ── Mensajes directos (MD) ──────────────────────────────────────────
+// El staff puede avisarle a un miembro que le cambió la inscripción a un
+// evento. Se manda por MD del bot: primero se abre (o reutiliza) el canal
+// privado con `POST /users/@me/channels` y después se postea el mensaje.
+// Devuelve un error "humano" (apto para un toast) cuando no se pudo avisar.
+export async function sendDirectMessage(
+  userId: string,
+  payload: { content?: string; embeds?: unknown[] },
+): Promise<{ error?: string; ok: boolean }> {
+  if (!env.DISCORD_BOT_TOKEN) {
+    return { error: "Falta DISCORD_BOT_TOKEN en el API.", ok: false };
+  }
+
+  try {
+    const channelResponse = await discordFetch("/users/@me/channels", {
+      body: { recipient_id: userId },
+      method: "POST",
+    });
+    if (!channelResponse.ok) {
+      // 403 = el miembro tiene los MD cerrados (o no comparte servidor con
+      // el bot): es el caso más común, así que damos un mensaje claro.
+      if (channelResponse.status === 403) {
+        return {
+          error: "El miembro no acepta mensajes directos del bot.",
+          ok: false,
+        };
+      }
+      return { error: await errorMessage(channelResponse), ok: false };
+    }
+
+    const channel = (await channelResponse.json()) as { id: string };
+    const messageResponse = await discordFetch(
+      `/channels/${channel.id}/messages`,
+      { body: payload, method: "POST" },
+    );
+    if (!messageResponse.ok) {
+      return { error: await errorMessage(messageResponse), ok: false };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Error de red",
+      ok: false,
+    };
+  }
+}
+
 // Crea un Scheduled Event en la guild. Devuelve su id o un error.
 async function createScheduledEvent(input: {
   description?: string;
