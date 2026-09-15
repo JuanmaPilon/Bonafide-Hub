@@ -4904,7 +4904,13 @@ export function buildApp() {
         targetType: "event-signup",
       });
 
-      return { ok: true, guildId: params.guildId, deleted, notified, notifyError };
+      return {
+        ok: true,
+        guildId: params.guildId,
+        deleted,
+        notified,
+        notifyError,
+      };
     },
   );
 

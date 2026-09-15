@@ -2131,15 +2131,9 @@ function EventCard({
               </div>
             ) : null}
 
-            <label
-              className={`module-toggle${staffNotify ? " checked" : ""}`}
-            >
+            <label className={`module-toggle${staffNotify ? " checked" : ""}`}>
               <span className="module-toggle-text">
                 <strong>🔔 Avisarle por mensaje directo</strong>
-                <small>
-                  Le llega un MD con lo que cambió. Si no cambió nada, no se
-                  envía.
-                </small>
               </span>
               <span className="module-switch">
                 <input
