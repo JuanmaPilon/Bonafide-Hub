@@ -4875,6 +4875,33 @@ input.comm-tag-hex {
   overflow: hidden;
   border: 1px solid rgba(134, 158, 214, 0.2);
   background: rgba(12, 19, 37, 0.55);
+  /* Para el tilt: relativa para poder subir su z-index mientras se inclina. */
+  position: relative;
+  transform-origin: center;
+}
+
+/* ── Tilt 3D siguiendo al mouse ───────────────────────────────────────
+   La rotación y la posición del reflejo llegan como custom properties
+   escritas por el JS; acá solo se aplican. `perspective` en la MISMA
+   transform le da a cada carta su propio punto de fuga, sin wrapper.
+   Solo con puntero fino: en touch no hay hover y no queremos transform
+   colgado en cada carta de la grilla. */
+@media (hover: hover) and (pointer: fine) {
+  .karuta-drop-card {
+    transform: perspective(900px) rotateX(var(--karuta-tilt-x, 0deg))
+      rotateY(var(--karuta-tilt-y, 0deg)) scale(var(--karuta-tilt-scale, 1));
+    /* Vuelta a plano al salir del hover. */
+    transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  .karuta-drop-card.karuta-tilting {
+    --karuta-tilt-scale: 1.02;
+    /* Mientras sigue al mouse: reacción casi inmediata y capa GPU propia
+       (el will-change se va al salir, así no quedan cientos de capas). */
+    transition: transform 0.08s linear;
+    will-change: transform;
+    z-index: 3;
+  }
 }
 
 .karuta-drop-image {
@@ -5040,6 +5067,71 @@ input.comm-tag-hex {
   position: relative;
   display: flex;
   overflow: hidden;
+  /* Grupo propio para los blend modes (brillo y reflejo): sin esto el color
+     sumado podría escaparse y mezclarse con lo que está fuera de la carta. */
+  isolation: isolate;
+}
+
+/* ── Reflejo holográfico (solo ultra raras) ───────────────────────────
+   Efecto de foil como el de una carta real, en tres capas sobre el arte:
+     1. grabado: líneas blancas finísimas, el micro-relieve de una foil
+     2. arcoíris: trama ancha que se desplaza con --karuta-glare-x/y, así al
+        mover el mouse la trama "cambia de ángulo"
+     3. banda especular (::before): el brillo blanco que se pega al cursor
+   El blend es `overlay` y no `color-dodge`: dodge sumaba tanto brillo que el
+   blanco ganaba y lavaba la ilustración (probado lado a lado). El especular va
+   en un pseudo-elemento aparte para que el blanco tenga su `screen` sin pisar
+   el arcoíris. */
+.karuta-card-glare {
+  position: absolute;
+  inset: 0;
+  /* Debajo de la etiqueta de rareza (z-index 2). */
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  transition: opacity 0.25s ease-out;
+  background-image:
+    repeating-linear-gradient(
+      112deg,
+      rgba(255, 255, 255, 0.5) 0 1px,
+      rgba(255, 255, 255, 0) 1px 4px
+    ),
+    repeating-linear-gradient(
+      112deg,
+      rgba(255, 0, 132, 0.75) 0%,
+      rgba(255, 196, 0, 0.75) 3.5%,
+      rgba(60, 255, 170, 0.75) 7%,
+      rgba(0, 190, 255, 0.75) 10.5%,
+      rgba(160, 90, 255, 0.75) 14%,
+      rgba(255, 0, 132, 0.75) 17.5%
+    );
+  background-position:
+    center,
+    var(--karuta-glare-x, 50%) var(--karuta-glare-y, 50%);
+  /* La trama más grande que su caja: así el desplazamiento la recorre de
+     verdad en vez de moverse dos píxeles. */
+  background-size:
+    100% 100%,
+    260% 260%;
+}
+
+.karuta-card-glare::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    58% 44% at var(--karuta-glare-x, 50%) var(--karuta-glare-y, 50%),
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0.22) 42%,
+    transparent 74%
+  );
+  mix-blend-mode: screen;
+}
+
+/* Al pasar el mouse el reflejo se intensifica (y la carta se inclina). */
+.karuta-drop-card:hover .karuta-card-glare {
+  opacity: 0.68;
 }
 
 /* ── Brillo "shiny" ─────────────────────────────────────────────────

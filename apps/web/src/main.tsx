@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -1098,6 +1105,131 @@ function ComunicadoTagFields({
       </div>
     </div>
   );
+}
+
+// ── Tilt 3D de las cartas de Karuta ──────────────────────────────────
+// La carta se inclina siguiendo al mouse, como si la sostuvieras, y el
+// reflejo holográfico se corre con el cursor. Toda la matemática la hace el
+// CSS: acá solo escribimos CSS custom properties en el elemento.
+//
+//   --karuta-tilt-x / --karuta-tilt-y   rotación en grados
+//   --karuta-glare-x / --karuta-glare-y posición (%) del reflejo
+//
+// Sin estado de React a propósito: un setState por cada pointermove
+// re-renderizaría la grilla completa decenas de veces por segundo. El frame
+// pendiente y el último punto viven en WeakMaps por elemento (se liberan solos
+// cuando la carta se desmonta) y los handlers son funciones de módulo, así no
+// se asigna un closure por carta en cada render.
+//
+// Solo actúa con puntero fino (mouse/trackpad): en touch no existe el hover y
+// las cartas se quedan con su animación automática de brillo.
+const KARUTA_TILT_MAX_DEG = 7;
+const KARUTA_TILT_PROPERTIES = [
+  "--karuta-tilt-x",
+  "--karuta-tilt-y",
+  "--karuta-glare-x",
+  "--karuta-glare-y",
+];
+
+const karutaTiltFrames = new WeakMap<HTMLElement, number>();
+const karutaTiltPoints = new WeakMap<HTMLElement, { x: number; y: number }>();
+
+function karutaTiltEnabled(): boolean {
+  return (
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+function applyKarutaTilt(element: HTMLElement): void {
+  karutaTiltFrames.delete(element);
+  const point = karutaTiltPoints.get(element);
+  if (!point) {
+    return;
+  }
+
+  const style = element.style;
+  style.setProperty(
+    "--karuta-tilt-x",
+    `${(-point.y * KARUTA_TILT_MAX_DEG).toFixed(2)}deg`,
+  );
+  style.setProperty(
+    "--karuta-tilt-y",
+    `${(point.x * KARUTA_TILT_MAX_DEG).toFixed(2)}deg`,
+  );
+  style.setProperty(
+    "--karuta-glare-x",
+    `${((point.x + 0.5) * 100).toFixed(1)}%`,
+  );
+  style.setProperty(
+    "--karuta-glare-y",
+    `${((point.y + 0.5) * 100).toFixed(1)}%`,
+  );
+}
+
+function handleKarutaCardPointerEnter(
+  event: ReactPointerEvent<HTMLElement>,
+): void {
+  if (!karutaTiltEnabled()) {
+    return;
+  }
+  event.currentTarget.classList.add("karuta-tilting");
+}
+
+function handleKarutaCardPointerMove(
+  event: ReactPointerEvent<HTMLElement>,
+): void {
+  if (!karutaTiltEnabled()) {
+    return;
+  }
+
+  const element = event.currentTarget;
+
+  // El centro del rect no se mueve al transformar (rotamos y escalamos
+  // alrededor del centro), pero el TAMAÑO sí: si midiéramos el rect ya
+  // inclinado las coordenadas se retroalimentarían y la carta temblaría. Por
+  // eso el tamaño sale de offsetWidth/offsetHeight, que ignora transforms.
+  const rect = element.getBoundingClientRect();
+  const width = element.offsetWidth || rect.width;
+  const height = element.offsetHeight || rect.height;
+  if (!width || !height) {
+    return;
+  }
+
+  // -0.5 = borde izquierdo/arriba · 0 = centro · 0.5 = borde derecho/abajo
+  karutaTiltPoints.set(element, {
+    x: (event.clientX - (rect.left + rect.width / 2)) / width,
+    y: (event.clientY - (rect.top + rect.height / 2)) / height,
+  });
+
+  // Un solo rAF por frame: pointermove llega 100+ veces por segundo y no tiene
+  // sentido escribir estilos más seguido de lo que el browser pinta.
+  if (!karutaTiltFrames.has(element)) {
+    karutaTiltFrames.set(
+      element,
+      requestAnimationFrame(() => applyKarutaTilt(element)),
+    );
+  }
+}
+
+function handleKarutaCardPointerLeave(
+  event: ReactPointerEvent<HTMLElement>,
+): void {
+  const element = event.currentTarget;
+
+  const frame = karutaTiltFrames.get(element);
+  if (frame !== undefined) {
+    cancelAnimationFrame(frame);
+    karutaTiltFrames.delete(element);
+  }
+  karutaTiltPoints.delete(element);
+  element.classList.remove("karuta-tilting");
+
+  // Sin las custom properties el CSS vuelve a sus valores por defecto (carta
+  // plana, reflejo centrado); la transición se encarga de que no salte.
+  for (const property of KARUTA_TILT_PROPERTIES) {
+    element.style.removeProperty(property);
+  }
 }
 
 // Arte de una carta de Karuta: si la imagen falla (URL caída o sin arte),
@@ -8620,6 +8752,9 @@ function App() {
                               <article
                                 className={`karuta-drop-card${tierClass}`}
                                 key={card.id}
+                                onPointerEnter={handleKarutaCardPointerEnter}
+                                onPointerLeave={handleKarutaCardPointerLeave}
+                                onPointerMove={handleKarutaCardPointerMove}
                               >
                                 <div className="karuta-card-art-wrap">
                                   {tier === "ultra" ? (
@@ -8639,6 +8774,14 @@ function App() {
                                         : undefined
                                     }
                                   />
+                                  {/* Solo las ultra raras llevan el foil: es
+                                      lo que las hace sentir distintas. */}
+                                  {tier === "ultra" ? (
+                                    <span
+                                      aria-hidden="true"
+                                      className="karuta-card-glare"
+                                    />
+                                  ) : null}
                                 </div>
                                 <div className="karuta-drop-body">
                                   <strong>{card.cardName ?? "Carta"}</strong>
