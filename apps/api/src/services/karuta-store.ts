@@ -296,8 +296,86 @@ export async function processKarutaTransfer(input: {
   return { processed: true, card: toKarutaCard(updated) };
 }
 
-export type KarutaAlbumImage = { page: number; url: string };
+// ── Wishlist conocida de las cartas ─────────────────────────────────
+// Card Companion anuncia el ♡ de cada carta al dropear y Karuta no lo muestra
+// en `kv`, así que lo aprendemos de ahí y lo guardamos por NOMBRE NORMALIZADO
+// (el bot manda la clave ya normalizada, así los dos lados usan el mismo
+// criterio y no hay dos normalizadores que se puedan desincronizar).
+export type KarutaWishlistInput = {
+  displayName: string;
+  nameKey: string;
+  series?: string;
+  wishlistCount: number;
+};
 
+// Best-effort e idempotente: si Card Companion repite una carta, se actualiza.
+export async function upsertKarutaWishlists(
+  guildId: string,
+  items: KarutaWishlistInput[],
+): Promise<number> {
+  let saved = 0;
+
+  for (const item of items) {
+    if (!item.nameKey) {
+      continue;
+    }
+    try {
+      await prisma.karutaWishlist.upsert({
+        where: { guildId_nameKey: { guildId, nameKey: item.nameKey } },
+        create: {
+          displayName: item.displayName,
+          guildId,
+          nameKey: item.nameKey,
+          series: item.series ?? null,
+          wishlistCount: item.wishlistCount,
+        },
+        update: {
+          displayName: item.displayName,
+          lastSeenAt: new Date(),
+          series: item.series ?? null,
+          wishlistCount: item.wishlistCount,
+        },
+      });
+      saved += 1;
+    } catch (error) {
+      console.warn(
+        `[api] no se pudo guardar la wishlist de "${item.displayName}" (guild ${guildId})`,
+        error,
+      );
+    }
+  }
+
+  return saved;
+}
+
+export async function listKarutaWishlists(
+  guildId: string,
+  nameKeys: string[],
+): Promise<{ displayName: string; nameKey: string; wishlistCount: number }[]> {
+  const keys = nameKeys.map((key) => key.trim()).filter(Boolean);
+  if (keys.length === 0) {
+    return [];
+  }
+
+  try {
+    const rows = await prisma.karutaWishlist.findMany({
+      where: { guildId, nameKey: { in: keys.slice(0, 50) } },
+    });
+    return rows.map((row) => ({
+      displayName: row.displayName,
+      nameKey: row.nameKey,
+      wishlistCount: row.wishlistCount,
+    }));
+  } catch (error) {
+    console.warn(
+      `[api] no se pudieron leer las wishlists conocidas (guild ${guildId})`,
+      error,
+    );
+    return [];
+  }
+}
+
+export type KarutaAlbumImage = { page: number; url: string };
 export type KarutaAlbum = {
   albumName?: string;
   background?: string;

@@ -395,6 +395,28 @@ model KarutaCardImage {
   @@map("karuta_card_images")
 }
 
+// Wishlist conocida de una carta: el ♡ que Card Companion anuncia cuando
+// dropea. Karuta NO muestra la wishlist en `kv`, así que la recordamos acá:
+// cuando alguien mira (kv) o agarra (k) una carta, el bot la consulta para
+// decidir si entra en "cartas raras" por wishlist.
+// La clave (`nameKey`) es el nombre normalizado (sin acentos, minúsculas y
+// signos convertidos en espacios) que arma el bot, para poder cruzar nombres
+// entre Karuta y Card Companion.
+model KarutaWishlist {
+  guildId       String
+  nameKey       String
+  displayName   String
+  series        String?
+  wishlistCount Int
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@id([guildId, nameKey])
+  @@map("karuta_wishlists")
+}
+
 // Álbumes de Karuta (ka). Colección de un usuario: nombre del álbum, fondo
 // y las imágenes de cada página. Se refresca cada vez que se ve una página.
 model KarutaAlbum {

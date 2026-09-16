@@ -64,6 +64,7 @@ import {
   listCachedKarutaCardIds,
   listKarutaAlbums,
   listKarutaCardsMissingArt,
+  listKarutaWishlists,
   listOwnedKarutaCards,
   processKarutaGrab,
   processKarutaTransfer,
@@ -71,6 +72,7 @@ import {
   saveKarutaCardImage,
   upsertKarutaAlbum,
   upsertKarutaCard,
+  upsertKarutaWishlists,
 } from "./services/karuta-store.js";
 import {
   downloadDiscordImage,
@@ -5530,6 +5532,86 @@ export function buildApp() {
         guildId: params.guildId,
         processed: result.processed,
       };
+    },
+  );
+
+  // ── Wishlists conocidas (♡ de Card Companion) ─────────────────────
+  // El bot manda los avisos de Card Companion y después consulta acá cuando
+  // alguien mira (`kv`) o agarra (`k`) una carta: Karuta no muestra la
+  // wishlist en kv, así que sin esta memoria el criterio de wishlist solo
+  // valía durante los minutos siguientes al drop.
+  app.post(
+    "/internal/guilds/:guildId/karuta/wishlists",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const body = (request.body ?? {}) as {
+        items?: Array<{
+          displayName?: string;
+          nameKey?: string;
+          series?: string;
+          wishlistCount?: number;
+        }>;
+      };
+
+      const items = (body.items ?? [])
+        .map((item) => ({
+          displayName: String(item.displayName ?? "").trim(),
+          nameKey: String(item.nameKey ?? "").trim(),
+          series: item.series ? String(item.series).trim() : undefined,
+          wishlistCount: Number(item.wishlistCount ?? 0),
+        }))
+        .filter((item) => item.nameKey && item.displayName);
+
+      const saved = await upsertKarutaWishlists(params.guildId, items);
+
+      return { ok: true, guildId: params.guildId, saved };
+    },
+  );
+
+  // `?names=` = claves normalizadas separadas por coma (lo que el bot busca).
+  app.get(
+    "/internal/guilds/:guildId/karuta/wishlists",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const query = request.query as { names?: string };
+      const names = (query.names ?? "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean);
+
+      const wishlists = await listKarutaWishlists(params.guildId, names);
+
+      return { ok: true, guildId: params.guildId, wishlists };
     },
   );
 

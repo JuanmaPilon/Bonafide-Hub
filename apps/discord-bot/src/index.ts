@@ -3067,6 +3067,183 @@ function pendingCardCompanionNames(
     .map(([, entry]) => `${entry.name} (♡${entry.wishlist})`);
 }
 
+// Wishlist a usar para una carta: primero el anuncio FRESCO de Card Companion
+// en el canal (lo más preciso) y, si ya venció, la que se anunció alguna vez
+// (la guardamos en la base vía la API). `undefined` = no se conoce: en ese caso
+// la carta solo puede entrar por el criterio de print.
+async function resolveKarutaWishlist(
+  guildId: string,
+  channelId: string,
+  cardName: string,
+): Promise<number | undefined> {
+  const fresh = findPendingWishlist(guildId, channelId, cardName);
+  if (fresh !== undefined) {
+    return fresh;
+  }
+
+  const nameKey = normalizeCardNameKey(cardName);
+  if (!nameKey) {
+    return undefined;
+  }
+
+  const known = await fetchKnownKarutaWishlists(guildId, [nameKey]);
+  return known.get(nameKey);
+}
+
+// Wishlists que Card Companion ya anunció alguna vez (base de datos). Se
+// consultan cuando el aviso fresco ya venció: sin esto, una carta popular con
+// print alto quedaba afuera de "cartas raras" salvo que alguien la mirara
+// dentro de los 15 minutos siguientes al drop.
+const knownKarutaWishlists = new Map<
+  string,
+  { at: number; wishlist?: number }
+>();
+const KNOWN_WISHLIST_TTL_MS = 30 * 60 * 1000;
+
+function rememberKnownWishlist(
+  guildId: string,
+  nameKey: string,
+  wishlist: number | undefined,
+): void {
+  knownKarutaWishlists.set(`${guildId}:${nameKey}`, {
+    at: Date.now(),
+    wishlist,
+  });
+}
+
+async function fetchKnownKarutaWishlists(
+  guildId: string,
+  nameKeys: string[],
+): Promise<Map<string, number>> {
+  const found = new Map<string, number>();
+  const now = Date.now();
+  const pending: string[] = [];
+
+  for (const nameKey of nameKeys) {
+    const cached = knownKarutaWishlists.get(`${guildId}:${nameKey}`);
+    if (cached && now - cached.at < KNOWN_WISHLIST_TTL_MS) {
+      if (cached.wishlist !== undefined) {
+        found.set(nameKey, cached.wishlist);
+      }
+      continue;
+    }
+    pending.push(nameKey);
+  }
+
+  if (pending.length === 0) {
+    return found;
+  }
+
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return found;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/wishlists?names=${encodeURIComponent(pending.join(","))}`,
+      {
+        headers: { "x-bot-token": token },
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta wishlists GET falló (${response.status}) para guild ${guildId}.`,
+      );
+      return found;
+    }
+
+    const data = (await response.json().catch(() => null)) as {
+      wishlists?: Array<{ nameKey: string; wishlistCount: number }>;
+    } | null;
+    const resolved = new Map(
+      (data?.wishlists ?? []).map((entry) => [
+        entry.nameKey,
+        entry.wishlistCount,
+      ]),
+    );
+
+    // Cacheamos también los "no está" para no golpear el API en cada carta.
+    for (const nameKey of pending) {
+      const wishlist = resolved.get(nameKey);
+      rememberKnownWishlist(guildId, nameKey, wishlist);
+      if (wishlist !== undefined) {
+        found.set(nameKey, wishlist);
+      }
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta wishlists GET error: ${getErrorMessage(error)}`,
+    );
+  }
+
+  return found;
+}
+
+// Guarda en la base las wishlists que anunció Card Companion (best-effort) y
+// de paso las cachea en memoria para las cartas que se miren en los próximos
+// minutos.
+async function pushKarutaWishlists(
+  guildId: string,
+  lines: ParsedCardCompanionLine[],
+): Promise<void> {
+  const items = lines
+    .filter(
+      (line) => line.cardName && line.wishlistCount !== undefined,
+    )
+    .map((line) => ({
+      displayName: line.cardName as string,
+      nameKey: normalizeCardNameKey(line.cardName as string),
+      series: line.series,
+      wishlistCount: line.wishlistCount as number,
+    }))
+    .filter((item) => item.nameKey);
+
+  if (items.length === 0) {
+    return;
+  }
+
+  for (const item of items) {
+    rememberKnownWishlist(guildId, item.nameKey, item.wishlistCount);
+  }
+
+  const baseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
+  const token = env.BOT_CONFIG_API_TOKEN?.trim();
+  if (!baseUrl || !token) {
+    return;
+  }
+
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(
+      `${baseUrl}/internal/guilds/${encodeURIComponent(guildId)}/karuta/wishlists`,
+      {
+        body: JSON.stringify({ items }),
+        headers: {
+          "content-type": "application/json",
+          "x-bot-token": token,
+        },
+        method: "POST",
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) {
+      console.warn(
+        `[discord-bot] Karuta wishlists POST falló (${response.status}) para guild ${guildId}.`,
+      );
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] Karuta wishlists POST error: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
 // Textos de un mensaje de Discord: contenido + embeds (título, descripción,
 // autor, footer y campos). Card Companion a veces manda embeds en vez de texto
 // plano, así que parseamos ambos.
@@ -3691,12 +3868,12 @@ async function processKarutaKv(
     `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} image=${kv.imageUrl ? "sí" : "no"} | ${rawDesc}`,
   );
 
-  // Karuta no muestra la wishlist en kv, así que la tomamos del aviso de Card
-  // Companion del mismo drop (mientras siga en el caché). Sin esto el criterio
-  // de wishlist NUNCA se aplicaba al registrar con kv, y una carta popular con
-  // print alto quedaba afuera de "cartas raras".
+  // Karuta no muestra la wishlist en kv, así que la resolvemos del aviso de
+  // Card Companion (fresco o de la base). Sin esto el criterio de wishlist no
+  // se aplicaba al registrar con kv y una carta popular con print alto quedaba
+  // afuera de "cartas raras".
   const wishlistFromDrop = kv.cardName
-    ? findPendingWishlist(message.guildId, message.channelId, kv.cardName)
+    ? await resolveKarutaWishlist(message.guildId, message.channelId, kv.cardName)
     : undefined;
   const effectiveWishlist = wishlistFromDrop ?? kv.wishlistCount;
 
@@ -3795,6 +3972,9 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
     }
 
     rememberCardCompanionWishlists(message.guildId, message.channelId, lines);
+    // Además de la memoria corta, las guardamos en la base: así un `kv`
+    // posterior (cuando el aviso ya venció) también las puede usar.
+    await pushKarutaWishlists(message.guildId, lines);
     console.log(
       `[discord-bot] Card Companion wishlists recordadas: ${lines.length} cartas`,
     );
@@ -3810,7 +3990,7 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       ? (message.mentions.members?.get(grab.mentionedUserId)?.displayName ??
         message.mentions.users.get(grab.mentionedUserId)?.username)
       : undefined;
-    const wishlistCount = findPendingWishlist(
+    const wishlistCount = await resolveKarutaWishlist(
       message.guildId,
       message.channelId,
       grab.cardName,
