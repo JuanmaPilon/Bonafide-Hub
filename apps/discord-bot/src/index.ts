@@ -3194,9 +3194,7 @@ async function pushKarutaWishlists(
   lines: ParsedCardCompanionLine[],
 ): Promise<void> {
   const items = lines
-    .filter(
-      (line) => line.cardName && line.wishlistCount !== undefined,
-    )
+    .filter((line) => line.cardName && line.wishlistCount !== undefined)
     .map((line) => ({
       displayName: line.cardName as string,
       nameKey: normalizeCardNameKey(line.cardName as string),
@@ -3306,9 +3304,16 @@ async function backfillKarutaWishlistsFromChannel(
   const found = new Map<string, ParsedCardCompanionLine>();
   let before: Snowflake | undefined;
   let scanned = 0;
+  // Diagnóstico: distinguir "Card Companion no publica acá" de "publica pero el
+  // formato cambió". Si hay 0 mensajes de otros bots el canal es el equivocado.
+  let candidates = 0;
+  let withHeart = 0;
 
   while (scanned < limit) {
-    const pageSize = Math.min(KARUTA_WISHLIST_BACKFILL_PAGE_SIZE, limit - scanned);
+    const pageSize = Math.min(
+      KARUTA_WISHLIST_BACKFILL_PAGE_SIZE,
+      limit - scanned,
+    );
 
     const page = await channel.messages
       .fetch(before ? { before, limit: pageSize } : { limit: pageSize })
@@ -3344,9 +3349,13 @@ async function backfillKarutaWishlistsFromChannel(
         continue;
       }
 
-      for (const line of parseCardCompanionDrop(
-        ...collectKarutaMessageTexts(message),
-      )) {
+      candidates += 1;
+      const texts = collectKarutaMessageTexts(message);
+      if (texts.some((text) => text.includes("♡"))) {
+        withHeart += 1;
+      }
+
+      for (const line of parseCardCompanionDrop(...texts)) {
         if (!line.cardName || line.wishlistCount === undefined) {
           continue;
         }
@@ -3371,27 +3380,22 @@ async function backfillKarutaWishlistsFromChannel(
     await sleep(KARUTA_WISHLIST_BACKFILL_PAGE_DELAY_MS);
   }
 
-  if (found.size === 0) {
-    console.log(
-      `[discord-bot] Karuta backfill (canal ${channelId}): ${scanned} mensajes revisados, ninguna wishlist encontrada.`,
-    );
-    return;
-  }
-
-  const lines = [...found.values()];
-  for (
-    let index = 0;
-    index < lines.length;
-    index += KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST
-  ) {
-    await pushKarutaWishlists(
-      guildId,
-      lines.slice(index, index + KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST),
-    );
+  if (found.size > 0) {
+    const lines = [...found.values()];
+    for (
+      let index = 0;
+      index < lines.length;
+      index += KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST
+    ) {
+      await pushKarutaWishlists(
+        guildId,
+        lines.slice(index, index + KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST),
+      );
+    }
   }
 
   console.log(
-    `[discord-bot] Karuta backfill (canal ${channelId}): ${scanned} mensajes revisados, ${lines.length} wishlists guardadas.`,
+    `[discord-bot] Karuta backfill (canal ${channelId}): ${scanned} mensajes revisados, ${candidates} de otros bots (${withHeart} con ♡), ${found.size} wishlists guardadas.`,
   );
 }
 
@@ -3435,9 +3439,40 @@ function startKarutaWishlistBackfill(): void {
   }, KARUTA_WISHLIST_BACKFILL_DELAY_MS);
 }
 
-// Textos de un mensaje de Discord: contenido + embeds (título, descripción,
-// autor, footer y campos). Card Companion a veces manda embeds en vez de texto
-// plano, así que parseamos ambos.
+// Textos de un mensaje de Discord. Card Companion cambió de formato varias
+// veces: texto plano, embeds y —desde 2026-09— **Components V2** (`type: 19` +
+// `flags: IsComponentsV2`), donde el texto NO viaja en `content` ni en
+// `embeds` sino en los componentes. Recolectamos las tres fuentes.
+//
+// Componentes V2: el texto vive en un `TextDisplay` (`type: 10`), normalmente
+// anidado dentro de un `Container` (`type: 17`) y a veces de una `Section`.
+// Bajamos recursivo buscando cualquier nodo con un `content` de texto: duck
+// typing a propósito, así no dependemos de las clases concretas de discord.js
+// (en un mensaje viejo los componentes son ActionRows con botones, que no
+// tienen `content` y no aportan nada).
+function collectComponentTexts(components: readonly unknown[]): string[] {
+  const texts: string[] = [];
+
+  const walk = (nodes: readonly unknown[]): void => {
+    for (const node of nodes) {
+      if (!node || typeof node !== "object") {
+        continue;
+      }
+
+      const candidate = node as { content?: unknown; components?: unknown };
+      if (typeof candidate.content === "string" && candidate.content.trim()) {
+        texts.push(candidate.content);
+      }
+      if (Array.isArray(candidate.components)) {
+        walk(candidate.components);
+      }
+    }
+  };
+
+  walk(components);
+  return texts;
+}
+
 function collectKarutaMessageTexts(message: Message): string[] {
   const texts: string[] = [];
   if (message.content) {
@@ -3455,6 +3490,11 @@ function collectKarutaMessageTexts(message: Message): string[] {
       texts.push(bits.join("\n"));
     }
   }
+
+  for (const text of collectComponentTexts(message.components)) {
+    texts.push(text);
+  }
+
   return texts;
 }
 
@@ -4064,7 +4104,11 @@ async function processKarutaKv(
   // se aplicaba al registrar con kv y una carta popular con print alto quedaba
   // afuera de "cartas raras".
   const wishlistFromDrop = kv.cardName
-    ? await resolveKarutaWishlist(message.guildId, message.channelId, kv.cardName)
+    ? await resolveKarutaWishlist(
+        message.guildId,
+        message.channelId,
+        kv.cardName,
+      )
     : undefined;
   const effectiveWishlist = wishlistFromDrop ?? kv.wishlistCount;
 

@@ -121,6 +121,14 @@ default 1000, máximo 5000) y guarda lo que encuentra. Es idempotente: se puede
 correr en cada reinicio sin duplicar nada. La clave es el nombre normalizado de
 la carta (no el código), así que un `kv` posterior de cualquier copia ya la ve.
 
+Card Companion cambia de formato seguido. Desde 2026-09 manda **Components V2**
+(`type: 19` + `flags: IsComponentsV2`): `content` y `embeds` vienen **vacíos** y
+el texto vive en los componentes (`container.components[].content`). Por eso
+`collectKarutaMessageTexts()` recolecta las TRES fuentes (content, embeds y
+componentes anidados). Si vuelven a faltar wishlists, comparar el JSON crudo del
+mensaje (`GET /channels/:id/messages`) con lo que espera `parseCardCompanionDrop`:
+el log del backfill dice cuántos mensajes de otros bots vio y cuántos traían `♡`.
+
 ## 4. Sistema de XP
 
 1. XP por mensaje (`messageXp`) y por minuto en voz (`voiceXpPerMinute`).
