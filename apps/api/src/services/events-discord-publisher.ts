@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import type { EventTag } from "./events-store.js";
 
 // ── Publicación de eventos del Módulo X en Discord ──────────────────
 // El API habla directo con Discord usando el token del bot (igual que la
@@ -571,7 +572,7 @@ export function buildEventAnnouncementEmbeds(input: {
   specLabel?: string;
   specs: AnnouncementSpec[];
   startsAt: Date;
-  tagLabel?: string;
+  tags?: EventTag[];
   title: string;
   type?: string;
   // Si el juego no usa personaje, el aviso no muestra el botón "Personaje".
@@ -812,12 +813,15 @@ export function buildEventAnnouncementEmbeds(input: {
     };
   }
   // Tag libre del evento (estilo comunicados): va como "autor" del embed para
-  // que se vea arriba del título con su color de acento.
-  const tagLabel = input.tagLabel?.trim();
-  if (tagLabel) {
+  // que se vea arriba del título con su color de acento. Con varias etiquetas
+  // se separan por " · " (el nombre del autor tiene tope de 256 caracteres).
+  const tagLabels = (input.tags ?? [])
+    .map((tag) => tag.label.trim())
+    .filter(Boolean);
+  if (tagLabels.length > 0) {
     embed.author = {
       ...(input.guildIconUrl ? { icon_url: input.guildIconUrl } : {}),
-      name: `🏷️ ${tagLabel.slice(0, 250)}`,
+      name: `🏷️ ${tagLabels.join(" · ").slice(0, 250)}`,
     };
   }
   if (input.discordEventId) {
@@ -1059,7 +1063,7 @@ export async function syncEventToDiscord(input: {
   specLabel?: string;
   specs?: AnnouncementSpec[];
   startsAt: Date;
-  tagLabel?: string;
+  tags?: EventTag[];
   title: string;
   type?: string;
 }): Promise<EventPublishResult> {
@@ -1140,7 +1144,7 @@ export async function syncEventToDiscord(input: {
       specLabel: input.specLabel,
       specs: input.specs ?? [],
       startsAt: input.startsAt,
-      tagLabel: input.tagLabel,
+      tags: input.tags,
       title: input.title,
       type: input.type,
     };

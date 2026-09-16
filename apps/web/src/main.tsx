@@ -111,6 +111,7 @@ import {
   type EventDiscordOptions,
   type EventSignup,
   type EventImage,
+  type EventTag,
   type HubEvent,
 } from "./api";
 import "./styles.css";
@@ -1055,6 +1056,132 @@ function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
   );
 }
 
+const MAX_EVENT_TAGS = 6;
+// Valor del filtro "eventos sin ninguna etiqueta".
+const EVENT_TAG_NONE = "__none__";
+
+// Editor de etiquetas de un evento: se agregan de a una (texto + color) y se
+// ven como chips con su ✕. Sugiere textos ya usados en otros eventos.
+function EventTagsField({
+  onChange,
+  suggestions,
+  tags,
+}: {
+  onChange: (tags: EventTag[]) => void;
+  suggestions: string[];
+  tags: EventTag[];
+}) {
+  const [label, setLabel] = useState("");
+  const [color, setColor] = useState("#6aa8ff");
+
+  const addTag = (): void => {
+    const text = label.trim().slice(0, 24);
+    if (!text || tags.length >= MAX_EVENT_TAGS) {
+      return;
+    }
+    if (tags.some((tag) => tag.label.toLowerCase() === text.toLowerCase())) {
+      setLabel("");
+      return;
+    }
+    onChange([...tags, { color: normalizeTagColor(color), label: text }]);
+    setLabel("");
+  };
+
+  return (
+    <div className="event-tags-editor">
+      {tags.length > 0 ? (
+        <div className="event-tag-list">
+          {tags.map((tag) => (
+            <span className="event-tag-item" key={tag.label}>
+              <ComunicadoTag color={tag.color} label={tag.label} />
+              <button
+                className="event-tag-remove"
+                onClick={() =>
+                  onChange(tags.filter((entry) => entry.label !== tag.label))
+                }
+                title={`Quitar ${tag.label}`}
+                type="button"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {tags.length < MAX_EVENT_TAGS ? (
+        <div className="event-tag-add">
+          <input
+            className="event-tag-input"
+            list="event-tag-suggestions"
+            maxLength={24}
+            onChange={(event) => setLabel(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addTag();
+              }
+            }}
+            placeholder="Etiqueta"
+            value={label}
+          />
+          <input
+            aria-label="Color de la etiqueta"
+            className="event-tag-color"
+            onChange={(event) => setColor(event.target.value)}
+            type="color"
+            value={color}
+          />
+          <button
+            className="ghost-button"
+            disabled={!label.trim()}
+            onClick={addTag}
+            type="button"
+          >
+            Agregar
+          </button>
+        </div>
+      ) : null}
+      <datalist id="event-tag-suggestions">
+        {suggestions.map((suggestion) => (
+          <option key={suggestion} value={suggestion} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
+function EventTagFilterChip({
+  active,
+  color,
+  label,
+  onToggle,
+}: {
+  active: boolean;
+  color: string;
+  label: string;
+  onToggle: () => void;
+}) {
+  const background = normalizeTagColor(color);
+  return (
+    <button
+      className={`event-filter-chip${active ? " active" : ""}`}
+      onClick={onToggle}
+      style={
+        active
+          ? {
+              backgroundColor: background,
+              borderColor: background,
+              color: tagTextColor(background),
+            }
+          : undefined
+      }
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
 // Campos del editor de tag (texto + color + vista previa). Se usa en el
 // modal de plantilla y en el de mensaje publicado para no duplicar markup.
 function ComunicadoTagFields({
@@ -1696,7 +1823,13 @@ function EventCard({
               {event.signupDeadline && signupsClosed && !paused ? (
                 <span className="event-card-status closed">🔒 Cerradas</span>
               ) : null}
-              <ComunicadoTag color={event.tagColor} label={event.tagLabel} />
+              {(event.tags ?? []).map((tag) => (
+                <ComunicadoTag
+                  color={tag.color}
+                  key={tag.label}
+                  label={tag.label}
+                />
+              ))}
             </div>
           </div>
           {/* Misma info que el aviso de Discord (mismos emojis y etiquetas),
@@ -3025,6 +3158,40 @@ function App() {
   );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventTagFilter, setEventTagFilter] = useState<string[]>([]);
+  // Etiquetas usadas en la guild: alimentan el filtro y las sugerencias.
+  const eventTagOptions = useMemo(() => {
+    const byLabel = new Map<string, EventTag>();
+    for (const event of events) {
+      for (const tag of event.tags ?? []) {
+        const key = tag.label.toLowerCase();
+        if (!byLabel.has(key)) {
+          byLabel.set(key, tag);
+        }
+      }
+    }
+    return [...byLabel.values()].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+  }, [events]);
+  const untaggedEvents = useMemo(
+    () => events.filter((event) => (event.tags?.length ?? 0) === 0).length,
+    [events],
+  );
+  const filteredEvents = useMemo(() => {
+    if (eventTagFilter.length === 0) {
+      return events;
+    }
+    return events.filter((event) => {
+      const tags = event.tags ?? [];
+      if (tags.length === 0) {
+        return eventTagFilter.includes(EVENT_TAG_NONE);
+      }
+      return tags.some((tag) =>
+        eventTagFilter.includes(tag.label.toLowerCase()),
+      );
+    });
+  }, [eventTagFilter, events]);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   // Indica que el form abrió en modo "duplicar" (para el título del form).
@@ -3054,8 +3221,7 @@ function App() {
     signupDeadline: string;
     startsAt: string;
     status: string;
-    tagColor: string;
-    tagLabel: string;
+    tags: EventTag[];
     title: string;
     type: string;
   }>({
@@ -3074,8 +3240,7 @@ function App() {
     signupDeadline: "",
     startsAt: "",
     status: "scheduled",
-    tagColor: "#6aa8ff",
-    tagLabel: "",
+    tags: [],
     title: "",
     type: "raid",
   });
@@ -4132,8 +4297,7 @@ function App() {
       signupDeadline: "",
       startsAt: "",
       status: "scheduled",
-      tagColor: "#6aa8ff",
-      tagLabel: "",
+      tags: [],
       title: "",
       type: "raid",
     });
@@ -4179,8 +4343,7 @@ function App() {
         : "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: event.status,
-      tagColor: event.tagColor ?? "#6aa8ff",
-      tagLabel: event.tagLabel ?? "",
+      tags: event.tags ?? [],
       title: event.title,
       type: event.type,
     });
@@ -4224,8 +4387,7 @@ function App() {
       signupDeadline: "",
       startsAt: toDateTimeLocal(event.startsAt),
       status: "scheduled",
-      tagColor: event.tagColor ?? "#6aa8ff",
-      tagLabel: event.tagLabel ?? "",
+      tags: event.tags ?? [],
       title: event.title,
       type: event.type,
     });
@@ -4358,8 +4520,7 @@ function App() {
           signupDeadline: signupDeadlineIso ?? null,
           startsAt: startsAtIso,
           status: eventForm.status,
-          tagColor: eventForm.tagColor || undefined,
-          tagLabel: eventForm.tagLabel.trim() || undefined,
+          tags: eventForm.tags,
           title: eventForm.title.trim(),
           type: eventForm.type,
         });
@@ -4396,8 +4557,7 @@ function App() {
           requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
           signupDeadline: signupDeadlineIso,
           startsAt: startsAtIso,
-          tagColor: eventForm.tagColor || undefined,
-          tagLabel: eventForm.tagLabel.trim() || undefined,
+          tags: eventForm.tags,
           title: eventForm.title.trim(),
           type: eventForm.type,
         });
@@ -8953,24 +9113,18 @@ function App() {
                           </select>
                         </label>
                         <div className="event-form-wide event-tag-field">
-                          <span className="event-tag-title">
-                            Etiqueta del evento (opcional)
-                          </span>
-                          <ComunicadoTagFields
-                            color={eventForm.tagColor}
-                            label={eventForm.tagLabel}
-                            onColor={(tagColor) =>
+                          <span className="event-tag-title">Etiquetas</span>
+                          <EventTagsField
+                            onChange={(tags) =>
                               setEventForm((current) => ({
                                 ...current,
-                                tagColor,
+                                tags,
                               }))
                             }
-                            onLabel={(tagLabel) =>
-                              setEventForm((current) => ({
-                                ...current,
-                                tagLabel,
-                              }))
-                            }
+                            suggestions={eventTagOptions.map(
+                              (tag) => tag.label,
+                            )}
+                            tags={eventForm.tags}
                           />
                         </div>
                         {editingEventId ? (
@@ -9559,9 +9713,63 @@ function App() {
                   {eventsLoading ? (
                     <LoadingState label="Cargando eventos…" />
                   ) : (
-                    <div className="events-grid">
-                      {events.map((event) => (
-                        <EventCard
+                    <>
+                      {eventTagOptions.length > 0 || untaggedEvents > 0 ? (
+                        <div className="event-tag-filter">
+                          <button
+                            className={`event-filter-chip${eventTagFilter.length === 0 ? " active" : ""}`}
+                            onClick={() => setEventTagFilter([])}
+                            type="button"
+                          >
+                            Todas
+                          </button>
+                          {eventTagOptions.map((tag) => {
+                            const key = tag.label.toLowerCase();
+                            return (
+                              <EventTagFilterChip
+                                active={eventTagFilter.includes(key)}
+                                color={tag.color}
+                                key={tag.label}
+                                label={tag.label}
+                                onToggle={() =>
+                                  setEventTagFilter((current) =>
+                                    current.includes(key)
+                                      ? current.filter(
+                                          (entry) => entry !== key,
+                                        )
+                                      : [...current, key],
+                                  )
+                                }
+                              />
+                            );
+                          })}
+                          {untaggedEvents > 0 ? (
+                            <button
+                              className={`event-filter-chip${eventTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
+                              onClick={() =>
+                                setEventTagFilter((current) =>
+                                  current.includes(EVENT_TAG_NONE)
+                                    ? current.filter(
+                                        (entry) => entry !== EVENT_TAG_NONE,
+                                      )
+                                    : [...current, EVENT_TAG_NONE],
+                                )
+                              }
+                              type="button"
+                            >
+                              Sin etiqueta
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {filteredEvents.length === 0 ? (
+                        <div className="empty-state">
+                          Ningún evento con esas etiquetas.
+                        </div>
+                      ) : (
+                        <div className="events-grid">
+                          {filteredEvents.map((event) => (
+                            <EventCard
                           canManage={canAccess("eventos")}
                           config={config}
                           event={event}
@@ -9579,8 +9787,10 @@ function App() {
                           gameRoles={rolesForGame(event.game)}
                           specs={specsForGame(event.game)}
                         />
-                      ))}
-                    </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               ) : activeTab === "dashboard" ? null : (

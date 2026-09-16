@@ -2879,6 +2879,100 @@ textarea {
   font-weight: 700;
 }
 
+/* Editor de etiquetas: chips ya cargadas + alta de a una. */
+.event-tags-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.event-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.event-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.event-tag-remove:hover,
+.event-tag-remove:focus-visible {
+  background: rgba(229, 72, 77, 0.18);
+  color: #ffb3b3;
+}
+
+.event-tag-add {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Van con selector de elemento porque hay un `input { width: 100% }` global. */
+input.event-tag-input {
+  width: 180px;
+  height: 42px;
+  flex: 0 0 auto;
+}
+
+input.event-tag-color {
+  width: 46px;
+  height: 42px;
+  flex: 0 0 auto;
+  padding: 3px;
+  cursor: pointer;
+}
+
+/* Filtro por etiquetas arriba de la grilla de eventos. */
+.event-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.event-filter-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.3);
+  background: rgba(12, 19, 37, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.event-filter-chip:hover,
+.event-filter-chip:focus-visible {
+  border-color: rgba(134, 158, 214, 0.55);
+  color: var(--text);
+}
+
+.event-filter-chip.active {
+  border-color: #6aa8ff;
+  background: rgba(106, 168, 255, 0.18);
+  color: #dce9ff;
+}
+
 .event-form-actions {
   display: flex;
   justify-content: flex-end;

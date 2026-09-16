@@ -199,9 +199,11 @@ model HubEvent {
   // Las claves salen de las plantillas (event-templates.ts) o de la config de
   // la guild (GuildConfig.eventGames).
   game              String   @default("wow")
-  // Etiqueta libre del evento (estilo comunicados): el staff escribe el texto
-  // y elige el color, sin categorías fijas. Se muestra en la web y en el
-  // embed de Discord.
+  // Etiquetas libres del evento (hasta 6): [{ label, color }]. Sirven para
+  // filtrar y se muestran en la web y en el aviso de Discord.
+  // tagLabel/tagColor quedaron como legado de la etiqueta única: solo se leen
+  // para reconstruir la lista en eventos viejos.
+  tags              Json?
   tagLabel          String?
   tagColor          String?
   startsAt          DateTime

@@ -109,6 +109,7 @@ import {
   resetSignup,
   setEventDiscordInfo,
   setEventRecurrenceNext,
+  type EventTag,
   type HubEvent,
   updateEvent,
   updateRaidSpec,
@@ -886,8 +887,7 @@ async function createRecurrenceCopy(
         ? new Date(startsAt.getTime() + deadlineOffsetMs).toISOString()
         : undefined,
     startsAt: startsAt.toISOString(),
-    tagColor: head.tagColor ?? null,
-    tagLabel: head.tagLabel ?? null,
+    tags: head.tags,
     title: head.title,
     type: head.type,
   });
@@ -1430,7 +1430,7 @@ async function syncAndStoreEventDiscord(input: {
     signupDeadline?: Date;
     signups: AnnouncementSignup[];
     startsAt: Date;
-    tagLabel?: string;
+    tags: EventTag[];
     title: string;
     type?: string;
   };
@@ -1472,7 +1472,7 @@ async function syncAndStoreEventDiscord(input: {
     specLabel: eventConfig.eventSpecLabel,
     specs,
     startsAt: event.startsAt,
-    tagLabel: event.tagLabel,
+    tags: event.tags,
     title: event.title,
     type: event.type,
   });
@@ -1550,7 +1550,7 @@ async function refreshEventAnnouncement(
       specLabel: eventConfig.eventSpecLabel,
       specs,
       startsAt: event.startsAt,
-      tagLabel: event.tagLabel,
+      tags: event.tags,
       title: event.title,
       type: event.type,
     });
@@ -3585,8 +3585,7 @@ export function buildApp() {
       requiredRoleId?: string;
       signupDeadline?: string;
       startsAt?: string;
-      tagColor?: string;
-      tagLabel?: string;
+      tags?: { color?: string; label?: string }[];
       title?: string;
       type?: string;
     };
@@ -3643,8 +3642,7 @@ export function buildApp() {
       requiredRoleId: body.requiredRoleId?.trim() || null,
       signupDeadline: body.signupDeadline?.trim() || undefined,
       startsAt,
-      tagColor: body.tagColor?.trim() || null,
-      tagLabel: body.tagLabel?.trim() || null,
+      tags: body.tags,
       title,
       type,
     });
@@ -3725,8 +3723,7 @@ export function buildApp() {
       signupDeadline?: string | null;
       startsAt?: string;
       status?: string;
-      tagColor?: string;
-      tagLabel?: string;
+      tags?: { color?: string; label?: string }[];
       title?: string;
       type?: string;
     };
@@ -3846,10 +3843,7 @@ export function buildApp() {
       signupDeadline: body.signupDeadline ?? null,
       startsAt: body.startsAt,
       status: body.status,
-      tagColor:
-        body.tagColor === undefined ? undefined : body.tagColor.trim() || null,
-      tagLabel:
-        body.tagLabel === undefined ? undefined : body.tagLabel.trim() || null,
+      tags: body.tags,
       title: body.title?.trim() || undefined,
       type: body.type
         ? EVENT_TYPES.includes(body.type as never)

@@ -1,5 +1,58 @@
 import { prisma } from "../db/prisma.js";
 
+export const MAX_EVENT_TAGS = 6;
+export const DEFAULT_EVENT_TAG_COLOR = "#6aa8ff";
+
+export type EventTag = {
+  color: string;
+  label: string;
+};
+
+function normalizeTagColor(value: unknown): string {
+  const hex = String(value ?? "")
+    .trim()
+    .replace(/^#/, "");
+  const expanded =
+    hex.length === 3
+      ? hex
+          .split("")
+          .map((char) => char + char)
+          .join("")
+      : hex;
+  return /^[0-9a-f]{6}$/i.test(expanded)
+    ? `#${expanded.toLowerCase()}`
+    : DEFAULT_EVENT_TAG_COLOR;
+}
+
+// Acepta lo que venga (body del request o JSON de la base) y devuelve una lista
+// limpia: sin vacíos, sin repetidos (por texto) y con tope. El color se
+// normaliza a #rrggbb para que la web y Discord pinten lo mismo.
+export function normalizeEventTags(value: unknown): EventTag[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const tags: EventTag[] = [];
+  for (const entry of value) {
+    const label = String(
+      (entry as { label?: unknown } | null)?.label ?? "",
+    )
+      .trim()
+      .slice(0, 24);
+    if (!label) {
+      continue;
+    }
+    if (tags.some((tag) => tag.label.toLowerCase() === label.toLowerCase())) {
+      continue;
+    }
+    tags.push({ color: normalizeTagColor((entry as { color?: unknown }).color), label });
+    if (tags.length >= MAX_EVENT_TAGS) {
+      break;
+    }
+  }
+  return tags;
+}
+
 // ── Catálogo de opciones del Módulo X ───────────────────────────────
 // Clases de WoW, roles de combate y tipos de evento. Se definen acá como
 // fuente de verdad y se exponen a la web para poblar los selects.
@@ -240,8 +293,7 @@ export type HubEvent = {
   signupDeadline?: Date;
   startsAt: Date;
   status: string;
-  tagColor?: string;
-  tagLabel?: string;
+  tags: EventTag[];
   title: string;
   type: string;
   updatedAt: Date;
@@ -304,6 +356,7 @@ type EventRecord = {
   signupDeadline: Date | null;
   startsAt: Date;
   status: string;
+  tags: unknown;
   tagColor: string | null;
   tagLabel: string | null;
   title: string;
@@ -345,6 +398,21 @@ function toSignup(record: SignupRecord): EventSignup {
   };
 }
 
+// Etiquetas de un evento: la lista guardada y, si está vacía, la etiqueta
+// única del modelo viejo (así los eventos anteriores siguen mostrando la suya
+// sin migrar la base).
+function eventTags(record: EventRecord): EventTag[] {
+  const tags = normalizeEventTags(record.tags);
+  if (tags.length > 0) {
+    return tags;
+  }
+  return normalizeEventTags(
+    record.tagLabel
+      ? [{ color: record.tagColor, label: record.tagLabel }]
+      : [],
+  );
+}
+
 function toEvent(record: EventRecord): HubEvent {
   return {
     characterEnabled: record.characterEnabled,
@@ -379,8 +447,7 @@ function toEvent(record: EventRecord): HubEvent {
     signupDeadline: record.signupDeadline ?? undefined,
     startsAt: record.startsAt,
     status: record.status,
-    tagColor: record.tagColor ?? undefined,
-    tagLabel: record.tagLabel ?? undefined,
+    tags: eventTags(record),
     title: record.title,
     type: record.type,
     updatedAt: record.updatedAt,
@@ -501,8 +568,7 @@ export async function createEvent(input: {
   requiredRoleId?: string | null;
   signupDeadline?: string;
   startsAt: string;
-  tagColor?: string | null;
-  tagLabel?: string | null;
+  tags?: unknown;
   title: string;
   type: string;
 }): Promise<HubEvent> {
@@ -535,8 +601,7 @@ export async function createEvent(input: {
         ? new Date(input.signupDeadline)
         : null,
       startsAt: new Date(input.startsAt),
-      tagColor: input.tagColor?.trim() || null,
-      tagLabel: input.tagLabel?.trim() || null,
+      tags: normalizeEventTags(input.tags),
       title: input.title,
       type: input.type,
     },
@@ -564,8 +629,7 @@ export async function updateEvent(
     signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
-    tagColor?: string | null;
-    tagLabel?: string | null;
+    tags?: unknown;
     title?: string;
     type?: string;
   },
@@ -641,14 +705,8 @@ export async function updateEvent(
             : undefined,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
       status: input.status,
-      tagColor:
-        input.tagColor === undefined
-          ? undefined
-          : input.tagColor?.trim() || null,
-      tagLabel:
-        input.tagLabel === undefined
-          ? undefined
-          : input.tagLabel?.trim() || null,
+      tags:
+        input.tags === undefined ? undefined : normalizeEventTags(input.tags),
       title: input.title,
       type: input.type,
     },

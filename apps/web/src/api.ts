@@ -960,6 +960,16 @@ export type EventDiscordOptions = {
   voiceChannelId?: string;
 };
 
+export type EventTag = {
+  color: string;
+  label: string;
+};
+
+export type EventTagInput = {
+  color?: string;
+  label?: string;
+};
+
 export type HubEvent = {
   // Si el evento pide (y recuerda) el nombre de personaje al anotarse.
   characterEnabled?: boolean;
@@ -1004,9 +1014,8 @@ export type HubEvent = {
   signupDeadline?: string;
   startsAt: string;
   status: string;
-  // Etiqueta libre del evento (texto + color), estilo comunicados.
-  tagColor?: string;
-  tagLabel?: string;
+  // Etiquetas libres del evento (texto + color).
+  tags?: EventTag[];
   title: string;
   type: string;
   updatedAt: string;
@@ -1056,8 +1065,7 @@ export async function createEvent(
     requiredRoleId?: string;
     signupDeadline?: string;
     startsAt: string;
-    tagColor?: string;
-    tagLabel?: string;
+    tags?: EventTagInput[];
     title: string;
     type: string;
   },
@@ -1092,8 +1100,7 @@ export async function updateEvent(
     signupDeadline?: string | null;
     startsAt?: string;
     status?: string;
-    tagColor?: string;
-    tagLabel?: string;
+    tags?: EventTagInput[];
     title?: string;
     type?: string;
   },
