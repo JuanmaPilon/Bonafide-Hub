@@ -795,9 +795,11 @@ async function syncGuildRoles(guildId: string): Promise<void> {
 
       const level = profileByUser.get(member.id)?.level ?? 0;
 
-      await applyMemberLevelRewards({ guildId, level, userId: member.id }).catch(
-        () => undefined,
-      );
+      await applyMemberLevelRewards({
+        guildId,
+        level,
+        userId: member.id,
+      }).catch(() => undefined);
 
       const rolesAboveLevel = allLevelRoleIds.filter((roleId) => {
         const rule = xpConfig.levelRoles?.find(
@@ -2845,7 +2847,7 @@ function parseKarutaGrab(content: string): ParsedKarutaGrab | null {
 // la carta. Clave: guildId:channelId:nombre (lowercase).
 const pendingCardCompanionWishlists = new Map<
   string,
-  { wishlist: number; at: number }
+  { wishlist: number; at: number; name: string }
 >();
 
 type ParsedCardCompanionLine = {
@@ -2933,7 +2935,14 @@ function parseCardCompanionDrop(
       if (heartMatch) {
         const wishlistCount = Number(heartMatch[1]);
         const tail = line.slice((heartMatch.index ?? 0) + heartMatch[0].length);
-        const text = tail.replace(/^[\s:·|>]+/, "").trim();
+        // El separador puede ser ":", "·", "|", ">" o un GUION. El formato
+        // de 2026 es "1 ♡ 1245 - Goku - Dragon Ball Z": si no sacamos el
+        // guion el nombre queda "- Goku" y después NO cruza con el de Karuta
+        // ("Goku") → se perdía la wishlist y la carta no entraba como rara.
+        const text = tail
+          .replace(/^[\s:·|>]+/, "")
+          .replace(/^[-–—]+\s*/, "")
+          .trim();
         if (text) {
           const sepMatch =
             text.match(/^(.*?)\s+(?:·|:)\s+(.*)$/) ??
@@ -2985,10 +2994,11 @@ function rememberCardCompanionWishlists(
     if (line.wishlistCount === undefined || !line.cardName) {
       continue;
     }
-    const key = `${guildId}:${channelId}:${line.cardName.toLowerCase()}`;
+    const key = `${guildId}:${channelId}:${normalizeCardNameKey(line.cardName)}`;
     pendingCardCompanionWishlists.set(key, {
       wishlist: line.wishlistCount,
       at: now,
+      name: line.cardName,
     });
   }
 
@@ -2998,6 +3008,63 @@ function rememberCardCompanionWishlists(
       pendingCardCompanionWishlists.delete(key);
     }
   }
+}
+
+// Clave para cruzar nombres entre bots: Karuta y Card Companion no siempre
+// escriben igual el mismo nombre (acentos, signos, mayúsculas). Bajamos todo a
+// minúsculas sin acentos y con los signos convertidos en espacios.
+function normalizeCardNameKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// Wishlist anunciada por Card Companion para esa carta, si sigue en el caché.
+// Primero busca exacto (nombre normalizado) y, si no está, acepta un prefijo
+// SOLO cuando no hay ambigüedad (un único candidato en el canal): así un
+// cambio de formato en el nombre no rompe el filtro de wishlist.
+function findPendingWishlist(
+  guildId: string,
+  channelId: string,
+  cardName: string,
+): number | undefined {
+  const wanted = normalizeCardNameKey(cardName);
+  if (!wanted) {
+    return undefined;
+  }
+
+  const prefix = `${guildId}:${channelId}:`;
+  const exact = pendingCardCompanionWishlists.get(`${prefix}${wanted}`);
+  if (exact) {
+    return exact.wishlist;
+  }
+
+  const candidates: number[] = [];
+  for (const [key, entry] of pendingCardCompanionWishlists) {
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+    const stored = key.slice(prefix.length);
+    if (stored.startsWith(wanted) || wanted.startsWith(stored)) {
+      candidates.push(entry.wishlist);
+    }
+  }
+
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+// Nombres anunciados por Card Companion en el canal (solo para diagnósticos).
+function pendingCardCompanionNames(
+  guildId: string,
+  channelId: string,
+): string[] {
+  const prefix = `${guildId}:${channelId}:`;
+  return [...pendingCardCompanionWishlists.entries()]
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([, entry]) => `${entry.name} (♡${entry.wishlist})`);
 }
 
 // Textos de un mensaje de Discord: contenido + embeds (título, descripción,
@@ -3624,14 +3691,23 @@ async function processKarutaKv(
     `[discord-bot] Karuta kv parseada: ${kv.code} print=${kv.printNumber ?? "?"} edición=${kv.edition ?? "?"} serie=${kv.series ?? "?"} nombre=${kv.cardName ?? "?"} image=${kv.imageUrl ? "sí" : "no"} | ${rawDesc}`,
   );
 
+  // Karuta no muestra la wishlist en kv, así que la tomamos del aviso de Card
+  // Companion del mismo drop (mientras siga en el caché). Sin esto el criterio
+  // de wishlist NUNCA se aplicaba al registrar con kv, y una carta popular con
+  // print alto quedaba afuera de "cartas raras".
+  const wishlistFromDrop = kv.cardName
+    ? findPendingWishlist(message.guildId, message.channelId, kv.cardName)
+    : undefined;
+  const effectiveWishlist = wishlistFromDrop ?? kv.wishlistCount;
+
   const reasons = karutaRareReasons(
     kv.printNumber,
-    kv.wishlistCount,
+    effectiveWishlist,
     guildConfig,
   );
   if (reasons.length === 0) {
     console.log(
-      `[discord-bot] Karuta kv ignorada (no rara): ${kv.code} print=${kv.printNumber ?? "?"} wishlist=${kv.wishlistCount ?? "?"}`,
+      `[discord-bot] Karuta kv ignorada (no rara): ${kv.code} print=${kv.printNumber ?? "?"} wishlist=${effectiveWishlist ?? "?"}`,
     );
     return true;
   }
@@ -3662,10 +3738,13 @@ async function processKarutaKv(
     return true;
   }
 
-  const saved = await postKarutaCard(message.guildId, kv);
+  const saved = await postKarutaCard(message.guildId, {
+    ...kv,
+    wishlistCount: effectiveWishlist,
+  });
   if (saved) {
     console.log(
-      `[discord-bot] Karuta kv registrada: ${kv.code} (${kv.ownerUsername ?? "?"})`,
+      `[discord-bot] Karuta kv registrada: ${kv.code} (${kv.ownerUsername ?? "?"}) rara por ${reasons.join(" + ")}`,
     );
   }
   return true;
@@ -3731,18 +3810,33 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
       ? (message.mentions.members?.get(grab.mentionedUserId)?.displayName ??
         message.mentions.users.get(grab.mentionedUserId)?.username)
       : undefined;
-    const wishlistEntry = pendingCardCompanionWishlists.get(
-      `${message.guildId}:${message.channelId}:${grab.cardName.toLowerCase()}`,
+    const wishlistCount = findPendingWishlist(
+      message.guildId,
+      message.channelId,
+      grab.cardName,
     );
+    if (wishlistCount === undefined) {
+      // Si Card Companion anunció cartas en este canal y no encontramos esta,
+      // el problema es cómo se cruzan los nombres (formato nuevo).
+      const pending = pendingCardCompanionNames(
+        message.guildId,
+        message.channelId,
+      );
+      if (pending.length > 0) {
+        console.warn(
+          `[discord-bot] Karuta: no encontré la wishlist de "${grab.cardName}" (${grab.code}). Anunciadas en el canal: ${pending.join(" | ")}`,
+        );
+      }
+    }
     const grabResult = await postKarutaGrab(message.guildId, message.id, {
       cardName: grab.cardName,
       code: grab.code,
       grabberUsername,
-      wishlistCount: wishlistEntry?.wishlist,
+      wishlistCount,
     });
     if (grabResult.ok) {
       console.log(
-        `[discord-bot] Karuta grab detectado: ${grab.code} por ${grabberUsername ?? "?"} wishlist=${wishlistEntry?.wishlist ?? "?"}${grabResult.processed ? "" : " (carta no registrada: falta kv)"}`,
+        `[discord-bot] Karuta grab detectado: ${grab.code} por ${grabberUsername ?? "?"} wishlist=${wishlistCount ?? "?"}${grabResult.processed ? "" : " (carta no registrada: falta kv)"}`,
       );
     }
     return;
