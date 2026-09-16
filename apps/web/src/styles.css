@@ -4895,7 +4895,7 @@ input.comm-tag-hex {
   }
 
   .karuta-drop-card.karuta-tilting {
-    --karuta-tilt-scale: 1.02;
+    --karuta-tilt-scale: 1.03;
     /* Mientras sigue al mouse: reacción casi inmediata y capa GPU propia
        (el will-change se va al salir, así no quedan cientos de capas). */
     transition: transform 0.08s linear;

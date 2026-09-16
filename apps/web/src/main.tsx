@@ -1123,7 +1123,7 @@ function ComunicadoTagFields({
 //
 // Solo actúa con puntero fino (mouse/trackpad): en touch no existe el hover y
 // las cartas se quedan con su animación automática de brillo.
-const KARUTA_TILT_MAX_DEG = 7;
+const KARUTA_TILT_MAX_DEG = 10;
 const KARUTA_TILT_PROPERTIES = [
   "--karuta-tilt-x",
   "--karuta-tilt-y",

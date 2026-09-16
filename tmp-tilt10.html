@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Tilt 10°</title>
+    <link
+      rel="stylesheet"
+      href="file:///C:/Users/Juanma/Code/Bonafide-BOT/apps/web/dist/assets/index-BU9-tjk4.css"
+    />
+    <style>
+      body {
+        background: #070b14;
+        padding: 40px 30px;
+        font: 12px/1.4 system-ui;
+        color: #9fb0d0;
+      }
+      /* Grilla como la real: para ver si la carta inclinada invade a la vecina. */
+      .karuta-drops-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .arte {
+        background: linear-gradient(200deg, #f2e6c8 0%, #c9a86a 30%, #2a3350 70%, #101626 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <p>Grilla real (minmax 200px, gap 14px). La 2ª y la 5ª están al MÁXIMO (10°).</p>
+    <div class="karuta-drops-grid" id="grid"></div>
+
+    <script>
+      const cartas = [
+        { tier: "karuta-super-rare", badge: "✨ Súper rara", est: "" },
+        {
+          tier: "karuta-ultra-rare karuta-tilting",
+          badge: "💎 Ultra rara",
+          est: "--karuta-tilt-x: -10deg; --karuta-tilt-y: -10deg; --karuta-glare-x: 8%; --karuta-glare-y: 8%",
+        },
+        { tier: "", badge: "", est: "" },
+        { tier: "", badge: "", est: "" },
+        {
+          tier: "karuta-ultra-rare karuta-tilting",
+          badge: "💎 Ultra rara",
+          est: "--karuta-tilt-x: 10deg; --karuta-tilt-y: 10deg; --karuta-glare-x: 92%; --karuta-glare-y: 92%",
+        },
+        { tier: "karuta-super-rare", badge: "✨ Súper rara", est: "" },
+        { tier: "", badge: "", est: "" },
+      ];
+
+      const grid = document.getElementById("grid");
+      for (const carta of cartas) {
+        const article = document.createElement("article");
+        article.className = ("karuta-drop-card " + carta.tier).trim();
+        if (carta.est) article.style.cssText = carta.est;
+        article.innerHTML =
+          '<div class="karuta-card-art-wrap">' +
+          (carta.badge
+            ? '<span class="karuta-tier-badge ' +
+              (carta.tier.includes("ultra") ? "karuta-ultra-badge" : "karuta-super-badge") +
+              '">' +
+              carta.badge +
+              "</span>"
+            : "") +
+          '<div class="karuta-drop-image arte"></div>' +
+          (carta.tier.includes("ultra")
+            ? '<span aria-hidden="true" class="karuta-card-glare"></span>'
+            : "") +
+          "</div>" +
+          '<div class="karuta-drop-body"><strong>Carta</strong>' +
+          '<span class="karuta-drop-series">Serie de prueba</span>' +
+          '<span class="karuta-drop-user">Alguien posee la carta</span></div>';
+        grid.append(article);
+      }
+    </script>
+  </body>
+</html>
