@@ -19,6 +19,10 @@ const envSchema = z.object({
   BOT_CONFIG_API_URL: z.string().url().optional(),
   BOT_CONFIG_API_TOKEN: z.string().min(16).optional(),
   BOT_DISABLED: z.string().optional(),
+  // Opcional: cuántos mensajes del canal de Karuta se revisan al arrancar para
+  // recuperar las wishlists que anunció Card Companion mientras el bot estaba
+  // caído. 0 lo desactiva; sin valor usa el default (1000).
+  KARUTA_WISHLIST_BACKFILL_MESSAGES: z.string().optional(),
   YOUTUBE_COOKIE: z.string().optional(),
 });
 

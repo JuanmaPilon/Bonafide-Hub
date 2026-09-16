@@ -13,6 +13,7 @@ import {
   type Guild,
   type GuildMember,
   type Role,
+  type Snowflake,
 } from "discord.js";
 import {
   createCanvas,
@@ -870,6 +871,7 @@ client.once(Events.ClientReady, (readyClient) => {
   startXpSyncChecker();
   startDailyMessagesProcessor(readyClient);
   startEventControlScheduler(readyClient);
+  startKarutaWishlistBackfill();
 });
 
 async function handleXpLevelCommand(
@@ -3242,6 +3244,195 @@ async function pushKarutaWishlists(
       `[discord-bot] Karuta wishlists POST error: ${getErrorMessage(error)}`,
     );
   }
+}
+
+// ── Backfill de wishlists desde el historial ────────────────────────────
+// Guardamos la wishlist que anuncia Card Companion SOLO cuando el bot ve el
+// mensaje EN VIVO. Todo lo que se anunció mientras el bot estaba caído (o
+// antes de que existiera la tabla `karuta_wishlists`) se perdía: si después
+// alguien hacía `kv` de esa carta, la wishlist quedaba desconocida y la carta
+// solo podía entrar a la colección por el criterio de print.
+// Este backfill lee el historial del canal de Karuta al arrancar y vuelca esos
+// avisos a la base, reusando el MISMO parser que el camino en vivo. Es
+// idempotente (upsert por clave de nombre) y best-effort: si falla, el bot
+// sigue funcionando igual.
+const KARUTA_WISHLIST_BACKFILL_DEFAULT_MESSAGES = 1000;
+const KARUTA_WISHLIST_BACKFILL_MAX_MESSAGES = 5000;
+const KARUTA_WISHLIST_BACKFILL_PAGE_SIZE = 100;
+// Un POST con cientos de cartas sería una request enorme (y una transacción
+// larga del lado del API): mandamos en tandas.
+const KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST = 100;
+const KARUTA_WISHLIST_BACKFILL_PAGE_DELAY_MS = 300;
+// Esperamos a que termine el arranque (recordatorios, sync de XP, etc.) antes
+// de sumar llamadas al canal.
+const KARUTA_WISHLIST_BACKFILL_DELAY_MS = 15_000;
+
+// 0 = desactivado. Sin valor = default. Un valor inválido cae al default (en
+// vez de desactivar en silencio).
+function karutaWishlistBackfillLimit(): number {
+  const raw = env.KARUTA_WISHLIST_BACKFILL_MESSAGES?.trim();
+  if (!raw) {
+    return KARUTA_WISHLIST_BACKFILL_DEFAULT_MESSAGES;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(
+      `[discord-bot] KARUTA_WISHLIST_BACKFILL_MESSAGES inválido ("${raw}"): uso ${KARUTA_WISHLIST_BACKFILL_DEFAULT_MESSAGES}.`,
+    );
+    return KARUTA_WISHLIST_BACKFILL_DEFAULT_MESSAGES;
+  }
+
+  return Math.min(Math.floor(parsed), KARUTA_WISHLIST_BACKFILL_MAX_MESSAGES);
+}
+
+async function backfillKarutaWishlistsFromChannel(
+  guildId: string,
+  channelId: string,
+  karutaBotUserId: string,
+  limit: number,
+): Promise<void> {
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    console.warn(
+      `[discord-bot] Karuta backfill: canal ${channelId} no disponible o no es de texto.`,
+    );
+    return;
+  }
+
+  // Leemos del mensaje más NUEVO al más viejo, así que la PRIMERA aparición de
+  // cada carta es la más reciente: si ya la tenemos, no la pisamos con una
+  // vieja (la wishlist cambia con el tiempo).
+  const found = new Map<string, ParsedCardCompanionLine>();
+  let before: Snowflake | undefined;
+  let scanned = 0;
+
+  while (scanned < limit) {
+    const pageSize = Math.min(KARUTA_WISHLIST_BACKFILL_PAGE_SIZE, limit - scanned);
+
+    const page = await channel.messages
+      .fetch(before ? { before, limit: pageSize } : { limit: pageSize })
+      .catch((error: unknown) => {
+        console.warn(
+          `[discord-bot] Karuta backfill: no pude leer el historial de ${channelId}: ${getErrorMessage(error)}`,
+        );
+        return null;
+      });
+
+    if (!page || page.size === 0) {
+      break;
+    }
+
+    let oldestId: Snowflake | undefined;
+    let oldestTimestamp = Number.POSITIVE_INFINITY;
+
+    for (const message of page.values()) {
+      scanned += 1;
+
+      if (!oldestId || message.createdTimestamp < oldestTimestamp) {
+        oldestId = message.id;
+        oldestTimestamp = message.createdTimestamp;
+      }
+
+      // Solo mensajes de bots que NO sean Karuta ni nosotros: ahí es donde
+      // Card Companion publica las wishlists.
+      if (
+        !message.author.bot ||
+        message.author.id === karutaBotUserId ||
+        message.author.id === client.user?.id
+      ) {
+        continue;
+      }
+
+      for (const line of parseCardCompanionDrop(
+        ...collectKarutaMessageTexts(message),
+      )) {
+        if (!line.cardName || line.wishlistCount === undefined) {
+          continue;
+        }
+        const nameKey = normalizeCardNameKey(line.cardName);
+        if (!nameKey || found.has(nameKey)) {
+          continue;
+        }
+        found.set(nameKey, line);
+      }
+    }
+
+    if (!oldestId) {
+      break;
+    }
+    before = oldestId;
+
+    // Discord devolvió menos de lo pedido → se acabó el historial.
+    if (page.size < pageSize) {
+      break;
+    }
+
+    await sleep(KARUTA_WISHLIST_BACKFILL_PAGE_DELAY_MS);
+  }
+
+  if (found.size === 0) {
+    console.log(
+      `[discord-bot] Karuta backfill (canal ${channelId}): ${scanned} mensajes revisados, ninguna wishlist encontrada.`,
+    );
+    return;
+  }
+
+  const lines = [...found.values()];
+  for (
+    let index = 0;
+    index < lines.length;
+    index += KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST
+  ) {
+    await pushKarutaWishlists(
+      guildId,
+      lines.slice(index, index + KARUTA_WISHLIST_BACKFILL_ITEMS_PER_POST),
+    );
+  }
+
+  console.log(
+    `[discord-bot] Karuta backfill (canal ${channelId}): ${scanned} mensajes revisados, ${lines.length} wishlists guardadas.`,
+  );
+}
+
+function startKarutaWishlistBackfill(): void {
+  const limit = karutaWishlistBackfillLimit();
+  if (limit <= 0) {
+    console.log(
+      "[discord-bot] Karuta backfill desactivado (KARUTA_WISHLIST_BACKFILL_MESSAGES=0).",
+    );
+    return;
+  }
+
+  // Sin API no hay dónde persistir nada: el caché en memoria no sirve para
+  // esto (se borra en cada reinicio).
+  if (!isRemoteStoreEnabled()) {
+    return;
+  }
+
+  setTimeout(() => {
+    void (async () => {
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          const config = await getGuildConfig(guild.id);
+          if (!config.karutaWatchEnabled || !config.karutaChannelId) {
+            continue;
+          }
+
+          await backfillKarutaWishlistsFromChannel(
+            guild.id,
+            config.karutaChannelId,
+            config.karutaBotUserId?.trim() || DEFAULT_KARUTA_BOT_USER_ID,
+            limit,
+          );
+        } catch (error: unknown) {
+          console.warn(
+            `[discord-bot] Karuta backfill falló para guild ${guild.id}: ${getErrorMessage(error)}`,
+          );
+        }
+      }
+    })();
+  }, KARUTA_WISHLIST_BACKFILL_DELAY_MS);
 }
 
 // Textos de un mensaje de Discord: contenido + embeds (título, descripción,

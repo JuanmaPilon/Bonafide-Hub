@@ -97,6 +97,30 @@ el bot maneja los clicks con mensajes efímeros y guarda por API interna:
 3. Los recordatorios de asistencia y los informes de "no se anotaron" los dispara
    el scheduler del bot consultando `GET /internal/.../events/control`.
 
+### Karuta (cartas raras y wishlists)
+
+`kv` (ver carta) es lo único que registra cartas en la colección; `ka` guarda
+álbumes y `grab`/`kg` transfieren el dueño. El criterio de rareza es OR:
+`print <= karutaRarePrintMax` **o** `wishlist >= karutaRareWishlistMin`.
+
+Karuta NO muestra la wishlist en `kv`: la aporta Card Companion al dropear. El
+bot la resuelve en cascada y la usa tanto en el `kv` como en el `grab`:
+
+```text
+kv / grab de una carta
+   -> 1. aviso FRESCO de Card Companion en el canal (memoria, 15 min)
+   -> 2. caché en memoria de wishlists vistas (30 min)
+   -> 3. base de datos (karuta_wishlists), vía API interna
+   -> si no está: la carta solo puede entrar por el criterio de print
+```
+
+La tabla `karuta_wishlists` se llena con cada aviso que el bot ve **en vivo**.
+Para los huecos (bot caído, o avisos anteriores a que existiera la tabla) el bot
+lee el historial del canal al arrancar (`KARUTA_WISHLIST_BACKFILL_MESSAGES`,
+default 1000, máximo 5000) y guarda lo que encuentra. Es idempotente: se puede
+correr en cada reinicio sin duplicar nada. La clave es el nombre normalizado de
+la carta (no el código), así que un `kv` posterior de cualquier copia ya la ve.
+
 ## 4. Sistema de XP
 
 1. XP por mensaje (`messageXp`) y por minuto en voz (`voiceXpPerMinute`).
@@ -121,6 +145,7 @@ Archivo ejemplo: `apps/discord-bot/.env.example`
 6. `BOT_DISABLED` — si es true, no hace login
 7. `YOUTUBE_COOKIE` — opcional: cookies de navegador de YouTube (mitiga 429/403 en IPs de datacenter)
 8. `YOUTUBE_DL_BIN` — opcional: ruta al binario de `yt-dlp` si no se encuentra en PATH ni se descarga automáticamente
+9. `KARUTA_WISHLIST_BACKFILL_MESSAGES` — opcional: cuántos mensajes del canal de Karuta revisar al arrancar para recuperar las wishlists que Card Companion anunció con el bot caído (default 1000, máximo 5000, `0` desactiva)
 
 ## 6. Permisos recomendados
 
