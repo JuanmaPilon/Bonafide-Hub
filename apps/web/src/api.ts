@@ -1115,6 +1115,27 @@ export async function updateEvent(
   return { discordError: data.discordError, event: data.event };
 }
 
+// Limpia la ocurrencia de una serie: borra el aviso/recordatorios en Discord y
+// las inscripciones, y mueve el molde a la próxima fecha (la serie sigue viva).
+export async function resetEventOccurrence(
+  guildId: string,
+  eventId: string,
+): Promise<{
+  discordError?: string;
+  discordFailed?: string[];
+  event: HubEvent;
+  removedSignups: number;
+}> {
+  return requestJson<{
+    discordError?: string;
+    discordFailed?: string[];
+    event: HubEvent;
+    removedSignups: number;
+  }>(`/guilds/${guildId}/events/${encodeURIComponent(eventId)}/reset-occurrence`, {
+    method: "POST",
+  });
+}
+
 export async function deleteEvent(
   guildId: string,
   eventId: string,

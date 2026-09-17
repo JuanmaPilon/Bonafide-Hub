@@ -1013,6 +1013,68 @@ export async function deleteSignup(
   return result.count > 0;
 }
 
+// Borra todas las inscripciones de un evento (se usa al limpiar la ocurrencia
+// de una serie: el roster es de esa fecha, no del molde).
+export async function deleteEventSignups(
+  guildId: string,
+  eventId: string,
+): Promise<number> {
+  const result = await prisma.eventSignup.deleteMany({
+    where: { guildId, eventId },
+  });
+  return result.count;
+}
+
+// ¿Ya hay otro evento de la misma serie en esa fecha exacta? El molde no debe
+// pisar una ocurrencia ya publicada (quedarían dos avisos para la misma fecha).
+export async function eventExistsAt(
+  guildId: string,
+  startsAt: Date,
+  title: string,
+  excludeEventId: string,
+): Promise<boolean> {
+  const found = await prisma.hubEvent.findFirst({
+    where: {
+      guildId,
+      id: { not: excludeEventId },
+      startsAt,
+      title,
+    },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
+// Limpia la ocurrencia de una serie: borra el rastro en Discord de esa fecha y
+// reinicia los marcadores, conservando el molde (config, recurrencia y
+// publicación) y moviéndolo a la próxima fecha de la serie.
+export async function resetEventOccurrence(
+  guildId: string,
+  eventId: string,
+  input: { recurrenceNextAt: Date; startsAt: Date },
+): Promise<HubEvent | null> {
+  const result = await prisma.hubEvent.updateMany({
+    where: { id: eventId, guildId },
+    data: {
+      completedAt: null,
+      discordEventId: null,
+      discordMessageIds: [],
+      recurrenceNextAt: input.recurrenceNextAt,
+      reminderMessageIds: [],
+      // Si no se limpian, la ocurrencia nueva nunca manda sus recordatorios.
+      reminderSentHours: [],
+      reportSentAt: null,
+      signupClosedAt: null,
+      startsAt: input.startsAt,
+      status: "scheduled",
+    },
+  });
+  if (result.count === 0) {
+    return null;
+  }
+  return getEvent(guildId, eventId);
+}
+
 // Resetear la inscripción: borra la fila de este evento Y olvida el personaje
 // recordado del jugador, así la próxima vez se anota desde cero (rol,
 // clase/spec y personaje). Distinto de "quitar inscripción", que solo borra la

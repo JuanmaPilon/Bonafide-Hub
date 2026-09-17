@@ -90,8 +90,10 @@ import {
   createRaidSpec,
   deleteEvent,
   deleteEventImage,
+  deleteEventSignups,
   deleteRaidSpec,
   deleteSignup,
+  eventExistsAt,
   getEvent,
   getEventPlayerCharacter,
   listEventImages,
@@ -106,6 +108,7 @@ import {
   markEventRemindersSent,
   markEventReportSent,
   markEventSignupClosed,
+  resetEventOccurrence,
   resetSignup,
   setEventDiscordInfo,
   setEventRecurrenceNext,
@@ -3971,6 +3974,142 @@ export function buildApp() {
       discordFailed: cleanup.failed,
     };
   });
+
+  // Limpia la ocurrencia de una serie: borra en Discord el aviso/recordatorios
+  // de ESA fecha y sus inscripciones, y mueve el molde a la próxima fecha de la
+  // serie (la primera que no esté ocupada por una ocurrencia ya publicada).
+  // El molde no se pierde: conserva su config, su recurrencia y su publicación.
+  app.post(
+    "/guilds/:guildId/events/:eventId/reset-occurrence",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
+      }
+      if (!event.recurrenceEnabled || !event.recurrenceEveryDays) {
+        return reply.code(400).send({
+          ok: false,
+          error: "El evento no es el molde de una serie (no tiene recurrencia)",
+        });
+      }
+
+      const stepMs = event.recurrenceEveryDays * DAY_MS;
+      // Fechas futuras de la serie que todavía no tienen evento: el molde no
+      // puede caer el mismo día que una ocurrencia ya publicada.
+      const findFreeDate = async (from: Date): Promise<Date> => {
+        let candidate = from;
+        while (candidate.getTime() <= Date.now()) {
+          candidate = new Date(candidate.getTime() + stepMs);
+        }
+        for (let guard = 0; guard < 52; guard += 1) {
+          const taken = await eventExistsAt(
+            params.guildId!,
+            candidate,
+            event.title,
+            event.id,
+          );
+          if (!taken) {
+            break;
+          }
+          candidate = new Date(candidate.getTime() + stepMs);
+        }
+        return candidate;
+      };
+
+      const nextStartsAt = await findFreeDate(
+        event.recurrenceNextAt ??
+          new Date(event.startsAt.getTime() + stepMs),
+      );
+      const nextRecurrenceAt = await findFreeDate(
+        new Date(nextStartsAt.getTime() + stepMs),
+      );
+
+      const cleanup = await cleanupEventDiscord({
+        discordEventId: event.discordEventId,
+        discordMessageIds: event.discordMessageIds,
+        guildId: params.guildId,
+        publishChannelId: event.publishChannelId,
+        reminderMessageIds: event.reminderMessageIds,
+      });
+      const removedSignups = await deleteEventSignups(
+        params.guildId,
+        params.eventId,
+      );
+      const updated = await resetEventOccurrence(params.guildId, params.eventId, {
+        recurrenceNextAt: nextRecurrenceAt,
+        startsAt: nextStartsAt,
+      });
+      if (!updated) {
+        return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
+      }
+
+      // Se re-publica la ocurrencia nueva con la config guardada del molde:
+      // si no, la serie queda sin aviso agendado hasta que alguien lo edite.
+      let discordError: string | undefined;
+      let savedEvent = updated;
+      const hadMessage = (event.discordMessageIds ?? []).length > 0;
+      const discordOpts: EventDiscordOptions = {
+        createScheduledEvent:
+          event.discordEventConfig?.createScheduledEvent ??
+          Boolean(event.discordEventId),
+        entityType: event.discordEventConfig?.entityType ?? "voice",
+        location: event.discordEventConfig?.location,
+        publishChannelId: event.publishChannelId,
+        publishMessage: hadMessage && Boolean(event.publishChannelId),
+        recurrence: (event.discordEventConfig?.recurrence ??
+          "none") as EventRecurrence,
+        voiceChannelId: event.voiceChannelId,
+      };
+      if (discordOpts.createScheduledEvent || discordOpts.publishMessage) {
+        const validationError = validateDiscordOptions(discordOpts);
+        if (validationError) {
+          discordError = validationError;
+        } else {
+          const synced = await syncAndStoreEventDiscord({
+            discordOpts,
+            event: updated,
+          });
+          discordError = synced.discordError;
+          if (synced.event) {
+            savedEvent = synced.event;
+          }
+        }
+      }
+
+      console.log(
+        `[eventos] ocurrencia limpiada ${params.eventId}: inscripciones=${removedSignups} próxima=${nextStartsAt.toISOString()} fallosDiscord=${cleanup.failed.length}`,
+      );
+
+      await logAdminAction(session, params.guildId, "event:occurrence-reset", {
+        details: `Ocurrencia limpiada de "${event.title}" (${removedSignups} inscripciones). Próxima: ${nextStartsAt.toISOString().slice(0, 10)}.`,
+        targetType: "event",
+        targetId: params.eventId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        discordError,
+        discordFailed: cleanup.failed,
+        event: savedEvent,
+        removedSignups,
+      };
+    },
+  );
 
   // ── Plantillas de juego (presets de roles + catálogo) ──
   // Listado de plantillas disponibles (Admin). Solo admin/owner, porque es

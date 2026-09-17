@@ -75,6 +75,7 @@ import {
   getEventGames,
   getEvents,
   getGuildEmojis,
+  resetEventOccurrence,
   resolveEventRoles,
   updateEvent,
   updateEventSpec,
@@ -1490,6 +1491,7 @@ function EventCard({
   onDuplicate,
   onEdit,
   onRemoveSignup,
+  onResetOccurrence,
   onResetSignup,
   onSignup,
   onStaffRemoveSignup,
@@ -1507,6 +1509,9 @@ function EventCard({
   onDuplicate: (event: HubEvent) => void;
   onEdit: (event: HubEvent) => void;
   onRemoveSignup: (eventId: string) => Promise<void>;
+  // Limpia la ocurrencia de una serie (Discord + inscripciones) y mueve el
+  // molde a la próxima fecha, sin perder la serie.
+  onResetOccurrence: (event: HubEvent) => void;
   onResetSignup: (eventId: string) => Promise<void>;
   onSignup: (
     eventId: string,
@@ -2242,6 +2247,15 @@ function EventCard({
               >
                 Duplicar
               </button>
+              {event.recurrenceEnabled ? (
+                <button
+                  className="primary-button"
+                  onClick={() => onResetOccurrence(event)}
+                  type="button"
+                >
+                  Limpiar ocurrencia
+                </button>
+              ) : null}
               <button
                 className="danger-button"
                 onClick={() => onDelete(event)}
@@ -4252,7 +4266,9 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Eliminar evento",
-      message: `¿Eliminar "${event.title}" y todas sus inscripciones?`,
+      message: event.recurrenceEnabled
+        ? `¿Eliminar "${event.title}" y todas sus inscripciones? Es el molde de una serie: si lo eliminás, no se crean más ocurrencias (las que ya existen quedan).`
+        : `¿Eliminar "${event.title}" y todas sus inscripciones?`,
       onConfirm: () => {
         void (async () => {
           try {
@@ -4281,6 +4297,50 @@ function App() {
               error instanceof Error
                 ? error.message
                 : "No se pudo eliminar el evento.",
+              "error",
+            );
+          }
+        })();
+      },
+    });
+  }
+
+  // Limpia la ocurrencia de una serie: se va el rastro de esa fecha en Discord
+  // (aviso, recordatorios y evento agendado) y sus inscripciones; el molde
+  // queda con su config y la serie avanza a la próxima fecha.
+  function handleResetOccurrence(event: HubEvent): void {
+    if (!selectedGuildId) {
+      return;
+    }
+    setConfirmDialog({
+      kind: "danger",
+      title: "Limpiar ocurrencia",
+      message: `Se borra en Discord el aviso y los recordatorios de "${event.title}", se quitan sus ${event.signups.length} inscripciones y la serie avanza a su próxima fecha (el molde se conserva).`,
+      onConfirm: () => {
+        void (async () => {
+          try {
+            const result = await resetEventOccurrence(
+              selectedGuildId,
+              event.id,
+            );
+            setEvents(await getEvents(selectedGuildId));
+            const fecha = formatDateTime24(result.event.startsAt);
+            if (result.discordFailed?.length) {
+              pushToast(
+                `Ocurrencia limpiada y serie movida al ${fecha}, pero Discord no dejó borrar: ${result.discordFailed.join(" | ")}`,
+                "error",
+              );
+            } else {
+              pushToast(`Ocurrencia limpiada. Próxima: ${fecha}.`, "success");
+            }
+            if (result.discordError) {
+              pushToast(`No se pudo publicar la próxima ocurrencia: ${result.discordError}`, "error");
+            }
+          } catch (error) {
+            pushToast(
+              error instanceof Error
+                ? error.message
+                : "No se pudo limpiar la ocurrencia.",
               "error",
             );
           }
@@ -9791,6 +9851,7 @@ function App() {
                               onDuplicate={handleDuplicateEvent}
                               onEdit={handleEditEvent}
                               onRemoveSignup={handleRemoveEventSignup}
+                              onResetOccurrence={handleResetOccurrence}
                               onResetSignup={handleResetEventSignup}
                               onSignup={handleEventSignup}
                               onStaffRemoveSignup={handleStaffRemoveEventSignup}
