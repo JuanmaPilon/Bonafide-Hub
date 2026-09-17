@@ -1,4 +1,4 @@
-import { prisma } from "../db/prisma.js";
+import { Prisma, prisma } from "../db/prisma.js";
 
 export const MAX_EVENT_TAGS = 6;
 export const DEFAULT_EVENT_TAG_COLOR = "#6aa8ff";
@@ -1013,16 +1013,50 @@ export async function deleteSignup(
   return result.count > 0;
 }
 
-// Borra todas las inscripciones de un evento (se usa al limpiar la ocurrencia
-// de una serie: el roster es de esa fecha, no del molde).
-export async function deleteEventSignups(
+// Archiva la ocurrencia que terminó: crea una fila "completed" con los datos de
+// esa fecha y MUEVE las inscripciones, así el historial del admin conserva el
+// roster de cada ocurrencia aunque el molde de la serie siga avanzando.
+export async function archiveEventOccurrence(
   guildId: string,
   eventId: string,
-): Promise<number> {
-  const result = await prisma.eventSignup.deleteMany({
-    where: { guildId, eventId },
+): Promise<HubEvent | null> {
+  const event = await prisma.hubEvent.findFirst({
+    where: { id: eventId, guildId },
   });
-  return result.count;
+  if (!event) {
+    return null;
+  }
+
+  const archived = await prisma.hubEvent.create({
+    data: {
+      characterEnabled: event.characterEnabled,
+      completedAt: new Date(),
+      createdByUserId: event.createdByUserId,
+      createdByUsername: event.createdByUsername,
+      description: event.description,
+      durationMinutes: event.durationMinutes,
+      game: event.game,
+      guildId,
+      imageUrl: event.imageUrl,
+      // La copia del historial no repite la serie ni su publicación.
+      recurrenceEnabled: false,
+      reminderHours: [],
+      requiredRoleId: event.requiredRoleId,
+      signupDeadline: event.signupDeadline,
+      startsAt: event.startsAt,
+      status: "completed",
+      tags: (event.tags ?? []) as Prisma.InputJsonValue,
+      title: event.title,
+      type: event.type,
+    },
+  });
+
+  await prisma.eventSignup.updateMany({
+    data: { eventId: archived.id },
+    where: { eventId, guildId },
+  });
+
+  return getEvent(guildId, archived.id);
 }
 
 // ¿Ya hay otro evento de la misma serie en esa fecha exacta? El molde no debe
@@ -1051,7 +1085,13 @@ export async function eventExistsAt(
 export async function resetEventOccurrence(
   guildId: string,
   eventId: string,
-  input: { recurrenceNextAt: Date; startsAt: Date },
+  input: {
+    recurrenceNextAt: Date;
+    // El cierre de inscripciones viaja con la serie (mismo offset respecto del
+    // inicio): si no, queda en el pasado y el evento aparece "cerrado".
+    signupDeadline: Date | null;
+    startsAt: Date;
+  },
 ): Promise<HubEvent | null> {
   const result = await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
@@ -1065,6 +1105,7 @@ export async function resetEventOccurrence(
       reminderSentHours: [],
       reportSentAt: null,
       signupClosedAt: null,
+      signupDeadline: input.signupDeadline,
       startsAt: input.startsAt,
       status: "scheduled",
     },

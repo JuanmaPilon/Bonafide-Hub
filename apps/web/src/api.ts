@@ -1131,9 +1131,12 @@ export async function resetEventOccurrence(
     discordFailed?: string[];
     event: HubEvent;
     removedSignups: number;
-  }>(`/guilds/${guildId}/events/${encodeURIComponent(eventId)}/reset-occurrence`, {
-    method: "POST",
-  });
+  }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/reset-occurrence`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export async function deleteEvent(

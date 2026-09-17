@@ -3187,14 +3187,21 @@ function App() {
     return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [events]);
   const untaggedEvents = useMemo(
-    () => events.filter((event) => (event.tags?.length ?? 0) === 0).length,
+    () =>
+      events.filter(
+        (event) =>
+          event.status !== "completed" && (event.tags?.length ?? 0) === 0,
+      ).length,
     [events],
   );
   const filteredEvents = useMemo(() => {
+    // Los completados viven en Admin → Historial de eventos (con su roster):
+    // la grilla es solo lo activo/próximo.
+    const active = events.filter((event) => event.status !== "completed");
     if (eventTagFilter.length === 0) {
-      return events;
+      return active;
     }
-    return events.filter((event) => {
+    return active.filter((event) => {
       const tags = event.tags ?? [];
       if (tags.length === 0) {
         return eventTagFilter.includes(EVENT_TAG_NONE);
@@ -3204,6 +3211,23 @@ function App() {
       );
     });
   }, [eventTagFilter, events]);
+  // Etiquetas del filtro: solo de los eventos activos (los del historial ya no
+  // se pueden filtrar desde acá).
+  const activeTagOptions = useMemo(() => {
+    const byLabel = new Map<string, EventTag>();
+    for (const event of events) {
+      if (event.status === "completed") {
+        continue;
+      }
+      for (const tag of event.tags ?? []) {
+        const key = tag.label.toLowerCase();
+        if (!byLabel.has(key)) {
+          byLabel.set(key, tag);
+        }
+      }
+    }
+    return [...byLabel.values()];
+  }, [events]);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   // Indica que el form abrió en modo "duplicar" (para el título del form).
@@ -4315,7 +4339,7 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Limpiar ocurrencia",
-      message: `Se borra en Discord el aviso y los recordatorios de "${event.title}", se quitan sus ${event.signups.length} inscripciones y la serie avanza a su próxima fecha (el molde se conserva).`,
+      message: `Se borra en Discord el aviso y los recordatorios de "${event.title}", su roster queda archivado en el historial y la serie avanza a su próxima fecha (el molde se conserva).`,
       onConfirm: () => {
         void (async () => {
           try {
@@ -4334,7 +4358,10 @@ function App() {
               pushToast(`Ocurrencia limpiada. Próxima: ${fecha}.`, "success");
             }
             if (result.discordError) {
-              pushToast(`No se pudo publicar la próxima ocurrencia: ${result.discordError}`, "error");
+              pushToast(
+                `No se pudo publicar la próxima ocurrencia: ${result.discordError}`,
+                "error",
+              );
             }
           } catch (error) {
             pushToast(
@@ -9741,7 +9768,7 @@ function App() {
                           >
                             <span className="module-toggle-text">
                               <strong>
-                                🧹 Eliminar de Discord al completar
+                                🧹 Eliminar ocurrencia al completar
                               </strong>
                             </span>
                             <span className="module-switch">
@@ -9787,7 +9814,7 @@ function App() {
                     <LoadingState label="Cargando eventos…" />
                   ) : (
                     <>
-                      {eventTagOptions.length > 0 || untaggedEvents > 0 ? (
+                      {activeTagOptions.length > 0 || untaggedEvents > 0 ? (
                         <div className="event-tag-filter">
                           <button
                             className={`event-filter-chip${eventTagFilter.length === 0 ? " active" : ""}`}
@@ -9796,7 +9823,7 @@ function App() {
                           >
                             Todas
                           </button>
-                          {eventTagOptions.map((tag) => {
+                          {activeTagOptions.map((tag) => {
                             const key = tag.label.toLowerCase();
                             return (
                               <EventTagFilterChip
@@ -9835,7 +9862,11 @@ function App() {
                       ) : null}
                       {filteredEvents.length === 0 ? (
                         <div className="empty-state">
-                          Ningún evento con esas etiquetas.
+                          {eventTagFilter.length > 0
+                            ? "Ningún evento activo con esas etiquetas."
+                            : events.length > 0
+                              ? "No hay eventos próximos. Las ocurrencias cerradas quedan en Admin → Historial de eventos."
+                              : "Todavía no hay eventos."}
                         </div>
                       ) : (
                         <div className="events-grid">
