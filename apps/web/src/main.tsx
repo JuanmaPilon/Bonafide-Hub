@@ -4257,6 +4257,14 @@ function App() {
         void (async () => {
           try {
             const result = await deleteEvent(selectedGuildId, event.id);
+            // El API puede responder ok sin haber borrado nada (id que no es de
+            // esta guild). Antes la lista lo sacaba igual y el evento
+            // "volvía" al recargar, sin ningún aviso.
+            if (!result.deleted) {
+              pushToast("El servidor no borró el evento.", "error");
+              setEvents(await getEvents(selectedGuildId));
+              return;
+            }
             setEvents((current) =>
               current.filter((entry) => entry.id !== event.id),
             );

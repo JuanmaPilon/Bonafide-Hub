@@ -3952,6 +3952,9 @@ export function buildApp() {
       : { failed: [] };
 
     const deleted = await deleteEvent(params.guildId, params.eventId);
+    console.log(
+      `[eventos] delete ${params.eventId} (guild ${params.guildId}): encontrado=${Boolean(existing)} borrado=${deleted} fallosDiscord=${cleanup.failed.length}`,
+    );
 
     await logAdminAction(session, params.guildId, "event:delete", {
       details: cleanup.failed.length
