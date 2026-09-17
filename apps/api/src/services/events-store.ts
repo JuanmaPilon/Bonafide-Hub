@@ -34,9 +34,7 @@ export function normalizeEventTags(value: unknown): EventTag[] {
 
   const tags: EventTag[] = [];
   for (const entry of value) {
-    const label = String(
-      (entry as { label?: unknown } | null)?.label ?? "",
-    )
+    const label = String((entry as { label?: unknown } | null)?.label ?? "")
       .trim()
       .slice(0, 24);
     if (!label) {
@@ -45,7 +43,10 @@ export function normalizeEventTags(value: unknown): EventTag[] {
     if (tags.some((tag) => tag.label.toLowerCase() === label.toLowerCase())) {
       continue;
     }
-    tags.push({ color: normalizeTagColor((entry as { color?: unknown }).color), label });
+    tags.push({
+      color: normalizeTagColor((entry as { color?: unknown }).color),
+      label,
+    });
     if (tags.length >= MAX_EVENT_TAGS) {
       break;
     }
@@ -407,9 +408,7 @@ function eventTags(record: EventRecord): EventTag[] {
     return tags;
   }
   return normalizeEventTags(
-    record.tagLabel
-      ? [{ color: record.tagColor, label: record.tagLabel }]
-      : [],
+    record.tagLabel ? [{ color: record.tagColor, label: record.tagLabel }] : [],
   );
 }
 
