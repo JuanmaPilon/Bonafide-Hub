@@ -3170,9 +3170,7 @@ function App() {
         }
       }
     }
-    return [...byLabel.values()].sort((a, b) =>
-      a.label.localeCompare(b.label),
-    );
+    return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [events]);
   const untaggedEvents = useMemo(
     () => events.filter((event) => (event.tags?.length ?? 0) === 0).length,
@@ -4258,11 +4256,18 @@ function App() {
       onConfirm: () => {
         void (async () => {
           try {
-            await deleteEvent(selectedGuildId, event.id);
+            const result = await deleteEvent(selectedGuildId, event.id);
             setEvents((current) =>
               current.filter((entry) => entry.id !== event.id),
             );
-            pushToast("Evento eliminado.", "success");
+            if (result.discordFailed?.length) {
+              pushToast(
+                `Evento eliminado, pero Discord no dejó borrar: ${result.discordFailed.join(" | ")}`,
+                "error",
+              );
+            } else {
+              pushToast("Evento eliminado.", "success");
+            }
           } catch (error) {
             pushToast(
               error instanceof Error
@@ -9734,9 +9739,7 @@ function App() {
                                 onToggle={() =>
                                   setEventTagFilter((current) =>
                                     current.includes(key)
-                                      ? current.filter(
-                                          (entry) => entry !== key,
-                                        )
+                                      ? current.filter((entry) => entry !== key)
                                       : [...current, key],
                                   )
                                 }
@@ -9770,23 +9773,23 @@ function App() {
                         <div className="events-grid">
                           {filteredEvents.map((event) => (
                             <EventCard
-                          canManage={canAccess("eventos")}
-                          config={config}
-                          event={event}
-                          guildRoles={guildRoles}
-                          key={event.id}
-                          meId={me?.id}
-                          onDelete={handleDeleteEvent}
-                          onDuplicate={handleDuplicateEvent}
-                          onEdit={handleEditEvent}
-                          onRemoveSignup={handleRemoveEventSignup}
-                          onResetSignup={handleResetEventSignup}
-                          onSignup={handleEventSignup}
-                          onStaffRemoveSignup={handleStaffRemoveEventSignup}
-                          onStaffSignup={handleStaffEventSignup}
-                          gameRoles={rolesForGame(event.game)}
-                          specs={specsForGame(event.game)}
-                        />
+                              canManage={canAccess("eventos")}
+                              config={config}
+                              event={event}
+                              guildRoles={guildRoles}
+                              key={event.id}
+                              meId={me?.id}
+                              onDelete={handleDeleteEvent}
+                              onDuplicate={handleDuplicateEvent}
+                              onEdit={handleEditEvent}
+                              onRemoveSignup={handleRemoveEventSignup}
+                              onResetSignup={handleResetEventSignup}
+                              onSignup={handleEventSignup}
+                              onStaffRemoveSignup={handleStaffRemoveEventSignup}
+                              onStaffSignup={handleStaffEventSignup}
+                              gameRoles={rolesForGame(event.game)}
+                              specs={specsForGame(event.game)}
+                            />
                           ))}
                         </div>
                       )}

@@ -3796,12 +3796,18 @@ export function buildApp() {
             publishChannelId: previous.publishChannelId,
           };
         } else {
-          await cleanupEventDiscord({
+          const cleanup = await cleanupEventDiscord({
             discordEventId: previous.discordEventId,
             discordMessageIds: previous.discordMessageIds,
             guildId: params.guildId,
             publishChannelId: previous.publishChannelId,
+            reminderMessageIds: previous.reminderMessageIds,
           });
+          if (cleanup.failed.length) {
+            console.warn(
+              `[eventos] al cambiar la publicación no se pudo borrar todo: ${cleanup.failed.join(" | ")}`,
+            );
+          }
         }
       }
     }
@@ -3865,7 +3871,7 @@ export function buildApp() {
     const completedNow =
       event.status === "completed" && previous?.status !== "completed";
     if (completedNow && event.discordCleanupOnComplete) {
-      await cleanupEventDiscord({
+      const cleanup = await cleanupEventDiscord({
         discordEventId: event.discordEventId,
         discordMessageIds: event.discordMessageIds,
         guildId: params.guildId,
@@ -3881,8 +3887,11 @@ export function buildApp() {
         savedEvent = cleared;
       }
       console.log(
-        `[eventos] evento completado: aviso/evento de Discord eliminado (${event.title})`,
+        `[eventos] evento completado: aviso/evento de Discord eliminado (${event.title})${cleanup.failed.length ? ` · fallos: ${cleanup.failed.join(" | ")}` : ""}`,
       );
+      if (cleanup.failed.length) {
+        discordError = `No se pudo borrar todo en Discord: ${cleanup.failed.join(" | ")}`;
+      }
     } else if (discordOpts) {
       const synced = await syncAndStoreEventDiscord({
         discordOpts,
@@ -3932,25 +3941,32 @@ export function buildApp() {
 
     // Limpiamos en Discord (scheduled event + avisos) antes de borrar.
     const existing = await getEvent(params.guildId, params.eventId);
-    if (existing) {
-      await cleanupEventDiscord({
-        discordEventId: existing.discordEventId,
-        discordMessageIds: existing.discordMessageIds,
-        guildId: params.guildId,
-        publishChannelId: existing.publishChannelId,
-        reminderMessageIds: existing.reminderMessageIds,
-      });
-    }
+    const cleanup = existing
+      ? await cleanupEventDiscord({
+          discordEventId: existing.discordEventId,
+          discordMessageIds: existing.discordMessageIds,
+          guildId: params.guildId,
+          publishChannelId: existing.publishChannelId,
+          reminderMessageIds: existing.reminderMessageIds,
+        })
+      : { failed: [] };
 
     const deleted = await deleteEvent(params.guildId, params.eventId);
 
     await logAdminAction(session, params.guildId, "event:delete", {
-      details: "Evento eliminado.",
+      details: cleanup.failed.length
+        ? `Evento eliminado. Discord rechazó borrar: ${cleanup.failed.join(" | ")}`
+        : "Evento eliminado.",
       targetType: "event",
       targetId: params.eventId,
     });
 
-    return { ok: true, guildId: params.guildId, deleted };
+    return {
+      ok: true,
+      guildId: params.guildId,
+      deleted,
+      discordFailed: cleanup.failed,
+    };
   });
 
   // ── Plantillas de juego (presets de roles + catálogo) ──

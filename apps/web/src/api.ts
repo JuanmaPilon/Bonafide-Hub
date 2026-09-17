@@ -1118,8 +1118,8 @@ export async function updateEvent(
 export async function deleteEvent(
   guildId: string,
   eventId: string,
-): Promise<{ deleted: boolean }> {
-  return requestJson<{ deleted: boolean }>(
+): Promise<{ deleted: boolean; discordFailed?: string[] }> {
+  return requestJson<{ deleted: boolean; discordFailed?: string[] }>(
     `/guilds/${guildId}/events/${encodeURIComponent(eventId)}`,
     { method: "DELETE" },
   );

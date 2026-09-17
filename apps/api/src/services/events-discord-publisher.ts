@@ -1208,32 +1208,69 @@ export async function syncEventToDiscord(input: {
   return result;
 }
 
-// Limpia lo publicado en Discord (scheduled event + mensajes-aviso). Es
-// best-effort: cada paso falla silenciosamente si ya no existe.
+// Limpia lo publicado en Discord (scheduled event + mensajes-aviso).
+// Es best-effort: un 404 se considera éxito (ya no está), pero cualquier otro
+// fallo se junta y se devuelve para poder avisarle al usuario. Antes esto era
+// totalmente silencioso: si Discord rechazaba el borrado, quedaban el aviso y
+// los recordatorios publicados y no había forma de enterarse.
 export async function cleanupEventDiscord(input: {
   discordEventId?: string;
   guildId: string;
   publishChannelId?: string;
   discordMessageIds?: string[];
   reminderMessageIds?: string[];
-}): Promise<void> {
+}): Promise<{ failed: string[] }> {
+  const failed: string[] = [];
+
+  const remove = async (path: string, what: string): Promise<void> => {
+    const response = await discordFetch(path, { method: "DELETE" }).catch(
+      (error: unknown) => {
+        const detail = error instanceof Error ? error.message : String(error);
+        failed.push(`${what}: ${detail}`);
+        console.warn(`[eventos] no se pudo borrar ${what}: ${detail}`);
+        return null;
+      },
+    );
+
+    if (!response || response.ok || response.status === 404) {
+      return;
+    }
+
+    const detail = await errorMessage(response);
+    failed.push(`${what}: ${response.status} ${detail}`);
+    console.warn(
+      `[eventos] no se pudo borrar ${what} (${response.status}): ${detail}`,
+    );
+  };
+
   if (input.discordEventId) {
-    await discordFetch(
+    await remove(
       `/guilds/${encodeURIComponent(input.guildId)}/scheduled-events/${encodeURIComponent(input.discordEventId)}`,
-      { method: "DELETE" },
+      "el evento agendado",
     );
   }
-  if (input.publishChannelId) {
-    // Aviso(s) del evento + mensajes de recordatorio publicado(s).
-    const messageIds = [
-      ...(input.discordMessageIds ?? []),
-      ...(input.reminderMessageIds ?? []),
-    ];
-    for (const messageId of messageIds) {
-      await discordFetch(
-        `/channels/${encodeURIComponent(input.publishChannelId)}/messages/${encodeURIComponent(messageId)}`,
-        { method: "DELETE" },
+
+  const messageIds = [
+    ...(input.discordMessageIds ?? []),
+    ...(input.reminderMessageIds ?? []),
+  ];
+  if (messageIds.length > 0) {
+    if (!input.publishChannelId) {
+      failed.push(
+        `los mensajes del aviso (${messageIds.length}): falta el canal de publicación`,
       );
+      console.warn(
+        "[eventos] hay mensajes para borrar pero el evento no tiene canal de publicación",
+      );
+    } else {
+      for (const messageId of messageIds) {
+        await remove(
+          `/channels/${encodeURIComponent(input.publishChannelId)}/messages/${encodeURIComponent(messageId)}`,
+          `un mensaje del evento (${messageId})`,
+        );
+      }
     }
   }
+
+  return { failed };
 }
