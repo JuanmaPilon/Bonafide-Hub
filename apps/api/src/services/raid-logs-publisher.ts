@@ -34,6 +34,7 @@ export type RaidLogSyncGroupReport = {
   parts: {
     code: string;
     fights: number;
+    firstFightAt?: string;
     kills: number;
     previousFights: number;
     stableSince?: string;
@@ -68,6 +69,7 @@ function describeParts(parts: RaidLog[]): RaidLogSyncGroupReport["parts"] {
   return parts.map((part) => ({
     code: part.reportCode,
     fights: part.fightCount,
+    firstFightAt: part.firstFightAt?.toISOString(),
     kills: part.kills,
     previousFights: part.previousFightCount ?? -1,
     stableSince: part.fightsStableSince?.toISOString(),

@@ -86,7 +86,11 @@ que "terminado" no se puede detectar en el momento; se deduce de que no crezca:
 2. Una parte está **terminada** cuando su `fightCount`/`kills` no cambió
    durante `FINISHED_STABLE_MS` (30 min). La cuenta arranca en la consulta
    anterior, no en la actual: un log que ya llevaba horas quieto se reconoce
-   terminado en la primera comprobación.
+   terminado en la primera comprobación. **Red de seguridad**: si pasaron más
+   de `MAX_NIGHT_MS` (6 h) desde el primer fight, la parte se considera
+   terminada igual. Sin ese tope, un report viejo que Warcraft Logs sigue
+   ajustando cada tanto queda "en vivo" para siempre, porque cada ajuste
+   reinicia la cuenta de estabilidad.
 3. Cuando **ninguna parte con fights** sigue creciendo y la entrada tiene al
    menos 1 fight, la entrada se **publica sola** (un mensaje por noche, con
    todas las partes y sus links) contra `logsChannelId`.

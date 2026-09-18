@@ -358,6 +358,13 @@ export async function showRaidLog(
 // syncRaidLogGroups en raid-logs-publisher.ts).
 const FINISHED_STABLE_MS = 30 * 60 * 1000;
 
+// Red de seguridad: una noche de raid no dura más que esto. Warcraft Logs a
+// veces sigue ajustando un report viejo (una kill que se recalcula, un fight
+// que aparece), y como cualquier cambio reinicia la cuenta de estabilidad, la
+// entrada se quedaba "en vivo" para siempre. Pasado este tope desde el primer
+// fight, el report se considera cerrado sí o sí.
+const MAX_NIGHT_MS = 6 * 60 * 60 * 1000;
+
 // Vuelve a consultar Warcraft Logs y actualiza el log guardado.
 // `changed` = el report dejó de crecer (terminó) y todavía no se publicó.
 export async function refreshRaidLog(id: string): Promise<{
@@ -398,10 +405,15 @@ export async function refreshRaidLog(id: string): Promise<{
     const fightsStableSince = grew
       ? null
       : (current.fightsStableSince ?? current.lastSyncedAt ?? now);
-    const isStable =
+    const quietLongEnough =
       fightCount > 0 &&
       fightsStableSince !== null &&
       now.getTime() - fightsStableSince.getTime() >= FINISHED_STABLE_MS;
+    const nightIsOver =
+      fightCount > 0 &&
+      firstFightAt !== null &&
+      now.getTime() - firstFightAt.getTime() >= MAX_NIGHT_MS;
+    const isStable = quietLongEnough || nightIsOver;
 
     const status = fightCount === 0 ? "new" : isStable ? "synced" : "live";
 
