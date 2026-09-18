@@ -75,9 +75,12 @@ import {
   getEventGames,
   getEvents,
   getGuildEmojis,
+  publishRaidLog,
   resetEventOccurrence,
   resolveEventRoles,
+  scanRaidLogs,
   updateEvent,
+  updateRaidLogMessage,
   updateEventSpec,
   uploadEventImage,
   upsertEventSignup,
@@ -520,70 +523,123 @@ function KarpindomoWidget({
   );
 }
 
-// Lista reutilizable de logs de raid (se usa en la tab Logs y en Raids).
-// Cada log es un acordeón: el detalle se expande solo al hacer click.
+// Lista reutilizable de logs de raid. Una entrada por NOCHE: los reports con
+// el mismo título y fecha (una subida en dos partes) salen juntos y se publican
+// en un solo mensaje. Cada entrada es un acordeón y se publica a mano.
 function RaidLogsList({
   logs,
   onHide,
+  onPublish,
+  onUpdate,
 }: {
   logs: RaidLog[];
-  onHide?: (log: RaidLog) => void;
+  onHide?: (group: RaidLog[]) => void;
+  onPublish?: (log: RaidLog) => Promise<void>;
+  onUpdate?: (log: RaidLog) => Promise<void>;
 }) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  const toggleLog = (logId: string): void => {
-    setExpandedIds((current) => {
-      const next = new Set(current);
-      if (next.has(logId)) {
-        next.delete(logId);
+  const groups = useMemo(() => {
+    const byKey = new Map<string, RaidLog[]>();
+    for (const log of logs) {
+      const key = log.groupKey || log.id;
+      const bucket = byKey.get(key);
+      if (bucket) {
+        bucket.push(log);
       } else {
-        next.add(logId);
+        byKey.set(key, [log]);
+      }
+    }
+    return [...byKey.entries()].map(([key, parts]) => ({
+      fights: parts.reduce((total, part) => total + part.fightCount, 0),
+      key,
+      kills: parts.reduce((total, part) => total + part.kills, 0),
+      parts: [...parts].sort((a, b) =>
+        (a.firstFightAt ?? a.createdAt).localeCompare(
+          b.firstFightAt ?? b.createdAt,
+        ),
+      ),
+      posted: parts.some((part) => part.discordPosted),
+      startedAt: parts
+        .map((part) => part.firstFightAt)
+        .filter((date): date is string => Boolean(date))
+        .sort()[0],
+      status: parts.some((part) => part.status === "failed")
+        ? "failed"
+        : parts.some((part) => part.status === "live")
+          ? "live"
+          : "synced",
+      title: parts[0]?.title,
+    }));
+  }, [logs]);
+
+  const toggleGroup = (key: string): void => {
+    setExpandedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
       }
       return next;
     });
   };
 
-  if (logs.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className="empty-state">
-        Todavía no hay logs de raid. Los logs se sincronizan desde Warcraft Logs
-        y aparecen acá y en Discord.
+        Todavía no hay logs de raid. El bot los detecta desde Warcraft Logs y
+        quedan acá como borrador hasta que los publiques.
       </div>
     );
   }
 
   return (
     <>
-      {logs.map((log) => {
-        const expanded = expandedIds.has(log.id);
+      {groups.map((group) => {
+        const expanded = expandedKeys.has(group.key);
+        const lead = group.parts[0];
+        const busy = busyKey === group.key;
+        const runAction = (action?: (log: RaidLog) => Promise<void>) => {
+          if (!action) {
+            return;
+          }
+          setBusyKey(group.key);
+          void action(lead).finally(() => setBusyKey(null));
+        };
+
         return (
-          <article className="comunicado-card comunicado-acc" key={log.id}>
+          <article className="comunicado-card comunicado-acc" key={group.key}>
             <button
               className="comunicado-acc-header"
-              onClick={() => toggleLog(log.id)}
+              onClick={() => toggleGroup(group.key)}
               type="button"
               aria-expanded={expanded}
             >
               <span className="comunicado-acc-heading">
-                <strong>{log.title || "Log de Raid"}</strong>
-                {log.firstFightAt ? (
+                <strong>{group.title || "Log de Raid"}</strong>
+                {group.startedAt ? (
                   <span className="comunicado-date">
-                    {formatDate24(log.firstFightAt)}
+                    {formatDate24(group.startedAt)}
                   </span>
                 ) : null}
                 <span className="raid-log-meta-inline">
-                  ⚔️ {log.fightCount} · 💀 {log.kills}
+                  ⚔️ {group.fights} · 💀 {group.kills}
+                  {group.parts.length > 1
+                    ? ` · ${group.parts.length} reports`
+                    : ""}
                 </span>
               </span>
               <span className="comunicado-acc-heading-right">
-                <span className={`raid-log-badge raid-log-${log.status}`}>
-                  {log.status === "failed"
+                <span className={`raid-log-badge raid-log-${group.status}`}>
+                  {group.status === "failed"
                     ? "Sin datos"
-                    : log.status === "live"
+                    : group.status === "live"
                       ? "En vivo"
-                      : log.discordPosted
+                      : group.posted
                         ? "Publicado"
-                        : "En espera"}
+                        : "Sin publicar"}
                 </span>
                 <span
                   className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
@@ -596,41 +652,88 @@ function RaidLogsList({
             {expanded ? (
               <div className="comunicado-acc-body">
                 <div className="raid-log-meta">
-                  ⚔️ {log.fightCount} fight/s · 💀 {log.kills} kill/s
+                  ⚔️ {group.fights} fight/s · 💀 {group.kills} kill/s
                 </div>
-                {log.summary && log.summary.fights.length > 0 ? (
-                  <div className="raid-log-fights">
-                    {log.summary.fights.map((fight, index) => (
-                      <span
-                        className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
-                        key={index}
-                      >
-                        {fight.name ?? "Fight"} {fight.kill ? "✅" : "❌"}
-                      </span>
+                {group.parts.length > 1 ? (
+                  <div className="raid-log-parts">
+                    {group.parts.map((part) => (
+                      <div className="raid-log-part" key={part.id}>
+                        <span className="raid-log-part-code">
+                          {part.reportCode}
+                        </span>
+                        <span className="muted-text">
+                          ⚔️ {part.fightCount} · 💀 {part.kills}
+                        </span>
+                        <a
+                          className="raid-log-link"
+                          href={part.reportUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Ver ↗
+                        </a>
+                      </div>
                     ))}
                   </div>
-                ) : log.error ? (
-                  <div className="meta-text">⚠️ {log.error}</div>
                 ) : null}
-                <a
-                  className="raid-log-link"
-                  href={log.reportUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Ver en Warcraft Logs ↗
-                </a>
-                {onHide ? (
-                  <div className="comunicado-acc-actions">
+                {lead?.summary && lead.summary.fights.length > 0 ? (
+                  <div className="raid-log-fights">
+                    {group.parts
+                      .flatMap((part) => part.summary?.fights ?? [])
+                      .map((fight, index) => (
+                        <span
+                          className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
+                          key={index}
+                        >
+                          {fight.name ?? "Fight"} {fight.kill ? "✅" : "❌"}
+                        </span>
+                      ))}
+                  </div>
+                ) : lead?.error ? (
+                  <div className="meta-text">⚠️ {lead.error}</div>
+                ) : null}
+                {group.parts.length === 1 ? (
+                  <a
+                    className="raid-log-link"
+                    href={lead.reportUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Ver en Warcraft Logs ↗
+                  </a>
+                ) : null}
+                <div className="comunicado-acc-actions">
+                  {group.posted ? (
+                    onUpdate ? (
+                      <button
+                        className="ghost-button"
+                        disabled={busy}
+                        onClick={() => runAction(onUpdate)}
+                        type="button"
+                      >
+                        {busy ? "Actualizando…" : "Actualizar"}
+                      </button>
+                    ) : null
+                  ) : onPublish ? (
+                    <button
+                      className="primary-button"
+                      disabled={busy}
+                      onClick={() => runAction(onPublish)}
+                      type="button"
+                    >
+                      {busy ? "Publicando…" : "Publicar"}
+                    </button>
+                  ) : null}
+                  {onHide ? (
                     <button
                       className="ghost-button danger"
-                      onClick={() => onHide(log)}
+                      onClick={() => onHide(group.parts)}
                       type="button"
                     >
                       Eliminar
                     </button>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </article>
@@ -3158,6 +3261,7 @@ function App() {
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
   const [dailyMessageDraft, setDailyMessageDraft] = useState("");
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
+  const [scanningRaidLogs, setScanningRaidLogs] = useState(false);
   const [raidLogsLoading, setRaidLogsLoading] = useState(false);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [hiddenRaidLogs, setHiddenRaidLogs] = useState<RaidLog[]>([]);
@@ -5218,10 +5322,10 @@ function App() {
       const result = await createRaidLog(selectedGuildId, url);
       setRaidLogUrl("");
       pushToast(
-        result.posted
-          ? "Log de raid agregado y publicado en Discord."
-          : "Log de raid agregado. Se publicará cuando tenga datos.",
-        "success",
+        result.error
+          ? `Log agregado, pero Warcraft Logs respondió: ${result.error}`
+          : "Log agregado como borrador. Revisalo y publicalo.",
+        result.error ? "error" : "success",
       );
       await refreshRaidLogs();
     } catch (error) {
@@ -5232,13 +5336,19 @@ function App() {
     }
   }
 
-  async function handleHideRaidLog(log: RaidLog): Promise<void> {
+  // Oculta la entrada completa: el watcher no la vuelve a capturar.
+  async function handleHideRaidLog(group: RaidLog[]): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     try {
-      await hideRaidLog(selectedGuildId, log.id);
-      setRaidLogs((current) => current.filter((entry) => entry.id !== log.id));
+      for (const log of group) {
+        await hideRaidLog(selectedGuildId, log.id);
+      }
+      const hidden = new Set(group.map((log) => log.id));
+      setRaidLogs((current) =>
+        current.filter((entry) => !hidden.has(entry.id)),
+      );
       pushToast("Log eliminado. No se va a volver a capturar.", "success");
     } catch (error) {
       pushToast(
@@ -5248,15 +5358,81 @@ function App() {
     }
   }
 
-  function requestHideRaidLog(log: RaidLog): void {
+  function requestHideRaidLog(group: RaidLog[]): void {
     setConfirmDialog({
       kind: "danger",
       title: "Eliminar log de raid",
-      message: `¿Eliminar "${log.title || log.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Se puede recuperar desde el panel Admin → Logs de Raid.`,
+      message: `¿Eliminar "${group[0]?.title || group[0]?.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Se puede recuperar desde el panel Admin → Logs de Raid.`,
       onConfirm: () => {
-        void handleHideRaidLog(log);
+        void handleHideRaidLog(group);
       },
     });
+  }
+
+  // Publica el log (todas las partes de esa noche en un solo mensaje).
+  async function handlePublishRaidLog(log: RaidLog): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const result = await publishRaidLog(selectedGuildId, log.id);
+      setRaidLogs(result.logs);
+      pushToast("Log publicado en Discord.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo publicar el log.",
+        "error",
+      );
+    }
+  }
+
+  // Re-escanea y edita el mensaje ya publicado si el log creció.
+  async function handleUpdateRaidLog(log: RaidLog): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      const result = await updateRaidLogMessage(selectedGuildId, log.id);
+      setRaidLogs(result.logs);
+      pushToast(
+        result.updated
+          ? "Log actualizado en Discord."
+          : "Sin cambios: no hay datos nuevos en Warcraft Logs.",
+        "success",
+      );
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar el log.",
+        "error",
+      );
+    }
+  }
+
+  // Escaneo manual: no hace falta esperar al scheduler.
+  async function handleScanRaidLogs(): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setScanningRaidLogs(true);
+    try {
+      const result = await scanRaidLogs(selectedGuildId);
+      setRaidLogs(result.logs);
+      pushToast(
+        result.detected > 0
+          ? `Escaneo listo: ${result.detected} report/s nuevo/s.`
+          : "Escaneo listo: no hay reports nuevos.",
+        "success",
+      );
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo escanear.",
+        "error",
+      );
+    } finally {
+      setScanningRaidLogs(false);
+    }
   }
 
   // ── Logs ocultos: restaurar o borrar definitivamente ─────────────
@@ -8618,14 +8794,44 @@ function App() {
                         {raidLogsLoading ? (
                           <LoadingState label="Cargando logs de raid…" />
                         ) : (
-                          <RaidLogsList
-                            logs={raidLogs}
-                            onHide={
-                              canAccess("raids")
-                                ? requestHideRaidLog
-                                : undefined
-                            }
-                          />
+                          <>
+                            {canAccess("raids") ? (
+                              <div className="raid-log-toolbar">
+                                <button
+                                  className="primary-button"
+                                  disabled={scanningRaidLogs}
+                                  onClick={() => void handleScanRaidLogs()}
+                                  type="button"
+                                >
+                                  {scanningRaidLogs
+                                    ? "Escaneando…"
+                                    : "Escanear Warcraft Logs"}
+                                </button>
+                                <span className="muted-text">
+                                  Busca reports nuevos y actualiza los
+                                  borradores. Nada se publica solo.
+                                </span>
+                              </div>
+                            ) : null}
+                            <RaidLogsList
+                              logs={raidLogs}
+                              onHide={
+                                canAccess("raids")
+                                  ? requestHideRaidLog
+                                  : undefined
+                              }
+                              onPublish={
+                                canAccess("raids")
+                                  ? handlePublishRaidLog
+                                  : undefined
+                              }
+                              onUpdate={
+                                canAccess("raids")
+                                  ? handleUpdateRaidLog
+                                  : undefined
+                              }
+                            />
+                          </>
                         )}
                       </div>
                     </div>

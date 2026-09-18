@@ -1071,6 +1071,39 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Barra de acciones del panel de logs (escanear + explicación). */
+.raid-log-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+/* Detalle de las partes de una misma noche (reports distintos, un solo log). */
+.raid-log-parts {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.raid-log-part {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(12, 19, 37, 0.45);
+  border: 1px solid rgba(134, 158, 214, 0.14);
+}
+
+.raid-log-part-code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 /* Vigilar perfil: título + checkbox juntos */
 .daily-messages-title {
   display: inline-flex;

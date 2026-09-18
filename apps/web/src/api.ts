@@ -61,10 +61,15 @@ export type RaidFightSummary = {
 
 export type RaidLog = {
   createdAt: string;
+  discordChannelId?: string;
+  discordMessageId?: string;
   discordPosted: boolean;
   error?: string;
   fightCount: number;
   firstFightAt?: string;
+  // Entrada a la que pertenece: los reports de la misma noche y título salen
+  // juntos en un solo mensaje.
+  groupKey: string;
   guildId: string;
   hidden?: boolean;
   id: string;
@@ -686,13 +691,46 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
 export async function createRaidLog(
   guildId: string,
   url: string,
-): Promise<{ log: RaidLog; posted?: boolean; error?: string }> {
-  return requestJson<{ log: RaidLog; posted?: boolean; error?: string }>(
+): Promise<{ error?: string; log: RaidLog }> {
+  return requestJson<{ error?: string; log: RaidLog }>(
     `/guilds/${guildId}/raid-logs`,
     {
       method: "POST",
       body: JSON.stringify({ url }),
     },
+  );
+}
+
+// Escaneo manual: fuerza la detección en Warcraft Logs y refresca los
+// borradores (para ver los números finales cuando ya se subió todo).
+export async function scanRaidLogs(
+  guildId: string,
+): Promise<{ detected: number; logs: RaidLog[] }> {
+  return requestJson<{ detected: number; logs: RaidLog[] }>(
+    `/guilds/${guildId}/raid-logs/scan`,
+    { method: "POST" },
+  );
+}
+
+// Publica la entrada completa (todas las partes de la misma noche).
+export async function publishRaidLog(
+  guildId: string,
+  logId: string,
+): Promise<{ logs: RaidLog[] }> {
+  return requestJson<{ logs: RaidLog[] }>(
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}/publish`,
+    { method: "POST" },
+  );
+}
+
+// Re-escanea la entrada y edita el mensaje ya publicado si cambió.
+export async function updateRaidLogMessage(
+  guildId: string,
+  logId: string,
+): Promise<{ logs: RaidLog[]; updated: boolean }> {
+  return requestJson<{ logs: RaidLog[]; updated: boolean }>(
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}/refresh`,
+    { method: "POST" },
   );
 }
 

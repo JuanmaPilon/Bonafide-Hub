@@ -148,8 +148,9 @@ model DailyMessage {
   @@map("daily_messages")
 }
 
-// Log de raid sincronizado con Warcraft Logs. El API observa el report,
-// guarda el resumen (para la web) y publica en Discord cuando tiene fights.
+// Log de raid sincronizado con Warcraft Logs. El API observa el report y
+// guarda el resumen: el log queda como BORRADOR en la web y recién se publica
+// en Discord cuando el staff lo confirma (así no sale un log a medio subir).
 model RaidLog {
   id                 String    @id @default(cuid())
   guildId            String
@@ -163,9 +164,15 @@ model RaidLog {
   status             String    @default("new") // new | live | synced | failed
   error              String?
   discordPosted      Boolean   @default(false)
+  // Dónde quedó publicado, para poder EDITAR el mensaje cuando el log crece
+  // después de publicado (los reports de una misma noche se juntan en uno).
+  discordChannelId   String?
+  discordMessageId   String?
   // Oculto (soft-delete): el usuario lo sacó de la lista. Se conserva la
   // fila para que el watcher NO lo vuelva a crear (reportCode presente).
   hidden             Boolean   @default(false)
+  // Inicio real del report según Warcraft Logs (no cuándo lo detectamos): se
+  // usa para la fecha que se muestra y para agrupar las partes de una noche.
   firstFightAt       DateTime?
   lastSyncedAt       DateTime?
   // Detectan si el report todavía está "en vivo" (WCL sigue agregando

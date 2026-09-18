@@ -10,10 +10,15 @@ export type RaidFightSummary = {
 
 export type RaidLog = {
   createdAt: Date;
+  discordChannelId?: string;
+  discordMessageId?: string;
   discordPosted: boolean;
   error?: string;
   fightCount: number;
   firstFightAt?: Date;
+  // Clave de la entrada a la que pertenece: los reports de la misma noche y
+  // con el mismo título se publican juntos (una subida en dos partes = 1 log).
+  groupKey: string;
   guildId: string;
   hidden: boolean;
   id: string;
@@ -56,6 +61,8 @@ function getErrorMessage(error: unknown): string {
 
 function toRaidLog(record: {
   createdAt: Date;
+  discordChannelId: string | null;
+  discordMessageId: string | null;
   discordPosted: boolean;
   error: string | null;
   fightCount: number;
@@ -85,10 +92,17 @@ function toRaidLog(record: {
 
   return {
     createdAt: record.createdAt,
+    discordChannelId: record.discordChannelId ?? undefined,
+    discordMessageId: record.discordMessageId ?? undefined,
     discordPosted: record.discordPosted,
     error: record.error ?? undefined,
     fightCount: record.fightCount,
     firstFightAt: record.firstFightAt ?? undefined,
+    groupKey: raidLogGroupKey({
+      firstFightAt: record.firstFightAt,
+      reportCode: record.reportCode,
+      title: record.title,
+    }),
     guildId: record.guildId,
     hidden: record.hidden,
     id: record.id,
@@ -108,6 +122,25 @@ function toRaidLog(record: {
     updatedAt: record.updatedAt,
     zone: record.zone,
   };
+}
+
+// Clave de "noche de raid": mismo título normalizado y misma fecha. La fecha se
+// corre 6 horas para que una raid que cruza la medianoche no se parta en dos
+// entradas (21:00 AR = 00:00 UTC del día siguiente).
+export function raidLogGroupKey(log: {
+  firstFightAt?: Date | null;
+  reportCode: string;
+  title?: string | null;
+}): string {
+  const title = (log.title ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!title || !log.firstFightAt) {
+    // Sin título o sin fecha todavía: cada report es su propia entrada.
+    return `code:${log.reportCode}`;
+  }
+  const nightKey = new Date(log.firstFightAt.getTime() - 6 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  return `${title}|${nightKey}`;
 }
 
 // Extrae el código de un link de Warcraft Logs (o acepta el código suelto).
@@ -278,8 +311,15 @@ export async function refreshRaidLog(id: string): Promise<{
     const fightCount = summary.fights.length;
     const kills = summary.fights.filter((fight) => fight.kill).length;
     const now = new Date();
+    // Fecha real del report según WCL: es la que se muestra y la que agrupa las
+    // partes de una misma noche (si no viene, se usa la anterior / ahora).
+    const reportStart =
+      typeof report.start === "number" && report.start > 0
+        ? new Date(report.start)
+        : null;
     const firstFightAt =
-      fightCount > 0 ? (current.firstFightAt ?? now) : current.firstFightAt;
+      reportStart ??
+      (fightCount > 0 ? (current.firstFightAt ?? now) : current.firstFightAt);
     const wasPosted = current.discordPosted;
 
     // ¿Sigue creciendo? Si el fightCount cambió desde la última vez,
@@ -333,26 +373,49 @@ export async function refreshRaidLog(id: string): Promise<{
   }
 }
 
-export async function markRaidLogPosted(id: string): Promise<void> {
-  await prisma.raidLog.update({
-    where: { id },
-    data: { discordPosted: true },
+// Marca las partes de una entrada como publicadas y guarda DÓNDE quedó el
+// mensaje: con eso se puede editar cuando el log crece después de publicado.
+export async function markRaidLogsPosted(
+  ids: string[],
+  input: { channelId: string; messageId: string },
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+  await prisma.raidLog.updateMany({
+    data: {
+      discordChannelId: input.channelId,
+      discordMessageId: input.messageId,
+      discordPosted: true,
+    },
+    where: { id: { in: ids } },
   });
 }
 
-// Mensaje que se publica en el canal de Discord.
-export function buildRaidLogMessage(log: RaidLog): string {
+// Mensaje que se publica en el canal. Recibe TODAS las partes de una misma
+// noche (ver raidLogGroupKey) y las publica como un solo log.
+export function buildRaidLogMessage(logs: RaidLog[]): string {
+  const parts = logs;
   const lines: string[] = ["📊 **Log de Raid**"];
-  if (log.title) {
-    lines.push(`**${log.title}**`);
+  const title = parts[0]?.title;
+  if (title) {
+    lines.push(`**${title}**`);
   }
-  const date = log.firstFightAt
-    ? new Date(log.firstFightAt).toLocaleDateString("es-AR")
+  const fights = parts.reduce((total, log) => total + log.fightCount, 0);
+  const kills = parts.reduce((total, log) => total + log.kills, 0);
+  const startedAt = parts
+    .map((log) => log.firstFightAt)
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+  const date = startedAt
+    ? new Date(startedAt).toLocaleDateString("es-AR")
     : null;
   lines.push(
-    `⚔️ ${log.fightCount} fight/s · 💀 ${log.kills} kill/s${date ? ` · 📅 ${date}` : ""}`,
+    `⚔️ ${fights} fight/s · 💀 ${kills} kill/s${date ? ` · 📅 ${date}` : ""}`,
   );
-  lines.push(log.reportUrl);
+  for (const part of parts) {
+    lines.push(part.reportUrl);
+  }
   return lines.join("\n");
 }
 

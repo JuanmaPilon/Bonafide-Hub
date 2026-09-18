@@ -73,17 +73,27 @@ Logs de raid (Warcraft Logs):
 
 El watcher automático de raids corre en el scheduler de la API cada 5 minutos.
 Usa la API v1 de Warcraft Logs con `WARCRAFT_LOGS_API_KEY`, guarda los reports
-nuevos en `raid_logs`, consulta sus fights y los publica en `logsChannelId` con
-`DISCORD_BOT_TOKEN`. Los reports se filtran por zona `Raid` o por título que
-contenga `raid`.
+nuevos en `raid_logs` y consulta sus fights. Los reports se filtran por zona
+`Raid` o por título que contenga `raid`.
 
-Un report recién detectado puede seguir "en vivo" (WCL sigue agregando fights
-mientras el raid continúa). Para no publicar con datos incompletos (0 kills),
-cada sync compara `fightCount` contra la sincronización anterior
-(`previousFightCount`): si creció, se considera en vivo (`status: "live"`) y
-no se publica. Si no creció, se guarda cuándo se detectó por primera vez
-(`fightsStableSince`); recién cuando pasan 6 minutos sin crecer, el report se
-marca `status: "synced"` y ahí se publica.
+**El watcher NO publica**: deja cada report como **borrador** en la web
+(`discordPosted: false`) y lo mantiene refrescado. Publicar es una decisión del
+staff, porque Warcraft Logs se sube por partes y un log puede "estabilizarse"
+a los 6 minutos y seguir creciendo después:
+
+1. `POST /guilds/:g/raid-logs/scan` — escaneo manual: busca reports nuevos y
+   refresca los borradores (para cuando ya se subió todo).
+2. `POST /guilds/:g/raid-logs/:logId/publish` — refresca y publica la entrada
+   completa en `logsChannelId`; guarda `discordChannelId`/`discordMessageId`.
+3. `POST /guilds/:g/raid-logs/:logId/refresh` — re-escanea y **edita** el
+   mensaje publicado si los números cambiaron.
+
+Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
+una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
+que cruza la medianoche no se parta): una subida en dos partes sale como **un**
+mensaje con los dos links. El estado del borrador (`status: live | synced |
+failed`) se calcula igual que antes: si `fightCount` no creció en 6 minutos
+(`fightsStableSince`), se considera terminado.
 
 XP:
 

@@ -43,15 +43,17 @@ import {
   createRaidLog,
   deleteRaidLog,
   extractReportCode,
+  getRaidLog,
   hideRaidLog,
   listHiddenRaidLogs,
   listRaidLogs,
   listUnpostedRaidLogs,
   listWatchGuildConfigs,
-  markRaidLogPosted,
+  markRaidLogsPosted,
   refreshRaidLog,
   showRaidLog,
   syncGuildWatch,
+  type RaidLog,
 } from "./services/raid-logs-store.js";
 import {
   burnKarutaCard,
@@ -697,28 +699,21 @@ const RAID_LOG_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 let raidLogSyncTimer: NodeJS.Timeout | null = null;
 
 async function runRaidLogSync(): Promise<void> {
-  // 1) Reports pegados manualmente que aún no se publicaron.
-  //    try/catch independiente: un error acá no debe bloquear el watch (parte 2).
+  // 1) Reports detectados (o pegados a mano) que todavía no se publicaron:
+  //    solo se refrescan, quedan como BORRADOR en la web. Publicar es una
+  //    decisión del staff (así no sale un log a medio subir).
   try {
     const logs = await listUnpostedRaidLogs();
     for (const log of logs) {
-      const config = await getGuildConfig(log.guildId);
-      const token = env.DISCORD_BOT_TOKEN;
-      if (!config.logsChannelId || !token) {
-        continue; // sin canal configurado: no hay dónde publicar
-      }
-
       const result = await refreshRaidLog(log.id);
-      if (result.changed && result.log) {
-        const chunks = splitForDiscord(buildRaidLogMessage(result.log));
-        const ids = await postMessages(token, config.logsChannelId, chunks);
-        if (ids.length > 0) {
-          await markRaidLogPosted(log.id);
-        }
+      if (result.error) {
+        console.warn(
+          `[raid-logs] no se pudo refrescar el borrador ${log.reportCode}: ${result.error}`,
+        );
       }
     }
   } catch (error) {
-    console.error("[raid-logs] manual publish sync failed", error);
+    console.error("[raid-logs] draft refresh failed", error);
   }
 
   // 2) Vigilado de perfil: crea logs de RAID nuevos automáticamente.
@@ -766,28 +761,9 @@ async function runRaidLogSync(): Promise<void> {
           console.warn(
             `[raid-logs] report ${created.reportCode} detectado pero no se pudo refrescar: ${refreshed.error}`,
           );
-        }
-        if (
-          config.logsChannelId &&
-          token &&
-          refreshed.changed &&
-          refreshed.log
-        ) {
-          const chunks = splitForDiscord(buildRaidLogMessage(refreshed.log));
-          const ids = await postMessages(token, config.logsChannelId, chunks);
-          if (ids.length > 0) {
-            await markRaidLogPosted(created.id);
-            console.log(
-              `[raid-logs] report ${created.reportCode} publicado en Discord para guild ${watch.guildId}`,
-            );
-          } else {
-            console.warn(
-              `[raid-logs] report ${created.reportCode} detectado, pero Discord no devolvió mensajes creados (guild ${watch.guildId})`,
-            );
-          }
-        } else if (!config.logsChannelId) {
-          console.warn(
-            `[raid-logs] report ${created.reportCode} detectado, pero no hay logsChannelId configurado para guild ${watch.guildId}`,
+        } else {
+          console.log(
+            `[raid-logs] report ${created.reportCode} detectado como borrador para guild ${watch.guildId} (${refreshed.log?.fightCount ?? 0} fight/s)`,
           );
         }
       }
@@ -3442,22 +3418,9 @@ export function buildApp() {
     });
 
     const result = await refreshRaidLog(created.id);
-    let posted = false;
-    if (result.changed && result.log) {
-      const config = await getGuildConfig(params.guildId);
-      const token = env.DISCORD_BOT_TOKEN;
-      if (config.logsChannelId && token) {
-        const chunks = splitForDiscord(buildRaidLogMessage(result.log));
-        const ids = await postMessages(token, config.logsChannelId, chunks);
-        if (ids.length > 0) {
-          await markRaidLogPosted(created.id);
-          posted = true;
-        }
-      }
-    }
 
     await logAdminAction(session, params.guildId, "raid-log:create", {
-      details: `Log de raid agregado: ${code}${posted ? " (publicado en Discord)" : ""}`,
+      details: `Log de raid agregado (borrador sin publicar): ${code}`,
       targetType: "raid-log",
       targetId: created.id,
     });
@@ -3467,9 +3430,214 @@ export function buildApp() {
       guildId: params.guildId,
       log: result.log ?? created,
       error: result.error,
-      posted,
     };
   });
+
+  // Partes de una misma entrada (misma noche y mismo título).
+  async function resolveRaidLogGroup(
+    guildId: string,
+    logId: string,
+  ): Promise<RaidLog[]> {
+    const log = await getRaidLog(logId);
+    if (!log || log.guildId !== guildId) {
+      return [];
+    }
+    const all = await listRaidLogs(guildId);
+    const group = all.filter((entry) => entry.groupKey === log.groupKey);
+    return group.length > 0 ? group : [log];
+  }
+
+  // Escanea Warcraft Logs ahora (sin esperar al scheduler) y refresca los
+  // borradores, para ver los números finales cuando ya se subió todo.
+  app.post("/guilds/:guildId/raid-logs/scan", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    let detected = 0;
+    if (
+      config.logsWatchEnabled &&
+      config.logsWatchGuild &&
+      config.logsWatchServer
+    ) {
+      const result = await syncGuildWatch({
+        guild: config.logsWatchGuild,
+        guildId: params.guildId,
+        region: config.logsWatchRegion ?? "EU",
+        server: config.logsWatchServer,
+      });
+      if (result.error) {
+        return reply.code(502).send({ ok: false, error: result.error });
+      }
+      detected = result.created.length;
+      for (const created of result.created) {
+        await refreshRaidLog(created.id);
+      }
+    }
+
+    const drafts = (await listRaidLogs(params.guildId)).filter(
+      (log) => !log.discordPosted,
+    );
+    for (const draft of drafts) {
+      await refreshRaidLog(draft.id);
+    }
+
+    console.log(
+      `[raid-logs] scan manual (guild ${params.guildId}): ${detected} report/s nuevo/s, ${drafts.length} borrador/es refrescado/s`,
+    );
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      detected,
+      logs: await listRaidLogs(params.guildId),
+    };
+  });
+
+  // Publica la entrada completa (una noche = un solo mensaje).
+  app.post(
+    "/guilds/:guildId/raid-logs/:logId/publish",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; logId?: string };
+      if (!params.guildId || !params.logId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "raids"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const config = await getGuildConfig(params.guildId);
+      if (!config.logsChannelId) {
+        return reply.code(400).send({
+          ok: false,
+          error: "Falta el canal de logs en Admin → Logs de Raid",
+        });
+      }
+      const token = env.DISCORD_BOT_TOKEN;
+      if (!token) {
+        return reply.code(502).send({
+          ok: false,
+          error: "DISCORD_BOT_TOKEN no está configurado en el API",
+        });
+      }
+
+      const group = await resolveRaidLogGroup(params.guildId, params.logId);
+      if (group.length === 0) {
+        return reply.code(404).send({ ok: false, error: "Log no encontrado" });
+      }
+
+      // Refrescamos antes de publicar: el mensaje sale con los números de ahora.
+      for (const part of group) {
+        await refreshRaidLog(part.id);
+      }
+      const fresh = (await listRaidLogs(params.guildId)).filter(
+        (entry) => entry.groupKey === group[0].groupKey,
+      );
+      const ids = await postMessages(
+        token,
+        config.logsChannelId,
+        splitForDiscord(buildRaidLogMessage(fresh)),
+      );
+      if (ids.length === 0) {
+        return reply
+          .code(502)
+          .send({ ok: false, error: "No se pudo publicar en Discord" });
+      }
+
+      await markRaidLogsPosted(
+        fresh.map((entry) => entry.id),
+        { channelId: config.logsChannelId, messageId: ids[0] },
+      );
+
+      await logAdminAction(session, params.guildId, "raid-log:publish", {
+        details: `Log de raid publicado: ${fresh[0]?.title ?? fresh[0]?.reportCode} (${fresh.length} report/s) · ${fresh.reduce((total, entry) => total + entry.fightCount, 0)} fight/s`,
+        targetType: "raid-log",
+        targetId: params.logId,
+      });
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        logs: await listRaidLogs(params.guildId),
+      };
+    },
+  );
+
+  // Re-escanea la entrada y EDITA el mensaje publicado si los números
+  // cambiaron (el log creció después de publicado).
+  app.post(
+    "/guilds/:guildId/raid-logs/:logId/refresh",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; logId?: string };
+      if (!params.guildId || !params.logId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "raids"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const group = await resolveRaidLogGroup(params.guildId, params.logId);
+      if (group.length === 0) {
+        return reply.code(404).send({ ok: false, error: "Log no encontrado" });
+      }
+
+      for (const part of group) {
+        await refreshRaidLog(part.id);
+      }
+      const fresh = (await listRaidLogs(params.guildId)).filter(
+        (entry) => entry.groupKey === group[0].groupKey,
+      );
+
+      const published = fresh.find(
+        (entry) => entry.discordMessageId && entry.discordChannelId,
+      );
+      const token = env.DISCORD_BOT_TOKEN;
+      let updated = false;
+      if (published?.discordMessageId && published.discordChannelId && token) {
+        const edited = await editMessages(
+          token,
+          published.discordChannelId,
+          [published.discordMessageId],
+          splitForDiscord(buildRaidLogMessage(fresh)),
+        );
+        updated = edited.length > 0;
+      }
+
+      console.log(
+        `[raid-logs] refresh de ${params.logId}: ${fresh.reduce((total, entry) => total + entry.fightCount, 0)} fight/s, mensaje ${updated ? "actualizado" : "sin cambios/omitido"}`,
+      );
+
+      return {
+        ok: true,
+        guildId: params.guildId,
+        logs: await listRaidLogs(params.guildId),
+        updated,
+      };
+    },
+  );
 
   app.get("/guilds/:guildId/raid-logs", async (request, reply) => {
     const session = await requireSession(request);
