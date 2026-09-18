@@ -8807,10 +8807,6 @@ function App() {
                                     ? "Escaneando…"
                                     : "Escanear Warcraft Logs"}
                                 </button>
-                                <span className="muted-text">
-                                  Busca reports nuevos y actualiza los
-                                  borradores. Nada se publica solo.
-                                </span>
                               </div>
                             ) : null}
                             <RaidLogsList

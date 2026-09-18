@@ -926,7 +926,12 @@ async function resetSeriesOccurrence(
       candidate = new Date(candidate.getTime() + stepMs);
     }
     for (let guard = 0; guard < 52; guard += 1) {
-      const taken = await eventExistsAt(guildId, candidate, event.title, event.id);
+      const taken = await eventExistsAt(
+        guildId,
+        candidate,
+        event.title,
+        event.id,
+      );
       if (!taken) {
         break;
       }

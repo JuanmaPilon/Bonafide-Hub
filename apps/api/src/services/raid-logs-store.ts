@@ -331,8 +331,7 @@ export async function refreshRaidLog(id: string): Promise<{
       fightsStableSince !== null &&
       now.getTime() - fightsStableSince.getTime() >= FIGHT_STABLE_THRESHOLD_MS;
 
-    const status =
-      fightCount === 0 ? "new" : isStable ? "synced" : "live";
+    const status = fightCount === 0 ? "new" : isStable ? "synced" : "live";
 
     const updated = await prisma.raidLog.update({
       where: { id },
@@ -518,9 +517,7 @@ export async function syncGuildWatch(input: {
       const zoneId = typeof report.zone === "number" ? Number(report.zone) : -1;
       const zoneInfo = zones.get(zoneId);
       const isRaidZone = zoneInfo?.type === "Raid";
-      const titleHasRaid = (report.title ?? "")
-        .toLowerCase()
-        .includes("raid");
+      const titleHasRaid = (report.title ?? "").toLowerCase().includes("raid");
 
       // Aceptamos raids aunque la zona no esté bien clasificada en WCL:
       // zona raid, O título que diga "raid" (p. ej. "Raid N 20/08/2026").
