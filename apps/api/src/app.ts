@@ -39,22 +39,23 @@ import {
   updateDailyMessage,
 } from "./services/daily-messages-store.js";
 import {
-  buildRaidLogMessage,
   createRaidLog,
   deleteRaidLog,
   extractReportCode,
-  getRaidLog,
   hideRaidLog,
   listHiddenRaidLogs,
   listRaidLogs,
-  listUnpostedRaidLogs,
   listWatchGuildConfigs,
-  markRaidLogsPosted,
   refreshRaidLog,
   showRaidLog,
   syncGuildWatch,
   type RaidLog,
 } from "./services/raid-logs-store.js";
+import {
+  publishRaidLogEntry,
+  syncRaidLogGroups,
+  updateRaidLogEntry,
+} from "./services/raid-logs-publisher.js";
 import {
   burnKarutaCard,
   deleteKarutaAlbum,
@@ -691,29 +692,42 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
 }
 
 // ── Scheduler de Logs de Raid ───────────────────────────────────────
-// "Observa" los reports que todavía no se publicaron en Discord: si ya
-// tienen fights, publica el resumen en el canal configurado. Así un link
-// pegado antes de que el report esté completo se publica apenas aparezcan
-// los fights, sin spamear.
+// Cada 5 minutos el API:
+//   1) busca reports NUEVOS del perfil vigilado y los guarda como borrador;
+//   2) cierra las entradas: publica las que ya terminaron y corrige los
+//      mensajes publicados que quedaron viejos (ver syncRaidLogGroups).
+// Los botones Publicar/Actualizar de la web siguen existiendo para forzarlo a
+// mano sin esperar el ciclo.
 const RAID_LOG_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 let raidLogSyncTimer: NodeJS.Timeout | null = null;
+// Un ciclo puede tardar (consulta cada report y publica/edita en Discord). Con
+// este flag, si una vuelta se pasa de los 5 minutos, la siguiente se saltea:
+// así dos ciclos no se pisan y una noche nunca se publica dos veces.
+let raidLogSyncRunning = false;
 
 async function runRaidLogSync(): Promise<void> {
-  // 1) Reports detectados (o pegados a mano) que todavía no se publicaron:
-  //    solo se refrescan, quedan como BORRADOR en la web. Publicar es una
-  //    decisión del staff (así no sale un log a medio subir).
+  if (raidLogSyncRunning) {
+    console.warn(
+      "[raid-logs] el ciclo anterior todavía está corriendo: se saltea esta vuelta",
+    );
+    return;
+  }
+  raidLogSyncRunning = true;
   try {
-    const logs = await listUnpostedRaidLogs();
-    for (const log of logs) {
-      const result = await refreshRaidLog(log.id);
-      if (result.error) {
-        console.warn(
-          `[raid-logs] no se pudo refrescar el borrador ${log.reportCode}: ${result.error}`,
-        );
-      }
-    }
+    await runRaidLogSyncInner();
+  } finally {
+    raidLogSyncRunning = false;
+  }
+}
+
+async function runRaidLogSyncInner(): Promise<void> {
+  // 1) Cierre automático + corrección de mensajes publicados. Adentro se
+  //    refrescan TODAS las partes de cada entrada antes de decidir: una noche
+  //    termina cuando ninguna parte sigue creciendo.
+  try {
+    await syncRaidLogGroups();
   } catch (error) {
-    console.error("[raid-logs] draft refresh failed", error);
+    console.error("[raid-logs] sync de entradas failed", error);
   }
 
   // 2) Vigilado de perfil: crea logs de RAID nuevos automáticamente.
@@ -3438,20 +3452,6 @@ export function buildApp() {
     };
   });
 
-  // Partes de una misma entrada (misma noche y mismo título).
-  async function resolveRaidLogGroup(
-    guildId: string,
-    logId: string,
-  ): Promise<RaidLog[]> {
-    const log = await getRaidLog(logId);
-    if (!log || log.guildId !== guildId) {
-      return [];
-    }
-    const all = await listRaidLogs(guildId);
-    const group = all.filter((entry) => entry.groupKey === log.groupKey);
-    return group.length > 0 ? group : [log];
-  }
-
   // Escanea Warcraft Logs ahora (sin esperar al scheduler) y refresca los
   // borradores, para ver los números finales cuando ya se subió todo.
   app.post("/guilds/:guildId/raid-logs/scan", async (request, reply) => {
@@ -3543,36 +3543,22 @@ export function buildApp() {
         });
       }
 
-      const group = await resolveRaidLogGroup(params.guildId, params.logId);
-      if (group.length === 0) {
-        return reply.code(404).send({ ok: false, error: "Log no encontrado" });
-      }
-
-      // Refrescamos antes de publicar: el mensaje sale con los números de ahora.
-      for (const part of group) {
-        await refreshRaidLog(part.id);
-      }
-      const fresh = (await listRaidLogs(params.guildId)).filter(
-        (entry) => entry.groupKey === group[0].groupKey,
-      );
-      const ids = await postMessages(
+      // Refresca las partes, publica el mensaje y guarda dónde y qué quedó
+      // publicado: misma implementación que usa el cierre automático.
+      const result = await publishRaidLogEntry({
+        channelId: config.logsChannelId,
+        guildId: params.guildId,
+        logId: params.logId,
         token,
-        config.logsChannelId,
-        splitForDiscord(buildRaidLogMessage(fresh)),
-      );
-      if (ids.length === 0) {
+      });
+      if (result.error) {
         return reply
-          .code(502)
-          .send({ ok: false, error: "No se pudo publicar en Discord" });
+          .code(result.error === "Log no encontrado" ? 404 : 502)
+          .send({ ok: false, error: result.error });
       }
-
-      await markRaidLogsPosted(
-        fresh.map((entry) => entry.id),
-        { channelId: config.logsChannelId, messageId: ids[0] },
-      );
 
       await logAdminAction(session, params.guildId, "raid-log:publish", {
-        details: `Log de raid publicado: ${fresh[0]?.title ?? fresh[0]?.reportCode} (${fresh.length} report/s) · ${fresh.reduce((total, entry) => total + entry.fightCount, 0)} fight/s`,
+        details: `Log de raid publicado: ${result.parts[0]?.title ?? result.parts[0]?.reportCode} (${result.parts.length} report/s) · ${result.parts.reduce((total, entry) => total + entry.fightCount, 0)} fight/s`,
         targetType: "raid-log",
         targetId: params.logId,
       });
@@ -3580,7 +3566,7 @@ export function buildApp() {
       return {
         ok: true,
         guildId: params.guildId,
-        logs: await listRaidLogs(params.guildId),
+        logs: result.logs,
       };
     },
   );
@@ -3604,42 +3590,34 @@ export function buildApp() {
         return reply.code(403).send({ ok: false, error: "Forbidden" });
       }
 
-      const group = await resolveRaidLogGroup(params.guildId, params.logId);
-      if (group.length === 0) {
+      const token = env.DISCORD_BOT_TOKEN;
+      if (!token) {
+        return reply.code(502).send({
+          ok: false,
+          error: "DISCORD_BOT_TOKEN no está configurado en el API",
+        });
+      }
+
+      // Re-escanea las partes y edita el mensaje publicado SOLO si cambió
+      // (misma implementación que usa la corrección automática).
+      const result = await updateRaidLogEntry({
+        guildId: params.guildId,
+        logId: params.logId,
+        token,
+      });
+      if (result.parts.length === 0) {
         return reply.code(404).send({ ok: false, error: "Log no encontrado" });
       }
 
-      for (const part of group) {
-        await refreshRaidLog(part.id);
-      }
-      const fresh = (await listRaidLogs(params.guildId)).filter(
-        (entry) => entry.groupKey === group[0].groupKey,
-      );
-
-      const published = fresh.find(
-        (entry) => entry.discordMessageId && entry.discordChannelId,
-      );
-      const token = env.DISCORD_BOT_TOKEN;
-      let updated = false;
-      if (published?.discordMessageId && published.discordChannelId && token) {
-        const edited = await editMessages(
-          token,
-          published.discordChannelId,
-          [published.discordMessageId],
-          splitForDiscord(buildRaidLogMessage(fresh)),
-        );
-        updated = edited.length > 0;
-      }
-
       console.log(
-        `[raid-logs] refresh de ${params.logId}: ${fresh.reduce((total, entry) => total + entry.fightCount, 0)} fight/s, mensaje ${updated ? "actualizado" : "sin cambios/omitido"}`,
+        `[raid-logs] refresh de ${params.logId}: ${result.parts.reduce((total, entry) => total + entry.fightCount, 0)} fight/s, mensaje ${result.updated ? "actualizado" : "sin cambios/omitido"}`,
       );
 
       return {
         ok: true,
         guildId: params.guildId,
-        logs: await listRaidLogs(params.guildId),
-        updated,
+        logs: result.logs,
+        updated: result.updated,
       };
     },
   );

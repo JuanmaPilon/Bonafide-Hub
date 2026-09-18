@@ -76,10 +76,32 @@ Usa la API v1 de Warcraft Logs con `WARCRAFT_LOGS_API_KEY`, guarda los reports
 nuevos en `raid_logs` y consulta sus fights. Los reports se filtran por zona
 `Raid` o por título que contenga `raid`.
 
-**El watcher NO publica**: deja cada report como **borrador** en la web
-(`discordPosted: false`) y lo mantiene refrescado. Publicar es una decisión del
-staff, porque Warcraft Logs se sube por partes y un log puede "estabilizarse"
-a los 6 minutos y seguir creciendo después:
+**El watcher NO publica solo**: crea el **borrador** y el scheduler lo cierra
+cuando la entrada terminó. Un report de Warcraft Logs se sube por partes, así
+que "terminado" no se puede detectar en el momento; se deduce de que no crezca:
+
+1. Cada 5 min (`syncRaidLogGroups`) se refrescan todas las partes de las
+   entradas activas (las creadas en las últimas 48 h y las que quedaron en
+   `live`).
+2. Una parte está **terminada** cuando su `fightCount`/`kills` no cambió
+   durante `FINISHED_STABLE_MS` (30 min). La cuenta arranca en la consulta
+   anterior, no en la actual: un log que ya llevaba horas quieto se reconoce
+   terminado en la primera comprobación.
+3. Cuando **ninguna parte con fights** sigue creciendo y la entrada tiene al
+   menos 1 fight, la entrada se **publica sola** (un mensaje por noche, con
+   todas las partes y sus links) contra `logsChannelId`.
+4. Si el log crece **después** de publicado (o aparece otra parte de la misma
+   noche), el mensaje se **edita solo** cuando la entrada vuelve a estar
+   terminada. Nunca se publica dos veces la misma noche: una parte nueva se
+   engancha al mensaje existente (`discordMessageId`) y el texto se corrige.
+   El texto publicado se guarda en `postedMessageText` para comparar y editar
+   solo si cambió.
+
+Publicar temprano ya no "corta" el log: cualquier número que falte entra por la
+edición automática. Eso es lo que hizo posible volver a automatizar el cierre
+después de haberlo pasado a manual.
+
+Rutas manuales (siguen existiendo, para forzarlo sin esperar el ciclo):
 
 1. `POST /guilds/:g/raid-logs/scan` — escaneo manual: busca reports nuevos y
    refresca los borradores (para cuando ya se subió todo).
@@ -88,12 +110,18 @@ a los 6 minutos y seguir creciendo después:
 3. `POST /guilds/:g/raid-logs/:logId/refresh` — re-escanea y **edita** el
    mensaje publicado si los números cambiaron.
 
+Las tres usan el mismo servicio que el ciclo automático
+(`services/raid-logs-publisher.ts`), así que se comportan igual.
+
 Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
 una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
 que cruza la medianoche no se parta): una subida en dos partes sale como **un**
-mensaje con los dos links. El estado del borrador (`status: live | synced |
-failed`) se calcula igual que antes: si `fightCount` no creció en 6 minutos
-(`fightsStableSince`), se considera terminado.
+mensaje con los dos links. El estado (`status: new | live | synced | failed`)
+sale del mismo cálculo de estabilidad y es lo que muestra la web: `live` =
+sigue creciendo, `synced` = terminado, `failed` = no se pudo consultar. La web
+además marca **"Actualizando…"** cuando la entrada está publicada pero el
+mensaje quedó viejo (`needsUpdate`, que calcula el API comparando el texto
+guardado con el que generaría ahora).
 
 XP:
 

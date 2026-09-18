@@ -1027,6 +1027,15 @@ a:hover {
   background: rgba(255, 138, 138, 0.08);
 }
 
+/* Publicado pero el mensaje quedó viejo: el API lo corrige solo.
+   Va DESPUÉS de synced/live/failed para ganarle en la cascada (misma
+   especificidad: dos clases sueltas). */
+.raid-log-pending {
+  color: #6aa8ff;
+  border-color: rgba(106, 168, 255, 0.4);
+  background: rgba(106, 168, 255, 0.1);
+}
+
 .raid-log-meta {
   color: var(--muted);
   margin-bottom: 10px;

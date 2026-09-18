@@ -24,6 +24,12 @@ export type RaidLog = {
   id: string;
   kills: number;
   lastSyncedAt?: Date;
+  // La entrada está publicada pero el mensaje quedó viejo: el log creció
+  // después de publicarse y todavía no se corrigió (lo hace el scheduler).
+  needsUpdate?: boolean;
+  // Texto que se publicó en Discord: se compara con el recién generado para
+  // editar el mensaje SOLO si cambió.
+  postedMessageText?: string;
   reportCode: string;
   reportUrl: string;
   status: string;
@@ -72,6 +78,7 @@ function toRaidLog(record: {
   id: string;
   kills: number;
   lastSyncedAt: Date | null;
+  postedMessageText: string | null;
   reportCode: string;
   reportUrl: string;
   status: string;
@@ -108,6 +115,8 @@ function toRaidLog(record: {
     id: record.id,
     kills: record.kills,
     lastSyncedAt: record.lastSyncedAt ?? undefined,
+    needsUpdate: false,
+    postedMessageText: record.postedMessageText ?? undefined,
     reportCode: record.reportCode,
     reportUrl: record.reportUrl,
     status: record.status,
@@ -202,6 +211,48 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
     where: { guildId, hidden: false },
     orderBy: { createdAt: "desc" },
   });
+  const logs = records.map(toRaidLog);
+
+  // Marca las entradas publicadas cuyo mensaje quedó desactualizado: el log
+  // creció después de publicarse. El scheduler las corrige solo, pero la web
+  // necesita saberlo para no mostrar "Publicado" como si estuviera al día.
+  const groups = new Map<string, RaidLog[]>();
+  for (const log of logs) {
+    const bucket = groups.get(log.groupKey);
+    if (bucket) {
+      bucket.push(log);
+    } else {
+      groups.set(log.groupKey, [log]);
+    }
+  }
+  for (const parts of groups.values()) {
+    const published = parts.find(
+      (part) => part.discordPosted && part.postedMessageText,
+    );
+    if (!published || published.postedMessageText === buildRaidLogMessage(parts)) {
+      continue;
+    }
+    for (const part of parts) {
+      part.needsUpdate = true;
+    }
+  }
+
+  return logs;
+}
+
+// Logs que el scheduler todavía tiene que mirar: los recientes (una noche de
+// raid puede seguir subiendo en partes) más cualquier entrada que haya quedado
+// en estado "en vivo", aunque sea vieja, para que no quede colgada para
+// siempre mostrando un estado que ya no es real.
+export async function listActiveRaidLogs(sinceHours = 48): Promise<RaidLog[]> {
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
+  const records = await prisma.raidLog.findMany({
+    where: {
+      hidden: false,
+      OR: [{ createdAt: { gte: since } }, { status: "live" }],
+    },
+    orderBy: { createdAt: "desc" },
+  });
   return records.map(toRaidLog);
 }
 
@@ -288,10 +339,12 @@ export async function showRaidLog(
   }
 }
 
-// Cuánto tiempo tiene que pasar sin que aparezcan fights nuevos para
-// considerar el report terminado (y recién ahí publicarlo). Evita publicar
-// logs "en vivo" con 0 kills mientras el raid sigue en curso.
-const FIGHT_STABLE_THRESHOLD_MS = 6 * 60 * 1000;
+// Cuánto tiene que dejar de crecer un report para considerarlo terminado.
+// Ojo: dejar de crecer NO prueba que la noche terminó (un corte entre pulls
+// también deja el report quieto), pero publicar temprano ya no rompe nada: el
+// mensaje se corrige solo cuando aparece el resto de los fights (ver
+// syncRaidLogGroups en raid-logs-publisher.ts).
+const FINISHED_STABLE_MS = 30 * 60 * 1000;
 
 // Vuelve a consultar Warcraft Logs y actualiza el log guardado.
 // `changed` = el report dejó de crecer (terminó) y todavía no se publicó.
@@ -322,14 +375,21 @@ export async function refreshRaidLog(id: string): Promise<{
       (fightCount > 0 ? (current.firstFightAt ?? now) : current.firstFightAt);
     const wasPosted = current.discordPosted;
 
-    // ¿Sigue creciendo? Si el fightCount cambió desde la última vez,
-    // reiniciamos el contador de estabilidad (todavía está en vivo).
-    const grew = fightCount !== current.previousFightCount;
-    const fightsStableSince = grew ? null : (current.fightsStableSince ?? now);
+    // ¿Sigue creciendo? Si cambió algo desde la última consulta (fights o
+    // kills), reiniciamos el contador de estabilidad (todavía está en vivo).
+    const grew =
+      fightCount !== current.previousFightCount || kills !== current.kills;
+    // Si no cambió, la cuenta de estabilidad arranca en la CONSULTA ANTERIOR
+    // (no en ahora): un report que ya llevaba quieto más del umbral se
+    // reconoce como terminado en la primera comprobación, sin esperar otro
+    // umbral completo (importante para logs viejos que quedaron "en vivo").
+    const fightsStableSince = grew
+      ? null
+      : (current.fightsStableSince ?? current.lastSyncedAt ?? now);
     const isStable =
       fightCount > 0 &&
       fightsStableSince !== null &&
-      now.getTime() - fightsStableSince.getTime() >= FIGHT_STABLE_THRESHOLD_MS;
+      now.getTime() - fightsStableSince.getTime() >= FINISHED_STABLE_MS;
 
     const status = fightCount === 0 ? "new" : isStable ? "synced" : "live";
 
@@ -373,10 +433,11 @@ export async function refreshRaidLog(id: string): Promise<{
 }
 
 // Marca las partes de una entrada como publicadas y guarda DÓNDE quedó el
-// mensaje: con eso se puede editar cuando el log crece después de publicado.
+// mensaje + QUÉ decía: con eso se puede editar cuando el log crece después de
+// publicado, y se evita editar cuando no cambió nada.
 export async function markRaidLogsPosted(
   ids: string[],
-  input: { channelId: string; messageId: string },
+  input: { channelId: string; messageId: string; content: string },
 ): Promise<void> {
   if (ids.length === 0) {
     return;
@@ -386,7 +447,22 @@ export async function markRaidLogsPosted(
       discordChannelId: input.channelId,
       discordMessageId: input.messageId,
       discordPosted: true,
+      postedMessageText: input.content,
     },
+    where: { id: { in: ids } },
+  });
+}
+
+// Guarda el texto que quedó en el mensaje después de editarlo.
+export async function updateRaidLogsPostedText(
+  ids: string[],
+  content: string,
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+  await prisma.raidLog.updateMany({
+    data: { postedMessageText: content },
     where: { id: { in: ids } },
   });
 }

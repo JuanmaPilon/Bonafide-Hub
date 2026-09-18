@@ -75,6 +75,9 @@ export type RaidLog = {
   id: string;
   kills: number;
   lastSyncedAt?: string;
+  // La entrada está publicada pero el mensaje quedó viejo (el log creció
+  // después): el API lo corrige solo en el próximo ciclo del scheduler.
+  needsUpdate?: boolean;
   reportCode: string;
   reportUrl: string;
   status: string;

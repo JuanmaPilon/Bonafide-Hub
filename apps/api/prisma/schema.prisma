@@ -168,6 +168,9 @@ model RaidLog {
   // después de publicado (los reports de una misma noche se juntan en uno).
   discordChannelId   String?
   discordMessageId   String?
+  // Texto exacto que quedó en el mensaje publicado: se compara con el que se
+  // generaría ahora para EDITAR solo si cambió (auto-actualización).
+  postedMessageText  String?
   // Oculto (soft-delete): el usuario lo sacó de la lista. Se conserva la
   // fila para que el watcher NO lo vuelva a crear (reportCode presente).
   hidden             Boolean   @default(false)

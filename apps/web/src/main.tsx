@@ -555,6 +555,7 @@ function RaidLogsList({
       fights: parts.reduce((total, part) => total + part.fightCount, 0),
       key,
       kills: parts.reduce((total, part) => total + part.kills, 0),
+      needsUpdate: parts.some((part) => part.needsUpdate),
       parts: [...parts].sort((a, b) =>
         (a.firstFightAt ?? a.createdAt).localeCompare(
           b.firstFightAt ?? b.createdAt,
@@ -601,6 +602,10 @@ function RaidLogsList({
         const expanded = expandedKeys.has(group.key);
         const lead = group.parts[0];
         const busy = busyKey === group.key;
+        // Publicado pero con el mensaje viejo: el API lo corrige solo. Si la
+        // noche sigue en curso no se avisa: primero tiene que terminar.
+        const pending =
+          group.posted && group.needsUpdate === true && group.status !== "live";
         const runAction = (action?: (log: RaidLog) => Promise<void>) => {
           if (!action) {
             return;
@@ -632,14 +637,18 @@ function RaidLogsList({
                 </span>
               </span>
               <span className="comunicado-acc-heading-right">
-                <span className={`raid-log-badge raid-log-${group.status}`}>
+                <span
+                  className={`raid-log-badge raid-log-${group.status}${pending ? " raid-log-pending" : ""}`}
+                >
                   {group.status === "failed"
                     ? "Sin datos"
                     : group.status === "live"
                       ? "En vivo"
-                      : group.posted
-                        ? "Publicado"
-                        : "Sin publicar"}
+                      : pending
+                        ? "Actualizando…"
+                        : group.posted
+                          ? "Publicado"
+                          : "Sin publicar"}
                 </span>
                 <span
                   className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
