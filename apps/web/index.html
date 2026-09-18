@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
+    <!-- /favicon.svg se declara a proposito: esa ruta ya existia antes y el navegador
+         guarda su propio registro de iconos. Si la ruta no devuelve una imagen real
+         (aqui el SPA responde HTML en rutas inexistentes), el navegador no puede
+         actualizar el registro viejo y el marcador sigue mostrando el icono anterior. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="any" />
     <link rel="icon" type="image/png" href="/favicon-v4.png" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-v4.png" />
