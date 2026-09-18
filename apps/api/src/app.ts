@@ -52,7 +52,9 @@ import {
   type RaidLog,
 } from "./services/raid-logs-store.js";
 import {
+  getRaidLogSyncStatus,
   publishRaidLogEntry,
+  recordRaidLogSyncError,
   syncRaidLogGroups,
   updateRaidLogEntry,
 } from "./services/raid-logs-publisher.js";
@@ -707,9 +709,9 @@ let raidLogSyncRunning = false;
 
 async function runRaidLogSync(): Promise<void> {
   if (raidLogSyncRunning) {
-    console.warn(
-      "[raid-logs] el ciclo anterior todavía está corriendo: se saltea esta vuelta",
-    );
+    const message = "el ciclo anterior todavía está corriendo";
+    recordRaidLogSyncError(message);
+    console.warn(`[raid-logs] ${message}: se saltea esta vuelta`);
     return;
   }
   raidLogSyncRunning = true;
@@ -727,6 +729,9 @@ async function runRaidLogSyncInner(): Promise<void> {
   try {
     await syncRaidLogGroups();
   } catch (error) {
+    recordRaidLogSyncError(
+      error instanceof Error ? error.message : String(error),
+    );
     console.error("[raid-logs] sync de entradas failed", error);
   }
 
@@ -2022,6 +2027,9 @@ export function buildApp() {
     service: "api",
     environment: env.NODE_ENV,
     timestamp: new Date().toISOString(),
+    // Estado del último ciclo de logs de raid: con esto se ve, sin mirar los
+    // logs del servidor, qué decidió el scheduler entrada por entrada.
+    raidLogs: getRaidLogSyncStatus(),
   }));
 
   app.get("/", async () => ({

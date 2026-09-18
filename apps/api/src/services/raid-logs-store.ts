@@ -16,6 +16,8 @@ export type RaidLog = {
   error?: string;
   fightCount: number;
   firstFightAt?: Date;
+  // Desde cuándo el report no cambia (null = cambió en la última consulta).
+  fightsStableSince?: Date;
   // Clave de la entrada a la que pertenece: los reports de la misma noche y
   // con el mismo título se publican juntos (una subida en dos partes = 1 log).
   groupKey: string;
@@ -30,6 +32,9 @@ export type RaidLog = {
   // Texto que se publicó en Discord: se compara con el recién generado para
   // editar el mensaje SOLO si cambió.
   postedMessageText?: string;
+  // Fights de la consulta ANTERIOR: si no coincide con el actual, el report
+  // todavía está creciendo (y la cuenta de estabilidad se reinicia).
+  previousFightCount?: number;
   reportCode: string;
   reportUrl: string;
   status: string;
@@ -73,12 +78,14 @@ function toRaidLog(record: {
   error: string | null;
   fightCount: number;
   firstFightAt: Date | null;
+  fightsStableSince: Date | null;
   guildId: string;
   hidden: boolean;
   id: string;
   kills: number;
   lastSyncedAt: Date | null;
   postedMessageText: string | null;
+  previousFightCount: number;
   reportCode: string;
   reportUrl: string;
   status: string;
@@ -105,6 +112,7 @@ function toRaidLog(record: {
     error: record.error ?? undefined,
     fightCount: record.fightCount,
     firstFightAt: record.firstFightAt ?? undefined,
+    fightsStableSince: record.fightsStableSince ?? undefined,
     groupKey: raidLogGroupKey({
       firstFightAt: record.firstFightAt,
       reportCode: record.reportCode,
@@ -117,6 +125,7 @@ function toRaidLog(record: {
     lastSyncedAt: record.lastSyncedAt ?? undefined,
     needsUpdate: false,
     postedMessageText: record.postedMessageText ?? undefined,
+    previousFightCount: record.previousFightCount,
     reportCode: record.reportCode,
     reportUrl: record.reportUrl,
     status: record.status,
@@ -229,7 +238,10 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
     const published = parts.find(
       (part) => part.discordPosted && part.postedMessageText,
     );
-    if (!published || published.postedMessageText === buildRaidLogMessage(parts)) {
+    if (
+      !published ||
+      published.postedMessageText === buildRaidLogMessage(parts)
+    ) {
       continue;
     }
     for (const part of parts) {

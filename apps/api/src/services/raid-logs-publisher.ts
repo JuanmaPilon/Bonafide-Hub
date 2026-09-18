@@ -22,6 +22,59 @@ import {
 
 const keyOf = (log: RaidLog): string => log.groupKey || log.id;
 
+// Resumen del último ciclo del scheduler. Sirve para responder "¿por qué esta
+// entrada no se cerró?" desde afuera (se expone en GET /health) en lugar de
+// tener que leer los logs del servidor.
+export type RaidLogSyncGroupReport = {
+  action: "al-dia" | "editado" | "error" | "esperando" | "publicado" | "sin-canal";
+  error?: string;
+  fights: number;
+  groupKey: string;
+  kills: number;
+  parts: {
+    code: string;
+    fights: number;
+    kills: number;
+    previousFights: number;
+    stableSince?: string;
+    status: string;
+  }[];
+};
+
+type RaidLogSyncStatus = {
+  at: string;
+  candidates: number;
+  error?: string;
+  groups: RaidLogSyncGroupReport[];
+};
+
+let lastSync: RaidLogSyncStatus = {
+  at: new Date(0).toISOString(),
+  candidates: 0,
+  groups: [],
+};
+
+// Último ciclo (para /health).
+export function getRaidLogSyncStatus(): RaidLogSyncStatus {
+  return lastSync;
+}
+
+// Errores del ciclo que no pertenecen a una entrada (se guardan en /health).
+export function recordRaidLogSyncError(message: string): void {
+  lastSync = { ...lastSync, error: message };
+}
+
+function describeParts(parts: RaidLog[]): RaidLogSyncGroupReport["parts"] {
+  return parts.map((part) => ({
+    code: part.reportCode,
+    fights: part.fightCount,
+    kills: part.kills,
+    previousFights: part.previousFightCount ?? -1,
+    stableSince: part.fightsStableSince?.toISOString(),
+    status: part.status,
+  }));
+}
+
 function partsOfGroup(logs: RaidLog[], log: RaidLog): RaidLog[] {
   const key = keyOf(log);
   return logs.filter(
@@ -32,7 +85,10 @@ function partsOfGroup(logs: RaidLog[], log: RaidLog): RaidLog[] {
 // Refresca todas las partes de una entrada y devuelve el estado fresco.
 // Se vuelve a leer la lista porque al refrescar puede cambiar el título o la
 // fecha del report, y con eso la clave del grupo.
-async function refreshGroup(guildId: string, logId: string): Promise<RaidLog[]> {
+async function refreshGroup(
+  guildId: string,
+  logId: string,
+): Promise<RaidLog[]> {
   const before = await listRaidLogs(guildId);
   const target = before.find((log) => log.id === logId);
   if (!target) {
@@ -99,7 +155,12 @@ export async function updateRaidLogEntry(input: {
   guildId: string;
   logId: string;
   token: string;
-}): Promise<{ error?: string; logs: RaidLog[]; parts: RaidLog[]; updated: boolean }> {
+}): Promise<{
+  error?: string;
+  logs: RaidLog[];
+  parts: RaidLog[];
+  updated: boolean;
+}> {
   const parts = await refreshGroup(input.guildId, input.logId);
   if (parts.length === 0) {
     return { error: "Log no encontrado", logs: [], parts: [], updated: false };
@@ -170,6 +231,8 @@ export async function syncRaidLogGroups(): Promise<void> {
     }
   }
 
+  const reports: RaidLogSyncGroupReport[] = [];
+
   for (const group of groups.values()) {
     const head = group[0];
     try {
@@ -179,6 +242,15 @@ export async function syncRaidLogGroups(): Promise<void> {
       }
 
       const totals = totalsOf(fresh);
+      const report: RaidLogSyncGroupReport = {
+        action: "esperando",
+        fights: totals.fights,
+        groupKey: keyOf(head),
+        kills: totals.kills,
+        parts: describeParts(fresh),
+      };
+      reports.push(report);
+
       // Sin fights todavía no hay nada que publicar (un report recién creado
       // aparece con 0 antes de que Warcraft Logs termine de subirlo).
       if (totals.fights === 0) {
@@ -203,6 +275,7 @@ export async function syncRaidLogGroups(): Promise<void> {
       if (!published) {
         const config = await getGuildConfig(head.guildId);
         if (!config.logsChannelId) {
+          report.action = "sin-canal";
           continue;
         }
         const ids = await postMessages(
@@ -211,6 +284,8 @@ export async function syncRaidLogGroups(): Promise<void> {
           splitForDiscord(content),
         );
         if (ids.length === 0) {
+          report.action = "error";
+          report.error = "Discord rechazó el mensaje";
           console.warn(
             `[raid-logs] no se pudo auto-publicar ${head.reportCode}: Discord rechazó el mensaje`,
           );
@@ -220,6 +295,7 @@ export async function syncRaidLogGroups(): Promise<void> {
           fresh.map((part) => part.id),
           { channelId: config.logsChannelId, content, messageId: ids[0] },
         );
+        report.action = "publicado";
         console.log(
           `[raid-logs] auto-publicado ${totals.title} (${fresh.length} report/s, ${totals.fights} fight/s, ${totals.kills} kill/s)`,
         );
@@ -247,6 +323,7 @@ export async function syncRaidLogGroups(): Promise<void> {
       }
 
       if (content === published.postedMessageText) {
+        report.action = "al-dia";
         continue;
       }
 
@@ -257,6 +334,8 @@ export async function syncRaidLogGroups(): Promise<void> {
         splitForDiscord(content),
       );
       if (edited.length === 0) {
+        report.action = "error";
+        report.error = "Discord rechazó la edición";
         console.warn(
           `[raid-logs] no se pudo actualizar el mensaje de ${head.reportCode}`,
         );
@@ -266,14 +345,30 @@ export async function syncRaidLogGroups(): Promise<void> {
         fresh.map((part) => part.id),
         content,
       );
+      report.action = "editado";
       console.log(
         `[raid-logs] mensaje actualizado ${totals.title} (${fresh.length} report/s, ${totals.fights} fight/s, ${totals.kills} kill/s)`,
       );
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      reports.push({
+        action: "error",
+        error: message,
+        fights: 0,
+        groupKey: keyOf(head),
+        kills: 0,
+        parts: [],
+      });
       console.error(
         `[raid-logs] error sincronizando la entrada ${head.reportCode}`,
         error,
       );
     }
   }
+
+  lastSync = {
+    at: new Date().toISOString(),
+    candidates: logs.length,
+    groups: reports.slice(0, 8),
+  };
 }
