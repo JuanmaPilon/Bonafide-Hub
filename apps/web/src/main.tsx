@@ -1284,7 +1284,7 @@ function ListFilterBar({
       />
       <select
         aria-label="Ordenar"
-        className="input list-order"
+        className="select list-order"
         onChange={(event) => onOrderChange(event.target.value as ListOrder)}
         value={order}
       >
@@ -9474,90 +9474,94 @@ function App() {
                         </div>
                       ) : null}
                       {visiblePublished.map((comm) => {
-                      const expanded = expandedPublished.has(comm.id);
-                      return (
-                        <article
-                          className="comunicado-card comunicado-acc"
-                          key={comm.id}
-                        >
-                          <button
-                            className="comunicado-acc-header"
-                            onClick={() => togglePublished(comm.id)}
-                            type="button"
-                            aria-expanded={expanded}
+                        const expanded = expandedPublished.has(comm.id);
+                        return (
+                          <article
+                            className="comunicado-card comunicado-acc"
+                            key={comm.id}
                           >
-                            <span className="comunicado-acc-heading">
-                              <strong>{comm.title}</strong>
-                              <ComunicadoTag
-                                color={comm.tagColor}
-                                label={comm.tagLabel}
-                              />
-                              {comm.publishedAt ? (
-                                <span className="comunicado-date">
-                                  {formatDate24(comm.publishedAt)}
-                                </span>
-                              ) : null}
-                            </span>
-                            <span
-                              className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
-                              aria-hidden="true"
+                            <button
+                              className="comunicado-acc-header"
+                              onClick={() => togglePublished(comm.id)}
+                              type="button"
+                              aria-expanded={expanded}
                             >
-                              ▸
-                            </span>
-                          </button>
-                          {expanded ? (
-                            <div className="comunicado-acc-body">
-                              <div className="comunicado-acc-copy">
-                                <button
-                                  className="ghost-button"
-                                  onClick={() => void copyComunicadoLink(comm)}
-                                  type="button"
-                                >
-                                  🔗 Copiar enlace
-                                </button>
-                              </div>
-                              {comm.authorName ? (
-                                <div className="comunicado-author">
-                                  Por {comm.authorName}
-                                </div>
-                              ) : null}
-                              <div
-                                className="comunicado-content comunicado-markdown"
-                                dangerouslySetInnerHTML={{
-                                  __html: renderMarkdown(comm.content),
-                                }}
-                              />
-                              {canAccess("comunicados") ? (
-                                <div className="comunicado-acc-actions">
+                              <span className="comunicado-acc-heading">
+                                <strong>{comm.title}</strong>
+                                <ComunicadoTag
+                                  color={comm.tagColor}
+                                  label={comm.tagLabel}
+                                />
+                                {comm.publishedAt ? (
+                                  <span className="comunicado-date">
+                                    {formatDate24(comm.publishedAt)}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span
+                                className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
+                                aria-hidden="true"
+                              >
+                                ▸
+                              </span>
+                            </button>
+                            {expanded ? (
+                              <div className="comunicado-acc-body">
+                                <div className="comunicado-acc-copy">
                                   <button
                                     className="ghost-button"
                                     onClick={() =>
-                                      setInstanceEditor({
-                                        communicationId: comm.communicationId,
-                                        content: comm.content,
-                                        id: comm.id,
-                                        title: comm.title,
-                                        tagColor: comm.tagColor ?? "",
-                                        tagLabel: comm.tagLabel ?? "",
-                                      })
+                                      void copyComunicadoLink(comm)
                                     }
                                     type="button"
                                   >
-                                    Editar
-                                  </button>
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() => requestDeleteInstance(comm)}
-                                    type="button"
-                                  >
-                                    Eliminar mensaje
+                                    🔗 Copiar enlace
                                   </button>
                                 </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-                        </article>
-                      );
+                                {comm.authorName ? (
+                                  <div className="comunicado-author">
+                                    Por {comm.authorName}
+                                  </div>
+                                ) : null}
+                                <div
+                                  className="comunicado-content comunicado-markdown"
+                                  dangerouslySetInnerHTML={{
+                                    __html: renderMarkdown(comm.content),
+                                  }}
+                                />
+                                {canAccess("comunicados") ? (
+                                  <div className="comunicado-acc-actions">
+                                    <button
+                                      className="ghost-button"
+                                      onClick={() =>
+                                        setInstanceEditor({
+                                          communicationId: comm.communicationId,
+                                          content: comm.content,
+                                          id: comm.id,
+                                          title: comm.title,
+                                          tagColor: comm.tagColor ?? "",
+                                          tagLabel: comm.tagLabel ?? "",
+                                        })
+                                      }
+                                      type="button"
+                                    >
+                                      Editar
+                                    </button>
+                                    <button
+                                      className="ghost-button danger"
+                                      onClick={() =>
+                                        requestDeleteInstance(comm)
+                                      }
+                                      type="button"
+                                    >
+                                      Eliminar mensaje
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
                       })}
                     </>
                   )}
@@ -9674,97 +9678,97 @@ function App() {
                               Ninguna carta coincide con el filtro.
                             </div>
                           ) : null}
-                        <div className="karuta-drops-grid">
-                          {visibleKarutaCards.map((card) => {
-                            const tier = karutaCardTier(card, config);
-                            const tierClass =
-                              tier === "ultra"
-                                ? " karuta-ultra-rare"
-                                : tier === "super"
-                                  ? " karuta-super-rare"
-                                  : "";
-                            return (
-                              <article
-                                className={`karuta-drop-card${tierClass}`}
-                                key={card.id}
-                                onPointerEnter={handleKarutaCardPointerEnter}
-                                onPointerLeave={handleKarutaCardPointerLeave}
-                                onPointerMove={handleKarutaCardPointerMove}
-                              >
-                                <div className="karuta-card-art-wrap">
-                                  {tier === "ultra" ? (
-                                    <span className="karuta-tier-badge karuta-ultra-badge">
-                                      💎 Ultra rara
-                                    </span>
-                                  ) : tier === "super" ? (
-                                    <span className="karuta-tier-badge karuta-super-badge">
-                                      ✨ Súper rara
-                                    </span>
-                                  ) : null}
-                                  <KarutaCardArt
-                                    name={card.cardName}
-                                    url={
-                                      card.imageUrl
-                                        ? apiAssetUrl(card.imageUrl)
-                                        : undefined
-                                    }
-                                  />
-                                  {/* Solo las ultra raras llevan el foil: es
-                                      lo que las hace sentir distintas. */}
-                                  {tier === "ultra" ? (
-                                    <span
-                                      aria-hidden="true"
-                                      className="karuta-card-glare"
+                          <div className="karuta-drops-grid">
+                            {visibleKarutaCards.map((card) => {
+                              const tier = karutaCardTier(card, config);
+                              const tierClass =
+                                tier === "ultra"
+                                  ? " karuta-ultra-rare"
+                                  : tier === "super"
+                                    ? " karuta-super-rare"
+                                    : "";
+                              return (
+                                <article
+                                  className={`karuta-drop-card${tierClass}`}
+                                  key={card.id}
+                                  onPointerEnter={handleKarutaCardPointerEnter}
+                                  onPointerLeave={handleKarutaCardPointerLeave}
+                                  onPointerMove={handleKarutaCardPointerMove}
+                                >
+                                  <div className="karuta-card-art-wrap">
+                                    {tier === "ultra" ? (
+                                      <span className="karuta-tier-badge karuta-ultra-badge">
+                                        💎 Ultra rara
+                                      </span>
+                                    ) : tier === "super" ? (
+                                      <span className="karuta-tier-badge karuta-super-badge">
+                                        ✨ Súper rara
+                                      </span>
+                                    ) : null}
+                                    <KarutaCardArt
+                                      name={card.cardName}
+                                      url={
+                                        card.imageUrl
+                                          ? apiAssetUrl(card.imageUrl)
+                                          : undefined
+                                      }
                                     />
-                                  ) : null}
-                                </div>
-                                <div className="karuta-drop-body">
-                                  <strong>{card.cardName ?? "Carta"}</strong>
-                                  {card.series ? (
-                                    <span className="karuta-drop-series">
-                                      {card.series}
-                                    </span>
-                                  ) : null}
-                                  <span className="karuta-drop-user">
-                                    {card.ownerUsername ?? "Desconocido"} posee
-                                    la carta
-                                  </span>
-                                  <div className="karuta-drop-reasons">
-                                    {card.printNumber != null ? (
-                                      <span className="karuta-drop-badge">
-                                        Print #{card.printNumber}
-                                      </span>
-                                    ) : null}
-                                    {card.edition != null ? (
-                                      <span className="karuta-drop-badge">
-                                        Edición {card.edition}
-                                      </span>
-                                    ) : null}
-                                    {card.wishlistCount != null ? (
-                                      <span className="karuta-drop-badge">
-                                        {card.wishlistCount} en wishlist
-                                      </span>
+                                    {/* Solo las ultra raras llevan el foil: es
+                                      lo que las hace sentir distintas. */}
+                                    {tier === "ultra" ? (
+                                      <span
+                                        aria-hidden="true"
+                                        className="karuta-card-glare"
+                                      />
                                     ) : null}
                                   </div>
-                                  <code className="karuta-card-code">
-                                    {card.code}
-                                  </code>
-                                  {canAccess("config") ? (
-                                    <button
-                                      className="ghost-button danger"
-                                      onClick={() =>
-                                        handleDeleteKarutaCard(card)
-                                      }
-                                      type="button"
-                                    >
-                                      Quitar
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </article>
-                            );
-                          })}
-                        </div>
+                                  <div className="karuta-drop-body">
+                                    <strong>{card.cardName ?? "Carta"}</strong>
+                                    {card.series ? (
+                                      <span className="karuta-drop-series">
+                                        {card.series}
+                                      </span>
+                                    ) : null}
+                                    <span className="karuta-drop-user">
+                                      {card.ownerUsername ?? "Desconocido"}{" "}
+                                      posee la carta
+                                    </span>
+                                    <div className="karuta-drop-reasons">
+                                      {card.printNumber != null ? (
+                                        <span className="karuta-drop-badge">
+                                          Print #{card.printNumber}
+                                        </span>
+                                      ) : null}
+                                      {card.edition != null ? (
+                                        <span className="karuta-drop-badge">
+                                          Edición {card.edition}
+                                        </span>
+                                      ) : null}
+                                      {card.wishlistCount != null ? (
+                                        <span className="karuta-drop-badge">
+                                          {card.wishlistCount} en wishlist
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <code className="karuta-card-code">
+                                      {card.code}
+                                    </code>
+                                    {canAccess("config") ? (
+                                      <button
+                                        className="ghost-button danger"
+                                        onClick={() =>
+                                          handleDeleteKarutaCard(card)
+                                        }
+                                        type="button"
+                                      >
+                                        Quitar
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
                         </>
                       )}
                     </section>

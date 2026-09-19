@@ -3006,15 +3006,14 @@ input.list-search {
   flex: 1 1 220px;
   min-width: 170px;
   max-width: 420px;
-  height: 42px;
-  padding: 0 12px;
 }
 
+/* El orden usa la misma clase .select que el resto de la página: hereda
+   padding, borde y fondo de los controles del hub. */
 select.list-order {
   flex: 0 0 auto;
   width: auto;
-  height: 42px;
-  padding: 0 10px;
+  min-width: 170px;
 }
 
 /* Los chips de etiqueta van dentro de .list-filters: sin margen propio, así
