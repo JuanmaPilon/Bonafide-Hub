@@ -26,7 +26,13 @@ const keyOf = (log: RaidLog): string => log.groupKey || log.id;
 // entrada no se cerró?" desde afuera (se expone en GET /health) en lugar de
 // tener que leer los logs del servidor.
 export type RaidLogSyncGroupReport = {
-  action: "al-dia" | "editado" | "error" | "esperando" | "publicado" | "sin-canal";
+  action:
+    | "al-dia"
+    | "editado"
+    | "error"
+    | "esperando"
+    | "publicado"
+    | "sin-canal";
   error?: string;
   fights: number;
   groupKey: string;

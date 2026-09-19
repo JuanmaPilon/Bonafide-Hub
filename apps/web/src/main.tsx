@@ -5,6 +5,7 @@ import {
   useState,
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
 import { marked } from "marked";
@@ -1172,6 +1173,87 @@ function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
 const MAX_EVENT_TAGS = 6;
 // Valor del filtro "eventos sin ninguna etiqueta".
 const EVENT_TAG_NONE = "__none__";
+
+// ── Filtros de listas (comunicados, eventos, raids, cartas) ─────────
+// Todas las listas comparten el mecanismo: buscador, orden por fecha o
+// alfabético y, donde haya etiquetas, chips para filtrar.
+type ListOrder = "az" | "newest" | "oldest" | "za";
+type KarutaRarityFilter = "all" | "normal" | "super" | "ultra";
+
+const LIST_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
+  { key: "newest", label: "Más recientes" },
+  { key: "oldest", label: "Más antiguos" },
+  { key: "az", label: "A-Z" },
+  { key: "za", label: "Z-A" },
+];
+
+function matchesSearch(value: string, search: string): boolean {
+  const needle = search.trim().toLowerCase();
+  return needle.length === 0 || value.toLowerCase().includes(needle);
+}
+
+function sortByOrder<T>(
+  items: T[],
+  order: ListOrder,
+  dateOf: (item: T) => string | undefined,
+  labelOf: (item: T) => string,
+): T[] {
+  const time = (value?: string): number =>
+    value ? new Date(value).getTime() : 0;
+  return [...items].sort((a, b) => {
+    if (order === "az") {
+      return labelOf(a).localeCompare(labelOf(b), "es");
+    }
+    if (order === "za") {
+      return labelOf(b).localeCompare(labelOf(a), "es");
+    }
+    const diff = time(dateOf(a)) - time(dateOf(b));
+    return order === "oldest" ? diff : -diff;
+  });
+}
+
+// Buscador + selector de orden. Los chips de etiqueta van como children, para
+// que cada lista muestre los suyos.
+function ListFilterBar({
+  children,
+  onOrderChange,
+  onSearchChange,
+  order,
+  placeholder,
+  search,
+}: {
+  children?: ReactNode;
+  onOrderChange: (order: ListOrder) => void;
+  onSearchChange: (value: string) => void;
+  order: ListOrder;
+  placeholder: string;
+  search: string;
+}) {
+  return (
+    <div className="list-filters">
+      <input
+        className="input list-search"
+        onChange={(event) => onSearchChange(event.target.value)}
+        placeholder={placeholder}
+        type="search"
+        value={search}
+      />
+      <select
+        aria-label="Ordenar"
+        className="input list-order"
+        onChange={(event) => onOrderChange(event.target.value as ListOrder)}
+        value={order}
+      >
+        {LIST_ORDER_OPTIONS.map((option) => (
+          <option key={option.key} value={option.key}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {children}
+    </div>
+  );
+}
 
 // Editor de etiquetas de un evento: se agregan de a una (texto + color) y se
 // ven como chips con su ✕. Sugiere textos ya usados en otros eventos.
@@ -3286,6 +3368,59 @@ function App() {
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventTagFilter, setEventTagFilter] = useState<string[]>([]);
+  // Filtros y buscadores de las listas (mismo mecanismo en todas).
+  const [eventSearch, setEventSearch] = useState("");
+  const [eventOrder, setEventOrder] = useState<ListOrder>("newest");
+  const [comunicadoSearch, setComunicadoSearch] = useState("");
+  const [comunicadoOrder, setComunicadoOrder] = useState<ListOrder>("newest");
+  const [comunicadoTagFilter, setComunicadoTagFilter] = useState<string[]>([]);
+  const [raidLogSearch, setRaidLogSearch] = useState("");
+  const [raidLogOrder, setRaidLogOrder] = useState<ListOrder>("newest");
+  const [karutaSearch, setKarutaSearch] = useState("");
+  const [karutaRarity, setKarutaRarity] = useState<KarutaRarityFilter>("all");
+
+  // Cuántas cartas hay de cada rareza (para los chips del filtro). Se calcula
+  // con la misma función que dibuja cada tarjeta, así nunca se desincroniza.
+  const karutaRarityCounts = useMemo(() => {
+    const counts: Record<"normal" | "super" | "ultra", number> = {
+      normal: 0,
+      super: 0,
+      ultra: 0,
+    };
+    for (const card of karutaCards) {
+      counts[karutaCardTier(card, config) ?? "normal"] += 1;
+    }
+    return counts;
+  }, [config, karutaCards]);
+
+  // Cartas visibles: filtro por rareza + buscador por nombre y serie.
+  const visibleKarutaCards = useMemo(() => {
+    return karutaCards.filter((card) => {
+      const tier = karutaCardTier(card, config) ?? "normal";
+      if (karutaRarity !== "all" && tier !== karutaRarity) {
+        return false;
+      }
+      return matchesSearch(
+        `${card.cardName ?? ""} ${card.series ?? ""}`,
+        karutaSearch,
+      );
+    });
+  }, [config, karutaCards, karutaRarity, karutaSearch]);
+
+  // Logs de raid visibles: buscador (título o código) + orden. Se filtra antes
+  // de agrupar, así las partes de una misma noche siguen viajando juntas.
+  const visibleRaidLogs = useMemo(() => {
+    const filtered = raidLogs.filter((log) =>
+      matchesSearch(`${log.title ?? ""} ${log.reportCode}`, raidLogSearch),
+    );
+    return sortByOrder(
+      filtered,
+      raidLogOrder,
+      (log) => log.firstFightAt ?? log.createdAt,
+      (log) => log.title ?? log.reportCode,
+    );
+  }, [raidLogOrder, raidLogSearch, raidLogs]);
+
   // Etiquetas usadas en la guild: alimentan el filtro y las sugerencias.
   const eventTagOptions = useMemo(() => {
     const byLabel = new Map<string, EventTag>();
@@ -3311,19 +3446,33 @@ function App() {
     // Los completados viven en Admin → Historial de eventos (con su roster):
     // la grilla es solo lo activo/próximo.
     const active = events.filter((event) => event.status !== "completed");
-    if (eventTagFilter.length === 0) {
-      return active;
-    }
-    return active.filter((event) => {
-      const tags = event.tags ?? [];
-      if (tags.length === 0) {
-        return eventTagFilter.includes(EVENT_TAG_NONE);
-      }
-      return tags.some((tag) =>
-        eventTagFilter.includes(tag.label.toLowerCase()),
-      );
-    });
-  }, [eventTagFilter, events]);
+    const byTag =
+      eventTagFilter.length === 0
+        ? active
+        : active.filter((event) => {
+            const tags = event.tags ?? [];
+            if (tags.length === 0) {
+              return eventTagFilter.includes(EVENT_TAG_NONE);
+            }
+            return tags.some((tag) =>
+              eventTagFilter.includes(tag.label.toLowerCase()),
+            );
+          });
+    const searched = byTag.filter((event) =>
+      matchesSearch(
+        `${event.title} ${event.description ?? ""} ${(event.tags ?? [])
+          .map((tag) => tag.label)
+          .join(" ")}`,
+        eventSearch,
+      ),
+    );
+    return sortByOrder(
+      searched,
+      eventOrder,
+      (event) => event.startsAt,
+      (event) => event.title,
+    );
+  }, [eventOrder, eventSearch, eventTagFilter, events]);
   // Etiquetas del filtro: solo de los eventos activos (los del historial ya no
   // se pueden filtrar desde acá).
   const activeTagOptions = useMemo(() => {
@@ -3445,6 +3594,43 @@ function App() {
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
   const [publishedLoading, setPublishedLoading] = useState(true);
+
+  // Etiquetas usadas en los comunicados publicados (alimentan el filtro).
+  const publishedTagOptions = useMemo(() => {
+    const byLabel = new Map<string, { color?: string; label: string }>();
+    for (const comm of published) {
+      const label = comm.tagLabel?.trim();
+      if (label && !byLabel.has(label.toLowerCase())) {
+        byLabel.set(label.toLowerCase(), { color: comm.tagColor, label });
+      }
+    }
+    return [...byLabel.values()].sort((a, b) =>
+      a.label.localeCompare(b.label, "es"),
+    );
+  }, [published]);
+
+  // Comunicados visibles: filtro por etiqueta + buscador + orden.
+  const visiblePublished = useMemo(() => {
+    const filtered = published.filter((comm) => {
+      const label = comm.tagLabel?.trim().toLowerCase() ?? "";
+      if (comunicadoTagFilter.length > 0) {
+        if (label === "") {
+          if (!comunicadoTagFilter.includes(EVENT_TAG_NONE)) {
+            return false;
+          }
+        } else if (!comunicadoTagFilter.includes(label)) {
+          return false;
+        }
+      }
+      return matchesSearch(`${comm.title} ${comm.content}`, comunicadoSearch);
+    });
+    return sortByOrder(
+      filtered,
+      comunicadoOrder,
+      (comm) => comm.publishedAt,
+      (comm) => comm.title,
+    );
+  }, [comunicadoOrder, comunicadoSearch, comunicadoTagFilter, published]);
   const [expandedPublished, setExpandedPublished] = useState<Set<string>>(
     new Set(),
   );
@@ -8804,8 +8990,8 @@ function App() {
                           <LoadingState label="Cargando logs de raid…" />
                         ) : (
                           <>
-                            {canAccess("raids") ? (
-                              <div className="raid-log-toolbar">
+                            <div className="raid-log-toolbar">
+                              {canAccess("raids") ? (
                                 <button
                                   className="primary-button"
                                   disabled={scanningRaidLogs}
@@ -8816,10 +9002,25 @@ function App() {
                                     ? "Escaneando…"
                                     : "Escanear Warcraft Logs"}
                                 </button>
+                              ) : null}
+                              {raidLogs.length > 0 ? (
+                                <ListFilterBar
+                                  onOrderChange={setRaidLogOrder}
+                                  onSearchChange={setRaidLogSearch}
+                                  order={raidLogOrder}
+                                  placeholder="Buscar log…"
+                                  search={raidLogSearch}
+                                />
+                              ) : null}
+                            </div>
+                            {raidLogs.length > 0 &&
+                            visibleRaidLogs.length === 0 ? (
+                              <div className="empty-state">
+                                Ningún log coincide con el filtro.
                               </div>
                             ) : null}
                             <RaidLogsList
-                              logs={raidLogs}
+                              logs={visibleRaidLogs}
                               onHide={
                                 canAccess("raids")
                                   ? requestHideRaidLog
@@ -9050,7 +9251,63 @@ function App() {
                       Todavía no hay comunicados publicados.
                     </div>
                   ) : (
-                    published.map((comm) => {
+                    <>
+                      <ListFilterBar
+                        onOrderChange={setComunicadoOrder}
+                        onSearchChange={setComunicadoSearch}
+                        order={comunicadoOrder}
+                        placeholder="Buscar comunicado…"
+                        search={comunicadoSearch}
+                      >
+                        <button
+                          className={`event-filter-chip${comunicadoTagFilter.length === 0 ? " active" : ""}`}
+                          onClick={() => setComunicadoTagFilter([])}
+                          type="button"
+                        >
+                          Todas
+                        </button>
+                        {publishedTagOptions.map((tag) => {
+                          const key = tag.label.toLowerCase();
+                          return (
+                            <EventTagFilterChip
+                              active={comunicadoTagFilter.includes(key)}
+                              color={tag.color ?? "#6aa8ff"}
+                              key={tag.label}
+                              label={tag.label}
+                              onToggle={() =>
+                                setComunicadoTagFilter((current) =>
+                                  current.includes(key)
+                                    ? current.filter((entry) => entry !== key)
+                                    : [...current, key],
+                                )
+                              }
+                            />
+                          );
+                        })}
+                        {published.some((comm) => !comm.tagLabel?.trim()) ? (
+                          <button
+                            className={`event-filter-chip${comunicadoTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
+                            onClick={() =>
+                              setComunicadoTagFilter((current) =>
+                                current.includes(EVENT_TAG_NONE)
+                                  ? current.filter(
+                                      (entry) => entry !== EVENT_TAG_NONE,
+                                    )
+                                  : [...current, EVENT_TAG_NONE],
+                              )
+                            }
+                            type="button"
+                          >
+                            Sin etiqueta
+                          </button>
+                        ) : null}
+                      </ListFilterBar>
+                      {visiblePublished.length === 0 ? (
+                        <div className="empty-state">
+                          Ningún comunicado coincide con el filtro.
+                        </div>
+                      ) : null}
+                      {visiblePublished.map((comm) => {
                       const expanded = expandedPublished.has(comm.id);
                       return (
                         <article
@@ -9135,7 +9392,8 @@ function App() {
                           ) : null}
                         </article>
                       );
-                    })
+                      })}
+                    </>
                   )}
                 </div>
               ) : activeTab === "sugerencias" ? (
@@ -9210,8 +9468,48 @@ function App() {
                           Todavía no hay cartas registradas.
                         </div>
                       ) : (
+                        <>
+                          <div className="karuta-filters">
+                            <input
+                              className="input list-search"
+                              onChange={(event) =>
+                                setKarutaSearch(event.target.value)
+                              }
+                              placeholder="Buscar carta…"
+                              type="search"
+                              value={karutaSearch}
+                            />
+                            <div className="event-tag-filter">
+                              {(
+                                [
+                                  ["all", "Todas"],
+                                  ["normal", "Raras"],
+                                  ["super", "Súper raras"],
+                                  ["ultra", "Ultra raras"],
+                                ] as const
+                              ).map(([key, label]) => (
+                                <button
+                                  className={`event-filter-chip${karutaRarity === key ? " active" : ""}`}
+                                  key={key}
+                                  onClick={() => setKarutaRarity(key)}
+                                  type="button"
+                                >
+                                  {label} (
+                                  {key === "all"
+                                    ? karutaCards.length
+                                    : karutaRarityCounts[key]}
+                                  )
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {visibleKarutaCards.length === 0 ? (
+                            <div className="empty-state">
+                              Ninguna carta coincide con el filtro.
+                            </div>
+                          ) : null}
                         <div className="karuta-drops-grid">
-                          {karutaCards.map((card) => {
+                          {visibleKarutaCards.map((card) => {
                             const tier = karutaCardTier(card, config);
                             const tierClass =
                               tier === "ultra"
@@ -9301,6 +9599,7 @@ function App() {
                             );
                           })}
                         </div>
+                        </>
                       )}
                     </section>
                   ) : karutaSection === "coleccion" ? (
@@ -10025,6 +10324,15 @@ function App() {
                     <LoadingState label="Cargando eventos…" />
                   ) : (
                     <>
+                      {events.length > 0 ? (
+                        <ListFilterBar
+                          onOrderChange={setEventOrder}
+                          onSearchChange={setEventSearch}
+                          order={eventOrder}
+                          placeholder="Buscar evento…"
+                          search={eventSearch}
+                        />
+                      ) : null}
                       {activeTagOptions.length > 0 || untaggedEvents > 0 ? (
                         <div className="event-tag-filter">
                           <button
@@ -10073,8 +10381,8 @@ function App() {
                       ) : null}
                       {filteredEvents.length === 0 ? (
                         <div className="empty-state">
-                          {eventTagFilter.length > 0
-                            ? "Ningún evento activo con esas etiquetas."
+                          {eventTagFilter.length > 0 || eventSearch.trim()
+                            ? "Ningún evento coincide con el filtro."
                             : events.length > 0
                               ? "No hay eventos próximos. Las ocurrencias cerradas quedan en Admin → Historial de eventos."
                               : "Todavía no hay eventos."}

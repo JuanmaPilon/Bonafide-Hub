@@ -2991,6 +2991,47 @@ input.event-tag-color {
   margin-bottom: 14px;
 }
 
+/* Filtros compartidos por las listas (comunicados, eventos, logs de raid).
+   El buscador ocupa el lugar libre y el orden va a la derecha. */
+.list-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
+input.list-search {
+  flex: 1 1 220px;
+  min-width: 170px;
+  max-width: 420px;
+  height: 42px;
+  padding: 0 12px;
+}
+
+select.list-order {
+  flex: 0 0 auto;
+  width: auto;
+  height: 42px;
+  padding: 0 10px;
+}
+
+/* Los chips de etiqueta van dentro de .list-filters: sin margen propio, así
+   quedan alineados con el buscador. */
+.list-filters .event-tag-filter {
+  margin-bottom: 0;
+}
+
+/* Buscador + chips de rareza en la grilla de cartas. */
+.karuta-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .event-filter-chip {
   padding: 4px 12px;
   border-radius: 999px;
