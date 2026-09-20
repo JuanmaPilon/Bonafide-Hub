@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -1255,6 +1256,20 @@ const LIST_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
   { key: "za", label: "Z-A" },
 ];
 
+// Chips del filtro de rareza de Karuta: cada uno lleva el MATERIAL de su
+// rareza (acero la rara, dorado la súper, holográfico la ultra), el mismo que
+// usan las cartas. `modifier` es la clase que define ese material.
+const KARUTA_RARITY_FILTERS: Array<{
+  key: KarutaRarityFilter;
+  label: string;
+  modifier: string;
+}> = [
+  { key: "all", label: "Todas", modifier: "karuta-rarity-chip--all" },
+  { key: "normal", label: "Raras", modifier: "karuta-rarity-chip--normal" },
+  { key: "super", label: "Súper raras", modifier: "karuta-rarity-chip--super" },
+  { key: "ultra", label: "Ultra raras", modifier: "karuta-rarity-chip--ultra" },
+];
+
 function matchesSearch(value: string, search: string): boolean {
   const needle = search.trim().toLowerCase();
   return needle.length === 0 || value.toLowerCase().includes(needle);
@@ -1425,18 +1440,19 @@ function EventTagFilterChip({
   onToggle: () => void;
 }) {
   const background = normalizeTagColor(color);
+  // El chip lleva SIEMPRE el color de la etiqueta (fondo y texto), igual que
+  // la tarjeta del evento/comunicado: así se reconoce de un vistazo. Activo =
+  // color pleno con texto de contraste; inactivo = el mismo color atenuado
+  // (las dos intensidades las resuelve el CSS con --chip-color).
   return (
     <button
-      className={`event-filter-chip${active ? " active" : ""}`}
+      className={`event-filter-chip event-filter-chip--tag${active ? " active" : ""}`}
       onClick={onToggle}
       style={
-        active
-          ? {
-              backgroundColor: background,
-              borderColor: background,
-              color: tagTextColor(background),
-            }
-          : undefined
+        {
+          "--chip-color": background,
+          "--chip-text": tagTextColor(background),
+        } as CSSProperties
       }
       type="button"
     >
@@ -9532,27 +9548,22 @@ function App() {
                               value={karutaSearch}
                             />
                             <div className="event-tag-filter">
-                              {(
-                                [
-                                  ["all", "Todas"],
-                                  ["normal", "Raras"],
-                                  ["super", "Súper raras"],
-                                  ["ultra", "Ultra raras"],
-                                ] as const
-                              ).map(([key, label]) => (
-                                <button
-                                  className={`event-filter-chip${karutaRarity === key ? " active" : ""}`}
-                                  key={key}
-                                  onClick={() => setKarutaRarity(key)}
-                                  type="button"
-                                >
-                                  {label} (
-                                  {key === "all"
-                                    ? karutaCards.length
-                                    : karutaRarityCounts[key]}
-                                  )
-                                </button>
-                              ))}
+                              {KARUTA_RARITY_FILTERS.map(
+                                ({ key, label, modifier }) => (
+                                  <button
+                                    className={`karuta-rarity-chip ${modifier}${karutaRarity === key ? " active" : ""}`}
+                                    key={key}
+                                    onClick={() => setKarutaRarity(key)}
+                                    type="button"
+                                  >
+                                    {label} (
+                                    {key === "all"
+                                      ? karutaCards.length
+                                      : karutaRarityCounts[key]}
+                                    )
+                                  </button>
+                                ),
+                              )}
                             </div>
                           </div>
                           {visibleKarutaCards.length === 0 ? (

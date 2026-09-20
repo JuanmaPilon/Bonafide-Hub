@@ -3031,6 +3031,11 @@ select.list-order {
   margin-bottom: 16px;
 }
 
+/* Los chips van dentro de .karuta-filters: sin margen propio. */
+.karuta-filters .event-tag-filter {
+  margin-bottom: 0;
+}
+
 .event-filter-chip {
   padding: 4px 12px;
   border-radius: 999px;
@@ -3053,6 +3058,65 @@ select.list-order {
   border-color: #6aa8ff;
   background: rgba(106, 168, 255, 0.18);
   color: #dce9ff;
+}
+
+/* Chip de etiqueta: el color del tag va SIEMPRE, en fondo y texto, igual que
+   en la tarjeta del evento/comunicado (el JS pasa --chip-color y --chip-text).
+   Inactivo = color atenuado; activo = color pleno. El texto se mezcla con
+   --text para que se lea bien en los dos temas (color-mix avisa al tema). */
+.event-filter-chip--tag {
+  border-color: rgba(134, 158, 214, 0.3);
+  border-color: color-mix(in srgb, var(--chip-color) 55%, transparent);
+  background: rgba(12, 19, 37, 0.6);
+  background: color-mix(in srgb, var(--chip-color) 20%, transparent);
+  color: var(--text);
+  color: color-mix(in srgb, var(--chip-color) 60%, var(--text));
+}
+
+.event-filter-chip--tag:hover,
+.event-filter-chip--tag:focus-visible {
+  border-color: var(--chip-color);
+  background: color-mix(in srgb, var(--chip-color) 32%, transparent);
+  color: color-mix(in srgb, var(--chip-color) 55%, var(--text));
+}
+
+.event-filter-chip--tag.active {
+  border-color: var(--chip-color);
+  background: var(--chip-color);
+  color: var(--chip-text);
+}
+
+/* En claro el color de texto base pesa más: sobre blanco, un tag claro (dorado,
+   cian) quedaría lavado si se mezclara con el color puro. */
+:root[data-theme="light"] .event-filter-chip--tag {
+  color: color-mix(in srgb, var(--chip-color) 45%, var(--text));
+}
+
+:root[data-theme="light"] .event-filter-chip--tag:hover,
+:root[data-theme="light"] .event-filter-chip--tag:focus-visible {
+  color: color-mix(in srgb, var(--chip-color) 32%, var(--text));
+}
+
+/* Chips sin etiqueta ("Todas", "Sin etiqueta"): en claro el fondo oscuro del
+   tema oscuro los dejaba ilegibles. Se excluyen los chips con color de tag,
+   que ya tienen su propio ajuste. */
+:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--tag) {
+  border-color: rgba(120, 140, 175, 0.4);
+  background: rgba(255, 255, 255, 0.85);
+  color: #3f4f6b;
+}
+
+:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--tag):hover,
+:root[data-theme="light"]
+  .event-filter-chip:not(.event-filter-chip--tag):focus-visible {
+  border-color: rgba(120, 140, 175, 0.65);
+  color: #101a2e;
+}
+
+:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--tag).active {
+  border-color: #6aa8ff;
+  background: rgba(106, 168, 255, 0.2);
+  color: #1d3a6b;
 }
 
 .event-form-actions {
@@ -5492,11 +5556,162 @@ input.comm-tag-hex {
     0 0 18px rgba(140, 92, 255, 0.55);
 }
 
+/* ── Chips del filtro de rareza ─────────────────────────────────────
+   Cada chip lleva el MATERIAL de su rareza, igual que las cartas: acero la
+   rara, dorado la súper y holográfico giratorio la ultra, más el mismo
+   barrido de brillo (banda inclinada en un pseudo-elemento, que es lo que se
+   anima). Inactivo va atenuado; al elegirlo se enciende del todo. */
+.karuta-rarity-chip {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  opacity: 0.62;
+  filter: saturate(0.7);
+  transition:
+    opacity 0.18s ease-out,
+    filter 0.18s ease-out,
+    box-shadow 0.18s ease-out,
+    transform 0.18s ease-out;
+}
+
+.karuta-rarity-chip:hover,
+.karuta-rarity-chip:focus-visible {
+  opacity: 0.88;
+  filter: saturate(0.95);
+}
+
+.karuta-rarity-chip.active {
+  opacity: 1;
+  filter: none;
+  transform: translateY(-1px);
+}
+
+/* El barrido de brillo: una banda blanca que cruza el chip. */
+.karuta-rarity-chip::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: 0;
+  width: 42%;
+  height: 220%;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.85) 50%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  transform: translateX(-140%) skewX(-18deg);
+  animation: karuta-shine 3.4s linear infinite;
+}
+
+/* "Todas": no es una rareza, va sin material ni brillo. */
+.karuta-rarity-chip--all {
+  border-color: rgba(134, 158, 214, 0.35);
+  background: rgba(12, 19, 37, 0.72);
+  color: var(--text);
+  text-shadow: none;
+}
+
+.karuta-rarity-chip--all::after {
+  display: none;
+}
+
+.karuta-rarity-chip--all.active {
+  border-color: #6aa8ff;
+  background: rgba(106, 168, 255, 0.22);
+  color: #dce9ff;
+}
+
+/* Rara: acero, sin brillo (es la rareza "base"). */
+.karuta-rarity-chip--normal {
+  border-color: rgba(170, 190, 220, 0.5);
+  background: linear-gradient(135deg, #465064 0%, #6f7f99 55%, #aebbd0 100%);
+}
+
+/* "Todas" en claro: el fondo oscuro del tema oscuro no tiene sentido ahí. */
+:root[data-theme="light"] .karuta-rarity-chip--all {
+  border-color: rgba(120, 140, 175, 0.4);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+}
+
+.karuta-rarity-chip--normal::after {
+  display: none;
+}
+
+/* Súper rara: el dorado de las cartas, con el brillo en tono cálido. */
+.karuta-rarity-chip--super {
+  border-color: rgba(255, 205, 110, 0.75);
+  background: linear-gradient(135deg, #7a4a06 0%, #c98a1b 55%, #ffe9a8 100%);
+}
+
+.karuta-rarity-chip--super.active {
+  box-shadow:
+    0 0 0 1px rgba(255, 196, 90, 0.5),
+    0 0 16px rgba(255, 176, 46, 0.35);
+}
+
+.karuta-rarity-chip--super::after {
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 240, 200, 0.3) 35%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 240, 200, 0.3) 65%,
+    transparent 100%
+  );
+}
+
+/* Ultra rara: relleno holográfico + anillo cónico girando (el mismo material
+   que el borde de las cartas ultra), con el barrido más rápido. */
+.karuta-rarity-chip--ultra {
+  background:
+    linear-gradient(115deg, #6b2bd9 0%, #b83bd6 30%, #2ec5ff 65%, #7cffb2 100%)
+      padding-box,
+    conic-gradient(
+        from var(--karuta-ultra-angle),
+        #ff6ec7,
+        #8a5cff,
+        #35d6ff,
+        #7cffb2,
+        #ffd166,
+        #ff6ec7
+      )
+      border-box;
+  animation: karuta-ultra-border 6s linear infinite;
+}
+
+.karuta-rarity-chip--ultra.active {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 0 18px rgba(138, 92, 255, 0.5);
+}
+
+.karuta-rarity-chip--ultra::after {
+  animation-duration: 2.4s;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .karuta-super-rare .karuta-card-art-wrap::before,
   .karuta-super-rare .karuta-card-art-wrap::after,
   .karuta-ultra-rare .karuta-card-art-wrap::before,
   .karuta-ultra-rare .karuta-card-art-wrap::after,
+  .karuta-rarity-chip,
+  .karuta-rarity-chip::after,
   .karuta-ultra-rare {
     animation: none;
   }
