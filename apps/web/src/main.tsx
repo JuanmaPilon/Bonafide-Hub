@@ -1455,15 +1455,14 @@ function EventTagFilterChip({
   onToggle,
 }: {
   active: boolean;
-  color: string;
+  color?: string;
   label: string;
   onToggle: () => void;
 }) {
+  // Mismo criterio de color que la tarjeta del evento/comunicado (ComunicadoTag):
+  // si la etiqueta no tiene color guardado, los dos caen al mismo default, así
+  // el filtro y la tarjeta nunca muestran colores distintos.
   const background = normalizeTagColor(color);
-  // El chip lleva SIEMPRE el color de la etiqueta (fondo y texto), igual que
-  // la tarjeta del evento/comunicado: así se reconoce de un vistazo. Activo =
-  // color pleno con texto de contraste; inactivo = el mismo color atenuado
-  // (las dos intensidades las resuelve el CSS con --chip-color).
   return (
     <button
       className={`event-filter-chip event-filter-chip--tag${active ? " active" : ""}`}
@@ -1476,6 +1475,7 @@ function EventTagFilterChip({
       }
       type="button"
     >
+      {active ? "✓ " : ""}
       {label}
     </button>
   );
@@ -7691,7 +7691,7 @@ function App() {
                               return (
                                 <EventTagFilterChip
                                   active={commAdminTagFilter.includes(key)}
-                                  color={tag.color ?? "#6aa8ff"}
+                                  color={tag.color}
                                   key={tag.label}
                                   label={tag.label}
                                   onToggle={() =>
@@ -9576,7 +9576,7 @@ function App() {
                           return (
                             <EventTagFilterChip
                               active={comunicadoTagFilter.includes(key)}
-                              color={tag.color ?? "#6aa8ff"}
+                              color={tag.color}
                               key={tag.label}
                               label={tag.label}
                               onToggle={() =>
@@ -9797,6 +9797,7 @@ function App() {
                                     onClick={() => setKarutaRarity(key)}
                                     type="button"
                                   >
+                                    {karutaRarity === key ? "✓ " : ""}
                                     {label} (
                                     {key === "all"
                                       ? karutaCards.length
