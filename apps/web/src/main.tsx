@@ -222,50 +222,6 @@ const STAFF_TIERS: Record<
   },
 };
 
-// Permisos que se pueden dar uno por uno: son los mismos módulos que revisa
-// cada tarjeta del panel (canAccess) y cada ruta del API (canManageModule).
-const STAFF_PERMISSIONS: Array<{
-  description: string;
-  key: string;
-  label: string;
-}> = [
-  {
-    description: "Canales, roles y ajustes del servidor.",
-    key: "config",
-    label: "Configuración general",
-  },
-  {
-    description: "Crear, publicar y editar comunicados.",
-    key: "comunicados",
-    label: "Comunicados",
-  },
-  {
-    description: "Escanear, publicar y borrar logs de raid.",
-    key: "raids",
-    label: "Logs de raid",
-  },
-  {
-    description: "Los mensajes que publica Karpindomo cada día.",
-    key: "daily",
-    label: "Mensajes diarios",
-  },
-  {
-    description: "Niveles, roles por nivel y ranking.",
-    key: "xp",
-    label: "Sistema de XP",
-  },
-  {
-    description: "Cartas, rarezas y wishlists.",
-    key: "karuta",
-    label: "Karuta",
-  },
-  {
-    description: "Crear eventos y gestionar inscripciones.",
-    key: "eventos",
-    label: "Eventos",
-  },
-];
-
 // Devuelve el rango de un rol según sus módulos guardados (para el selector).
 // Si no coincide con un rango exacto, devuelve null.
 function tierForModules(modules: string[]): StaffTier | null {
@@ -5492,48 +5448,8 @@ function App() {
     }
   }
 
-  // Da o quita UN permiso a UN rol.
-  async function setRolePermission(
-    roleId: string,
-    moduleKey: string,
-    grant: boolean,
-  ): Promise<void> {
-    const rules = (config.adminRoleModules ?? []).map((rule) => ({
-      ...rule,
-      modules: [...rule.modules],
-    }));
-    const index = rules.findIndex((rule) => rule.roleId === roleId);
-    if (grant) {
-      if (index >= 0) {
-        if (!rules[index].modules.includes(moduleKey)) {
-          rules[index].modules.push(moduleKey);
-        }
-      } else {
-        rules.push({ modules: [moduleKey], roleId });
-      }
-    } else if (index >= 0) {
-      rules[index].modules = rules[index].modules.filter(
-        (entry) => entry !== moduleKey,
-      );
-      if (rules[index].modules.length === 0) {
-        rules.splice(index, 1);
-      }
-    }
-
-    const roleName =
-      guildRoles.find((role) => role.id === roleId)?.name ?? "El rol";
-    const label =
-      STAFF_PERMISSIONS.find((entry) => entry.key === moduleKey)?.label ??
-      moduleKey;
-    await applyAdminRoleModules(
-      rules,
-      grant
-        ? `${roleName}: acceso a ${label}.`
-        : `${roleName}: sin acceso a ${label}.`,
-    );
-  }
-
-  // Atajo por rango: asigna (o saca) varios permisos de una sola vez.
+  // Da o quita el rango completo de UN rol (los permisos de cada rango están
+  // en STAFF_TIERS).
   async function applyStaffTier(
     roleId: string,
     tier: StaffTier | null,
@@ -7446,6 +7362,11 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
+                        <p className="staff-hierarchy-note">
+                          Elegir los roles de cada rango: el rol recibe todos
+                          los permisos de ese nivel. Los cambios se guardan al
+                          instante.
+                        </p>
                         <div className="staff-hierarchy">
                           <div className="staff-hierarchy-tier owner">
                             <span
@@ -7549,53 +7470,6 @@ function App() {
                             </div>
                           </div>
                         </div>
-                        <div className="staff-permission-list">
-                          {STAFF_PERMISSIONS.map((permission) => {
-                            const assigned = (
-                              config.adminRoleModules ?? []
-                            ).filter((rule) =>
-                              rule.modules.includes(permission.key),
-                            );
-                            return (
-                              <div
-                                className="staff-permission-row"
-                                key={permission.key}
-                              >
-                                <div className="staff-permission-info">
-                                  <strong>{permission.label}</strong>
-                                  <small>{permission.description}</small>
-                                </div>
-                                <StaffRoleControls
-                                  assigned={assigned.map((rule) => ({
-                                    id: rule.roleId,
-                                    name:
-                                      guildRoles.find(
-                                        (item) => item.id === rule.roleId,
-                                      )?.name ?? rule.roleId,
-                                  }))}
-                                  disabled={savingPermission}
-                                  guildRoles={guildRoles}
-                                  label={permission.label}
-                                  onAdd={(roleId) =>
-                                    void setRolePermission(
-                                      roleId,
-                                      permission.key,
-                                      true,
-                                    )
-                                  }
-                                  onRemove={(roleId) =>
-                                    void setRolePermission(
-                                      roleId,
-                                      permission.key,
-                                      false,
-                                    )
-                                  }
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-
                       </div>
                     </details>
                   ) : null}

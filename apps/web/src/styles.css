@@ -4869,42 +4869,15 @@ input.comm-tag-hex {
 
 /* ---------- Permisos de staff (owner) ---------- */
 
-/* Un bloque por permiso: qué es + a qué roles alcanza + agregar/quitar. */
-.staff-permission-list {
-  display: grid;
-  gap: 10px;
-}
-
-.staff-permission-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(133, 156, 212, 0.18);
-  background: rgba(10, 16, 31, 0.5);
-}
-
-.staff-permission-info {
-  display: grid;
-  gap: 3px;
-  flex: 1 1 220px;
-  min-width: 190px;
-}
-
-.staff-permission-info strong {
-  color: var(--text);
-  font-size: 0.95rem;
-}
-
-.staff-permission-info small {
+/* Nota de la tarjeta: los roles se asignan por rango. */
+.staff-hierarchy-note {
+  margin: 0;
   color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.4;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
+/* Chips de roles de un rango/permiso + selector para agregar. */
 .staff-permission-roles {
   display: flex;
   align-items: center;
@@ -5853,8 +5826,7 @@ input.comm-tag-hex {
 :root[data-theme="light"] .admin-card-footer,
 :root[data-theme="light"] .module-toggle,
 :root[data-theme="light"] .suggestion-tier-chip,
-:root[data-theme="light"] .staff-hierarchy-tier,
-:root[data-theme="light"] .staff-permission-row {
+:root[data-theme="light"] .staff-hierarchy-tier {
   background: var(--surface-card);
 }
 
