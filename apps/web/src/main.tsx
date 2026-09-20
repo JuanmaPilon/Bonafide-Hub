@@ -279,6 +279,74 @@ function tierForModules(modules: string[]): StaffTier | null {
   return null;
 }
 
+// Un rol mostrado como chip: solo hace falta el id para quitarlo.
+type StaffRoleChip = { id: string; name: string };
+
+// Chips de roles + selector "Agregar rol…". Se usa en las plaquitas de la
+// jerarquía (el rol entra con TODOS los permisos de ese rango) y en la lista
+// por permiso (el rol entra con ese permiso suelto). Sin `onAdd` solo lista y
+// permite quitar.
+function StaffRoleControls({
+  assigned,
+  disabled,
+  guildRoles,
+  label,
+  onAdd,
+  onRemove,
+}: {
+  assigned: StaffRoleChip[];
+  disabled: boolean;
+  guildRoles: GuildRole[];
+  label: string;
+  onAdd?: (roleId: string) => void;
+  onRemove: (roleId: string) => void;
+}) {
+  const assignedIds = new Set(assigned.map((role) => role.id));
+  return (
+    <div className="staff-permission-roles">
+      {assigned.map((role) => (
+        <span className="staff-permission-role" key={role.id}>
+          {role.name}
+          <button
+            aria-label={`Quitar ${role.name}`}
+            className="staff-permission-remove"
+            disabled={disabled}
+            onClick={() => onRemove(role.id)}
+            title={`Quitar ${role.name}`}
+            type="button"
+          >
+            ✕
+          </button>
+        </span>
+      ))}
+      {onAdd ? (
+        <select
+          aria-label={`Agregar rol: ${label}`}
+          className="select staff-permission-add"
+          disabled={disabled}
+          onChange={(event) => {
+            const roleId = event.target.value;
+            event.target.value = "";
+            if (roleId) {
+              onAdd(roleId);
+            }
+          }}
+          value=""
+        >
+          <option value="">Agregar rol…</option>
+          {guildRoles
+            .filter((role) => !assignedIds.has(role.id))
+            .map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
+              </option>
+            ))}
+        </select>
+      ) : null}
+    </div>
+  );
+}
+
 // El perfil NO es un módulo activable: se accede desde el chip de usuario
 // (arriba a la derecha) y nunca se oculta ni aparece en la navegación.
 
@@ -3385,7 +3453,6 @@ function App() {
   const savedXpRef = useRef<string | null>(null);
   const [adminAccess, setAdminAccess] = useState<AdminAccess | null>(null);
   // Rol seleccionado en el panel de Permisos de staff (solo owner).
-  const [staffRoleId, setStaffRoleId] = useState("");
   const [savingPermission, setSavingPermission] = useState(false);
   const [widgetStatus, setWidgetStatus] = useState<GuildWidgetStatus | null>(
     null,
@@ -3804,19 +3871,23 @@ function App() {
     ? "owner"
     : tierForModules(adminAccessModules);
 
-  // Roles asignados a cada rango, para la vista por jerarquía.
-  const staffByTier: Record<"admin" | "officer", string[]> = {
+  // Roles asignados a cada rango, para la vista por jerarquía. Los que tienen
+  // permisos sueltos (no el rango completo) van a "custom": así el resumen no
+  // esconde a nadie que sí tenga acceso al panel.
+  const staffByTier: Record<"admin" | "officer" | "custom", GuildRole[]> = {
     admin: [],
     officer: [],
+    custom: [],
   };
   for (const role of guildRoles) {
     const rule = (config.adminRoleModules ?? []).find(
       (entry) => entry.roleId === role.id,
     );
-    const tier = tierForModules(rule?.modules ?? []);
-    if (tier) {
-      staffByTier[tier].push(role.name);
+    const modules = rule?.modules ?? [];
+    if (modules.length === 0) {
+      continue;
     }
+    staffByTier[tierForModules(modules) ?? "custom"].push(role);
   }
 
   async function refreshSession(): Promise<void> {
@@ -7401,11 +7472,18 @@ function App() {
                             <div className="staff-hierarchy-info">
                               <strong>Admin</strong>
                               <small>{STAFF_TIERS.admin.description}</small>
-                              <span className="staff-hierarchy-roles">
-                                {staffByTier.admin.length > 0
-                                  ? `Roles: ${staffByTier.admin.join(", ")}`
-                                  : "Sin roles asignados"}
-                              </span>
+                              <StaffRoleControls
+                                assigned={staffByTier.admin}
+                                disabled={savingPermission}
+                                guildRoles={guildRoles}
+                                label="Admin"
+                                onAdd={(roleId) =>
+                                  void applyStaffTier(roleId, "admin")
+                                }
+                                onRemove={(roleId) =>
+                                  void applyStaffTier(roleId, null)
+                                }
+                              />
                             </div>
                           </div>
                           <div className="staff-hierarchy-tier officer">
@@ -7418,13 +7496,46 @@ function App() {
                             <div className="staff-hierarchy-info">
                               <strong>Officer</strong>
                               <small>{STAFF_TIERS.officer.description}</small>
-                              <span className="staff-hierarchy-roles">
-                                {staffByTier.officer.length > 0
-                                  ? `Roles: ${staffByTier.officer.join(", ")}`
-                                  : "Sin roles asignados"}
-                              </span>
+                              <StaffRoleControls
+                                assigned={staffByTier.officer}
+                                disabled={savingPermission}
+                                guildRoles={guildRoles}
+                                label="Officer"
+                                onAdd={(roleId) =>
+                                  void applyStaffTier(roleId, "officer")
+                                }
+                                onRemove={(roleId) =>
+                                  void applyStaffTier(roleId, null)
+                                }
+                              />
                             </div>
                           </div>
+                          {staffByTier.custom.length > 0 ? (
+                            <div className="staff-hierarchy-tier custom">
+                              <span
+                                className="staff-hierarchy-icon"
+                                aria-hidden="true"
+                              >
+                                🔷
+                              </span>
+                              <div className="staff-hierarchy-info">
+                                <strong>Personalizado</strong>
+                                <small>
+                                  Permisos asignados uno por uno, sin el rango
+                                  completo.
+                                </small>
+                                <StaffRoleControls
+                                  assigned={staffByTier.custom}
+                                  disabled={savingPermission}
+                                  guildRoles={guildRoles}
+                                  label="Personalizado"
+                                  onRemove={(roleId) =>
+                                    void applyStaffTier(roleId, null)
+                                  }
+                                />
+                              </div>
+                            </div>
+                          ) : null}
                           <div className="staff-hierarchy-tier none">
                             <span
                               className="staff-hierarchy-icon"
@@ -7454,140 +7565,37 @@ function App() {
                                   <strong>{permission.label}</strong>
                                   <small>{permission.description}</small>
                                 </div>
-                                <div className="staff-permission-roles">
-                                  {assigned.map((rule) => {
-                                    const name =
+                                <StaffRoleControls
+                                  assigned={assigned.map((rule) => ({
+                                    id: rule.roleId,
+                                    name:
                                       guildRoles.find(
                                         (item) => item.id === rule.roleId,
-                                      )?.name ?? rule.roleId;
-                                    return (
-                                      <span
-                                        className="staff-permission-role"
-                                        key={rule.roleId}
-                                      >
-                                        {name}
-                                        <button
-                                          aria-label={`Quitar ${name}`}
-                                          className="staff-permission-remove"
-                                          disabled={savingPermission}
-                                          onClick={() =>
-                                            void setRolePermission(
-                                              rule.roleId,
-                                              permission.key,
-                                              false,
-                                            )
-                                          }
-                                          title={`Quitar ${name}`}
-                                          type="button"
-                                        >
-                                          ✕
-                                        </button>
-                                      </span>
-                                    );
-                                  })}
-                                  <select
-                                    aria-label={`Agregar rol a ${permission.label}`}
-                                    className="select staff-permission-add"
-                                    disabled={savingPermission}
-                                    onChange={(event) => {
-                                      const roleId = event.target.value;
-                                      event.target.value = "";
-                                      if (roleId) {
-                                        void setRolePermission(
-                                          roleId,
-                                          permission.key,
-                                          true,
-                                        );
-                                      }
-                                    }}
-                                    value=""
-                                  >
-                                    <option value="">Agregar rol…</option>
-                                    {guildRoles
-                                      .filter(
-                                        (role) =>
-                                          !assigned.some(
-                                            (rule) => rule.roleId === role.id,
-                                          ),
-                                      )
-                                      .map((role) => (
-                                        <option key={role.id} value={role.id}>
-                                          {role.name}
-                                        </option>
-                                      ))}
-                                  </select>
-                                </div>
+                                      )?.name ?? rule.roleId,
+                                  }))}
+                                  disabled={savingPermission}
+                                  guildRoles={guildRoles}
+                                  label={permission.label}
+                                  onAdd={(roleId) =>
+                                    void setRolePermission(
+                                      roleId,
+                                      permission.key,
+                                      true,
+                                    )
+                                  }
+                                  onRemove={(roleId) =>
+                                    void setRolePermission(
+                                      roleId,
+                                      permission.key,
+                                      false,
+                                    )
+                                  }
+                                />
                               </div>
                             );
                           })}
                         </div>
 
-                        <label className="staff-role-picker">
-                          <span>Atajo por rango</span>
-                          <select
-                            className="select"
-                            value={staffRoleId}
-                            onChange={(event) =>
-                              setStaffRoleId(event.target.value)
-                            }
-                          >
-                            <option value="">Seleccionar un rol</option>
-                            {guildRoles.map((role) => (
-                              <option key={role.id} value={role.id}>
-                                {role.name}
-                              </option>
-                            ))}
-                          </select>
-                          <small className="staff-role-picker-note">
-                            Da o saca varios permisos de una sola vez, para no
-                            tocar permiso por permiso.
-                          </small>
-                        </label>
-
-                        {staffRoleId
-                          ? (() => {
-                              const role = guildRoles.find(
-                                (item) => item.id === staffRoleId,
-                              );
-                              const modules =
-                                (config.adminRoleModules ?? []).find(
-                                  (entry) => entry.roleId === staffRoleId,
-                                )?.modules ?? [];
-                              const tier = tierForModules(modules);
-                              return (
-                                <div className="staff-role-editor">
-                                  <div className="staff-role-editor-head">
-                                    <strong>{role?.name ?? "Rol"}</strong>
-                                    <select
-                                      className="select staff-tier-select"
-                                      disabled={savingPermission}
-                                      value={tier ?? ""}
-                                      onChange={(event) => {
-                                        const value = event.target.value as
-                                          | StaffTier
-                                          | "";
-                                        void applyStaffTier(
-                                          staffRoleId,
-                                          value === "" ? null : value,
-                                        );
-                                      }}
-                                    >
-                                      <option value="">Sin acceso</option>
-                                      <option value="admin">Admin</option>
-                                      <option value="officer">Officer</option>
-                                    </select>
-                                  </div>
-                                  <p className="staff-role-editor-note">
-                                    {tier
-                                      ? `${STAFF_TIERS[tier].label}: los ${STAFF_TIERS[tier].modules.length} permisos del rango.`
-                                      : modules.length > 0
-                                        ? `Permisos asignados de a uno: ${modules.length}.`
-                                        : "Este rol no tiene acceso al panel Admin."}
-                                  </p>
-                                </div>
-                              );
-                            })()
-                          : null}
                       </div>
                     </details>
                   ) : null}
