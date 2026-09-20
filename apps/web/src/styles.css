@@ -3060,41 +3060,31 @@ select.list-order {
   color: #dce9ff;
 }
 
-/* Chip de etiqueta: el color del tag va SIEMPRE, en fondo y texto, igual que
-   en la tarjeta del evento/comunicado (el JS pasa --chip-color y --chip-text).
-   Inactivo = color atenuado; activo = color pleno. El texto se mezcla con
-   --text para que se lea bien en los dos temas (color-mix avisa al tema). */
+/* Chip de etiqueta: lleva SIEMPRE el color del tag en fondo, borde y texto (el
+   texto de contraste lo calcula el JS y llega en --chip-text). A propósito NO
+   usa color-mix: con el color pleno + opacidad se ve idéntico en los dos temas
+   y en cualquier navegador (color-mix no existe en los viejos y el chip caía
+   al gris neutro). Inactivo = apenas apagado; activo = a full con un halo del
+   propio color. */
 .event-filter-chip--tag {
-  border-color: rgba(134, 158, 214, 0.3);
-  border-color: color-mix(in srgb, var(--chip-color) 55%, transparent);
-  background: rgba(12, 19, 37, 0.6);
-  background: color-mix(in srgb, var(--chip-color) 20%, transparent);
-  color: var(--text);
-  color: color-mix(in srgb, var(--chip-color) 60%, var(--text));
+  border-color: var(--chip-color);
+  background: var(--chip-color);
+  color: var(--chip-text);
+  opacity: 0.78;
+  transition:
+    opacity 0.15s ease-out,
+    outline-color 0.15s ease-out;
 }
 
 .event-filter-chip--tag:hover,
 .event-filter-chip--tag:focus-visible {
-  border-color: var(--chip-color);
-  background: color-mix(in srgb, var(--chip-color) 32%, transparent);
-  color: color-mix(in srgb, var(--chip-color) 55%, var(--text));
+  opacity: 0.92;
 }
 
 .event-filter-chip--tag.active {
-  border-color: var(--chip-color);
-  background: var(--chip-color);
-  color: var(--chip-text);
-}
-
-/* En claro el color de texto base pesa más: sobre blanco, un tag claro (dorado,
-   cian) quedaría lavado si se mezclara con el color puro. */
-:root[data-theme="light"] .event-filter-chip--tag {
-  color: color-mix(in srgb, var(--chip-color) 45%, var(--text));
-}
-
-:root[data-theme="light"] .event-filter-chip--tag:hover,
-:root[data-theme="light"] .event-filter-chip--tag:focus-visible {
-  color: color-mix(in srgb, var(--chip-color) 32%, var(--text));
+  opacity: 1;
+  outline: 2px solid var(--chip-color);
+  outline-offset: 2px;
 }
 
 /* Chips sin etiqueta ("Todas", "Sin etiqueta"): en claro el fondo oscuro del

@@ -3794,12 +3794,7 @@ function App() {
       (comm) => comm.updatedAt,
       (comm) => comm.title,
     );
-  }, [
-    commAdminOrder,
-    commAdminSearch,
-    commAdminTagFilter,
-    communications,
-  ]);
+  }, [commAdminOrder, commAdminSearch, commAdminTagFilter, communications]);
 
   // Registro de auditoría: buscador por autor/acción/detalle.
   const visibleAuditLogs = useMemo(
@@ -9229,8 +9224,7 @@ function App() {
                                         ).map(([st, emoji, label]) => {
                                           const members =
                                             finished.signups.filter(
-                                              (signup) =>
-                                                signup.status === st,
+                                              (signup) => signup.status === st,
                                             );
                                           if (members.length === 0) {
                                             return null;
