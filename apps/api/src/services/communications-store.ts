@@ -3,30 +3,17 @@ import { prisma } from "../db/prisma.js";
 
 export type CommunicationStatus = "draft" | "published";
 
-// Una instancia es una publicación concreta en Discord (cada vez que se
-// publica una plantilla se crea una instancia con snapshot del contenido).
-export type CommunicationInstance = {
-  authorName?: string;
-  channelId: string;
-  communicationId: string;
-  content: string;
-  discordMessageIds: string[];
-  guildId: string;
-  id: string;
-  publishedAt: Date;
-  tagColor?: string;
-  tagLabel?: string;
-  title: string;
-};
-
 export type Communication = {
   authorName?: string;
   channelId?: string;
   content: string;
   createdAt: Date;
+  // IDs de los mensajes en Discord (varios si el texto se partió en partes).
+  discordMessageIds: string[];
   guildId: string;
   id: string;
-  instances: CommunicationInstance[];
+  // Última publicación. Sin fecha = borrador.
+  publishedAt?: Date;
   status: CommunicationStatus;
   tagColor?: string;
   tagLabel?: string;
@@ -34,54 +21,15 @@ export type Communication = {
   updatedAt: Date;
 };
 
-function toCommunicationInstance(record: {
-  authorName: string | null;
-  channelId: string;
-  communicationId: string;
-  content: string;
-  discordMessageIds: string[];
-  guildId: string;
-  id: string;
-  publishedAt: Date;
-  tagColor: string | null;
-  tagLabel: string | null;
-  title: string;
-}): CommunicationInstance {
-  return {
-    authorName: record.authorName ?? undefined,
-    channelId: record.channelId,
-    communicationId: record.communicationId,
-    content: record.content,
-    discordMessageIds: record.discordMessageIds,
-    guildId: record.guildId,
-    id: record.id,
-    publishedAt: record.publishedAt,
-    tagColor: record.tagColor ?? undefined,
-    tagLabel: record.tagLabel ?? undefined,
-    title: record.title,
-  };
-}
-
 function toCommunication(record: {
   authorName: string | null;
   channelId: string | null;
   content: string;
   createdAt: Date;
+  discordMessageIds: string[];
   guildId: string;
   id: string;
-  instances: Array<{
-    authorName: string | null;
-    channelId: string;
-    communicationId: string;
-    content: string;
-    discordMessageIds: string[];
-    guildId: string;
-    id: string;
-    publishedAt: Date;
-    tagColor: string | null;
-    tagLabel: string | null;
-    title: string;
-  }>;
+  publishedAt: Date | null;
   status: string;
   tagColor: string | null;
   tagLabel: string | null;
@@ -93,9 +41,10 @@ function toCommunication(record: {
     channelId: record.channelId ?? undefined,
     content: record.content,
     createdAt: record.createdAt,
+    discordMessageIds: record.discordMessageIds,
     guildId: record.guildId,
     id: record.id,
-    instances: record.instances.map(toCommunicationInstance),
+    publishedAt: record.publishedAt ?? undefined,
     status: (record.status === "published"
       ? "published"
       : "draft") as CommunicationStatus,
@@ -111,7 +60,6 @@ export async function listCommunications(
 ): Promise<Communication[]> {
   const records = await prisma.communication.findMany({
     where: { guildId },
-    include: { instances: { orderBy: { publishedAt: "desc" } } },
     orderBy: { createdAt: "desc" },
   });
   return records.map(toCommunication);
@@ -120,22 +68,19 @@ export async function listCommunications(
 export async function getCommunication(
   id: string,
 ): Promise<Communication | null> {
-  const record = await prisma.communication.findUnique({
-    where: { id },
-    include: { instances: { orderBy: { publishedAt: "desc" } } },
-  });
+  const record = await prisma.communication.findUnique({ where: { id } });
   return record ? toCommunication(record) : null;
 }
 
-// Mensajes publicados (instancias) visibles para los miembros del hub.
-export async function listPublishedInstances(
+// Comunicados publicados: es lo que ve el hub (cualquier miembro de la guild).
+export async function listPublishedCommunications(
   guildId: string,
-): Promise<CommunicationInstance[]> {
-  const records = await prisma.communicationInstance.findMany({
-    where: { guildId },
+): Promise<Communication[]> {
+  const records = await prisma.communication.findMany({
+    where: { guildId, status: "published" },
     orderBy: { publishedAt: "desc" },
   });
-  return records.map(toCommunicationInstance);
+  return records.map(toCommunication);
 }
 
 export async function createCommunication(input: {
@@ -157,7 +102,6 @@ export async function createCommunication(input: {
       tagLabel: input.tagLabel?.trim() || null,
       title: input.title.trim(),
     },
-    include: { instances: { orderBy: { publishedAt: "desc" } } },
   });
   return toCommunication(record);
 }
@@ -171,51 +115,32 @@ export async function updateCommunication(input: {
   tagLabel?: string;
   title?: string;
 }): Promise<Communication | null> {
-  const record = await prisma.communication.update({
-    where: { id: input.id },
-    data: {
-      ...(input.authorName !== undefined
-        ? { authorName: input.authorName.trim() || null }
-        : {}),
-      ...(input.channelId !== undefined
-        ? { channelId: input.channelId.trim() || null }
-        : {}),
-      ...(input.content !== undefined ? { content: input.content } : {}),
-      ...(input.tagColor !== undefined
-        ? { tagColor: input.tagColor.trim() || null }
-        : {}),
-      ...(input.tagLabel !== undefined
-        ? { tagLabel: input.tagLabel.trim() || null }
-        : {}),
-      ...(input.title !== undefined ? { title: input.title.trim() } : {}),
-    },
-    include: { instances: { orderBy: { publishedAt: "desc" } } },
-  });
-
-  // El tag es una etiqueta web del comunicado: al guardarlo en la plantilla
-  // lo propagamos a sus instancias (cartas del hub) para que se refleje en
-  // mensajes ya publicados sin tener que republicar. Editar una instancia
-  // puntual después puede sobreescribirlo (snapshot propio).
-  if (input.tagLabel !== undefined || input.tagColor !== undefined) {
-    await prisma.communicationInstance.updateMany({
-      where: { communicationId: input.id },
+  try {
+    // El comunicado es una sola fila (plantilla y mensaje publicado son lo
+    // mismo), así que el tag no hay que propagarlo a ningún lado.
+    const record = await prisma.communication.update({
+      where: { id: input.id },
       data: {
-        tagColor: record.tagColor,
-        tagLabel: record.tagLabel,
+        ...(input.authorName !== undefined
+          ? { authorName: input.authorName.trim() || null }
+          : {}),
+        ...(input.channelId !== undefined
+          ? { channelId: input.channelId.trim() || null }
+          : {}),
+        ...(input.content !== undefined ? { content: input.content } : {}),
+        ...(input.tagColor !== undefined
+          ? { tagColor: input.tagColor.trim() || null }
+          : {}),
+        ...(input.tagLabel !== undefined
+          ? { tagLabel: input.tagLabel.trim() || null }
+          : {}),
+        ...(input.title !== undefined ? { title: input.title.trim() } : {}),
       },
     });
-
-    // Re-consultamos para devolver las instancias ya actualizadas.
-    const refreshed = await prisma.communication.findUnique({
-      where: { id: input.id },
-      include: { instances: { orderBy: { publishedAt: "desc" } } },
-    });
-    if (refreshed) {
-      return toCommunication(refreshed);
-    }
+    return toCommunication(record);
+  } catch {
+    return null;
   }
-
-  return toCommunication(record);
 }
 
 export async function deleteCommunication(id: string): Promise<boolean> {
@@ -227,93 +152,32 @@ export async function deleteCommunication(id: string): Promise<boolean> {
   }
 }
 
-// ── Instancias (mensajes publicados) ────────────────────────────────
+// ── Publicación ─────────────────────────────────────────────────────
+// Un comunicado tiene UN juego de mensajes en Discord: al publicarlo (o al
+// guardar cambios de uno ya publicado, que se editan en su lugar) se guardan
+// acá sus IDs, el canal y la fecha de la última publicación.
 
-export async function createCommunicationInstance(input: {
-  authorName?: string;
-  channelId: string;
-  communicationId: string;
-  content: string;
-  discordMessageIds: string[];
-  guildId: string;
-  tagColor?: string;
-  tagLabel?: string;
-  title: string;
-}): Promise<CommunicationInstance> {
-  const record = await prisma.communicationInstance.create({
-    data: {
-      authorName: input.authorName?.trim() || null,
-      channelId: input.channelId,
-      communicationId: input.communicationId,
-      content: input.content,
-      discordMessageIds: input.discordMessageIds,
-      guildId: input.guildId,
-      tagColor: input.tagColor?.trim() || null,
-      tagLabel: input.tagLabel?.trim() || null,
-      title: input.title.trim(),
-    },
-  });
-  return toCommunicationInstance(record);
-}
-
-export async function getCommunicationInstance(
-  id: string,
-): Promise<CommunicationInstance | null> {
-  const record = await prisma.communicationInstance.findUnique({
-    where: { id },
-  });
-  return record ? toCommunicationInstance(record) : null;
-}
-
-// Edita una instancia ya publicada (snapshot): actualiza título, contenido
-// y los IDs de los mensajes de Discord (por si se recrearon al cambiar el
-// número de partes).
-export async function updateCommunicationInstance(input: {
-  authorName?: string;
-  content: string;
+export async function setCommunicationPublication(input: {
+  channelId?: string;
   discordMessageIds: string[];
   id: string;
-  tagColor?: string;
-  tagLabel?: string;
-  title: string;
-}): Promise<CommunicationInstance | null> {
-  try {
-    const record = await prisma.communicationInstance.update({
-      where: { id: input.id },
-      data: {
-        authorName: input.authorName?.trim() || null,
-        content: input.content,
-        discordMessageIds: input.discordMessageIds,
-        tagColor: input.tagColor?.trim() || null,
-        tagLabel: input.tagLabel?.trim() || null,
-        title: input.title.trim(),
-      },
-    });
-    return toCommunicationInstance(record);
-  } catch {
-    return null;
-  }
-}
-
-export async function deleteCommunicationInstance(
-  id: string,
-): Promise<boolean> {
-  try {
-    await prisma.communicationInstance.delete({ where: { id } });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function markCommunicationPublished(
-  id: string,
-): Promise<Communication | null> {
+  // Fecha de la publicación. Se manda solo la PRIMERA vez: después, editar no
+  // cambia la fecha que se muestra en el hub (para eso está updatedAt).
+  publishedAt?: Date;
+}): Promise<Communication | null> {
   try {
     const record = await prisma.communication.update({
-      where: { id },
-      data: { status: "published" },
-      include: { instances: { orderBy: { publishedAt: "desc" } } },
+      where: { id: input.id },
+      data: {
+        ...(input.channelId !== undefined
+          ? { channelId: input.channelId.trim() || null }
+          : {}),
+        discordMessageIds: input.discordMessageIds,
+        ...(input.publishedAt !== undefined
+          ? { publishedAt: input.publishedAt }
+          : {}),
+        status: "published",
+      },
     });
     return toCommunication(record);
   } catch {

@@ -105,16 +105,29 @@ model Communication {
   // Tag visible en la web: etiqueta corta (ej: "Raid") con color hex libre.
   tagLabel   String?
   tagColor   String?
+  // Publicación: canal + IDs de los mensajes en Discord (varios si el texto se
+  // partió en partes) y cuándo se publicó por última vez. Sin mensajes y sin
+  // fecha = borrador.
+  // Un comunicado es UNA sola fila: editar es editar lo publicado (el API
+  // actualiza el mensaje de Discord en su lugar).
+  discordMessageIds String[]  @default([])
+  publishedAt       DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  // LEGACY: cuando cada publicación creaba una instancia (snapshot) con su
+  // propio mensaje. Se migró a las columnas de publicación de arriba
+  // (communications-migration.ts) y ya no se usa; se conserva la relación para
+  // que `prisma db push` no intente borrar la tabla en el deploy.
   instances  CommunicationInstance[]
 
   @@index([guildId, status])
   @@map("communications")
 }
 
-// Cada vez que se publica una plantilla se crea una instancia: el
-// "mensaje" concreto que quedó en Discord (con snapshot del contenido).
+// LEGACY: cada vez que se publicaba una plantilla se creaba una instancia (el
+// "mensaje" concreto con snapshot del contenido). El modelo pasó a ser una fila
+// por comunicado (ver Communication.discordMessageIds/publishedAt) y esta tabla
+// ya no se escribe ni se lee; queda solo para no perder el historial viejo.
 model CommunicationInstance {
   id                String   @id @default(cuid())
   communicationId   String

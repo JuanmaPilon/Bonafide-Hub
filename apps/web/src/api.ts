@@ -160,27 +160,17 @@ export async function deleteKarutaAlbum(
   );
 }
 
-export type CommunicationInstance = {
-  authorName?: string;
-  channelId: string;
-  communicationId: string;
-  content: string;
-  discordMessageIds: string[];
-  id: string;
-  publishedAt: string;
-  tagColor?: string;
-  tagLabel?: string;
-  title: string;
-};
-
 export type Communication = {
   authorName?: string;
   channelId?: string;
   content: string;
   createdAt: string;
+  // IDs de los mensajes en Discord (varios si el texto se partió).
+  discordMessageIds: string[];
   guildId: string;
   id: string;
-  instances: CommunicationInstance[];
+  // Última publicación (vacío = borrador).
+  publishedAt?: string;
   status: "draft" | "published";
   tagColor?: string;
   tagLabel?: string;
@@ -1519,8 +1509,8 @@ export async function listCommunications(
 
 export async function listPublishedCommunications(
   guildId: string,
-): Promise<CommunicationInstance[]> {
-  const data = await requestJson<{ communications: CommunicationInstance[] }>(
+): Promise<Communication[]> {
+  const data = await requestJson<{ communications: Communication[] }>(
     `/guilds/${guildId}/communications/published`,
   );
   return data.communications;
@@ -1540,19 +1530,21 @@ export async function createCommunication(
   return data.communication;
 }
 
+// Guarda el comunicado. Si ya estaba publicado, el API edita el mensaje de
+// Discord en el mismo paso y devuelve `discordError` si eso no se pudo hacer
+// (el cambio igual queda guardado en la web).
 export async function updateCommunication(
   guildId: string,
   communicationId: string,
   input: CommunicationInput,
-): Promise<Communication> {
-  const data = await requestJson<{ communication: Communication }>(
+): Promise<{ communication: Communication; discordError?: string }> {
+  return requestJson<{ communication: Communication; discordError?: string }>(
     `/guilds/${guildId}/communications/${communicationId}`,
     {
       body: JSON.stringify(input),
       method: "PATCH",
     },
   );
-  return data.communication;
 }
 
 export async function deleteCommunication(
@@ -1565,47 +1557,16 @@ export async function deleteCommunication(
   );
 }
 
+// Publica el comunicado. Si ya estaba publicado en Discord, actualiza el
+// mensaje existente en vez de crear otro (`updated: true`).
 export async function publishCommunication(
   guildId: string,
   communicationId: string,
-): Promise<CommunicationInstance> {
-  const data = await requestJson<{ instance: CommunicationInstance }>(
+): Promise<{ communication: Communication; updated?: boolean }> {
+  return requestJson<{ communication: Communication; updated?: boolean }>(
     `/guilds/${guildId}/communications/${communicationId}/publish`,
     { method: "POST" },
   );
-  return data.instance;
-}
-
-export async function deleteCommunicationInstance(
-  guildId: string,
-  communicationId: string,
-  instanceId: string,
-): Promise<{ deleted: boolean }> {
-  return requestJson<{ deleted: boolean }>(
-    `/guilds/${guildId}/communications/${communicationId}/instances/${instanceId}`,
-    { method: "DELETE" },
-  );
-}
-
-export async function updateCommunicationInstance(
-  guildId: string,
-  communicationId: string,
-  instanceId: string,
-  input: {
-    content: string;
-    tagColor?: string;
-    tagLabel?: string;
-    title: string;
-  },
-): Promise<CommunicationInstance> {
-  const data = await requestJson<{ instance: CommunicationInstance }>(
-    `/guilds/${guildId}/communications/${communicationId}/instances/${instanceId}`,
-    {
-      body: JSON.stringify(input),
-      method: "PATCH",
-    },
-  );
-  return data.instance;
 }
 
 export async function logout(): Promise<void> {

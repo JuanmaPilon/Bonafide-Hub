@@ -685,8 +685,8 @@ a:hover {
   margin: 0;
 }
 
-/* Aviso dentro de un modal (ej: guardar la plantilla no actualiza los
-   mensajes ya publicados). */
+/* Aviso dentro de un modal (ej: el comunicado está publicado y al guardar
+   también se actualiza el mensaje de Discord). */
 .modal-note {
   margin: 0;
   padding: 10px 12px;
@@ -4551,6 +4551,7 @@ select.list-order {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .comunicado-admin-block {
@@ -4566,42 +4567,6 @@ select.list-order {
   border: none;
   border-radius: 0;
   background: transparent;
-}
-
-.comunicado-instances {
-  border-top: 1px solid rgba(133, 156, 212, 0.14);
-  padding: 4px 16px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.comunicado-instance-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
-.comunicado-instance-row > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.comunicado-instance-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.comm-edit-hint {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 0.86rem;
 }
 
 .comunicados-empty {
