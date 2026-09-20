@@ -5298,9 +5298,17 @@ function App() {
 
   // Comunicado seleccionado por URL (#/comunicados/<slug>).
   const currentComunicado = comunicadoSlug
-    ? (published.find((comm) => slugifyTitle(comm.title) === comunicadoSlug) ??
-      null)
+    ? (published.find(
+        (comm) => slugifyTitle(comm.title) === comunicadoSlug,
+      ) ?? null)
     : null;
+
+  // Si el editor está abierto sobre una plantilla ya publicada, cuántos
+  // mensajes tiene: el modal avisa que guardar no los actualiza.
+  const commEditorPublishedCount = commEditor?.id
+    ? (communications.find((comm) => comm.id === commEditor.id)?.instances
+        .length ?? 0)
+    : 0;
 
   async function copyComunicadoLink(comm: { title: string }): Promise<void> {
     const url = `${window.location.origin}${window.location.pathname}#/comunicados/${slugifyTitle(comm.title)}`;
@@ -5310,6 +5318,28 @@ function App() {
     } catch {
       pushToast("No se pudo copiar el enlace.", "error");
     }
+  }
+
+  // Abre el editor de la PLANTILLA desde el hub de comunicados: es el mismo
+  // modal que usa el panel Admin, así no hay que ir hasta Admin para corregir
+  // un comunicado. La plantilla se busca por el `communicationId` de la
+  // instancia (el hub solo tiene mensajes publicados).
+  function openTemplateEditor(communicationId: string): void {
+    const template = communications.find(
+      (entry) => entry.id === communicationId,
+    );
+    if (!template) {
+      pushToast("No se encontró la plantilla de este comunicado.", "error");
+      return;
+    }
+    setCommEditor({
+      id: template.id,
+      title: template.title,
+      content: template.content,
+      channelId: template.channelId ?? "",
+      tagColor: template.tagColor ?? "",
+      tagLabel: template.tagLabel ?? "",
+    });
   }
 
   async function handleSaveCommunication(): Promise<void> {
@@ -5329,7 +5359,17 @@ function App() {
           content: commEditor.content,
           channelId: commEditor.channelId,
         });
-        pushToast("Plantilla actualizada.", "success");
+        // Ojo: guardar la plantilla NO toca Discord (los mensajes publicados son
+        // un snapshot). Si ya hay mensajes, se avisa cómo corregirlos.
+        const publishedCount =
+          communications.find((comm) => comm.id === commEditor.id)?.instances
+            .length ?? 0;
+        pushToast(
+          publishedCount > 0
+            ? "Plantilla actualizada. Los mensajes ya publicados no cambian: se corrigen con «Editar mensaje»."
+            : "Plantilla actualizada.",
+          "success",
+        );
       } else {
         await createCommunication(selectedGuildId, {
           ...commEditor,
@@ -9530,6 +9570,17 @@ function App() {
                               <button
                                 className="ghost-button"
                                 onClick={() =>
+                                  openTemplateEditor(
+                                    currentComunicado.communicationId,
+                                  )
+                                }
+                                type="button"
+                              >
+                                ✏️ Editar plantilla
+                              </button>
+                              <button
+                                className="ghost-button"
+                                onClick={() =>
                                   setInstanceEditor({
                                     communicationId:
                                       currentComunicado.communicationId,
@@ -9542,7 +9593,7 @@ function App() {
                                 }
                                 type="button"
                               >
-                                Editar
+                                Editar mensaje
                               </button>
                               <button
                                 className="ghost-button danger"
@@ -9691,6 +9742,15 @@ function App() {
                                     <button
                                       className="ghost-button"
                                       onClick={() =>
+                                        openTemplateEditor(comm.communicationId)
+                                      }
+                                      type="button"
+                                    >
+                                      ✏️ Editar plantilla
+                                    </button>
+                                    <button
+                                      className="ghost-button"
+                                      onClick={() =>
                                         setInstanceEditor({
                                           communicationId: comm.communicationId,
                                           content: comm.content,
@@ -9702,7 +9762,7 @@ function App() {
                                       }
                                       type="button"
                                     >
-                                      Editar
+                                      Editar mensaje
                                     </button>
                                     <button
                                       className="ghost-button danger"
@@ -10832,6 +10892,15 @@ function App() {
             aria-modal="true"
           >
             <h4>{commEditor.id ? "Editar plantilla" : "Nueva plantilla"}</h4>
+            {commEditorPublishedCount > 0 ? (
+              <p className="modal-note">
+                Guardar cambia la <strong>plantilla</strong>. Los{" "}
+                {commEditorPublishedCount === 1
+                  ? "mensaje ya publicado no se actualiza"
+                  : `${commEditorPublishedCount} mensajes ya publicados no se actualizan`}{" "}
+                solo: eso se hace con «Editar mensaje».
+              </p>
+            ) : null}
             <div className="comm-form">
               <label>
                 <span>Título</span>
