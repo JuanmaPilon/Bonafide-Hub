@@ -1275,6 +1275,23 @@ function matchesSearch(value: string, search: string): boolean {
   return needle.length === 0 || value.toLowerCase().includes(needle);
 }
 
+// Una entrada de etiqueta por texto (sin repetir, case-insensitive) con su
+// color: alimenta los chips de filtro de cualquier lista que use tagLabel.
+function tagOptionsFrom(
+  items: Array<{ tagColor?: string; tagLabel?: string }>,
+): Array<{ color?: string; label: string }> {
+  const byLabel = new Map<string, { color?: string; label: string }>();
+  for (const item of items) {
+    const label = item.tagLabel?.trim();
+    if (label && !byLabel.has(label.toLowerCase())) {
+      byLabel.set(label.toLowerCase(), { color: item.tagColor, label });
+    }
+  }
+  return [...byLabel.values()].sort((a, b) =>
+    a.label.localeCompare(b.label, "es"),
+  );
+}
+
 function sortByOrder<T>(
   items: T[],
   order: ListOrder,
@@ -1296,7 +1313,8 @@ function sortByOrder<T>(
 }
 
 // Buscador + selector de orden. Los chips de etiqueta van como children, para
-// que cada lista muestre los suyos.
+// que cada lista muestre los suyos. Sin `order` la barra queda solo con el
+// buscador (listas que ya tienen su propio orden natural, como el ranking).
 function ListFilterBar({
   children,
   onOrderChange,
@@ -1306,9 +1324,9 @@ function ListFilterBar({
   search,
 }: {
   children?: ReactNode;
-  onOrderChange: (order: ListOrder) => void;
+  onOrderChange?: (order: ListOrder) => void;
   onSearchChange: (value: string) => void;
-  order: ListOrder;
+  order?: ListOrder;
   placeholder: string;
   search: string;
 }) {
@@ -1321,18 +1339,20 @@ function ListFilterBar({
         type="search"
         value={search}
       />
-      <select
-        aria-label="Ordenar"
-        className="select list-order"
-        onChange={(event) => onOrderChange(event.target.value as ListOrder)}
-        value={order}
-      >
-        {LIST_ORDER_OPTIONS.map((option) => (
-          <option key={option.key} value={option.key}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      {onOrderChange ? (
+        <select
+          aria-label="Ordenar"
+          className="select list-order"
+          onChange={(event) => onOrderChange(event.target.value as ListOrder)}
+          value={order ?? "newest"}
+        >
+          {LIST_ORDER_OPTIONS.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : null}
       {children}
     </div>
   );
@@ -3462,6 +3482,21 @@ function App() {
   const [raidLogOrder, setRaidLogOrder] = useState<ListOrder>("newest");
   const [karutaSearch, setKarutaSearch] = useState("");
   const [karutaRarity, setKarutaRarity] = useState<KarutaRarityFilter>("all");
+  // Listas del panel: mismas dos piezas que las tabs (buscador + orden) y, en
+  // los comunicados, los chips de etiqueta.
+  const [commAdminSearch, setCommAdminSearch] = useState("");
+  const [commAdminOrder, setCommAdminOrder] = useState<ListOrder>("newest");
+  const [commAdminTagFilter, setCommAdminTagFilter] = useState<string[]>([]);
+  const [dailySearch, setDailySearch] = useState("");
+  const [dailyOrder, setDailyOrder] = useState<ListOrder>("newest");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditOrder, setAuditOrder] = useState<ListOrder>("newest");
+  const [eventHistorySearch, setEventHistorySearch] = useState("");
+  const [eventHistoryOrder, setEventHistoryOrder] =
+    useState<ListOrder>("newest");
+  const [karutaAlbumSearch, setKarutaAlbumSearch] = useState("");
+  const [karutaAlbumOrder, setKarutaAlbumOrder] = useState<ListOrder>("newest");
+  const [leaderboardSearch, setLeaderboardSearch] = useState("");
 
   // Cuántas cartas hay de cada rareza (para los chips del filtro). Se calcula
   // con la misma función que dibuja cada tarjeta, así nunca se desincroniza.
@@ -3504,6 +3539,58 @@ function App() {
       (log) => log.title ?? log.reportCode,
     );
   }, [raidLogOrder, raidLogSearch, raidLogs]);
+
+  // Frases del loro: buscador por texto + orden (alfabético o por fecha).
+  const visibleDailyMessages = useMemo(
+    () =>
+      sortByOrder(
+        dailyMessages.filter((message) =>
+          matchesSearch(message.content, dailySearch),
+        ),
+        dailyOrder,
+        (message) => message.createdAt,
+        (message) => message.content,
+      ),
+    [dailyMessages, dailyOrder, dailySearch],
+  );
+
+  // Historial de eventos: completados, con buscador + orden.
+  const completedEvents = useMemo(
+    () => events.filter((entry) => entry.status === "completed"),
+    [events],
+  );
+  const visibleEventHistory = useMemo(
+    () =>
+      sortByOrder(
+        completedEvents.filter((entry) =>
+          matchesSearch(
+            `${entry.title} ${entry.description ?? ""}`,
+            eventHistorySearch,
+          ),
+        ),
+        eventHistoryOrder,
+        (entry) => entry.startsAt,
+        (entry) => entry.title,
+      ),
+    [completedEvents, eventHistoryOrder, eventHistorySearch],
+  );
+
+  // Colecciones de Karuta: buscador por colección o dueño.
+  const visibleKarutaAlbums = useMemo(
+    () =>
+      sortByOrder(
+        karutaAlbums.filter((album) =>
+          matchesSearch(
+            `${album.albumName ?? ""} ${album.ownerUsername ?? ""}`,
+            karutaAlbumSearch,
+          ),
+        ),
+        karutaAlbumOrder,
+        (album) => album.updatedAt,
+        (album) => album.albumName ?? "",
+      ),
+    [karutaAlbumOrder, karutaAlbumSearch, karutaAlbums],
+  );
 
   // Etiquetas usadas en la guild: alimentan el filtro y las sugerencias.
   const eventTagOptions = useMemo(() => {
@@ -3679,19 +3766,75 @@ function App() {
   const [published, setPublished] = useState<CommunicationInstance[]>([]);
   const [publishedLoading, setPublishedLoading] = useState(true);
 
-  // Etiquetas usadas en los comunicados publicados (alimentan el filtro).
-  const publishedTagOptions = useMemo(() => {
-    const byLabel = new Map<string, { color?: string; label: string }>();
-    for (const comm of published) {
-      const label = comm.tagLabel?.trim();
-      if (label && !byLabel.has(label.toLowerCase())) {
-        byLabel.set(label.toLowerCase(), { color: comm.tagColor, label });
-      }
-    }
-    return [...byLabel.values()].sort((a, b) =>
-      a.label.localeCompare(b.label, "es"),
+  // ── Listas del panel Admin, ranking y colecciones ─────────────────
+  // Mismo mecanismo que las tabs, pero acá abajo porque dependen de estados
+  // que se declaran en este bloque (leaderboard, auditoría, comunicados).
+  // Plantillas de comunicados: chips por etiqueta (con su color) + buscador.
+  const commAdminTagOptions = useMemo(
+    () => tagOptionsFrom(communications),
+    [communications],
+  );
+  const visibleAdminCommunications = useMemo(() => {
+    const byTag =
+      commAdminTagFilter.length === 0
+        ? communications
+        : communications.filter((comm) => {
+            const label = comm.tagLabel?.trim().toLowerCase() ?? "";
+            if (label === "") {
+              return commAdminTagFilter.includes(EVENT_TAG_NONE);
+            }
+            return commAdminTagFilter.includes(label);
+          });
+    const searched = byTag.filter((comm) =>
+      matchesSearch(`${comm.title} ${comm.content}`, commAdminSearch),
     );
-  }, [published]);
+    return sortByOrder(
+      searched,
+      commAdminOrder,
+      (comm) => comm.updatedAt,
+      (comm) => comm.title,
+    );
+  }, [
+    commAdminOrder,
+    commAdminSearch,
+    commAdminTagFilter,
+    communications,
+  ]);
+
+  // Registro de auditoría: buscador por autor/acción/detalle.
+  const visibleAuditLogs = useMemo(
+    () =>
+      sortByOrder(
+        auditLogs.filter((entry) =>
+          matchesSearch(
+            `${entry.actorName ?? ""} ${entry.action} ${entry.details ?? ""}`,
+            auditSearch,
+          ),
+        ),
+        auditOrder,
+        (entry) => entry.createdAt,
+        (entry) => entry.actorName ?? "",
+      ),
+    [auditLogs, auditOrder, auditSearch],
+  );
+
+  // Ranking de XP: buscador por nombre (el orden lo da el propio ranking).
+  const visibleLeaderboard = useMemo(
+    () =>
+      leaderboard.filter((entry) =>
+        matchesSearch(
+          `${entry.nickname ?? ""} ${entry.username ?? ""}`,
+          leaderboardSearch,
+        ),
+      ),
+    [leaderboard, leaderboardSearch],
+  );
+
+  // Etiquetas usadas en los comunicados publicados (alimentan el filtro).
+  const publishedTagOptions = useMemo(
+    () => tagOptionsFrom(published),
+    [published],
+  );
 
   // Comunicados visibles: filtro por etiqueta + buscador + orden.
   const visiblePublished = useMemo(() => {
@@ -6780,11 +6923,20 @@ function App() {
 
                   <div className="leaderboard-panel">
                     <h3>Leaderboard de XP</h3>
+                    <ListFilterBar
+                      onSearchChange={setLeaderboardSearch}
+                      placeholder="Buscar miembro…"
+                      search={leaderboardSearch}
+                    />
                     {loadingGuildData ? (
                       <div className="empty-state">Cargando ranking...</div>
                     ) : leaderboard.length === 0 ? (
                       <div className="empty-state">
                         Todavía no hay XP registrado en este servidor.
+                      </div>
+                    ) : visibleLeaderboard.length === 0 ? (
+                      <div className="empty-state">
+                        Ningún miembro coincide con la búsqueda.
                       </div>
                     ) : (
                       <table className="leaderboard-table">
@@ -6799,7 +6951,7 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {leaderboard.map((entry) => (
+                          {visibleLeaderboard.map((entry) => (
                             <tr
                               key={entry.userId}
                               className={
@@ -7524,12 +7676,72 @@ function App() {
                             Nueva plantilla
                           </button>
                         </div>
+                        {communications.length > 0 ? (
+                          <ListFilterBar
+                            onOrderChange={setCommAdminOrder}
+                            onSearchChange={setCommAdminSearch}
+                            order={commAdminOrder}
+                            placeholder="Buscar plantilla…"
+                            search={commAdminSearch}
+                          >
+                            <button
+                              className={`event-filter-chip${commAdminTagFilter.length === 0 ? " active" : ""}`}
+                              onClick={() => setCommAdminTagFilter([])}
+                              type="button"
+                            >
+                              Todos
+                            </button>
+                            {commAdminTagOptions.map((tag) => {
+                              const key = tag.label.toLowerCase();
+                              return (
+                                <EventTagFilterChip
+                                  active={commAdminTagFilter.includes(key)}
+                                  color={tag.color ?? "#6aa8ff"}
+                                  key={tag.label}
+                                  label={tag.label}
+                                  onToggle={() =>
+                                    setCommAdminTagFilter((current) =>
+                                      current.includes(key)
+                                        ? current.filter(
+                                            (entry) => entry !== key,
+                                          )
+                                        : [...current, key],
+                                    )
+                                  }
+                                />
+                              );
+                            })}
+                            {communications.some(
+                              (comm) => !comm.tagLabel?.trim(),
+                            ) ? (
+                              <button
+                                className={`event-filter-chip${commAdminTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
+                                onClick={() =>
+                                  setCommAdminTagFilter((current) =>
+                                    current.includes(EVENT_TAG_NONE)
+                                      ? current.filter(
+                                          (entry) => entry !== EVENT_TAG_NONE,
+                                        )
+                                      : [...current, EVENT_TAG_NONE],
+                                  )
+                                }
+                                type="button"
+                              >
+                                Sin etiqueta
+                              </button>
+                            ) : null}
+                          </ListFilterBar>
+                        ) : null}
                         {communications.length === 0 ? (
                           <div className="empty-state comunicados-empty">
                             <p>No existen plantillas.</p>
                           </div>
+                        ) : visibleAdminCommunications.length === 0 ? (
+                          <div className="empty-state comunicados-empty">
+                            <p>Ninguna plantilla coincide con el filtro.</p>
+                          </div>
                         ) : (
-                          communications.map((comm) => (
+                          visibleAdminCommunications.map((comm) => (
                             <div
                               className="comunicado-admin-block"
                               key={comm.id}
@@ -7792,15 +8004,27 @@ function App() {
                             + Agregar frase
                           </button>
 
+                          <ListFilterBar
+                            onOrderChange={setDailyOrder}
+                            onSearchChange={setDailySearch}
+                            order={dailyOrder}
+                            placeholder="Buscar frase…"
+                            search={dailySearch}
+                          />
+
                           {dailyMessages.length === 0 ? (
                             <div className="empty-state">
                               <p>
-                                No hay frases todavía. ¡Agregá la primera para
-                                que el loro empiece a hablar!
+                                No hay frases todavía. Agregar la primera para
+                                que el loro empiece a hablar.
                               </p>
                             </div>
+                          ) : visibleDailyMessages.length === 0 ? (
+                            <div className="empty-state">
+                              <p>Ninguna frase coincide con la búsqueda.</p>
+                            </div>
                           ) : (
-                            dailyMessages.map((message) => (
+                            visibleDailyMessages.map((message) => (
                               <div
                                 className="daily-message-row"
                                 key={message.id}
@@ -8492,15 +8716,28 @@ function App() {
                             <RefreshIcon />
                           </button>
                         </div>
+                        {selectedGuild?.owner && auditLogs.length > 0 ? (
+                          <ListFilterBar
+                            onOrderChange={setAuditOrder}
+                            onSearchChange={setAuditSearch}
+                            order={auditOrder}
+                            placeholder="Buscar en el registro…"
+                            search={auditSearch}
+                          />
+                        ) : null}
                         {selectedGuild?.owner ? (
                           auditLogs.length === 0 ? (
                             <div className="empty-state">
                               Aún no hay cambios registrados. Las acciones del
                               panel Admin quedan anotadas acá.
                             </div>
+                          ) : visibleAuditLogs.length === 0 ? (
+                            <div className="empty-state">
+                              Ningún registro coincide con la búsqueda.
+                            </div>
                           ) : (
                             <div className="audit-list">
-                              {auditLogs.map((entry) => (
+                              {visibleAuditLogs.map((entry) => (
                                 <div className="audit-row" key={entry.id}>
                                   <span className="audit-time">
                                     {formatDateTime24(entry.createdAt)}
@@ -8944,82 +9181,92 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        {events.filter((entry) => entry.status === "completed")
-                          .length === 0 ? (
+                        {completedEvents.length === 0 ? (
                           <p className="muted-text">
                             Todavía no hay eventos completados. Cuando un evento
                             se marca como "Completado" queda archivado acá con
                             su roster final.
                           </p>
                         ) : (
-                          <div className="event-history-list">
-                            {events
-                              .filter((entry) => entry.status === "completed")
-                              .sort(
-                                (a, b) =>
-                                  new Date(b.startsAt).getTime() -
-                                  new Date(a.startsAt).getTime(),
-                              )
-                              .map((finished) => (
-                                <details
-                                  className="event-history-item"
-                                  key={finished.id}
-                                >
-                                  <summary className="event-history-head">
-                                    <strong>{finished.title}</strong>
-                                    <span className="event-history-date">
-                                      {formatDateTime24(finished.startsAt)}
-                                    </span>
-                                  </summary>
-                                  <div className="event-history-body">
-                                    {finished.signups.length === 0 ? (
-                                      <p className="muted-text">
-                                        Sin inscripciones.
-                                      </p>
-                                    ) : (
-                                      (
-                                        [
-                                          ["yes", "✅", "Asistieron"],
-                                          ["bench", "🪑", "Bench"],
-                                          ["late", "⏰", "Tarde"],
-                                          ["no", "❌", "No asistieron"],
-                                        ] as const
-                                      ).map(([st, emoji, label]) => {
-                                        const members = finished.signups.filter(
-                                          (signup) => signup.status === st,
-                                        );
-                                        if (members.length === 0) {
-                                          return null;
-                                        }
-                                        return (
-                                          <div
-                                            className="event-history-group"
-                                            key={st}
-                                          >
-                                            <span className="event-roster-role">
-                                              {emoji} {label} ({members.length})
-                                            </span>
-                                            <span className="event-history-names">
-                                              {members.map((signup) => (
-                                                <span
-                                                  className="event-roster-member"
-                                                  key={signup.id}
-                                                >
-                                                  {signup.username}
-                                                  {signup.character
-                                                    ? ` (${signup.character})`
-                                                    : ""}
-                                                </span>
-                                              ))}
-                                            </span>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                </details>
-                              ))}
-                          </div>
+                          <>
+                            <ListFilterBar
+                              onOrderChange={setEventHistoryOrder}
+                              onSearchChange={setEventHistorySearch}
+                              order={eventHistoryOrder}
+                              placeholder="Buscar evento…"
+                              search={eventHistorySearch}
+                            />
+                            {visibleEventHistory.length === 0 ? (
+                              <p className="muted-text">
+                                Ningún evento coincide con la búsqueda.
+                              </p>
+                            ) : (
+                              <div className="event-history-list">
+                                {visibleEventHistory.map((finished) => (
+                                  <details
+                                    className="event-history-item"
+                                    key={finished.id}
+                                  >
+                                    <summary className="event-history-head">
+                                      <strong>{finished.title}</strong>
+                                      <span className="event-history-date">
+                                        {formatDateTime24(finished.startsAt)}
+                                      </span>
+                                    </summary>
+                                    <div className="event-history-body">
+                                      {finished.signups.length === 0 ? (
+                                        <p className="muted-text">
+                                          Sin inscripciones.
+                                        </p>
+                                      ) : (
+                                        (
+                                          [
+                                            ["yes", "✅", "Asistieron"],
+                                            ["bench", "🪑", "Bench"],
+                                            ["late", "⏰", "Tarde"],
+                                            ["no", "❌", "No asistieron"],
+                                          ] as const
+                                        ).map(([st, emoji, label]) => {
+                                          const members =
+                                            finished.signups.filter(
+                                              (signup) =>
+                                                signup.status === st,
+                                            );
+                                          if (members.length === 0) {
+                                            return null;
+                                          }
+                                          return (
+                                            <div
+                                              className="event-history-group"
+                                              key={st}
+                                            >
+                                              <span className="event-roster-role">
+                                                {emoji} {label} (
+                                                {members.length})
+                                              </span>
+                                              <span className="event-history-names">
+                                                {members.map((signup) => (
+                                                  <span
+                                                    className="event-roster-member"
+                                                    key={signup.id}
+                                                  >
+                                                    {signup.username}
+                                                    {signup.character
+                                                      ? ` (${signup.character})`
+                                                      : ""}
+                                                  </span>
+                                                ))}
+                                              </span>
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  </details>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </details>
@@ -9328,7 +9575,7 @@ function App() {
                           onClick={() => setComunicadoTagFilter([])}
                           type="button"
                         >
-                          Todas
+                          Todos
                         </button>
                         {publishedTagOptions.map((tag) => {
                           const key = tag.label.toLowerCase();
@@ -9673,16 +9920,31 @@ function App() {
                           ve su álbum con <code>ka</code>.
                         </div>
                       ) : (
-                        <div className="karuta-albums-grid">
-                          {karutaAlbums.map((album) => (
-                            <KarutaAlbumCard
-                              album={album}
-                              canDelete={canAccess("config")}
-                              key={album.id}
-                              onDelete={handleDeleteKarutaAlbum}
-                            />
-                          ))}
-                        </div>
+                        <>
+                          <ListFilterBar
+                            onOrderChange={setKarutaAlbumOrder}
+                            onSearchChange={setKarutaAlbumSearch}
+                            order={karutaAlbumOrder}
+                            placeholder="Buscar colección…"
+                            search={karutaAlbumSearch}
+                          />
+                          {visibleKarutaAlbums.length === 0 ? (
+                            <div className="empty-state">
+                              Ninguna colección coincide con la búsqueda.
+                            </div>
+                          ) : (
+                            <div className="karuta-albums-grid">
+                              {visibleKarutaAlbums.map((album) => (
+                                <KarutaAlbumCard
+                                  album={album}
+                                  canDelete={canAccess("config")}
+                                  key={album.id}
+                                  onDelete={handleDeleteKarutaAlbum}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </section>
                   ) : (
@@ -10403,7 +10665,7 @@ function App() {
                             onClick={() => setEventTagFilter([])}
                             type="button"
                           >
-                            Todas
+                            Todos
                           </button>
                           {activeTagOptions.map((tag) => {
                             const key = tag.label.toLowerCase();

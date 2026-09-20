@@ -3113,7 +3113,8 @@ select.list-order {
   color: #101a2e;
 }
 
-:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--tag).active {
+:root[data-theme="light"]
+  .event-filter-chip:not(.event-filter-chip--tag).active {
   border-color: #6aa8ff;
   background: rgba(106, 168, 255, 0.2);
   color: #1d3a6b;
