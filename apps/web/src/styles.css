@@ -3060,16 +3060,19 @@ select.list-order {
   color: #dce9ff;
 }
 
-/* Chip de etiqueta: el color del tag va siempre, sin variantes de intensidad
-   (el JS manda --chip-color y el texto de contraste --chip-text). El elegido se
-   marca con un tilde en el label y un halo del propio color, asi el color nunca
-   cambia y se ve igual en los dos temas. Sin color-mix ni opacidad: eso último
-   apagaba el chip entero y en modo claro se veía sucio. */
+/* Chip de etiqueta: SIN seleccionar va tenido (el color del tag al 22% + borde
+   al 70%) con el texto del tema, y al seleccionarlo se llena con el color pleno
+   y el texto de contraste (más el tilde). El cambio "tenue → sólido" se lee al
+   toque y el color queda siempre presente. Los valores los calcula el JS
+   (--chip-tint/--chip-border/--chip-color/--chip-text): nada de color-mix ni de
+   opacity, que en modo claro lavaban el chip. */
 .event-filter-chip--tag {
-  border-color: var(--chip-color);
-  background: var(--chip-color);
-  color: var(--chip-text);
-  transition: filter 0.15s ease-out;
+  border-color: var(--chip-border);
+  background: var(--chip-tint);
+  color: var(--text);
+  transition:
+    filter 0.15s ease-out,
+    outline-color 0.15s ease-out;
 }
 
 .event-filter-chip--tag:hover,
@@ -3078,8 +3081,10 @@ select.list-order {
 }
 
 .event-filter-chip--tag.active {
-  outline: 2px solid var(--chip-color);
-  outline-offset: 2px;
+  border-color: var(--chip-color);
+  background: var(--chip-color);
+  color: var(--chip-text);
+  font-weight: 800;
 }
 
 /* Chips sin etiqueta ("Todas", "Sin etiqueta"): en claro el fondo oscuro del

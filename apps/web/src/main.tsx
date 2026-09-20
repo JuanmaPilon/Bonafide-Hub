@@ -1211,14 +1211,30 @@ function normalizeTagColor(
   return /^[0-9a-f]{6}$/i.test(hex) ? `#${hex.toLowerCase()}` : fallback;
 }
 
-// Texto legible sobre el color del tag (blanco u oscuro según luminancia).
-function tagTextColor(hex: string): string {
+// Componentes RGB del color del tag (base para el texto de contraste y para
+// los tintes del chip de filtro).
+function tagRgb(hex: string): [number, number, number] {
   const h = normalizeTagColor(hex).replace("#", "");
-  const r = Number.parseInt(h.slice(0, 2), 16);
-  const g = Number.parseInt(h.slice(2, 4), 16);
-  const b = Number.parseInt(h.slice(4, 6), 16);
+  return [
+    Number.parseInt(h.slice(0, 2), 16),
+    Number.parseInt(h.slice(2, 4), 16),
+    Number.parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+// Texto legible sobre el color pleno del tag (blanco u oscuro según luminancia).
+function tagTextColor(hex: string): string {
+  const [r, g, b] = tagRgb(hex);
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return luminance > 150 ? "#141b2b" : "#ffffff";
+}
+
+// El mismo color con transparencia: fondo tenido del chip sin seleccionar.
+// Se calcula acá (y no con color-mix en CSS) para que funcione en cualquier
+// navegador y se vea igual en los dos temas.
+function tagTint(hex: string, alpha: number): string {
+  const [r, g, b] = tagRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 // Chip del tag: si no hay etiqueta no renderiza nada (uso seguro en cards).
@@ -1469,8 +1485,10 @@ function EventTagFilterChip({
       onClick={onToggle}
       style={
         {
+          "--chip-border": tagTint(background, 0.7),
           "--chip-color": background,
           "--chip-text": tagTextColor(background),
+          "--chip-tint": tagTint(background, 0.22),
         } as CSSProperties
       }
       type="button"
