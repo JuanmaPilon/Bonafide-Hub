@@ -729,16 +729,19 @@ export function buildEventAnnouncementEmbeds(input: {
     });
   }
 
-  // Cuántas columnas por fila: hasta 3, Discord las empaqueta solo. Con 4 o más
-  // se muestran de a DOS para que cada columna ocupe la mitad del ancho (de a
-  // tres quedan de un tercio y "nick (personaje)" se parte); el salto se fuerza
-  // con un espacio en blanco.
-  const perRow = columns.length <= 3 ? 3 : 2;
+  // Columnas del roster: SIEMPRE de a DOS por fila (media pantalla cada una),
+  // que es lo que hace entrar "nick (personaje)" en una sola línea. Antes eran
+  // de a tres cuando el evento tenía 3 roles con gente y de a dos cuando tenía
+  // 4: el mismo evento se veía distinto según cuántos roles se anotaran, y de a
+  // tres el nombre se partía. El salto entre pares se fuerza con un espacio en
+  // blanco (Discord empaqueta solo los fields inline de a tres).
+  // Con un solo rol con gente, la columna va a lo ancho (no inline).
+  const rosterInline = columns.length > 1;
   columns.forEach((column, index) => {
-    if (perRow === 2 && index > 0 && index % 2 === 0) {
+    if (rosterInline && index > 0 && index % 2 === 0) {
       pushSpacer(fields);
     }
-    pushField(fields, column.label, column.lines, true);
+    pushField(fields, column.label, column.lines, rosterInline);
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
