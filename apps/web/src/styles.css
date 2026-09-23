@@ -12,6 +12,25 @@
   --accent: #6aa8ff;
   --accent-strong: #ff7043;
   --danger: #fca5a5;
+
+  /* Colores de los rangos de staff (jerarquía del panel Permisos, badges de las
+     tarjetas y chip de usuario). Único lugar donde se cambian: el resto de las
+     reglas usan var(--tier-*). El *-rgb es para las transparencias. */
+  --tier-owner: #c2410c; /* naranja rojo oscuro */
+  --tier-owner-rgb: 194, 65, 12;
+  --tier-admin: #ff8a5c; /* naranja */
+  --tier-admin-rgb: 255, 138, 92;
+  --tier-officer: #ffd700; /* dorado */
+  --tier-officer-rgb: 255, 215, 0;
+  --tier-subofficer: #a335ee; /* violeta épico */
+  --tier-subofficer-rgb: 163, 53, 238;
+  /* Variante para TEXTO: el mismo color pero legible en cada tema (en oscuro
+     el naranja rojo oscuro queda apagado y en claro el dorado no se lee sobre
+     blanco). En el tema claro se sobreescriben (ver más abajo). */
+  --tier-owner-text: #e0632f;
+  --tier-admin-text: #ff8a5c;
+  --tier-officer-text: #ffd700;
+  --tier-subofficer-text: #b96bff;
 }
 
 * {
@@ -254,9 +273,9 @@ a:hover {
   color: var(--text);
 }
 
-/* La tab Admin es especial: siempre resaltada en naranja (rango owner). */
+/* La tab Admin es especial: siempre resaltada con el color del rango Admin. */
 .nav-link--admin {
-  border-color: rgba(255, 138, 92, 0.5);
+  border-color: rgba(var(--tier-admin-rgb), 0.5);
   color: #ffb28f;
 }
 
@@ -265,10 +284,10 @@ a:hover {
 }
 
 .nav-link--admin.active {
-  background: rgba(255, 138, 92, 0.2);
-  border-color: rgba(255, 138, 92, 0.8);
+  background: rgba(var(--tier-admin-rgb), 0.2);
+  border-color: rgba(var(--tier-admin-rgb), 0.8);
   color: #ffe3cf;
-  box-shadow: 0 0 14px rgba(255, 138, 92, 0.25);
+  box-shadow: 0 0 14px rgba(var(--tier-admin-rgb), 0.25);
 }
 
 .topbar-user {
@@ -331,50 +350,66 @@ a:hover {
     inset 0 0 0 1px rgba(106, 168, 255, 0.2);
 }
 
-/* Chip de usuario según el rango: Owner (naranja), Admin (dorado),
-   Officer (verde). Sin rango queda con el estilo base. */
+/* Chip de usuario según el rango: Owner (naranja rojo oscuro), Admin (naranja),
+   Officer (dorado) y Sub Officer (violeta). Sin rango queda con el estilo base. */
 .user-chip--owner {
-  border-color: rgba(255, 138, 92, 0.75);
+  border-color: rgba(var(--tier-owner-rgb), 0.75);
   background: linear-gradient(
     160deg,
-    rgba(255, 138, 92, 0.3),
-    rgba(255, 138, 92, 0.1)
+    rgba(var(--tier-owner-rgb), 0.3),
+    rgba(var(--tier-owner-rgb), 0.1)
   );
-  box-shadow: 0 0 14px rgba(255, 138, 92, 0.28);
+  color: #ffd9cb;
+  box-shadow: 0 0 14px rgba(var(--tier-owner-rgb), 0.28);
 }
 
 .user-chip--owner .user-chip-avatar {
-  border-color: rgba(255, 138, 92, 0.85);
+  border-color: rgba(var(--tier-owner-rgb), 0.85);
 }
 
 .user-chip--admin {
-  border-color: rgba(255, 215, 0, 0.6);
+  border-color: rgba(var(--tier-admin-rgb), 0.65);
   background: linear-gradient(
     160deg,
-    rgba(255, 215, 0, 0.18),
-    rgba(255, 215, 0, 0.06)
+    rgba(var(--tier-admin-rgb), 0.24),
+    rgba(var(--tier-admin-rgb), 0.08)
   );
-  color: #fff3c9;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+  color: #ffe2d3;
+  box-shadow: 0 0 12px rgba(var(--tier-admin-rgb), 0.22);
 }
 
 .user-chip--admin .user-chip-avatar {
-  border-color: rgba(255, 215, 0, 0.7);
+  border-color: rgba(var(--tier-admin-rgb), 0.75);
 }
 
 .user-chip--officer {
-  border-color: rgba(124, 227, 139, 0.6);
+  border-color: rgba(var(--tier-officer-rgb), 0.6);
   background: linear-gradient(
     160deg,
-    rgba(124, 227, 139, 0.18),
-    rgba(124, 227, 139, 0.06)
+    rgba(var(--tier-officer-rgb), 0.18),
+    rgba(var(--tier-officer-rgb), 0.06)
   );
-  color: #d6ffd9;
-  box-shadow: 0 0 12px rgba(124, 227, 139, 0.2);
+  color: #fff3c9;
+  box-shadow: 0 0 12px rgba(var(--tier-officer-rgb), 0.2);
 }
 
 .user-chip--officer .user-chip-avatar {
-  border-color: rgba(124, 227, 139, 0.7);
+  border-color: rgba(var(--tier-officer-rgb), 0.7);
+}
+
+.user-chip--subofficer {
+  border-color: rgba(var(--tier-subofficer-rgb), 0.6);
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-subofficer-rgb), 0.2),
+    rgba(var(--tier-subofficer-rgb), 0.07)
+  );
+  color: #e6d0ff;
+  box-shadow: 0 0 12px rgba(var(--tier-subofficer-rgb), 0.22);
+}
+
+.user-chip--subofficer .user-chip-avatar {
+  border-color: rgba(var(--tier-subofficer-rgb), 0.75);
 }
 
 /* Botón Salir: rojo con texto blanco (indica salida) */
@@ -807,45 +842,53 @@ a:hover {
 /* Colores de tarjetas del Admin por rango (Owner / Admin / Officer) */
 .admin-card--owner {
   order: 1;
-  border-color: rgba(255, 138, 92, 0.45);
+  border-color: rgba(var(--tier-owner-rgb), 0.45);
 }
 
 .admin-card--owner > .admin-card-header {
-  background: linear-gradient(90deg, rgba(255, 138, 92, 0.11), transparent 45%);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-owner-rgb), 0.12),
+    transparent 45%
+  );
 }
 
 .admin-card--owner .admin-card-header h3 {
-  color: #ff8a5c;
+  color: var(--tier-owner-text);
 }
 
 .admin-card--admin {
   order: 2;
-  border-color: rgba(255, 215, 0, 0.4);
+  border-color: rgba(var(--tier-admin-rgb), 0.4);
 }
 
 .admin-card--admin > .admin-card-header {
-  background: linear-gradient(90deg, rgba(255, 215, 0, 0.09), transparent 45%);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-admin-rgb), 0.09),
+    transparent 45%
+  );
 }
 
 .admin-card--admin .admin-card-header h3 {
-  color: #ffd700;
+  color: var(--tier-admin-text);
 }
 
 .admin-card--officer {
   order: 3;
-  border-color: rgba(124, 227, 139, 0.34);
+  border-color: rgba(var(--tier-officer-rgb), 0.34);
 }
 
 .admin-card--officer > .admin-card-header {
   background: linear-gradient(
     90deg,
-    rgba(124, 227, 139, 0.08),
+    rgba(var(--tier-officer-rgb), 0.1),
     transparent 45%
   );
 }
 
 .admin-card--officer .admin-card-header h3 {
-  color: #7ce38b;
+  color: var(--tier-officer-text);
 }
 
 /* Badge de rango dentro del título de la tarjeta */
@@ -864,18 +907,23 @@ a:hover {
 }
 
 .tier-owner {
-  color: #ff8a5c;
-  background: rgba(255, 138, 92, 0.12);
+  color: var(--tier-owner-text);
+  background: rgba(var(--tier-owner-rgb), 0.14);
 }
 
 .tier-admin {
-  color: #ffd700;
-  background: rgba(255, 215, 0, 0.1);
+  color: var(--tier-admin-text);
+  background: rgba(var(--tier-admin-rgb), 0.12);
 }
 
 .tier-officer {
-  color: #7ce38b;
-  background: rgba(124, 227, 139, 0.1);
+  color: var(--tier-officer-text);
+  background: rgba(var(--tier-officer-rgb), 0.1);
+}
+
+.tier-subofficer {
+  color: var(--tier-subofficer-text);
+  background: rgba(var(--tier-subofficer-rgb), 0.14);
 }
 
 .plantillas-actions {
@@ -4978,28 +5026,37 @@ input.comm-tag-hex {
 }
 
 .staff-hierarchy-tier.owner {
-  border-color: rgba(255, 138, 92, 0.55);
+  border-color: rgba(var(--tier-owner-rgb), 0.55);
   background: linear-gradient(
     160deg,
-    rgba(255, 138, 92, 0.16),
+    rgba(var(--tier-owner-rgb), 0.16),
     rgba(10, 16, 31, 0.5)
   );
 }
 
 .staff-hierarchy-tier.admin {
-  border-color: rgba(255, 215, 0, 0.5);
+  border-color: rgba(var(--tier-admin-rgb), 0.5);
   background: linear-gradient(
     160deg,
-    rgba(255, 215, 0, 0.14),
+    rgba(var(--tier-admin-rgb), 0.14),
     rgba(10, 16, 31, 0.5)
   );
 }
 
 .staff-hierarchy-tier.officer {
-  border-color: rgba(124, 227, 139, 0.4);
+  border-color: rgba(var(--tier-officer-rgb), 0.45);
   background: linear-gradient(
     160deg,
-    rgba(124, 227, 139, 0.08),
+    rgba(var(--tier-officer-rgb), 0.1),
+    rgba(10, 16, 31, 0.5)
+  );
+}
+
+.staff-hierarchy-tier.subofficer {
+  border-color: rgba(var(--tier-subofficer-rgb), 0.45);
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-subofficer-rgb), 0.12),
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -5831,6 +5888,12 @@ input.comm-tag-hex {
   --accent: #2456d6;
   --accent-strong: #c44f16;
   --danger: #b92e24;
+  /* Colores de rango para texto: versiones oscurecidas (sobre blanco el dorado
+     y el violeta del tema oscuro no se leen). */
+  --tier-owner-text: #9a3412;
+  --tier-admin-text: #b4462a;
+  --tier-officer-text: #8a6d00;
+  --tier-subofficer-text: #6b1fa8;
   /* Superficies claras reutilizables */
   --surface-card: rgba(255, 255, 255, 0.92);
   --surface-input: #ffffff;
@@ -5957,12 +6020,20 @@ input.comm-tag-hex {
   color: #4a2c18;
 }
 
+:root[data-theme="light"] .user-chip--owner {
+  color: #7c2d12;
+}
+
 :root[data-theme="light"] .user-chip--admin {
-  color: #6b5500;
+  color: #8a3d18;
 }
 
 :root[data-theme="light"] .user-chip--officer {
-  color: #1c5c2a;
+  color: #6b5500;
+}
+
+:root[data-theme="light"] .user-chip--subofficer {
+  color: #5b1d8a;
 }
 
 :root[data-theme="light"] .suggestion-tier-chip.checked {
@@ -6004,7 +6075,7 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.owner {
   background: linear-gradient(
     160deg,
-    rgba(255, 138, 92, 0.16),
+    rgba(var(--tier-owner-rgb), 0.16),
     var(--surface-card)
   );
 }
@@ -6012,7 +6083,7 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.admin {
   background: linear-gradient(
     160deg,
-    rgba(255, 215, 0, 0.14),
+    rgba(var(--tier-admin-rgb), 0.16),
     var(--surface-card)
   );
 }
@@ -6020,7 +6091,15 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.officer {
   background: linear-gradient(
     160deg,
-    rgba(124, 227, 139, 0.1),
+    rgba(var(--tier-officer-rgb), 0.14),
+    var(--surface-card)
+  );
+}
+
+:root[data-theme="light"] .staff-hierarchy-tier.subofficer {
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-subofficer-rgb), 0.12),
     var(--surface-card)
   );
 }

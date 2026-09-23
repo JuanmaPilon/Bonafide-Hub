@@ -202,9 +202,13 @@ type DiscordGuildWidgetResponse = {
 // Módulos por rango de staff. Deben coincidir con STAFF_TIERS de la web
 // para poder resolver, a partir de adminRoleModules, qué roles tienen cada
 // rango (usado para saber quién recibe las sugerencias).
-const STAFF_TIER_MODULES: Record<"admin" | "officer", string[]> = {
+const STAFF_TIER_MODULES: Record<
+  "admin" | "officer" | "subofficer",
+  string[]
+> = {
   admin: ["config", "comunicados", "raids", "daily", "xp", "karuta", "eventos"],
   officer: ["comunicados", "raids", "daily", "karuta", "eventos"],
+  subofficer: ["comunicados", "eventos"],
 };
 
 // Fetch a Discord con reintento ante rate limits (429). Discord manda el
@@ -6491,8 +6495,8 @@ export function buildApp() {
     if (tiers.length > 0) {
       const needOwner = tiers.includes("owner");
       const staffTiers = tiers.filter(
-        (tier): tier is "admin" | "officer" =>
-          tier === "admin" || tier === "officer",
+        (tier): tier is "admin" | "officer" | "subofficer" =>
+          tier === "admin" || tier === "officer" || tier === "subofficer",
       );
 
       let ownerId: string | null = null;

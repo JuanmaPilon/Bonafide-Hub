@@ -190,9 +190,10 @@ const HUB_MODULES: Array<{
   },
 ];
 
-// Rangos de staff: cada rango tiene un set de módulos fijo definido acá
-// (desde el código). El owner solo elige qué rango darle a cada rol.
-type StaffTier = "admin" | "officer";
+// Rangos de staff, de mayor a menor: cada uno tiene un set de módulos fijo
+// definido acá (desde el código); el owner solo elige qué rango darle a cada
+// rol de Discord. Los COLORES de cada rango viven en styles.css (--tier-*).
+type StaffTier = "admin" | "officer" | "subofficer";
 
 const STAFF_TIERS: Record<
   StaffTier,
@@ -218,6 +219,11 @@ const STAFF_TIERS: Record<
       "Operativo: comunicados, raids/logs, mensajes diarios, Karuta y eventos.",
     modules: ["comunicados", "raids", "daily", "karuta", "eventos"],
   },
+  subofficer: {
+    label: "Sub Officer",
+    description: "Base: comunicados y eventos.",
+    modules: ["comunicados", "eventos"],
+  },
 };
 
 // Devuelve el rango de un rol según sus módulos guardados (para el selector).
@@ -229,6 +235,9 @@ function tierForModules(modules: string[]): StaffTier | null {
   }
   if (sortKey(modules) === sortKey(STAFF_TIERS.officer.modules)) {
     return "officer";
+  }
+  if (sortKey(modules) === sortKey(STAFF_TIERS.subofficer.modules)) {
+    return "subofficer";
   }
   return null;
 }
@@ -3984,16 +3993,17 @@ function App() {
     isAdminOwner || adminAccessModules.includes(module);
 
   // Rango efectivo del usuario logueado, para el chip (owner/admin/officer).
-  const myTier: "owner" | "admin" | "officer" | null = isAdminOwner
+  const myTier: "owner" | StaffTier | null = isAdminOwner
     ? "owner"
     : tierForModules(adminAccessModules);
 
   // Roles asignados a cada rango, para la vista por jerarquía. Los que tienen
   // permisos sueltos (no el rango completo) van a "custom": así el resumen no
   // esconde a nadie que sí tenga acceso al panel.
-  const staffByTier: Record<"admin" | "officer" | "custom", GuildRole[]> = {
+  const staffByTier: Record<StaffTier | "custom", GuildRole[]> = {
     admin: [],
     officer: [],
+    subofficer: [],
     custom: [],
   };
   for (const role of guildRoles) {
@@ -7134,17 +7144,17 @@ function App() {
                           <label>
                             <span>Rangos que reciben sugerencias</span>
                             <div className="suggestion-tier-chips">
-                              {(["owner", "admin", "officer"] as const).map(
-                                (tier) => {
+                              {(
+                                [
+                                  ["owner", "Owner"],
+                                  ["admin", "Admin"],
+                                  ["officer", "Officer"],
+                                  ["subofficer", "Sub Officer"],
+                                ] as const
+                              ).map(([tier, label]) => {
                                   const checked = (
                                     config.suggestionsDmTiers ?? []
                                   ).includes(tier);
-                                  const label =
-                                    tier === "owner"
-                                      ? "Owner"
-                                      : tier === "admin"
-                                        ? "Admin"
-                                        : "Officer";
                                   return (
                                     <label
                                       className={`suggestion-tier-chip${checked ? " checked" : ""}`}
@@ -7551,7 +7561,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              🟢
+                              �
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Officer</strong>
@@ -7563,6 +7573,30 @@ function App() {
                                 label="Officer"
                                 onAdd={(roleId) =>
                                   void applyStaffTier(roleId, "officer")
+                                }
+                                onRemove={(roleId) =>
+                                  void applyStaffTier(roleId, null)
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div className="staff-hierarchy-tier subofficer">
+                            <span
+                              className="staff-hierarchy-icon"
+                              aria-hidden="true"
+                            >
+                              🟣
+                            </span>
+                            <div className="staff-hierarchy-info">
+                              <strong>Sub Officer</strong>
+                              <small>{STAFF_TIERS.subofficer.description}</small>
+                              <StaffRoleControls
+                                assigned={staffByTier.subofficer}
+                                disabled={savingPermission}
+                                guildRoles={guildRoles}
+                                label="Sub Officer"
+                                onAdd={(roleId) =>
+                                  void applyStaffTier(roleId, "subofficer")
                                 }
                                 onRemove={(roleId) =>
                                   void applyStaffTier(roleId, null)
