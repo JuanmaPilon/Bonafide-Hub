@@ -1270,6 +1270,43 @@ const MAX_EVENT_TAGS = 6;
 // Valor del filtro "eventos sin ninguna etiqueta".
 const EVENT_TAG_NONE = "__none__";
 
+// ── Registro de auditoría (Admin → Registros) ─────────────────────
+// Cada acción del panel se guarda con una clave técnica ("update:guild-config")
+// y un detalle de qué cambió. Acá se traduce la clave a algo legible: la clave
+// queda como title del elemento, para no perder la traza.
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  "create:communication": "Comunicado creado",
+  "daily-message:create": "Frase del loro creada",
+  "daily-message:delete": "Frase del loro borrada",
+  "daily-message:update": "Frase del loro editada",
+  "delete:communication": "Comunicado eliminado",
+  "event:create": "Evento creado",
+  "event:delete": "Evento eliminado",
+  "event:occurrence-reset": "Ocurrencia de evento cerrada",
+  "event:signup-edit": "Inscripción editada a mano",
+  "event:signup-remove": "Inscripción quitada a mano",
+  "event:template-apply": "Plantilla de evento aplicada",
+  "event:update": "Evento editado",
+  "karuta-album:delete": "Álbum de Karuta eliminado",
+  "karuta-card:delete": "Carta de Karuta eliminada",
+  "publish:communication": "Comunicado publicado en Discord",
+  "raid-log:create": "Log de raid agregado",
+  "raid-log:delete": "Log de raid borrado",
+  "raid-log:hide": "Log de raid ocultado",
+  "raid-log:publish": "Log de raid publicado",
+  "raid-log:restore": "Log de raid restaurado",
+  "update:communication": "Comunicado editado",
+  "update:guild-config": "Configuración general actualizada",
+  "update:xp-config": "Configuración de XP actualizada",
+  "xp:import": "XP importada",
+  "xp:reset-all": "XP reseteada",
+  "xp:sync": "Roles de XP re-sincronizados",
+};
+
+function auditActionLabel(action: string): string {
+  return AUDIT_ACTION_LABELS[action] ?? action;
+}
+
 // ── Filtros de listas (comunicados, eventos, raids, cartas) ─────────
 // Todas las listas comparten el mecanismo: buscador, orden por fecha o
 // alfabético y, donde haya etiquetas, chips para filtrar.
@@ -3825,13 +3862,14 @@ function App() {
     );
   }, [commAdminOrder, commAdminSearch, commAdminTagFilter, communications]);
 
-  // Registro de auditoría: buscador por autor/acción/detalle.
+  // Registro de auditoría: buscador por autor/acción/detalle (la acción se
+  // busca también por su etiqueta legible, que es lo que se ve).
   const visibleAuditLogs = useMemo(
     () =>
       sortByOrder(
         auditLogs.filter((entry) =>
           matchesSearch(
-            `${entry.actorName ?? ""} ${entry.action} ${entry.details ?? ""}`,
+            `${entry.actorName ?? ""} ${entry.action} ${auditActionLabel(entry.action)} ${entry.details ?? ""}`,
             auditSearch,
           ),
         ),
@@ -8703,8 +8741,9 @@ function App() {
                         {selectedGuild?.owner ? (
                           auditLogs.length === 0 ? (
                             <div className="empty-state">
-                              Aún no hay cambios registrados. Las acciones del
-                              panel Admin quedan anotadas acá.
+                              Aún no hay cambios registrados. Se anota cada
+                              cambio real hecho desde el panel Admin, con qué
+                              campo se tocó y de qué valor a cuál.
                             </div>
                           ) : visibleAuditLogs.length === 0 ? (
                             <div className="empty-state">
@@ -8722,8 +8761,11 @@ function App() {
                                       entry.actorUserId ??
                                       "—"}
                                   </span>
-                                  <span className="audit-action">
-                                    {entry.action}
+                                  <span
+                                    className="audit-action"
+                                    title={entry.action}
+                                  >
+                                    {auditActionLabel(entry.action)}
                                   </span>
                                   {entry.details ? (
                                     <span className="audit-detail">

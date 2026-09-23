@@ -11,6 +11,15 @@ import {
   createAuditLogEntry,
   listAuditLogEntries,
 } from "./services/audit-log-store.js";
+import { snippetText } from "./services/audit-change.js";
+import {
+  describeCommunicationChanges,
+  describeDailyMessageChanges,
+  describeEventChanges,
+  describeGuildConfigChanges,
+  describeXpConfigChanges,
+  type AuditNames,
+} from "./services/audit-describe.js";
 import {
   createCommunication,
   deleteCommunication,
@@ -368,6 +377,59 @@ async function fetchGuildRoleNames(
     // Sin nombres: la tarjeta cae al fallback de la web.
   }
   return names;
+}
+
+// Caché corta de canales: la usa el registro de auditoría para escribir
+// "#logs" en vez del id de Discord, que no le dice nada a quien lo lee.
+const guildChannelsCache = new Map<
+  string,
+  { at: number; names: Map<string, string> }
+>();
+const GUILD_CHANNELS_TTL_MS = 5 * 60 * 1000;
+
+async function fetchGuildChannelNames(
+  guildId: string,
+): Promise<Map<string, string>> {
+  const cached = guildChannelsCache.get(guildId);
+  if (cached && Date.now() - cached.at < GUILD_CHANNELS_TTL_MS) {
+    return cached.names;
+  }
+  const names = new Map<string, string>();
+  if (!env.DISCORD_BOT_TOKEN) {
+    return names;
+  }
+  try {
+    const response = await fetchWithDiscordRetry(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/channels`,
+      { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
+    );
+    if (response.ok) {
+      const channels = (await response.json()) as Array<{
+        id: string;
+        name: string;
+      }>;
+      for (const channel of channels) {
+        names.set(channel.id, channel.name);
+      }
+      guildChannelsCache.set(guildId, { at: Date.now(), names });
+    }
+  } catch {
+    // Sin nombres: el registro cae a mostrar el id.
+  }
+  return names;
+}
+
+/**
+ * Nombres de canales y roles para escribir el registro de auditoría.
+ * Las dos consultas van cacheadas (5 min): el registro se guarda al guardar
+ * una config, no en un bucle.
+ */
+async function fetchAuditNames(guildId: string): Promise<AuditNames> {
+  const [channels, roles] = await Promise.all([
+    fetchGuildChannelNames(guildId),
+    fetchGuildRoleNames(guildId),
+  ]);
+  return { channels, roles };
 }
 
 async function fetchAllGuildMembers(
@@ -3102,6 +3164,7 @@ export function buildApp() {
     }
 
     const body = request.body as Partial<XpConfig>;
+    const previousXpConfig = await getXpConfig(params.guildId);
     const xpConfig = await upsertXpConfig({
       guildId: params.guildId,
       cooldownSeconds: body.cooldownSeconds,
@@ -3114,9 +3177,20 @@ export function buildApp() {
       voiceXpPerMinute: body.voiceXpPerMinute,
     });
 
-    await logAdminAction(session, params.guildId, "update:xp-config", {
-      details: "Se guardó la configuración de XP.",
-    });
+    // Detalle del cambio: solo los valores que se movieron y de qué a qué.
+    // El panel manda la config completa en cada guardado, así que sin diff el
+    // registro no diría nada útil. Si no cambió nada, no se registra.
+    const xpDetails = describeXpConfigChanges(
+      previousXpConfig,
+      xpConfig,
+      await fetchAuditNames(params.guildId),
+    );
+
+    if (xpDetails) {
+      await logAdminAction(session, params.guildId, "update:xp-config", {
+        details: xpDetails,
+      });
+    }
 
     return {
       ok: true,
@@ -3416,11 +3490,23 @@ export function buildApp() {
         return reply.code(404).send({ ok: false, error: "Not found" });
       }
 
-      await logAdminAction(session, params.guildId, "daily-message:update", {
-        details: `Frase del loro actualizada${message.content ? `: "${message.content.slice(0, 60)}"` : ""}.`,
-        targetType: "daily-message",
-        targetId: message.id,
-      });
+      // Para registrar QUÉ cambió hace falta la versión anterior de la frase:
+      // el listado es corto y ya se usa en el panel, así que se busca ahí.
+      const previousMessage = (await listDailyMessages(params.guildId)).find(
+        (entry) => entry.id === message.id,
+      );
+      const messageDetails = describeDailyMessageChanges(
+        previousMessage,
+        message,
+      );
+
+      if (messageDetails) {
+        await logAdminAction(session, params.guildId, "daily-message:update", {
+          details: messageDetails,
+          targetId: message.id,
+          targetType: "daily-message",
+        });
+      }
 
       return {
         ok: true,
@@ -4200,6 +4286,9 @@ export function buildApp() {
     }
 
     let discordError: string | undefined;
+    // Nota extra para el registro cuando la API cierra la ocurrencia de una
+    // serie (el diff de campos ya muestra la fecha nueva).
+    let occurrenceNote: string | null = null;
     let savedEvent = event;
 
     // Auto-limpieza en Discord al marcarlo Completado: el registro ya quedó
@@ -4216,6 +4305,7 @@ export function buildApp() {
           savedEvent = reset.event;
         }
         discordError = reset.discordError;
+        occurrenceNote = `ocurrencia cerrada: quedó en el historial con ${reset.removedSignups} inscripción${reset.removedSignups === 1 ? "" : "es"} y la serie sigue el ${reset.nextStartsAt.toISOString().slice(0, 10)}`;
         console.log(
           `[eventos] completado: ocurrencia cerrada y serie movida al ${reset.nextStartsAt.toISOString()}`,
         );
@@ -4254,11 +4344,26 @@ export function buildApp() {
       }
     }
 
-    await logAdminAction(session, params.guildId, "event:update", {
-      details: `Evento actualizado: ${event.title}`,
-      targetType: "event",
-      targetId: event.id,
-    });
+    // El detalle se calcula sobre el estado FINAL guardado (savedEvent), así
+    // incluye lo que movió la propia API, como la fecha nueva de una serie al
+    // cerrar la ocurrencia.
+    const eventDetails = describeEventChanges(
+      previous,
+      savedEvent,
+      await fetchAuditNames(params.guildId),
+    );
+
+    const details = [eventDetails, occurrenceNote]
+      .filter((part): part is string => Boolean(part))
+      .join(" · ");
+
+    if (details) {
+      await logAdminAction(session, params.guildId, "event:update", {
+        details,
+        targetId: event.id,
+        targetType: "event",
+      });
+    }
 
     const updateRoleNames = await fetchGuildRoleNames(params.guildId);
     return {
@@ -6287,7 +6392,9 @@ export function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const logs = await listAuditLogEntries(params.guildId);
+    // 100 entradas (el máximo del store): con el detalle campo por campo,
+    // más historial es más útil que menos.
+    const logs = await listAuditLogEntries(params.guildId, 100);
 
     return {
       ok: true,
@@ -6430,6 +6537,8 @@ export function buildApp() {
       allowedBody.adminRoleModules = body.adminRoleModules;
     }
 
+    // Config previa para poder detallar el cambio en el registro de auditoría.
+    const previousConfig = await getGuildConfig(params.guildId);
     const config = await upsertGuildConfig(params.guildId, allowedBody);
 
     // Si cambió algo que se ve en los avisos de Discord (roles de
@@ -6442,9 +6551,21 @@ export function buildApp() {
       refreshUpcomingAnnouncements(params.guildId);
     }
 
-    await logAdminAction(session, params.guildId, "update:guild-config", {
-      details: "Se guardó la configuración general del servidor.",
-    });
+    // Detalle campo por campo: canal, umbral y lista que cambiaron, con los
+    // permisos de staff nombre por nombre. Si no cambió nada (el panel manda
+    // la config entera al guardar) no se registra: sería una entrada vacía.
+    const configDetails = describeGuildConfigChanges(
+      previousConfig,
+      config,
+      await fetchAuditNames(params.guildId),
+      STAFF_TIER_MODULES,
+    );
+
+    if (configDetails) {
+      await logAdminAction(session, params.guildId, "update:guild-config", {
+        details: configDetails,
+      });
+    }
 
     return {
       ok: true,
@@ -6814,6 +6935,7 @@ export function buildApp() {
       // canal, el mensaje viejo se borra y se publica en el nuevo: un mensaje no
       // se puede mover de canal.
       let discordError: string | undefined;
+      let savedCommunication = communication;
       const contentChanged =
         body.content !== undefined &&
         communication.content !== existing.content;
@@ -6834,12 +6956,12 @@ export function buildApp() {
           const posted = await postCommunicationToDiscord(communication);
           discordError = posted.error;
           if (posted.messageIds) {
-            const updated = await setCommunicationPublication({
+            const republished = await setCommunicationPublication({
               discordMessageIds: posted.messageIds,
               id: communication.id,
             });
-            if (updated) {
-              return { ok: true, communication: updated, discordError };
+            if (republished) {
+              savedCommunication = republished;
             }
           }
         } else {
@@ -6851,13 +6973,30 @@ export function buildApp() {
               id: communication.id,
             });
             if (updated) {
-              return { ok: true, communication: updated, discordError };
+              savedCommunication = updated;
             }
           }
         }
       }
 
-      return { ok: true, communication, discordError };
+      // El registro guarda qué cambió (título, etiqueta, canal, texto) y con
+      // qué quedó la publicación en Discord. Un guardado sin cambios no deja
+      // entrada: el editor manda el formulario completo cada vez.
+      const communicationDetails = describeCommunicationChanges(
+        existing,
+        savedCommunication,
+        await fetchAuditNames(params.guildId),
+      );
+
+      if (communicationDetails) {
+        await logAdminAction(session, params.guildId, "update:communication", {
+          details: communicationDetails,
+          targetId: savedCommunication.id,
+          targetType: "communication",
+        });
+      }
+
+      return { ok: true, communication: savedCommunication, discordError };
     },
   );
 
@@ -6897,6 +7036,17 @@ export function buildApp() {
       }
 
       const deleted = await deleteCommunication(params.communicationId);
+
+      await logAdminAction(session, params.guildId, "delete:communication", {
+        details: [
+          `Comunicado eliminado: "${snippetText(existing.title, 60)}"`,
+          existing.publishedAt
+            ? `estaba publicado en Discord (${existing.discordMessageIds.length} mensaje${existing.discordMessageIds.length === 1 ? "" : "s"})`
+            : "todavía era borrador",
+        ].join(" · "),
+        targetId: params.communicationId,
+        targetType: "communication",
+      });
 
       return { ok: true, deleted };
     },

@@ -1719,9 +1719,9 @@ a:hover {
 
 .audit-row {
   display: grid;
-  grid-template-columns: 150px 150px 180px 1fr;
+  grid-template-columns: 130px 140px 210px minmax(0, 1fr);
   gap: 12px;
-  align-items: baseline;
+  align-items: start;
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(12, 19, 37, 0.55);
@@ -1738,14 +1738,20 @@ a:hover {
   font-weight: 600;
 }
 
+/* La acción va con su etiqueta legible ("Evento editado"), no con la clave
+   técnica, que queda en el title. */
 .audit-action {
   color: var(--accent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
+  font-weight: 600;
+  font-size: 0.84rem;
 }
 
+/* El detalle puede ser largo ("campo: antes → después · campo: …"): se deja
+   envolver sin desbordar la tarjeta. */
 .audit-detail {
   color: var(--muted);
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 @media (max-width: 760px) {
