@@ -193,6 +193,11 @@ const HUB_MODULES: Array<{
 // Rangos de staff, de mayor a menor: cada uno tiene un set de módulos fijo
 // definido acá (desde el código); el owner solo elige qué rango darle a cada
 // rol de Discord. Los COLORES de cada rango viven en styles.css (--tier-*).
+//
+// El chip de cada tarjeta del panel es el rango MÁS BAJO que puede usar su
+// módulo: si un módulo entra o sale de un rango, hay que mover también el chip
+// (y la clase admin-card--*) de esa tarjeta. Hoy: comunicados/eventos/raids →
+// Sub Officer; daily/karuta → Officer; config/xp → Admin.
 type StaffTier = "admin" | "officer" | "subofficer";
 
 const STAFF_TIERS: Record<
@@ -7649,13 +7654,13 @@ function App() {
                   ) : null}
 
                   {canAccess("comunicados") ? (
-                    <details className="admin-card admin-card-acc admin-card--officer">
+                    <details className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
                             Comunicados{" "}
-                            <span className="admin-tier-badge tier-officer">
-                              Officer
+                            <span className="admin-tier-badge tier-subofficer">
+                              Sub Officer
                             </span>
                           </h3>
                         </div>
@@ -8033,13 +8038,13 @@ function App() {
                   ) : null}
 
                   {canAccess("raids") ? (
-                    <details className="admin-card admin-card-acc admin-card--officer">
+                    <details className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
                             Logs de Raid{" "}
-                            <span className="admin-tier-badge tier-officer">
-                              Officer
+                            <span className="admin-tier-badge tier-subofficer">
+                              Sub Officer
                             </span>
                           </h3>
                         </div>
@@ -9136,13 +9141,13 @@ function App() {
                     </details>
                   ) : null}
                   {canAccess("eventos") ? (
-                    <details className="admin-card admin-card-acc admin-card--officer">
+                    <details className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
                             Historial de eventos{" "}
-                            <span className="admin-tier-badge tier-officer">
-                              Officer
+                            <span className="admin-tier-badge tier-subofficer">
+                              Sub Officer
                             </span>
                           </h3>
                         </div>

@@ -891,6 +891,25 @@ a:hover {
   color: var(--tier-officer-text);
 }
 
+/* Tarjetas que alcanza el rango más bajo con acceso (Sub Officer): van al final
+   del stack, después de las de Officer. */
+.admin-card--subofficer {
+  order: 4;
+  border-color: rgba(var(--tier-subofficer-rgb), 0.4);
+}
+
+.admin-card--subofficer > .admin-card-header {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-subofficer-rgb), 0.1),
+    transparent 45%
+  );
+}
+
+.admin-card--subofficer .admin-card-header h3 {
+  color: var(--tier-subofficer-text);
+}
+
 /* Badge de rango dentro del título de la tarjeta */
 .admin-tier-badge {
   display: inline-flex;
