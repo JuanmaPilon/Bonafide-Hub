@@ -202,14 +202,20 @@ type DiscordGuildWidgetResponse = {
 // Módulos por rango de staff. Deben coincidir con STAFF_TIERS de la web
 // para poder resolver, a partir de adminRoleModules, qué roles tienen cada
 // rango (usado para saber quién recibe las sugerencias).
-const STAFF_TIER_MODULES: Record<
-  "admin" | "officer" | "subofficer",
-  string[]
-> = {
-  admin: ["config", "comunicados", "raids", "daily", "xp", "karuta", "eventos"],
-  officer: ["comunicados", "raids", "daily", "karuta", "eventos"],
-  subofficer: ["comunicados", "eventos"],
-};
+const STAFF_TIER_MODULES: Record<"admin" | "officer" | "subofficer", string[]> =
+  {
+    admin: [
+      "config",
+      "comunicados",
+      "raids",
+      "daily",
+      "xp",
+      "karuta",
+      "eventos",
+    ],
+    officer: ["comunicados", "raids", "daily", "karuta", "eventos"],
+    subofficer: ["comunicados", "eventos", "raids"],
+  };
 
 // Fetch a Discord con reintento ante rate limits (429). Discord manda el
 // header retry-after; si no viene, usamos un backoff simple. Así un 429
@@ -6809,7 +6815,8 @@ export function buildApp() {
       // se puede mover de canal.
       let discordError: string | undefined;
       const contentChanged =
-        body.content !== undefined && communication.content !== existing.content;
+        body.content !== undefined &&
+        communication.content !== existing.content;
 
       if (contentChanged && communication.discordMessageIds.length > 0) {
         const channelChanged =

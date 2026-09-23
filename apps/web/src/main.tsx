@@ -221,8 +221,8 @@ const STAFF_TIERS: Record<
   },
   subofficer: {
     label: "Sub Officer",
-    description: "Base: comunicados y eventos.",
-    modules: ["comunicados", "eventos"],
+    description: "Base: comunicados, eventos y logs de raid.",
+    modules: ["comunicados", "eventos", "raids"],
   },
 };
 
@@ -7152,39 +7152,38 @@ function App() {
                                   ["subofficer", "Sub Officer"],
                                 ] as const
                               ).map(([tier, label]) => {
-                                  const checked = (
-                                    config.suggestionsDmTiers ?? []
-                                  ).includes(tier);
-                                  return (
-                                    <label
-                                      className={`suggestion-tier-chip${checked ? " checked" : ""}`}
-                                      key={tier}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() =>
-                                          editConfig((current) => {
-                                            const tiers = new Set(
-                                              current.suggestionsDmTiers ?? [],
-                                            );
-                                            if (checked) {
-                                              tiers.delete(tier);
-                                            } else {
-                                              tiers.add(tier);
-                                            }
-                                            return {
-                                              ...current,
-                                              suggestionsDmTiers: [...tiers],
-                                            };
-                                          })
-                                        }
-                                      />
-                                      <span>{label}</span>
-                                    </label>
-                                  );
-                                },
-                              )}
+                                const checked = (
+                                  config.suggestionsDmTiers ?? []
+                                ).includes(tier);
+                                return (
+                                  <label
+                                    className={`suggestion-tier-chip${checked ? " checked" : ""}`}
+                                    key={tier}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() =>
+                                        editConfig((current) => {
+                                          const tiers = new Set(
+                                            current.suggestionsDmTiers ?? [],
+                                          );
+                                          if (checked) {
+                                            tiers.delete(tier);
+                                          } else {
+                                            tiers.add(tier);
+                                          }
+                                          return {
+                                            ...current,
+                                            suggestionsDmTiers: [...tiers],
+                                          };
+                                        })
+                                      }
+                                    />
+                                    <span>{label}</span>
+                                  </label>
+                                );
+                              })}
                             </div>
                           </label>
                         </div>
@@ -7561,7 +7560,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              �
+                              🟡
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Officer</strong>
@@ -7589,7 +7588,9 @@ function App() {
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Sub Officer</strong>
-                              <small>{STAFF_TIERS.subofficer.description}</small>
+                              <small>
+                                {STAFF_TIERS.subofficer.description}
+                              </small>
                               <StaffRoleControls
                                 assigned={staffByTier.subofficer}
                                 disabled={savingPermission}
