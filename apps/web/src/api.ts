@@ -242,6 +242,8 @@ export type XpRoleRule = {
   nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
+  // Con un segundo color, el nombre del miembro se pinta con degradado.
+  secondaryColor?: string;
   stacking: "stack" | "replace";
 };
 

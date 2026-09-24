@@ -12,6 +12,9 @@ export type XpRoleRule = {
   nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
+  // Segundo color del rango: con los dos, el nombre del miembro se pinta con
+  // un degradado (el mismo efecto que los roles con degradado de Discord).
+  secondaryColor?: string;
   stacking: "stack" | "replace";
 };
 
@@ -85,6 +88,7 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
               : undefined,
           removeRoleIds: normalizeRoleIds(entry.removeRoleIds),
           roleId: String(entry.roleId ?? ""),
+          secondaryColor: normalizeColor(entry.secondaryColor),
           stacking: (entry.stacking === "replace"
             ? "replace"
             : record?.roleStacking === "replace"
@@ -145,6 +149,7 @@ function normalizeLevelRoles(
           : undefined,
       removeRoleIds: normalizeRoleIds(rule.removeRoleIds),
       roleId: String(rule.roleId ?? "").trim(),
+      secondaryColor: normalizeColor(rule.secondaryColor),
       stacking: (rule.stacking === "replace" ? "replace" : "stack") as
         | "stack"
         | "replace",

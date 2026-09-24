@@ -1744,6 +1744,17 @@ a:hover {
   cursor: pointer;
 }
 
+/* Vista previa del color del rango: el nombre tal como se ve en el ranking
+   (con degradado, si el rango tiene segundo color). */
+.xp-color-preview {
+  align-self: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px dashed rgba(134, 158, 214, 0.35);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .leaderboard-level {
   display: inline-flex;
   align-items: center;

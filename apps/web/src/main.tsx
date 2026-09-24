@@ -1321,7 +1321,8 @@ function roleChipStyle(role: {
     return undefined;
   }
   const secondaryRaw = roleColorHex(role.secondaryColor);
-  const secondary = secondaryRaw && secondaryRaw !== primary ? secondaryRaw : null;
+  const secondary =
+    secondaryRaw && secondaryRaw !== primary ? secondaryRaw : null;
   return {
     "--role-border": tagTint(primary, 0.5),
     "--role-color": primary,
@@ -3474,9 +3475,7 @@ function HomeView({
 }: {
   boostCount: number | null;
   boosters: GuildBooster[];
-  colorFor: (
-    level: number,
-  ) => { color: string; textShadow?: string } | undefined;
+  colorFor: (level: number) => CSSProperties | undefined;
   leaderboard: LeaderboardEntry[];
   loading: boolean;
   // Abre el perfil del miembro clickeado (podio y boosters).
@@ -6428,30 +6427,62 @@ function App() {
     }
   }
 
-  function levelColorFor(level: number): string | undefined {
+  function levelColorFor(
+    level: number,
+  ): { color: string; secondary?: string } | undefined {
     if (!xpConfig) {
       return undefined;
     }
 
-    let color: string | undefined;
+    let match: { color: string; secondary?: string } | undefined;
     for (const rule of xpConfig.levelRoles) {
       if (rule.level <= level && rule.color) {
-        color = rule.color;
+        match = { color: rule.color, secondary: rule.secondaryColor };
       }
     }
 
-    return color;
+    return match;
+  }
+
+  // El nombre del miembro según el color de su rango: un color pleno con
+  // brillo, o un DEGRADADO si el rango tiene segundo color (el mismo efecto
+  // que los roles con degradado de Discord). Se aplica al elemento que
+  // contiene el texto, así el caso degradado puede recortarlo con
+  // background-clip (el relleno transparente se hereda a los hijos).
+  function levelColorsStyle(
+    color: string | undefined,
+    secondary: string | undefined,
+    glow = true,
+  ): CSSProperties | undefined {
+    if (!color) {
+      return undefined;
+    }
+    if (secondary && secondary !== color) {
+      return {
+        backgroundClip: "text",
+        backgroundImage: `linear-gradient(90deg, ${color}, ${secondary})`,
+        color: "transparent",
+        // Con el relleno transparente, text-shadow no se ve: el brillo va con
+        // drop-shadow, que sigue la forma del degradado.
+        filter: glow
+          ? `drop-shadow(0 0 3px ${tagTint(color, 0.7)}) drop-shadow(0 0 9px ${tagTint(color, 0.35)})`
+          : undefined,
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+      };
+    }
+    return glow
+      ? { color, textShadow: `0 0 6px ${color}, 0 0 14px ${color}66` }
+      : { color };
   }
 
   function levelStyleFor(
     level: number,
     glow = true,
-  ): { color: string; textShadow?: string } | undefined {
-    const color = levelColorFor(level);
-    return color
-      ? glow
-        ? { color, textShadow: `0 0 6px ${color}, 0 0 14px ${color}66` }
-        : { color }
+  ): CSSProperties | undefined {
+    const match = levelColorFor(level);
+    return match
+      ? levelColorsStyle(match.color, match.secondary, glow)
       : undefined;
   }
 
@@ -8685,7 +8716,7 @@ function App() {
                                       />
                                     </label>
                                     <label className="xp-color-input">
-                                      <span>Color (nivel/nombre)</span>
+                                      <span>Color</span>
                                       <span className="xp-color-row">
                                         <input
                                           type="color"
@@ -8711,6 +8742,58 @@ function App() {
                                         ) : null}
                                       </span>
                                     </label>
+                                    <label className="xp-color-input">
+                                      <span>2º color (degradado)</span>
+                                      <span className="xp-color-row">
+                                        <input
+                                          type="color"
+                                          value={
+                                            rule.secondaryColor ?? "#ff3700"
+                                          }
+                                          onChange={(event) =>
+                                            updateXpRole(rule.level, {
+                                              // Sin color principal el
+                                              // degradado no existe: se pone
+                                              // el mismo que muestra el
+                                              // primer selector.
+                                              color:
+                                                rule.color ?? "#6aa8ff",
+                                              secondaryColor:
+                                                event.target.value,
+                                            })
+                                          }
+                                        />
+                                        {rule.secondaryColor ? (
+                                          <button
+                                            type="button"
+                                            className="ghost-button small"
+                                            onClick={() =>
+                                              updateXpRole(rule.level, {
+                                                secondaryColor: undefined,
+                                              })
+                                            }
+                                          >
+                                            Quitar
+                                          </button>
+                                        ) : null}
+                                      </span>
+                                    </label>
+                                    <div
+                                      className="xp-color-preview"
+                                      title="Así se ve el nombre del rango"
+                                    >
+                                      <span
+                                        style={levelColorsStyle(
+                                          rule.color,
+                                          rule.secondaryColor,
+                                        )}
+                                      >
+                                        {rule.nicknamePrefix ?? ""}
+                                        {guildRoles.find(
+                                          (role) => role.id === rule.roleId,
+                                        )?.name ?? "Nombre"}
+                                      </span>
+                                    </div>
                                     <div
                                       className="xp-mode-toggle"
                                       title="Comportamiento al alcanzar este nivel"
@@ -9754,7 +9837,10 @@ function App() {
                       onClick={() => setProfileUserId(null)}
                       type="button"
                     >
-                      <span aria-hidden="true" className="comunicado-back-arrow">
+                      <span
+                        aria-hidden="true"
+                        className="comunicado-back-arrow"
+                      >
                         ←
                       </span>
                       Mi perfil
