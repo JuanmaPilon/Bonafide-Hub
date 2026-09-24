@@ -213,7 +213,7 @@ export async function updateRaidLogEntry(input: {
   return { logs: await listRaidLogs(input.guildId), parts, updated };
 }
 
-// Ciclo automático (corre en el scheduler del API cada 5 minutos):
+// Ciclo automático (corre en el scheduler del API cada 2 minutos):
 //   - los borradores que ya terminaron se publican solos;
 //   - los mensajes publicados que quedaron viejos se corrigen solos.
 // Publicar temprano no rompe nada porque la corrección es automática; lo que

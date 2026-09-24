@@ -356,7 +356,10 @@ export async function showRaidLog(
 // también deja el report quieto), pero publicar temprano ya no rompe nada: el
 // mensaje se corrige solo cuando aparece el resto de los fights (ver
 // syncRaidLogGroups en raid-logs-publisher.ts).
-const FINISHED_STABLE_MS = 30 * 60 * 1000;
+// Bajado de 30 a 10 minutos (24/09): con 30 la entrada tardaba hasta 35 min en
+// pasar de "En vivo" a publicada (30 de ventana + el ciclo), y la publicación
+// temprana es reversible:
+const FINISHED_STABLE_MS = 10 * 60 * 1000;
 
 // Red de seguridad: una noche de raid no dura más que esto. Warcraft Logs a
 // veces sigue ajustando un report viejo (una kill que se recalcula, un fight

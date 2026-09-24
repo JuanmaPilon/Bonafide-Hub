@@ -781,16 +781,18 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
 }
 
 // ── Scheduler de Logs de Raid ───────────────────────────────────────
-// Cada 5 minutos el API:
+// Cada 2 minutos el API:
 //   1) busca reports NUEVOS del perfil vigilado y los guarda como borrador;
 //   2) cierra las entradas: publica las que ya terminaron y corrige los
 //      mensajes publicados que quedaron viejos (ver syncRaidLogGroups).
 // Los botones Publicar/Actualizar de la web siguen existiendo para forzarlo a
 // mano sin esperar el ciclo.
-const RAID_LOG_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+// 2 minutos (era 5, 24/09): es el tramo que se suma a la ventana de cierre del
+// report, así que el log aparece publicado apenas termina la noche.
+const RAID_LOG_SYNC_INTERVAL_MS = 2 * 60 * 1000;
 let raidLogSyncTimer: NodeJS.Timeout | null = null;
 // Un ciclo puede tardar (consulta cada report y publica/edita en Discord). Con
-// este flag, si una vuelta se pasa de los 5 minutos, la siguiente se saltea:
+// este flag, si una vuelta se pasa de los 2 minutos, la siguiente se saltea:
 // así dos ciclos no se pisan y una noche nunca se publica dos veces.
 let raidLogSyncRunning = false;
 

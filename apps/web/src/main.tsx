@@ -689,6 +689,15 @@ function RaidLogsList({
         // noche sigue en curso no se avisa: primero tiene que terminar.
         const pending =
           group.posted && group.needsUpdate === true && group.status !== "live";
+        // Color del badge de PUBLICACIÓN: no depende de si la noche sigue en
+        // curso (eso se muestra aparte como "En vivo"), así que un log ya
+        // publicado se ve verde aunque Warcraft Logs siga subiendo fights.
+        const publishBadgeClass =
+          group.status === "failed"
+            ? "raid-log-failed"
+            : group.posted
+              ? "raid-log-synced"
+              : "";
         const runAction = (action?: (log: RaidLog) => Promise<void>) => {
           if (!action) {
             return;
@@ -720,18 +729,24 @@ function RaidLogsList({
                 </span>
               </span>
               <span className="comunicado-acc-heading-right">
+                {group.status === "live" ? (
+                  <span
+                    className="raid-log-badge raid-log-live"
+                    title="Todavía se están subiendo fights a Warcraft Logs"
+                  >
+                    ● En vivo
+                  </span>
+                ) : null}
                 <span
-                  className={`raid-log-badge raid-log-${group.status}${pending ? " raid-log-pending" : ""}`}
+                  className={`raid-log-badge ${publishBadgeClass}${pending ? " raid-log-pending" : ""}`}
                 >
                   {group.status === "failed"
                     ? "Sin datos"
-                    : group.status === "live"
-                      ? "En vivo"
-                      : pending
-                        ? "Actualizando…"
-                        : group.posted
-                          ? "Publicado"
-                          : "Sin publicar"}
+                    : pending
+                      ? "Actualizando…"
+                      : group.posted
+                        ? "Publicado"
+                        : "Sin publicar"}
                 </span>
                 <span
                   className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
@@ -1856,6 +1871,7 @@ function EventCard({
   onDelete,
   onDuplicate,
   onEdit,
+  onOpenProfile,
   onRemoveSignup,
   onResetOccurrence,
   onResetSignup,
@@ -1874,6 +1890,8 @@ function EventCard({
   onDelete: (event: HubEvent) => void;
   onDuplicate: (event: HubEvent) => void;
   onEdit: (event: HubEvent) => void;
+  // Abre el perfil del miembro clickeado en el roster.
+  onOpenProfile: (userId: string) => void;
   onRemoveSignup: (eventId: string) => Promise<void>;
   // Limpia la ocurrencia de una serie (Discord + inscripciones) y mueve el
   // molde a la próxima fecha, sin perder la serie.
@@ -2089,8 +2107,15 @@ function EventCard({
             emojiId={specRow?.emojiId}
             name={specRow?.specName}
           />
-          {signup.username}
-          {signup.character ? ` (${signup.character})` : ""}
+          <button
+            className="member-link"
+            onClick={() => onOpenProfile(signup.userId)}
+            title="Ver perfil"
+            type="button"
+          >
+            {signup.username}
+            {signup.character ? ` (${signup.character})` : ""}
+          </button>
         </span>
         {canManage ? (
           <button
@@ -3378,6 +3403,7 @@ function HomeView({
   colorFor,
   leaderboard,
   loading,
+  onOpenProfile,
   username,
 }: {
   boostCount: number | null;
@@ -3387,6 +3413,8 @@ function HomeView({
   ) => { color: string; textShadow?: string } | undefined;
   leaderboard: LeaderboardEntry[];
   loading: boolean;
+  // Abre el perfil del miembro clickeado (podio y boosters).
+  onOpenProfile: (userId: string) => void;
   username: string | null;
 }) {
   const top5 = leaderboard.slice(0, 5);
@@ -3431,7 +3459,14 @@ function HomeView({
                   </span>
                 )}
                 <span className="podium-name" style={colorFor(entry.level)}>
-                  {entry.nickname || entry.username || `@${entry.userId}`}
+                  <button
+                    className="member-link"
+                    onClick={() => onOpenProfile(entry.userId)}
+                    title="Ver perfil"
+                    type="button"
+                  >
+                    {entry.nickname || entry.username || `@${entry.userId}`}
+                  </button>
                 </span>
                 <span className="podium-tier">
                   {entry.rank === 1 ? "👑 " : ""}
@@ -3479,7 +3514,14 @@ function HomeView({
                   </span>
                 )}
                 <span className="booster-name">
-                  {booster.nickname || booster.username}
+                  <button
+                    className="member-link"
+                    onClick={() => onOpenProfile(booster.userId)}
+                    title="Ver perfil"
+                    type="button"
+                  >
+                    {booster.nickname || booster.username}
+                  </button>
                 </span>
                 <span className="booster-since">
                   Desde {formatDate24(booster.premiumSince)}
@@ -3502,6 +3544,9 @@ function App() {
     username: string;
   } | null>(null);
   const [profile, setProfile] = useState<MemberProfile | null>(null);
+  // Perfil de OTRO miembro (null = el propio): se abre al clickear un nombre
+  // en el dashboard, el podio, los boosters o el roster de un evento.
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [guilds, setGuilds] = useState<ApiGuild[]>([]);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
@@ -5354,7 +5399,7 @@ function App() {
     }
     let cancelled = false;
     setProfileLoading(true);
-    getMemberProfile(selectedGuildId, me.id)
+    getMemberProfile(selectedGuildId, profileUserId ?? me.id)
       .then((nextProfile) => {
         if (!cancelled) {
           setProfile(nextProfile);
@@ -5369,7 +5414,20 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, selectedGuildId, me]);
+  }, [activeTab, profileUserId, selectedGuildId, me]);
+
+  // Al cambiar de guild el perfil vuelve al propio: el miembro que estabamos
+  // mirando puede no estar en la guild nueva.
+  useEffect(() => {
+    setProfileUserId(null);
+  }, [selectedGuildId]);
+
+  // Abre el perfil de un miembro en la tab Perfil (el propio si es uno mismo).
+  function openMemberProfile(userId: string): void {
+    setProfileUserId(userId === me?.id ? null : userId);
+    setActiveTab("perfil");
+    window.scrollTo({ top: 0 });
+  }
 
   async function refreshCommunications(): Promise<void> {
     if (!selectedGuildId) {
@@ -6929,7 +6987,10 @@ function App() {
             ) : null}
             <button
               className={`user-chip user-chip-link${myTier ? ` user-chip--${myTier}` : ""}`}
-              onClick={() => setActiveTab("perfil")}
+              onClick={() => {
+                setProfileUserId(null);
+                setActiveTab("perfil");
+              }}
               type="button"
               title="Ver mi perfil"
             >
@@ -6977,6 +7038,7 @@ function App() {
             colorFor={levelStyleFor}
             leaderboard={leaderboard}
             loading={loadingGuildData}
+            onOpenProfile={openMemberProfile}
             username={username}
           />
         ) : (
@@ -7096,9 +7158,18 @@ function App() {
                                       entry.isBooster,
                                     )}
                                   >
-                                    {entry.nickname ||
-                                      entry.username ||
-                                      `@${entry.userId}`}
+                                    <button
+                                      className="member-link"
+                                      onClick={() =>
+                                        openMemberProfile(entry.userId)
+                                      }
+                                      title="Ver perfil"
+                                      type="button"
+                                    >
+                                      {entry.nickname ||
+                                        entry.username ||
+                                        `@${entry.userId}`}
+                                    </button>
                                   </span>
                                   {entry.isBooster ? (
                                     <span
@@ -9611,6 +9682,18 @@ function App() {
                 </div>
               ) : activeTab === "perfil" ? (
                 <div className="profile-view">
+                  {profileUserId ? (
+                    <button
+                      className="comunicado-back"
+                      onClick={() => setProfileUserId(null)}
+                      type="button"
+                    >
+                      <span aria-hidden="true" className="comunicado-back-arrow">
+                        ←
+                      </span>
+                      Mi perfil
+                    </button>
+                  ) : null}
                   {profileLoading ? (
                     <div className="empty-state">Cargando perfil...</div>
                   ) : !profile ? (
@@ -10964,6 +11047,7 @@ function App() {
                               onDelete={handleDeleteEvent}
                               onDuplicate={handleDuplicateEvent}
                               onEdit={handleEditEvent}
+                              onOpenProfile={openMemberProfile}
                               onRemoveSignup={handleRemoveEventSignup}
                               onResetOccurrence={handleResetOccurrence}
                               onResetSignup={handleResetEventSignup}
