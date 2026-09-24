@@ -1506,7 +1506,10 @@ a:hover {
   gap: 8px;
 }
 
-.profile-role {
+/* Chip de un rol de Discord con SU color real (o su degradado). Se usa en el
+   perfil y en Roles por nivel; las variables --role-* las escribe el JS
+   (ver roleChipStyle en main.tsx). */
+.role-chip {
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
@@ -1516,8 +1519,8 @@ a:hover {
 }
 
 /* Rol con color propio: borde y fondo tenidos con ese color y el nombre del
-   color del rol (--role-* lo escribe el JS, ver roleChipStyle). */
-.profile-role--colored {
+   color del rol. */
+.role-chip--colored {
   border-color: var(--role-border);
   background: var(--role-tint);
   color: var(--role-color);
@@ -1525,15 +1528,15 @@ a:hover {
 
 /* Rol con degradado (dos colores): el fondo lleva los dos tintes y el NOMBRE
    el degradado completo, como lo muestra Discord. */
-.profile-role--gradient {
+.role-chip--gradient {
   background: linear-gradient(90deg, var(--role-tint), var(--role-tint-2));
 }
 
-.profile-role-name {
+.role-chip-name {
   color: inherit;
 }
 
-.profile-role--gradient .profile-role-name {
+.role-chip--gradient .role-chip-name {
   background-image: linear-gradient(
     90deg,
     var(--role-color),
@@ -6165,6 +6168,7 @@ input.comm-tag-hex {
 :root[data-theme="light"] .user-pill,
 :root[data-theme="light"] .xp-role-row,
 :root[data-theme="light"] .daily-message-row,
+:root[data-theme="light"] .role-chip,
 :root[data-theme="light"] .raid-log-badge,
 :root[data-theme="light"] .raid-log-fight,
 :root[data-theme="light"] .raid-log-watcher,
@@ -6172,7 +6176,6 @@ input.comm-tag-hex {
 :root[data-theme="light"] .karuta-drop-card,
 :root[data-theme="light"] .profile-badge,
 :root[data-theme="light"] .profile-stat,
-:root[data-theme="light"] .profile-role,
 :root[data-theme="light"] .rr-panel-card,
 :root[data-theme="light"] .rr-job,
 :root[data-theme="light"] .audit-row,
@@ -6217,24 +6220,24 @@ input.comm-tag-hex {
 }
 
 /* El chip del rol con color mantiene su tinte en tema claro: la regla de
-   ".profile-role { background: var(--surface-card) }" de arriba lo pisaba. */
-:root[data-theme="light"] .profile-role--colored {
+   ".role-chip { background: var(--surface-card) }" de arriba lo pisaba. */
+:root[data-theme="light"] .role-chip--colored {
   background: var(--role-tint);
 }
 
-:root[data-theme="light"] .profile-role--gradient {
+:root[data-theme="light"] .role-chip--gradient {
   background: linear-gradient(90deg, var(--role-tint), var(--role-tint-2));
 }
 
 /* Colores muy claros (blanco, pasteles): sobre el fondo claro hay que
    oscurecer el nombre para que se lea. */
-:root[data-theme="light"] .profile-role--pale .profile-role-name {
+:root[data-theme="light"] .role-chip--pale .role-chip-name {
   filter: brightness(0.62) saturate(1.2);
 }
 
 /* Y al revés: un color casi negro (los grises de Discord) desaparece sobre el
    fondo oscuro, así que en tema dark se aclara. */
-:root:not([data-theme="light"]) .profile-role--dark .profile-role-name {
+:root:not([data-theme="light"]) .role-chip--dark .role-chip-name {
   filter: brightness(1.9) saturate(0.85);
 }
 

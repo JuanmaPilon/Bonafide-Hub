@@ -2964,6 +2964,10 @@ export function buildApp() {
     };
   });
 
+  // Lista de roles de la guild. La usa el panel Admin y también el ranking:
+  // el nombre de cada miembro se pinta con el color de su rol de nivel, así
+  // que cualquier miembro necesita los colores (nombres y colores de rol son
+  // públicos dentro del servidor).
   app.get("/guilds/:guildId/roles", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -2975,7 +2979,7 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    if (!(await hasAnyStaffAccess(session, params.guildId))) {
+    if (!isGuildMember(session, params.guildId)) {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
@@ -3004,6 +3008,7 @@ export function buildApp() {
 
     const roles = (await rolesResponse.json()) as Array<{
       color: number;
+      colors?: { primary_color?: number; secondary_color?: number };
       id: string;
       managed: boolean;
       name: string;
@@ -3013,11 +3018,12 @@ export function buildApp() {
     const normalRoles = roles
       .filter((role) => role.id !== params.guildId)
       .map((role) => ({
-        color: role.color,
+        color: role.colors?.primary_color || role.color,
         id: role.id,
         managed: role.managed,
         name: role.name,
         position: role.position,
+        secondaryColor: role.colors?.secondary_color || undefined,
       }))
       .sort((left, right) => right.position - left.position);
 

@@ -1298,15 +1298,15 @@ function roleChipClass(role: {
 }): string {
   const primary = roleColorHex(role.color);
   if (!primary) {
-    return "profile-role";
+    return "role-chip";
   }
   const secondary = roleColorHex(role.secondaryColor);
   return [
-    "profile-role",
-    "profile-role--colored",
-    secondary && secondary !== primary ? "profile-role--gradient" : null,
-    isPaleRoleColor(primary) ? "profile-role--pale" : null,
-    isDarkRoleColor(primary) ? "profile-role--dark" : null,
+    "role-chip",
+    "role-chip--colored",
+    secondary && secondary !== primary ? "role-chip--gradient" : null,
+    isPaleRoleColor(primary) ? "role-chip--pale" : null,
+    isDarkRoleColor(primary) ? "role-chip--dark" : null,
   ]
     .filter((part): part is string => Boolean(part))
     .join(" ");
@@ -4583,6 +4583,29 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, selectedGuildId, events, guildRoles.length]);
 
+  // Roles de la guild para CUALQUIER miembro: el ranking pinta el nombre con
+  // el color del rol de nivel (con su degradado), así que los colores tienen
+  // que estar cargados también para quien no es staff.
+  useEffect(() => {
+    if (!selectedGuildId) {
+      setGuildRoles([]);
+      return;
+    }
+    let cancelled = false;
+    getGuildRoles(selectedGuildId)
+      .then((roles) => {
+        if (!cancelled) {
+          setGuildRoles(roles);
+        }
+      })
+      .catch(() => {
+        // Sin roles el nombre queda sin color: no rompe la vista.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedGuildId]);
+
   // Emojis custom de la guild, solo cuando se abre el editor de catálogo.
   useEffect(() => {
     if (!selectedGuildId || !showSpecEditor) {
@@ -6427,6 +6450,24 @@ function App() {
     }
   }
 
+  // Colores efectivos de un rango: manda el color del ROL en Discord (con su
+  // degradado, igual que el chip del perfil) y el color guardado en la regla
+  // queda como respaldo para roles sin color propio.
+  function ruleColorsFor(rule: XpRoleRule): {
+    color?: string;
+    secondary?: string;
+  } {
+    const role = guildRoles.find((entry) => entry.id === rule.roleId);
+    const roleColor = roleColorHex(role?.color);
+    if (roleColor) {
+      return {
+        color: roleColor,
+        secondary: roleColorHex(role?.secondaryColor) ?? undefined,
+      };
+    }
+    return { color: rule.color, secondary: rule.secondaryColor };
+  }
+
   function levelColorFor(
     level: number,
   ): { color: string; secondary?: string } | undefined {
@@ -6434,14 +6475,21 @@ function App() {
       return undefined;
     }
 
-    let match: { color: string; secondary?: string } | undefined;
+    let match: XpRoleRule | undefined;
     for (const rule of xpConfig.levelRoles) {
-      if (rule.level <= level && rule.color) {
-        match = { color: rule.color, secondary: rule.secondaryColor };
+      if (rule.level <= level && (rule.roleId || rule.color)) {
+        match = rule;
       }
     }
 
-    return match;
+    if (!match) {
+      return undefined;
+    }
+
+    const colors = ruleColorsFor(match);
+    return colors.color
+      ? { color: colors.color, secondary: colors.secondary }
+      : undefined;
   }
 
   // El nombre del miembro según el color de su rango: un color pleno con
@@ -6822,7 +6870,8 @@ function App() {
     if (activeTab !== "admin" || !selectedGuildId) {
       setVoiceChannels([]);
       setTextChannels([]);
-      setGuildRoles([]);
+      // guildRoles NO se limpia: los colores de los roles se usan fuera del
+      // panel (el ranking pinta los nombres con ellos).
       setDailyMessages([]);
       setHiddenRaidLogs([]);
       setAuditLogs([]);
@@ -8663,6 +8712,11 @@ function App() {
                             </div>
 
                             <h4>Roles por nivel</h4>
+                            <p className="muted-text">
+                              El nombre se pinta con el color del rol en Discord
+                              (con degradado si lo tiene). El color manual se usa
+                              solo si el rol no tiene color propio.
+                            </p>
                             <div className="xp-roles">
                               {xpConfig.levelRoles.length === 0 ? (
                                 <div className="empty-state">
@@ -8701,6 +8755,23 @@ function App() {
                                         </option>
                                       ))}
                                     </select>
+                                    {/* El rol con SU color de Discord (el
+                                        mismo chip que el perfil). */}
+                                    {(() => {
+                                      const role = guildRoles.find(
+                                        (entry) => entry.id === rule.roleId,
+                                      );
+                                      return role ? (
+                                        <span
+                                          className={roleChipClass(role)}
+                                          style={roleChipStyle(role)}
+                                        >
+                                          <span className="role-chip-name">
+                                            {role.name}
+                                          </span>
+                                        </span>
+                                      ) : null;
+                                    })()}
                                     <label className="xp-nickname-prefix">
                                       <span>Prefijo de nombre</span>
                                       <input
@@ -8715,8 +8786,11 @@ function App() {
                                         }
                                       />
                                     </label>
-                                    <label className="xp-color-input">
-                                      <span>Color</span>
+                                    <label
+                                      className="xp-color-input"
+                                      title="Se usa solo si el rol no tiene color en Discord"
+                                    >
+                                      <span>Color manual</span>
                                       <span className="xp-color-row">
                                         <input
                                           type="color"
@@ -8742,8 +8816,11 @@ function App() {
                                         ) : null}
                                       </span>
                                     </label>
-                                    <label className="xp-color-input">
-                                      <span>2º color (degradado)</span>
+                                    <label
+                                      className="xp-color-input"
+                                      title="Se usa solo si el rol no tiene color en Discord"
+                                    >
+                                      <span>2º manual</span>
                                       <span className="xp-color-row">
                                         <input
                                           type="color"
@@ -8784,8 +8861,8 @@ function App() {
                                     >
                                       <span
                                         style={levelColorsStyle(
-                                          rule.color,
-                                          rule.secondaryColor,
+                                          ruleColorsFor(rule).color,
+                                          ruleColorsFor(rule).secondary,
                                         )}
                                       >
                                         {rule.nicknamePrefix ?? ""}
@@ -9934,7 +10011,7 @@ function App() {
                                 key={role.id}
                                 style={roleChipStyle(role)}
                               >
-                                <span className="profile-role-name">
+                                <span className="role-chip-name">
                                   {role.name}
                                 </span>
                               </span>

@@ -228,6 +228,8 @@ export type GuildRole = {
   managed: boolean;
   name: string;
   position: number;
+  // Segundo color del degradado del rol (si lo tiene).
+  secondaryColor?: number;
 };
 
 export type XpRoleMultiplier = {
