@@ -783,6 +783,48 @@ export async function listEventsPendingCloseAnnouncement(
   return records.map((record) => toEvent(record));
 }
 
+// Margen después del final para dar por terminado un evento (por si se
+// estira) y duración asumida cuando el evento no la tiene cargada.
+const EVENT_AUTO_COMPLETE_GRACE_MS = 60 * 60 * 1000;
+const EVENT_DEFAULT_DURATION_MINUTES = 180;
+
+// Momento en que el evento ya terminó: inicio + duración (o 3 h) + 1 h. Es la
+// referencia del cierre automático: nadie marca "Completado" solo, así que sin
+// esto el evento quedaba en la grilla y su aviso en Discord para siempre.
+export function eventAutoCompleteAt(event: HubEvent): Date {
+  const minutes = event.durationMinutes ?? EVENT_DEFAULT_DURATION_MINUTES;
+  return new Date(
+    event.startsAt.getTime() + minutes * 60_000 + EVENT_AUTO_COMPLETE_GRACE_MS,
+  );
+}
+
+// Eventos que ya terminaron y siguen "scheduled" (los que hay que completar
+// solos). Quedan afuera:
+//  - los pausados: pausar congela el evento a propósito;
+//  - los moldes de una serie (recurrenceEnabled) SIN limpieza en Discord: ahí
+//    cerrar la ocurrencia no aporta nada (no hay nada que borrar) y la tarjeta
+//    desaparecería de la grilla hasta que se publique la próxima ocurrencia.
+//    Con la limpieza activada sí se cierran: el cierre archiva la ocurrencia,
+//    mueve la serie y la re-publica sola (ver applyEventCompletion).
+export async function listEventsPendingAutoComplete(
+  now: Date = new Date(),
+): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    where: {
+      OR: [{ recurrenceEnabled: false }, { discordCleanupOnComplete: true }],
+      paused: false,
+      // Filtro grueso en SQL (descarta los que ni empezaron) y fino en memoria,
+      // porque el final depende de la duración de cada evento.
+      startsAt: { lte: new Date(now.getTime() - EVENT_AUTO_COMPLETE_GRACE_MS) },
+      status: "scheduled",
+    },
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+  });
+  return records
+    .map((record) => toEvent(record))
+    .filter((event) => eventAutoCompleteAt(event).getTime() <= now.getTime());
+}
+
 // Eventos ya publicados en Discord que todavía no empezaron. Se usan para
 // re-renderizar los avisos cuando cambia algo global del módulo (roles, ejes
 // o emojis del catálogo): el roster del embed queda "congelado" hasta que

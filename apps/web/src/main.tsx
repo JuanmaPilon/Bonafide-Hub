@@ -1403,6 +1403,7 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   "daily-message:delete": "Frase del loro borrada",
   "daily-message:update": "Frase del loro editada",
   "delete:communication": "Comunicado eliminado",
+  "event:auto-complete": "Evento cerrado automáticamente",
   "event:create": "Evento creado",
   "event:delete": "Evento eliminado",
   "event:occurrence-reset": "Ocurrencia de evento cerrada",

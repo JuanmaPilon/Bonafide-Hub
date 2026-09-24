@@ -11,7 +11,7 @@ import {
   createAuditLogEntry,
   listAuditLogEntries,
 } from "./services/audit-log-store.js";
-import { snippetText } from "./services/audit-change.js";
+import { formatAuditMoment, snippetText } from "./services/audit-change.js";
 import {
   describeCommunicationChanges,
   describeDailyMessageChanges,
@@ -101,12 +101,14 @@ import {
   deleteEventImage,
   deleteRaidSpec,
   deleteSignup,
+  eventAutoCompleteAt,
   eventExistsAt,
   archiveEventOccurrence,
   getEvent,
   getEventPlayerCharacter,
   listEventImages,
   listEvents,
+  listEventsPendingAutoComplete,
   listEventsPendingCloseAnnouncement,
   listRecurrenceSeries,
   listGuildIdsWithEvents,
@@ -1121,6 +1123,123 @@ async function resetSeriesOccurrence(
     nextStartsAt,
     removedSignups: signupsBefore,
   };
+}
+
+// ── Cierre automático de eventos ────────────────────────────────────
+// NADA marcaba un evento como "completed": quedaba "scheduled" para siempre,
+// así que la tarjeta seguía en la grilla, el aviso quedaba publicado en Discord
+// y el toggle "Eliminar de Discord al completar" no corría nunca (solo se
+// dispara al completar). Ahora, cada minuto, los que ya terminaron se completan
+// solos: pasan al historial con su roster y, si tienen la limpieza activada, se
+// borran de Discord.
+const EVENT_AUTO_COMPLETE_SYNC_INTERVAL_MS = 60 * 1000;
+// Tope por tick: si quedaron muchos eventos viejos sin cerrar (o el API estuvo
+// caído), evita una ráfaga de llamadas a Discord de golpe; el resto sale en el
+// tick siguiente.
+const EVENT_AUTO_COMPLETE_MAX_PER_TICK = 10;
+let eventAutoCompleteTimer: NodeJS.Timeout | null = null;
+
+// Efectos de completar un evento. Lo comparten el botón "Completado" del panel
+// y el cierre automático: si el evento tiene activada la limpieza en Discord,
+// borra su aviso (y los recordatorios) y, si es el molde de una serie, cierra
+// la ocurrencia y avanza la serie a su próxima fecha.
+async function applyEventCompletion(
+  guildId: string,
+  event: HubEvent,
+): Promise<{ discordError?: string; event: HubEvent; note: string | null }> {
+  if (!event.discordCleanupOnComplete) {
+    return { event, note: null };
+  }
+
+  // Si es el molde de una serie, completar = cerrar la ocurrencia: se archiva
+  // en el historial y la serie avanza a su próxima fecha.
+  if (event.recurrenceEnabled && event.recurrenceEveryDays) {
+    const reset = await resetSeriesOccurrence(guildId, event);
+    console.log(
+      `[eventos] completado: ocurrencia cerrada y serie movida al ${reset.nextStartsAt.toISOString()}`,
+    );
+    return {
+      discordError: reset.discordError,
+      event: reset.event ?? event,
+      note: `ocurrencia cerrada: quedó en el historial con ${reset.removedSignups} inscripción${reset.removedSignups === 1 ? "" : "es"} y la serie sigue el ${reset.nextStartsAt.toISOString().slice(0, 10)}`,
+    };
+  }
+
+  const cleanup = await cleanupEventDiscord({
+    discordEventId: event.discordEventId,
+    discordMessageIds: event.discordMessageIds,
+    guildId,
+    publishChannelId: event.publishChannelId,
+    reminderMessageIds: event.reminderMessageIds,
+  });
+  const cleared = await setEventDiscordInfo(guildId, event.id, {
+    discordEventId: null,
+    discordMessageIds: [],
+    reminderMessageIds: [],
+  });
+  console.log(
+    `[eventos] evento completado: aviso/evento de Discord eliminado (${event.title})${cleanup.failed.length ? ` · fallos: ${cleanup.failed.join(" | ")}` : ""}`,
+  );
+  return {
+    discordError: cleanup.failed.length
+      ? `No se pudo borrar todo en Discord: ${cleanup.failed.join(" | ")}`
+      : undefined,
+    event: cleared ?? event,
+    note: null,
+  };
+}
+
+async function runEventAutoCompleteSync(): Promise<void> {
+  try {
+    const pending = await listEventsPendingAutoComplete();
+    if (pending.length === 0) {
+      return;
+    }
+    let closed = 0;
+    for (const event of pending.slice(0, EVENT_AUTO_COMPLETE_MAX_PER_TICK)) {
+      try {
+        const completed = await updateEvent(event.guildId, event.id, {
+          status: "completed",
+        });
+        if (!completed) {
+          continue;
+        }
+        const completion = await applyEventCompletion(event.guildId, completed);
+        await createAuditLogEntry({
+          action: "event:auto-complete",
+          actorName: "Sistema",
+          details: [
+            `terminó el ${formatAuditMoment(eventAutoCompleteAt(event))} y se cerró solo`,
+            completion.note ??
+              (completed.discordCleanupOnComplete
+                ? "se borró el aviso y los recordatorios en Discord"
+                : "el aviso queda publicado en Discord (la limpieza al completar está apagada)"),
+          ].join(" · "),
+          guildId: event.guildId,
+          targetId: event.id,
+          targetType: "event",
+        });
+        closed += 1;
+      } catch (error) {
+        console.error(`[eventos] no se pudo cerrar "${event.title}"`, error);
+      }
+    }
+    console.log(
+      `[eventos] cierre automático: ${closed} de ${pending.length} eventos completados`,
+    );
+  } catch (error) {
+    console.error("[eventos] auto close sync failed", error);
+  }
+}
+
+function startEventAutoCompleteSync(): void {
+  if (eventAutoCompleteTimer) {
+    return;
+  }
+  void runEventAutoCompleteSync();
+  eventAutoCompleteTimer = setInterval(() => {
+    void runEventAutoCompleteSync();
+  }, EVENT_AUTO_COMPLETE_SYNC_INTERVAL_MS);
 }
 
 async function runEventRecurrenceSync(): Promise<void> {
@@ -4328,44 +4447,15 @@ export function buildApp() {
     // Auto-limpieza en Discord al marcarlo Completado: el registro ya quedó
     // guardado (completedAt + historial), así que si el evento lo tenía
     // activado borramos el evento agendado y el aviso, y limpiamos sus ids.
+    // Los efectos viven en applyEventCompletion (los comparte el cierre
+    // automático de eventos que ya terminaron).
     const completedNow =
       event.status === "completed" && previous?.status !== "completed";
-    if (completedNow && event.discordCleanupOnComplete) {
-      // Si es el molde de una serie, completar = cerrar la ocurrencia: se
-      // archiva en el historial y la serie avanza a su próxima fecha.
-      if (event.recurrenceEnabled && event.recurrenceEveryDays) {
-        const reset = await resetSeriesOccurrence(params.guildId, event);
-        if (reset.event) {
-          savedEvent = reset.event;
-        }
-        discordError = reset.discordError;
-        occurrenceNote = `ocurrencia cerrada: quedó en el historial con ${reset.removedSignups} inscripción${reset.removedSignups === 1 ? "" : "es"} y la serie sigue el ${reset.nextStartsAt.toISOString().slice(0, 10)}`;
-        console.log(
-          `[eventos] completado: ocurrencia cerrada y serie movida al ${reset.nextStartsAt.toISOString()}`,
-        );
-      } else {
-        const cleanup = await cleanupEventDiscord({
-          discordEventId: event.discordEventId,
-          discordMessageIds: event.discordMessageIds,
-          guildId: params.guildId,
-          publishChannelId: event.publishChannelId,
-          reminderMessageIds: event.reminderMessageIds,
-        });
-        const cleared = await setEventDiscordInfo(params.guildId, event.id, {
-          discordEventId: null,
-          discordMessageIds: [],
-          reminderMessageIds: [],
-        });
-        if (cleared) {
-          savedEvent = cleared;
-        }
-        console.log(
-          `[eventos] evento completado: aviso/evento de Discord eliminado (${event.title})${cleanup.failed.length ? ` · fallos: ${cleanup.failed.join(" | ")}` : ""}`,
-        );
-        if (cleanup.failed.length) {
-          discordError = `No se pudo borrar todo en Discord: ${cleanup.failed.join(" | ")}`;
-        }
-      }
+    if (completedNow) {
+      const completion = await applyEventCompletion(params.guildId, event);
+      savedEvent = completion.event;
+      discordError = completion.discordError;
+      occurrenceNote = completion.note;
     } else if (discordOpts) {
       const synced = await syncAndStoreEventDiscord({
         discordOpts,
@@ -7350,6 +7440,7 @@ export function buildApp() {
   startRaidLogSync();
   startEventCloseSync();
   startEventRecurrenceSync();
+  startEventAutoCompleteSync();
   startKarutaAlbumImageSync();
   startKarutaCardImageSync();
   startXpExMemberCleanup();
