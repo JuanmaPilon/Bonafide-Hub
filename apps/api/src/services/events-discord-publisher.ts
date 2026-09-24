@@ -754,7 +754,8 @@ export function buildEventAnnouncementEmbeds(input: {
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
-  // roster (y entre ellos) con un poco de aire.
+  // roster (y entre ellos) con un poco de aire. Igual que el roster, los
+  // nombres van citados (`> `) para que el bloque se lea igual que los roles.
   const statusGroups: Array<[string, AnnouncementSignup[]]> = [
     [`⏰ Llegan tarde (${late.length})`, late],
     [`🪑 Bench (${bench.length})`, bench],
@@ -771,7 +772,7 @@ export function buildEventAnnouncementEmbeds(input: {
       pushSpacer(fields);
     }
     firstStatus = false;
-    pushField(fields, label, linesFor(members));
+    pushField(fields, label, linesFor(members), false, true);
   }
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción
