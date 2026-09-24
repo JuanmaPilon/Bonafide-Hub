@@ -20,6 +20,7 @@ import {
   deleteRaidLogPermanent,
   exportXpData,
   getAuditLogs,
+  getEventReportCsv,
   getGuildBoosters,
   getGuildConfig,
   getGuildMembers,
@@ -370,6 +371,20 @@ function slugifyTitle(title: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+// Descarga un texto como archivo (lo usa el informe de asistencia en CSV).
+function downloadCsvFile(name: string, content: string): void {
+  const url = URL.createObjectURL(
+    new Blob([content], { type: "text/csv;charset=utf-8" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 // Parsea el hash:
@@ -1976,6 +1991,7 @@ function EventCard({
   gameRoles,
   meId,
   onDelete,
+  onDownloadReport,
   onDuplicate,
   onEdit,
   onOpenProfile,
@@ -1995,6 +2011,8 @@ function EventCard({
   gameRoles: EventRoleOption[];
   meId?: string;
   onDelete: (event: HubEvent) => void;
+  // Baja el informe de asistencia del evento en CSV.
+  onDownloadReport: (event: HubEvent) => void;
   onDuplicate: (event: HubEvent) => void;
   onEdit: (event: HubEvent) => void;
   // Abre el perfil del miembro clickeado en el roster.
@@ -2595,7 +2613,7 @@ function EventCard({
                         {specs.length === 0 ? (
                           <div className="event-signup-no-catalog">
                             El staff todavía no configuró los roles de evento
-                            (Admin → Configuración de eventos).
+                            (Admin → Eventos).
                           </div>
                         ) : catalogClasses.length === 0 ? (
                           <div className="event-signup-no-catalog">
@@ -2744,6 +2762,13 @@ function EventCard({
                 type="button"
               >
                 Duplicar
+              </button>
+              <button
+                className="ghost-button"
+                onClick={() => onDownloadReport(event)}
+                type="button"
+              >
+                ⬇️ Informe CSV
               </button>
               {event.recurrenceEnabled ? (
                 <button
@@ -3689,6 +3714,8 @@ function App() {
   );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  // Evento cuyo informe CSV se está generando (para el estado del botón).
+  const [reportCsvEventId, setReportCsvEventId] = useState<string | null>(null);
   const [eventTagFilter, setEventTagFilter] = useState<string[]>([]);
   // Filtros y buscadores de las listas (mismo mecanismo en todas).
   const [eventSearch, setEventSearch] = useState("");
@@ -3942,6 +3969,9 @@ function App() {
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
   const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
   const [showSpecEditor, setShowSpecEditor] = useState(false);
+  // Tarjeta Configuraciones del panel Admin (ahí vive el informe de
+  // asistencia, que necesita la lista de miembros de la guild).
+  const [showMainConfig, setShowMainConfig] = useState(false);
   // Tipo de evento que se está editando en "Configuración de eventos"
   // (roles + catálogo). Las claves internas son las de las plantillas
   // (wow/lol/…) o las que configure la guild.
@@ -4747,10 +4777,10 @@ function App() {
     };
   }, [selectedGuildId, showSpecEditor]);
 
-  // Miembros de la guild, solo cuando se abre la config de eventos (ahí se
-  // eligen las personas que reciben el informe de asistencia).
+  // Miembros de la guild, solo cuando se abre la tarjeta Configuraciones (ahí
+  // se eligen las personas que reciben el informe de asistencia por MD).
   useEffect(() => {
-    if (!selectedGuildId || !showSpecEditor || guildMembers !== null) {
+    if (!selectedGuildId || !showMainConfig || guildMembers !== null) {
       return;
     }
     let cancelled = false;
@@ -4774,7 +4804,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [guildMembers, selectedGuildId, showSpecEditor]);
+  }, [guildMembers, selectedGuildId, showMainConfig]);
 
   // Personas del informe de asistencia: el id guardado se muestra con su
   // nombre (los que ya no están en el server quedan con el id a la vista).
@@ -5148,8 +5178,8 @@ function App() {
     }
     setConfirmDialog({
       kind: "danger",
-      title: "Quitar de la configuración de eventos",
-      message: `¿Quitar "${spec.specName}" (${spec.className}) de la configuración de eventos? Las inscripciones existentes conservan su texto pero pierden el emoji.`,
+      title: "Quitar del catálogo de eventos",
+      message: `¿Quitar "${spec.specName}" (${spec.className}) del catálogo de eventos? Las inscripciones existentes conservan su texto pero pierden el emoji.`,
       onConfirm: () => {
         void (async () => {
           try {
@@ -5215,6 +5245,28 @@ function App() {
         })();
       },
     });
+  }
+
+  // Baja el informe de asistencia del evento (anotados con su estado + quiénes
+  // tienen el rol mínimo y no se anotaron) en CSV: lo arma el API.
+  async function handleDownloadEventReport(event: HubEvent): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setReportCsvEventId(event.id);
+    try {
+      const csv = await getEventReportCsv(selectedGuildId, event.id);
+      downloadCsvFile(
+        `informe-${slugifyTitle(event.title) || "evento"}.csv`,
+        csv,
+      );
+      pushToast("Informe descargado.", "success");
+    } catch (error) {
+      void error;
+      pushToast("No se pudo generar el informe.", "error");
+    } finally {
+      setReportCsvEventId(null);
+    }
   }
 
   // Limpia la ocurrencia de una serie: se va el rastro de esa fecha en Discord
@@ -6155,7 +6207,7 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Eliminar log de raid",
-      message: `¿Eliminar "${group[0]?.title || group[0]?.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Se puede recuperar desde el panel Admin → Logs de Raid.`,
+      message: `¿Eliminar "${group[0]?.title || group[0]?.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Se puede recuperar desde el panel Admin → Logs.`,
       onConfirm: () => {
         void handleHideRaidLog(group);
       },
@@ -6343,9 +6395,9 @@ function App() {
     }
   }
 
-  // Informe de asistencia: guardado parcial del canal + menciones + MD.
-  // Los selects mandan "" para limpiar (JSON no lleva undefined), y el API
-  // traduce ese "" a "borrar el valor".
+  // Informe de asistencia: guardado parcial del canal + personas + MD.
+  // El select manda "" para limpiar (JSON no lleva undefined), y el API traduce
+  // ese "" a "borrar el valor".
   async function handleSaveEventReport(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -6356,7 +6408,6 @@ function App() {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
         eventReportChannelId: config.eventReportChannelId ?? "",
         eventReportDmCreator: config.eventReportDmCreator !== false,
-        eventReportRoleId: config.eventReportRoleId ?? "",
         eventReportUserIds: config.eventReportUserIds ?? [],
       });
       setConfig(nextConfig);
@@ -7475,11 +7526,16 @@ function App() {
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
                 <div className="admin-card-stack">
                   {canAccess("config") ? (
-                    <details className="admin-card admin-card-acc admin-card--admin">
+                    <details
+                      className="admin-card admin-card-acc admin-card--admin"
+                      onToggle={(event) =>
+                        setShowMainConfig(event.currentTarget.open)
+                      }
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Configuraciones principales{" "}
+                            Configuraciones{" "}
                             <span className="admin-tier-badge tier-admin">
                               Admin
                             </span>
@@ -7639,6 +7695,139 @@ function App() {
                               })}
                             </div>
                           </label>
+                        </div>
+
+                        {/* Informe de asistencia: lo manda el bot al cerrar las
+                            inscripciones (o al completarse el evento si no hay
+                            cierre cargado). Antes vivía en la tarjeta de
+                            Eventos. */}
+                        <h4 className="karuta-threshold-title">
+                          Informe de asistencia
+                        </h4>
+                        <div className="event-report-editor">
+                          <p className="muted-text">
+                            Al cerrar las inscripciones del evento. El canal lo
+                            publica sin menciones.
+                          </p>
+                          <div className="form-grid">
+                            <label>
+                              <span>Canal del informe</span>
+                              <select
+                                className="select"
+                                value={config.eventReportChannelId ?? ""}
+                                onChange={(event) =>
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      eventReportChannelId: event.target.value,
+                                    }),
+                                    "eventReport",
+                                  )
+                                }
+                              >
+                                <option value="">Sin canal</option>
+                                {textChannels.map((channel) => (
+                                  <option key={channel.id} value={channel.id}>
+                                    {channel.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <div className="raid-watcher-head">
+                            <div>
+                              <strong>Mandar también por MD</strong>
+                              <span>Al creador del evento</span>
+                            </div>
+                            <label className="raid-watcher-toggle">
+                              <input
+                                type="checkbox"
+                                checked={config.eventReportDmCreator !== false}
+                                onChange={(event) =>
+                                  editConfig(
+                                    (current) => ({
+                                      ...current,
+                                      eventReportDmCreator:
+                                        event.target.checked,
+                                    }),
+                                    "eventReport",
+                                  )
+                                }
+                              />
+                              <span
+                                className="raid-watcher-switch"
+                                aria-hidden="true"
+                              />
+                              <span className="sr-only">
+                                Mandar el informe por MD al creador
+                              </span>
+                            </label>
+                          </div>
+                          <div className="event-report-people">
+                            <span>Personas que lo reciben por MD</span>
+                            <div className="staff-permission-roles">
+                              {reportUserIds.map((userId) => (
+                                <span
+                                  className="staff-permission-role"
+                                  key={userId}
+                                >
+                                  {reportMemberName(userId)}
+                                  <button
+                                    aria-label={`Quitar a ${reportMemberName(userId)}`}
+                                    className="staff-permission-remove"
+                                    onClick={() =>
+                                      toggleReportUser(userId, false)
+                                    }
+                                    title={`Quitar a ${reportMemberName(userId)}`}
+                                    type="button"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
+                              <select
+                                aria-label="Agregar persona al informe"
+                                className="select staff-permission-add"
+                                disabled={guildMembersLoading}
+                                onChange={(event) => {
+                                  const userId = event.target.value;
+                                  event.target.value = "";
+                                  if (userId) {
+                                    toggleReportUser(userId, true);
+                                  }
+                                }}
+                                value=""
+                              >
+                                <option value="">
+                                  {guildMembersLoading
+                                    ? "Cargando miembros…"
+                                    : "Agregar persona…"}
+                                </option>
+                                {(guildMembers ?? [])
+                                  .filter(
+                                    (member) =>
+                                      !reportUserIds.includes(member.id),
+                                  )
+                                  .map((member) => (
+                                    <option key={member.id} value={member.id}>
+                                      {member.displayName}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          </div>
+                          {isDirty("eventReport") ? (
+                            <button
+                              className="primary-button"
+                              disabled={savingAction !== null}
+                              onClick={() => void handleSaveEventReport()}
+                              type="button"
+                            >
+                              {savingAction === "config"
+                                ? "Guardando…"
+                                : "Guardar informe"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                       {configDirty ? (
@@ -8279,7 +8468,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Mensajes Karpindomo{" "}
+                            Karpindomo{" "}
                             <span className="admin-tier-badge tier-officer">
                               Officer
                             </span>
@@ -8490,7 +8679,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Logs de Raid{" "}
+                            Logs{" "}
                             <span className="admin-tier-badge tier-subofficer">
                               Sub Officer
                             </span>
@@ -8701,7 +8890,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Sistema de XP{" "}
+                            XP{" "}
                             <span className="admin-tier-badge tier-admin">
                               Admin
                             </span>
@@ -9214,7 +9403,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Configuración de eventos{" "}
+                            Eventos{" "}
                             <span className="admin-tier-badge tier-admin">
                               Admin
                             </span>
@@ -9600,159 +9789,6 @@ function App() {
                           </div>
                         </div>
 
-                        {/* Informe de asistencia: lo manda el bot cuando
-                            cierran las inscripciones (o al completarse el
-                            evento si no hay cierre cargado). */}
-                        <h4 className="karuta-threshold-title">
-                          Informe de asistencia
-                        </h4>
-                        <div className="event-report-editor">
-                          <p className="muted-text">
-                            Al cerrar las inscripciones del evento.
-                          </p>
-                          <div className="form-grid">
-                            <label>
-                              <span>Canal del informe</span>
-                              <select
-                                className="select"
-                                value={config.eventReportChannelId ?? ""}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      eventReportChannelId: event.target.value,
-                                    }),
-                                    "eventReport",
-                                  )
-                                }
-                              >
-                                <option value="">Sin canal</option>
-                                {textChannels.map((channel) => (
-                                  <option key={channel.id} value={channel.id}>
-                                    {channel.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              <span>Rol que recibe el mensaje</span>
-                              <select
-                                className="select"
-                                value={config.eventReportRoleId ?? ""}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      eventReportRoleId: event.target.value,
-                                    }),
-                                    "eventReport",
-                                  )
-                                }
-                              >
-                                <option value="">Sin rol</option>
-                                {guildRoles.map((role) => (
-                                  <option key={role.id} value={role.id}>
-                                    {role.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
-                          <div className="raid-watcher-head">
-                            <div>
-                              <strong>Mandar también por MD</strong>
-                              <span>Al creador del evento</span>
-                            </div>
-                            <label className="raid-watcher-toggle">
-                              <input
-                                type="checkbox"
-                                checked={config.eventReportDmCreator !== false}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      eventReportDmCreator:
-                                        event.target.checked,
-                                    }),
-                                    "eventReport",
-                                  )
-                                }
-                              />
-                              <span
-                                className="raid-watcher-switch"
-                                aria-hidden="true"
-                              />
-                              <span className="sr-only">
-                                Mandar el informe por MD al creador
-                              </span>
-                            </label>
-                          </div>
-                          <div className="event-report-people">
-                            <span>Personas aparte que reciben el informe</span>
-                            <div className="staff-permission-roles">
-                              {reportUserIds.map((userId) => (
-                                <span
-                                  className="staff-permission-role"
-                                  key={userId}
-                                >
-                                  {reportMemberName(userId)}
-                                  <button
-                                    aria-label={`Quitar a ${reportMemberName(userId)}`}
-                                    className="staff-permission-remove"
-                                    onClick={() =>
-                                      toggleReportUser(userId, false)
-                                    }
-                                    title={`Quitar a ${reportMemberName(userId)}`}
-                                    type="button"
-                                  >
-                                    ✕
-                                  </button>
-                                </span>
-                              ))}
-                              <select
-                                aria-label="Agregar persona al informe"
-                                className="select staff-permission-add"
-                                disabled={guildMembersLoading}
-                                onChange={(event) => {
-                                  const userId = event.target.value;
-                                  event.target.value = "";
-                                  if (userId) {
-                                    toggleReportUser(userId, true);
-                                  }
-                                }}
-                                value=""
-                              >
-                                <option value="">
-                                  {guildMembersLoading
-                                    ? "Cargando miembros…"
-                                    : "Agregar persona…"}
-                                </option>
-                                {(guildMembers ?? [])
-                                  .filter(
-                                    (member) =>
-                                      !reportUserIds.includes(member.id),
-                                  )
-                                  .map((member) => (
-                                    <option key={member.id} value={member.id}>
-                                      {member.displayName}
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-                          </div>
-                          {isDirty("eventReport") ? (
-                            <button
-                              className="primary-button"
-                              disabled={savingAction !== null}
-                              onClick={() => void handleSaveEventReport()}
-                              type="button"
-                            >
-                              {savingAction === "config"
-                                ? "Guardando…"
-                                : "Guardar informe"}
-                            </button>
-                          ) : null}
-                        </div>
                       </div>
                     </details>
                   ) : null}
@@ -9851,6 +9887,22 @@ function App() {
                                           );
                                         })
                                       )}
+                                      <button
+                                        className="ghost-button"
+                                        disabled={
+                                          reportCsvEventId === finished.id
+                                        }
+                                        onClick={() =>
+                                          void handleDownloadEventReport(
+                                            finished,
+                                          )
+                                        }
+                                        type="button"
+                                      >
+                                        {reportCsvEventId === finished.id
+                                          ? "Generando…"
+                                          : "⬇️ Informe CSV"}
+                                      </button>
                                     </div>
                                   </details>
                                 ))}
@@ -11307,6 +11359,7 @@ function App() {
                               key={event.id}
                               meId={me?.id}
                               onDelete={handleDeleteEvent}
+                              onDownloadReport={handleDownloadEventReport}
                               onDuplicate={handleDuplicateEvent}
                               onEdit={handleEditEvent}
                               onOpenProfile={openMemberProfile}

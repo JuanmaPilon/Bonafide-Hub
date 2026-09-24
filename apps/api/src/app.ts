@@ -1242,6 +1242,56 @@ function startEventAutoCompleteSync(): void {
   }, EVENT_AUTO_COMPLETE_SYNC_INTERVAL_MS);
 }
 
+// ── Informe de asistencia en CSV ────────────────────────────────────
+// Mismo contenido que el informe que manda el bot a Discord (los anotados con
+// su estado + quiénes tienen el rol mínimo y no se anotaron), pero en planilla.
+// El API corre en UTC: sin hora argentina explícita, un evento de las 21:00
+// aparecería como las 00:00 del día siguiente.
+const REPORT_TIME_ZONE = "America/Argentina/Buenos_Aires";
+const CSV_STATUS_LABELS: Record<string, string> = {
+  bench: "Bench",
+  late: "Llega tarde",
+  no: "No asiste",
+  yes: "Asiste",
+};
+
+function csvMoment(value: Date): string {
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "2-digit",
+    timeZone: REPORT_TIME_ZONE,
+    year: "numeric",
+  }).formatToParts(value);
+  const get = (type: string): string =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}`;
+}
+
+// Celda CSV: se escapan comillas, punto y coma y saltos de línea. El separador
+// es ";" porque es el que espera Excel en español.
+function csvCell(value: string): string {
+  return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function buildCsv(rows: string[][]): string {
+  // El BOM hace que Excel lo abra en UTF-8 (acentos y emojis).
+  return `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\r\n")}\r\n`;
+}
+
+function csvFileName(title: string): string {
+  const slug = title
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `informe-${slug || "evento"}.csv`;
+}
+
 async function runEventRecurrenceSync(): Promise<void> {
   try {
     const series = await listRecurrenceSeries();
@@ -5562,6 +5612,116 @@ export function buildApp() {
     },
   );
 
+  // Informe de asistencia en CSV: lo mismo que el bot manda a Discord (los
+  // anotados con su estado + quiénes tienen el rol mínimo y no se anotaron),
+  // para trabajarlo en planilla.
+  app.get(
+    "/guilds/:guildId/events/:eventId/report.csv",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+
+      const config = await getGuildConfig(params.guildId);
+      const roleLabels = new Map(
+        resolveEventRoles(config, event.game).map((role) => [
+          role.key,
+          role.label,
+        ]),
+      );
+      const signups = event.signups ?? [];
+
+      const rows: string[][] = [
+        ["Informe de asistencia", event.title],
+        ["Evento", csvMoment(event.startsAt)],
+        [],
+        [
+          `Anotados (${signups.length})`,
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        ["Nombre", "Estado", "Rol", "Clase", "Spec", "Personaje"],
+      ];
+      for (const signup of signups) {
+        rows.push([
+          signup.username,
+          CSV_STATUS_LABELS[signup.status] ?? signup.status,
+          signup.role ? (roleLabels.get(signup.role) ?? signup.role) : "",
+          signup.wowClass ?? "",
+          signup.spec ?? "",
+          signup.character ?? "",
+        ]);
+      }
+
+      // Quiénes tienen el rol mínimo y no se anotaron. Sin rol mínimo no hay a
+      // quién reclamar (igual que el informe de Discord).
+      if (event.requiredRoleId) {
+        const members = await fetchAllGuildMembers(params.guildId).catch(
+          () => [],
+        );
+        const signed = new Set(signups.map((signup) => signup.userId));
+        const missing = members
+          .filter(
+            (member) =>
+              Boolean(
+                member.user?.id &&
+                  !signed.has(member.user.id) &&
+                  member.roles?.includes(event.requiredRoleId as string),
+              ),
+          )
+          .map(
+            (member) =>
+              member.nick ??
+              member.user?.global_name ??
+              member.user?.username ??
+              member.user?.id ??
+              "",
+          )
+          .sort((left, right) => left.localeCompare(right));
+
+        rows.push([]);
+        rows.push([
+          `No se anotaron (${missing.length} con el rol)`,
+          "",
+          "",
+          "",
+          "",
+          "",
+        ]);
+        for (const name of missing) {
+          rows.push([name, "Sin anotarse", "", "", "", ""]);
+        }
+      }
+
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="${csvFileName(event.title)}"`,
+      );
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      return reply.send(buildCsv(rows));
+    },
+  );
+
   // ── Inscripciones desde Discord (bot) ──────────────────────────────
   // El bot llama estos endpoints internos (x-bot-token) cuando un miembro
   // toca los botones del embed del evento. Reutilizan la misma lógica que
@@ -5674,11 +5834,12 @@ export function buildApp() {
         guildId: params.guildId,
         reports,
         reminders,
-        // A dónde va el informe de asistencia (se configura en el panel).
+        // A dónde va el informe de asistencia (se configura en el panel). El
+        // canal lo recibe sin menciones; las personas, por MD. El rol que
+        // existía acá quedó sin uso (el campo se sacó del panel).
         report: {
           channelId: config.eventReportChannelId,
           dmCreator: config.eventReportDmCreator !== false,
-          roleId: config.eventReportRoleId,
           userIds: config.eventReportUserIds ?? [],
         },
       };

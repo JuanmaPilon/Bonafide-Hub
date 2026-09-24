@@ -465,6 +465,24 @@ export async function getGuildMembers(guildId: string): Promise<GuildMember[]> {
   return data.members;
 }
 
+// Informe de asistencia en CSV (lo arma el API: los anotados con su estado y
+// quiénes tienen el rol mínimo y no se anotaron).
+export async function getEventReportCsv(
+  guildId: string,
+  eventId: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/guilds/${guildId}/events/${eventId}/report.csv`,
+    { credentials: "include" },
+  );
+
+  if (!response.ok) {
+    throw new Error(`No se pudo generar el informe (${response.status})`);
+  }
+
+  return response.text();
+}
+
 export async function getXpConfig(guildId: string): Promise<XpConfig> {
   const data = await requestJson<{ xpConfig: XpConfig }>(
     `/guilds/${guildId}/xp-config`,

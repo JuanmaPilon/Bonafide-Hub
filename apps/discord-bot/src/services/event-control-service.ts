@@ -13,8 +13,9 @@ import { env } from "../config/env.js";
 //   - Recordatorios: menciona en el canal del aviso a quienes tienen el rol
 //     requerido y todavía no se anotaron (sin inscripción). Al terminar
 //     avisa al API qué horas marcó como enviadas.
-//   - Informe: al completarse el evento, manda por DM al creador quiénes
-//     tenían el rol y no se anotaron (con fallback al canal del aviso).
+//   - Informe: al cerrar las inscripciones (o al completarse el evento si no
+//     tiene cierre cargado), manda quiénes tenían el rol y no se anotaron al
+//     canal configurado y/o por MD.
 
 const REMOTE_BASE = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
 const REMOTE_TOKEN = env.BOT_CONFIG_API_TOKEN?.trim();
@@ -46,12 +47,12 @@ type RemoteEvent = {
   title: string;
 };
 
-// A dónde va el informe de asistencia (lo configura el panel Admin): un canal
-// con menciones opcionales y/o el MD al creador del evento.
+// A dónde va el informe de asistencia (lo configura el panel Admin: bloque
+// "Informe de asistencia"): el canal donde se publica y/o las personas que lo
+// reciben por MD. El MD al creador del evento se prende con un toggle.
 type RemoteReportConfig = {
   channelId?: string;
   dmCreator?: boolean;
-  roleId?: string;
   userIds?: string[];
 };
 
@@ -288,11 +289,11 @@ async function processReminder(
   }
 }
 
-// Informe al completar: quiénes tenían el rol y no se anotaron. Los destinos
-// salen de la config de eventos del panel: un canal (mencionando un rol y/o
-// personas), el MD al creador, o los dos. Si no hay canal configurado se
-// mantiene el comportamiento viejo: DM al creador con el canal del aviso como
-// respaldo.
+// Informe al cerrar las inscripciones: quiénes tenían el rol y no se anotaron.
+// Destinos (config del panel): el canal elegido, SIN menciones (es un registro,
+// no un aviso), y el MD a cada persona de la lista. El MD al creador del evento
+// se prende/apaga con un toggle. Si nada llegó, el respaldo sigue siendo el
+// canal del aviso.
 async function processReport(
   guild: Guild,
   event: RemoteEvent,
@@ -333,28 +334,26 @@ async function processReport(
       )
       .setFooter({ text: "Bonafide Hub · Informe de asistencia" });
 
-    // Menciones: van en el CONTENIDO (dentro de un embed no notifican).
-    const mentions = [
-      reportConfig.roleId ? `<@&${reportConfig.roleId}>` : null,
-      ...(reportConfig.userIds ?? []).map((userId) => `<@${userId}>`),
-    ].filter((mention): mention is string => Boolean(mention));
-
-    // Canal elegido en el panel (con sus menciones).
+    // Canal elegido en el panel: el informe va pelado, sin menciones (a las
+    // personas no se las etiqueta: se les manda el mismo informe por MD).
     let channelDelivered = false;
     if (reportConfig.channelId) {
       channelDelivered =
         (await sendToChannel(guild, reportConfig.channelId, {
-          allowedMentions: {
-            roles: reportConfig.roleId ? [reportConfig.roleId] : [],
-            users: reportConfig.userIds ?? [],
-          },
-          content: mentions.length > 0 ? mentions.join(" ") : undefined,
           embeds: [embed],
         })) !== null;
       if (!channelDelivered) {
         console.warn(
           `[event-control] Informe de "${event.title}": no se pudo publicar en el canal configurado (${reportConfig.channelId}).`,
         );
+      }
+    }
+
+    // MD a cada persona de la lista.
+    let peopleDelivered = 0;
+    for (const userId of reportConfig.userIds ?? []) {
+      if (await sendDm(guild, userId, { embeds: [embed] })) {
+        peopleDelivered += 1;
       }
     }
 
@@ -367,22 +366,32 @@ async function processReport(
 
     // Respaldo: el canal del aviso, solo si el informe no llegó a ningún lado.
     let fallbackDelivered = false;
-    if (!channelDelivered && !delivered && event.publishChannelId) {
+    if (
+      !channelDelivered &&
+      !delivered &&
+      peopleDelivered === 0 &&
+      event.publishChannelId
+    ) {
       fallbackDelivered =
         (await sendToChannel(guild, event.publishChannelId, {
           embeds: [embed],
         })) !== null;
     }
 
-    if (channelDelivered || delivered || fallbackDelivered) {
+    if (channelDelivered || delivered || peopleDelivered > 0 || fallbackDelivered) {
       await postAction(guild.id, event.id, "report-sent");
       console.log(
-        `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (canal=${channelDelivered ? "sí" : "no"}, dm=${delivered ? "sí" : "no"})`,
+        `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (canal=${channelDelivered ? "sí" : "no"}, dm=${delivered ? "sí" : "no"}, personas=${peopleDelivered})`,
       );
       return;
     }
 
-    if (!reportConfig.channelId && !canDm && !event.publishChannelId) {
+    if (
+      !reportConfig.channelId &&
+      !canDm &&
+      (reportConfig.userIds ?? []).length === 0 &&
+      !event.publishChannelId
+    ) {
       // Sin ningún destino posible: se descarta para no reintentar en cada
       // tick.
       await postAction(guild.id, event.id, "report-sent");
