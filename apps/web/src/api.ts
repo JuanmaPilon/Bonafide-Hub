@@ -277,7 +277,14 @@ export type MemberProfile = {
   globalName: string | null;
   isBooster: boolean;
   joinedAt: string | null;
-  roles: Array<{ color: number; id: string; name: string }>;
+  roles: Array<{
+    color: number;
+    id: string;
+    name: string;
+    // Segundo color del degradado (roles "Nitro" de Discord); sin él el rol
+    // se pinta de un solo color.
+    secondaryColor?: number;
+  }>;
   serverAvatarUrl: string | null;
   userId: string;
   username: string;

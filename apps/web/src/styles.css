@@ -1515,6 +1515,36 @@ a:hover {
   background: rgba(12, 19, 37, 0.4);
 }
 
+/* Rol con color propio: borde y fondo tenidos con ese color y el nombre del
+   color del rol (--role-* lo escribe el JS, ver roleChipStyle). */
+.profile-role--colored {
+  border-color: var(--role-border);
+  background: var(--role-tint);
+  color: var(--role-color);
+}
+
+/* Rol con degradado (dos colores): el fondo lleva los dos tintes y el NOMBRE
+   el degradado completo, como lo muestra Discord. */
+.profile-role--gradient {
+  background: linear-gradient(90deg, var(--role-tint), var(--role-tint-2));
+}
+
+.profile-role-name {
+  color: inherit;
+}
+
+.profile-role--gradient .profile-role-name {
+  background-image: linear-gradient(
+    90deg,
+    var(--role-color),
+    var(--role-color-2)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
 .rr-panels-list {
   margin-top: 20px;
   display: grid;
@@ -6173,6 +6203,28 @@ input.comm-tag-hex {
   color: #2258a8;
   border-color: rgba(34, 88, 168, 0.3);
   background: rgba(34, 88, 168, 0.08);
+}
+
+/* El chip del rol con color mantiene su tinte en tema claro: la regla de
+   ".profile-role { background: var(--surface-card) }" de arriba lo pisaba. */
+:root[data-theme="light"] .profile-role--colored {
+  background: var(--role-tint);
+}
+
+:root[data-theme="light"] .profile-role--gradient {
+  background: linear-gradient(90deg, var(--role-tint), var(--role-tint-2));
+}
+
+/* Colores muy claros (blanco, pasteles): sobre el fondo claro hay que
+   oscurecer el nombre para que se lea. */
+:root[data-theme="light"] .profile-role--pale .profile-role-name {
+  filter: brightness(0.62) saturate(1.2);
+}
+
+/* Y al revés: un color casi negro (los grises de Discord) desaparece sobre el
+   fondo oscuro, así que en tema dark se aclara. */
+:root:not([data-theme="light"]) .profile-role--dark .profile-role-name {
+  filter: brightness(1.9) saturate(0.85);
 }
 
 /* Jerarquía de staff: mantener el tinte de cada rango sobre fondo claro */

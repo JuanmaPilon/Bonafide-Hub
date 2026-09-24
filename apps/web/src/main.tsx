@@ -1265,6 +1265,72 @@ function tagTint(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// ── Colores de roles de Discord (chips del perfil) ──────────────────
+// Un rol puede venir sin color (0), con un color pleno o con DOS colores:
+// los degradados de Discord llegan en `colors` y el legacy `color` solo trae
+// el principal (y en algunos roles viene en 0).
+function roleColorHex(value: number | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  return `#${(value & 0xffffff).toString(16).padStart(6, "0")}`;
+}
+
+// ¿El color es tan claro que sobre el fondo claro no se leería (blanco,
+// amarillo pálido)? El JS solo marca el caso; el tema lo resuelve el CSS
+// (.profile-role--pale). El umbral es alto a propósito: los colores vivos
+// (el verde de Rank 5, el dorado de Gold) se dejan tal cual.
+function isPaleRoleColor(hex: string): boolean {
+  const [r, g, b] = tagRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 190;
+}
+
+// El caso simétrico: un color casi negro (los grises de Discord, ej. Unrank)
+// desaparece sobre el fondo oscuro del tema dark.
+function isDarkRoleColor(hex: string): boolean {
+  const [r, g, b] = tagRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 60;
+}
+
+function roleChipClass(role: {
+  color?: number;
+  secondaryColor?: number;
+}): string {
+  const primary = roleColorHex(role.color);
+  if (!primary) {
+    return "profile-role";
+  }
+  const secondary = roleColorHex(role.secondaryColor);
+  return [
+    "profile-role",
+    "profile-role--colored",
+    secondary && secondary !== primary ? "profile-role--gradient" : null,
+    isPaleRoleColor(primary) ? "profile-role--pale" : null,
+    isDarkRoleColor(primary) ? "profile-role--dark" : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
+}
+
+function roleChipStyle(role: {
+  color?: number;
+  secondaryColor?: number;
+}): CSSProperties | undefined {
+  const primary = roleColorHex(role.color);
+  if (!primary) {
+    return undefined;
+  }
+  const secondaryRaw = roleColorHex(role.secondaryColor);
+  const secondary = secondaryRaw && secondaryRaw !== primary ? secondaryRaw : null;
+  return {
+    "--role-border": tagTint(primary, 0.5),
+    "--role-color": primary,
+    "--role-color-2": secondary ?? primary,
+    "--role-tint": tagTint(primary, 0.16),
+    "--role-tint-2": tagTint(secondary ?? primary, 0.16),
+  } as CSSProperties;
+}
+
 // Chip del tag: si no hay etiqueta no renderiza nada (uso seguro en cards).
 function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
   const text = label?.trim();
@@ -9778,18 +9844,13 @@ function App() {
                           <div className="profile-roles">
                             {profile.roles.map((role) => (
                               <span
-                                className="profile-role"
+                                className={roleChipClass(role)}
                                 key={role.id}
-                                style={
-                                  role.color
-                                    ? {
-                                        borderColor: `#${role.color.toString(16).padStart(6, "0")}`,
-                                        color: `#${role.color.toString(16).padStart(6, "0")}`,
-                                      }
-                                    : undefined
-                                }
+                                style={roleChipStyle(role)}
                               >
-                                {role.name}
+                                <span className="profile-role-name">
+                                  {role.name}
+                                </span>
                               </span>
                             ))}
                           </div>

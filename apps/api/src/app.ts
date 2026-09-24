@@ -3081,6 +3081,9 @@ export function buildApp() {
     const roles = rolesResponse.ok
       ? ((await rolesResponse.json()) as Array<{
           color: number;
+          // Discord devuelve los colores con degradado (roles "Nitro") en
+          // `colors`; el legacy `color` solo trae el principal.
+          colors?: { primary_color?: number; secondary_color?: number };
           id: string;
           name: string;
           position: number;
@@ -3122,9 +3125,12 @@ export function buildApp() {
       )
       .sort((left, right) => right.position - left.position)
       .map((role) => ({
-        color: role.color,
+        // Con degradado, el primer color está en `colors` (el legacy `color`
+        // suele coincidir, pero en algunos roles viene en 0).
+        color: role.colors?.primary_color || role.color,
         id: role.id,
         name: role.name,
+        secondaryColor: role.colors?.secondary_color || undefined,
       }));
 
     return {
