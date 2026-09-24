@@ -322,10 +322,10 @@ export function describeGuildConfigChanges(
       after: next.eventReportRoleId,
       before: previous.eventReportRoleId,
       format: roles,
-      label: "rol mencionado en el informe",
+      label: "rol que recibe el mensaje",
     },
     auditNoteChange(
-      "personas mencionadas en el informe",
+      "personas aparte del informe",
       describeListDelta(
         previous.eventReportUserIds,
         next.eventReportUserIds,

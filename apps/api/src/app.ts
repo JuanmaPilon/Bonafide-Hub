@@ -1603,14 +1603,14 @@ function normalizeDiscordOptions(
 function validateDiscordOptions(options: EventDiscordOptions): string | null {
   if (options.createScheduledEvent) {
     if (options.entityType === "voice" && !options.voiceChannelId) {
-      return "Para crear el evento en Discord elegí una sala de voz.";
+      return "Para crear el evento en Discord falta la sala de voz.";
     }
     if (options.entityType === "external" && !options.location) {
-      return "Para crear el evento externo en Discord poné una ubicación.";
+      return "Para crear el evento externo en Discord falta la ubicación.";
     }
   }
   if (options.publishMessage && !options.publishChannelId) {
-    return "Elegí el canal donde publicar el aviso.";
+    return "Falta el canal donde publicar el aviso.";
   }
   return null;
 }
@@ -2569,7 +2569,7 @@ export function buildApp() {
 
       const message =
         tokenResponse.status === 429
-          ? "Demasiados intentos de login (Discord está limitando). Esperá unos segundos y volvé a intentar."
+          ? "Demasiados intentos de login (Discord está limitando). Esperar unos segundos y reintentar."
           : "Failed to exchange Discord code";
 
       return reply.code(400).send({

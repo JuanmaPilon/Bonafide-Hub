@@ -5717,7 +5717,7 @@ function App() {
     const title = suggestionTitle.trim();
     const text = suggestionText.trim();
     if (!title || !text) {
-      pushToast("Completá el título y el texto.", "error");
+      pushToast("Faltan el título y el texto.", "error");
       return;
     }
     setSendingSuggestion(true);
@@ -5765,7 +5765,7 @@ function App() {
     }
     const content = dailyMessageDraft.trim();
     if (!content) {
-      pushToast("Escribí una frase primero.", "error");
+      pushToast("Falta la frase.", "error");
       return;
     }
 
@@ -9054,7 +9054,7 @@ function App() {
                         ) : adminSpecs.length === 0 ? (
                           <div className="event-signup-no-catalog">
                             Este tipo de evento todavía no tiene clases/specs
-                            cargadas. Agregá abajo cada una con su emoji.
+                            cargadas. Se agregan abajo, con su emoji.
                           </div>
                         ) : (
                           adminRoles.map((roleOption) => {
@@ -9273,9 +9273,7 @@ function App() {
                         </h4>
                         <div className="event-report-editor">
                           <p className="muted-text">
-                            Cuando cierran las inscripciones el bot avisa
-                            quiénes no se anotaron. Elegí a dónde va y a quién
-                            menciona.
+                            Al cerrar las inscripciones del evento.
                           </p>
                           <div className="form-grid">
                             <label>
@@ -9302,7 +9300,7 @@ function App() {
                               </select>
                             </label>
                             <label>
-                              <span>Rol mencionado en el aviso</span>
+                              <span>Rol que recibe el mensaje</span>
                               <select
                                 className="select"
                                 value={config.eventReportRoleId ?? ""}
@@ -9328,10 +9326,7 @@ function App() {
                           <div className="raid-watcher-head">
                             <div>
                               <strong>Mandar también por MD</strong>
-                              <span>
-                                Al creador del evento (aunque ya haya ido al
-                                canal)
-                              </span>
+                              <span>Al creador del evento</span>
                             </div>
                             <label className="raid-watcher-toggle">
                               <input
@@ -9358,7 +9353,7 @@ function App() {
                             </label>
                           </div>
                           <div className="event-report-people">
-                            <span>Personas mencionadas en el aviso</span>
+                            <span>Personas aparte que reciben el informe</span>
                             <div className="staff-permission-roles">
                               {reportUserIds.map((userId) => (
                                 <span
@@ -9410,12 +9405,6 @@ function App() {
                               </select>
                             </div>
                           </div>
-                          <p className="muted-text">
-                            Con canal elegido, el informe va ahí con las
-                            menciones marcadas. Si no hay canal, va por MD al
-                            creador (y cae al canal del aviso si el MD no
-                            llega): sin canal y con el MD apagado no se manda.
-                          </p>
                           {isDirty("eventReport") ? (
                             <button
                               className="primary-button"
