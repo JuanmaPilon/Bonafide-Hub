@@ -443,17 +443,23 @@ function signupDisplay(signup: AnnouncementSignup): string {
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars
 // (límite de Discord para el value de un field). `inline` los pone en
 // columnas (3 por fila), que es lo que mantiene el embed "horizontal".
+// `quote` antepone "> " a cada línea: Discord las une en un solo bloque con
+// barra vertical a la izquierda. Esa barra es lo que separa un rol del
+// siguiente cuando el cliente apila los campos (celular), donde antes quedaba
+// todo como una lista suelta de nombres.
 function pushField(
   fields: Array<{ inline?: boolean; name: string; value: string }>,
   name: string,
   lines: string[],
   inline = false,
+  quote = false,
 ): void {
   if (lines.length === 0) {
     return;
   }
+  const rendered = quote ? lines.map((line) => `> ${line}`) : lines;
   let value = "";
-  for (const line of lines) {
+  for (const line of rendered) {
     if (value.length + line.length + 1 > 1024) {
       fields.push({ inline, name, value });
       value = "";
@@ -736,12 +742,15 @@ export function buildEventAnnouncementEmbeds(input: {
   // tres el nombre se partía. El salto entre pares se fuerza con un espacio en
   // blanco (Discord empaqueta solo los fields inline de a tres).
   // Con un solo rol con gente, la columna va a lo ancho (no inline).
+  // Los nombres van citados (`> `): en la PC se ven en columnas como siempre y
+  // en el celular (donde Discord apila todo) cada rol queda con su barra, que
+  // es lo que evita que se lea como una lista pegada sin divisiones.
   const rosterInline = columns.length > 1;
   columns.forEach((column, index) => {
     if (rosterInline && index > 0 && index % 2 === 0) {
       pushSpacer(fields);
     }
-    pushField(fields, column.label, column.lines, rosterInline);
+    pushField(fields, column.label, column.lines, rosterInline, true);
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
