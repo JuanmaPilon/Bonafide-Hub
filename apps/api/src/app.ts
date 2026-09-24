@@ -421,15 +421,35 @@ async function fetchGuildChannelNames(
 
 /**
  * Nombres de canales y roles para escribir el registro de auditoría.
- * Las dos consultas van cacheadas (5 min): el registro se guarda al guardar
- * una config, no en un bucle.
+ * Las consultas van cacheadas (5 min): el registro se guarda al guardar una
+ * config, no en un bucle. `withUsers` suma la lista de miembros, que es más
+ * pesada: solo la pide el guardado de la config de eventos (ahí se eligen
+ * personas para el informe de asistencia).
  */
-async function fetchAuditNames(guildId: string): Promise<AuditNames> {
+async function fetchAuditNames(
+  guildId: string,
+  options: { withUsers?: boolean } = {},
+): Promise<AuditNames> {
   const [channels, roles] = await Promise.all([
     fetchGuildChannelNames(guildId),
     fetchGuildRoleNames(guildId),
   ]);
-  return { channels, roles };
+
+  if (!options.withUsers) {
+    return { channels, roles };
+  }
+
+  const users = new Map<string, string>();
+  for (const member of await fetchAllGuildMembers(guildId)) {
+    const id = member.user?.id;
+    if (id) {
+      users.set(
+        id,
+        member.nick ?? member.user?.global_name ?? member.user?.username ?? id,
+      );
+    }
+  }
+  return { channels, roles, users };
 }
 
 async function fetchAllGuildMembers(
@@ -5540,15 +5560,23 @@ export function buildApp() {
       if (!params.guildId) {
         return reply.code(400).send({ ok: false, error: "Missing guildId" });
       }
-      const [reminders, reports] = await Promise.all([
+      const [reminders, reports, config] = await Promise.all([
         listReminderDueEvents(params.guildId),
         listReportPendingEvents(params.guildId),
+        getGuildConfig(params.guildId),
       ]);
       return {
         ok: true,
         guildId: params.guildId,
         reports,
         reminders,
+        // A dónde va el informe de asistencia (se configura en el panel).
+        report: {
+          channelId: config.eventReportChannelId,
+          dmCreator: config.eventReportDmCreator !== false,
+          roleId: config.eventReportRoleId,
+          userIds: config.eventReportUserIds ?? [],
+        },
       };
     },
   );
@@ -6517,6 +6545,26 @@ export function buildApp() {
       allowedBody.eventRoles = body.eventRoles;
     }
 
+    // Informe de asistencia: lo configura quien maneja eventos. Al ser un
+    // select, la web manda "" para limpiar (no puede mandar undefined, que
+    // JSON descarta), así que acá se traduce a undefined para que el guardado
+    // efectivamente borre el valor.
+    if (body.eventReportChannelId !== undefined) {
+      allowedBody.eventReportChannelId = body.eventReportChannelId || undefined;
+    }
+
+    if (body.eventReportDmCreator !== undefined) {
+      allowedBody.eventReportDmCreator = body.eventReportDmCreator === true;
+    }
+
+    if (body.eventReportRoleId !== undefined) {
+      allowedBody.eventReportRoleId = body.eventReportRoleId || undefined;
+    }
+
+    if (body.eventReportUserIds !== undefined) {
+      allowedBody.eventReportUserIds = body.eventReportUserIds;
+    }
+
     if (body.musicEnabled !== undefined) {
       allowedBody.musicEnabled = body.musicEnabled;
     }
@@ -6557,7 +6605,7 @@ export function buildApp() {
     const configDetails = describeGuildConfigChanges(
       previousConfig,
       config,
-      await fetchAuditNames(params.guildId),
+      await fetchAuditNames(params.guildId, { withUsers: true }),
       STAFF_TIER_MODULES,
     );
 

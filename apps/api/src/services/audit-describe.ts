@@ -24,12 +24,17 @@ import type { Communication } from "./communications-store.js";
 import type { DailyMessage } from "./daily-messages-store.js";
 import type { AdminRoleRule, GuildConfig } from "./guild-config-store.js";
 import type { HubEvent } from "./events-store.js";
-import type { XpConfig, XpRoleMultiplier, XpRoleRule } from "./xp-config-store.js";
+import type {
+  XpConfig,
+  XpRoleMultiplier,
+  XpRoleRule,
+} from "./xp-config-store.js";
 
 /** Nombres legibles para los ids que aparecen en el registro. */
 export type AuditNames = {
   channels?: Map<string, string>;
   roles?: Map<string, string>;
+  users?: Map<string, string>;
 };
 
 // Módulos del panel Admin (los mismos de la web) para el detalle de cambios.
@@ -79,6 +84,13 @@ function roleText(names: AuditNames, value: unknown): string | null {
     return null;
   }
   return `@${names.roles?.get(value) ?? value}`;
+}
+
+function userText(names: AuditNames, value: unknown): string | null {
+  if (typeof value !== "string" || value === "") {
+    return null;
+  }
+  return `@${names.users?.get(value) ?? value}`;
 }
 
 function moduleListText(modules: readonly string[]): string | null {
@@ -134,14 +146,19 @@ function recurrenceText(event: HubEvent): string | null {
   const publishBefore = event.recurrencePublishDaysBefore;
   return [
     `cada ${days} día${days === 1 ? "" : "s"}`,
-    publishBefore ? `publica ${publishBefore} día${publishBefore === 1 ? "" : "s"} antes` : null,
+    publishBefore
+      ? `publica ${publishBefore} día${publishBefore === 1 ? "" : "s"} antes`
+      : null,
   ]
     .filter(Boolean)
     .join(", ");
 }
 
 /** Cómo está publicado un evento en Discord (canal, evento agendado, sala). */
-function eventDiscordText(event: HubEvent | null, names: AuditNames): string | null {
+function eventDiscordText(
+  event: HubEvent | null,
+  names: AuditNames,
+): string | null {
   if (!event) {
     return null;
   }
@@ -160,7 +177,9 @@ function eventDiscordText(event: HubEvent | null, names: AuditNames): string | n
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-function communicationPublicationText(communication: Communication): string | null {
+function communicationPublicationText(
+  communication: Communication,
+): string | null {
   if (communication.discordMessageIds.length === 0) {
     return null;
   }
@@ -289,6 +308,31 @@ export function describeGuildConfigChanges(
       label: "rol por defecto",
     },
     {
+      after: next.eventReportChannelId,
+      before: previous.eventReportChannelId,
+      format: channels,
+      label: "canal del informe de asistencia",
+    },
+    {
+      after: next.eventReportDmCreator,
+      before: previous.eventReportDmCreator,
+      label: "informe por MD al creador",
+    },
+    {
+      after: next.eventReportRoleId,
+      before: previous.eventReportRoleId,
+      format: roles,
+      label: "rol mencionado en el informe",
+    },
+    auditNoteChange(
+      "personas mencionadas en el informe",
+      describeListDelta(
+        previous.eventReportUserIds,
+        next.eventReportUserIds,
+        (userId) => userText(names, userId) ?? userId,
+      ),
+    ),
+    {
       after: next.musicEnabled,
       before: previous.musicEnabled,
       label: "música",
@@ -317,8 +361,10 @@ export function describeGuildConfigChanges(
     },
     auditNoteChange(
       "módulos activos",
-      describeListDelta(previous.enabledModules, next.enabledModules, (module) =>
-        MODULE_LABELS[module] ?? module,
+      describeListDelta(
+        previous.enabledModules,
+        next.enabledModules,
+        (module) => MODULE_LABELS[module] ?? module,
       ),
     ),
     auditNoteChange(
@@ -386,7 +432,9 @@ export function describeXpConfigChanges(
 ): string | null {
   const roleName = (roleId: string) => roleText(names, roleId) ?? roleId;
 
-  const multipliersText = (list: XpRoleMultiplier[] | undefined): string | null =>
+  const multipliersText = (
+    list: XpRoleMultiplier[] | undefined,
+  ): string | null =>
     list && list.length > 0
       ? [...list]
           .sort((left, right) => left.roleId.localeCompare(right.roleId))
@@ -429,8 +477,7 @@ export function describeXpConfigChanges(
     {
       after: next.maxLevel,
       before: previous.maxLevel,
-      format: (value) =>
-        Number(value) > 0 ? String(value) : "sin límite",
+      format: (value) => (Number(value) > 0 ? String(value) : "sin límite"),
       label: "nivel máximo",
     },
     {
@@ -555,14 +602,11 @@ export function describeEventChanges(
     {
       after: next.imageUrl,
       before: previous?.imageUrl,
-      format: (value) => imageText(value as string | undefined) ?? "(sin imagen)",
+      format: (value) =>
+        imageText(value as string | undefined) ?? "(sin imagen)",
       label: "imagen",
     },
-    auditTextChange(
-      "etiquetas",
-      tagsText(previous?.tags),
-      tagsText(next.tags),
-    ),
+    auditTextChange("etiquetas", tagsText(previous?.tags), tagsText(next.tags)),
   ]);
 }
 

@@ -221,6 +221,11 @@ export type GuildConfig = {
   enabledModules?: string[];
   eventClassLabel?: string;
   eventGames?: EventGameConfig[];
+  // Informe de asistencia: canal + menciones + MD al creador del evento.
+  eventReportChannelId?: string;
+  eventReportDmCreator?: boolean;
+  eventReportRoleId?: string;
+  eventReportUserIds?: string[];
   eventRoles?: EventRoleOption[];
   eventSpecEnabled?: boolean;
   eventSpecLabel?: string;
@@ -259,6 +264,10 @@ function toGuildConfig(
     enabledModules: string[];
     eventClassLabel: string | null;
     eventGames: unknown;
+    eventReportChannelId: string | null;
+    eventReportDmCreator: boolean;
+    eventReportRoleId: string | null;
+    eventReportUserIds: string[];
     eventRoles: unknown;
     eventSpecEnabled: boolean;
     eventSpecLabel: string | null;
@@ -306,6 +315,10 @@ function toGuildConfig(
     enabledModules: record.enabledModules,
     eventClassLabel: record.eventClassLabel ?? undefined,
     eventGames: normalizeEventGames(record.eventGames) ?? undefined,
+    eventReportChannelId: record.eventReportChannelId ?? undefined,
+    eventReportDmCreator: record.eventReportDmCreator,
+    eventReportRoleId: record.eventReportRoleId ?? undefined,
+    eventReportUserIds: record.eventReportUserIds,
     eventRoles: normalizeEventRoles(record.eventRoles) ?? undefined,
     eventSpecEnabled: record.eventSpecEnabled,
     eventSpecLabel: record.eventSpecLabel ?? undefined,
@@ -345,6 +358,10 @@ type NormalizedGuildConfig = {
   enabledModules: string[];
   eventClassLabel?: string;
   eventGames?: EventGameConfig[];
+  eventReportChannelId?: string;
+  eventReportDmCreator: boolean;
+  eventReportRoleId?: string;
+  eventReportUserIds: string[];
   eventRoles?: EventRoleOption[];
   eventSpecEnabled: boolean;
   eventSpecLabel?: string;
@@ -396,6 +413,12 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     enabledModules: config.enabledModules ?? [],
     eventClassLabel: config.eventClassLabel?.trim().slice(0, 24) || undefined,
     eventGames: normalizeEventGames(config.eventGames) ?? [],
+    eventReportChannelId: config.eventReportChannelId,
+    eventReportDmCreator: config.eventReportDmCreator ?? true,
+    eventReportRoleId: config.eventReportRoleId,
+    eventReportUserIds: (config.eventReportUserIds ?? []).filter(
+      (userId) => typeof userId === "string" && userId.length > 0,
+    ),
     eventRoles: normalizeEventRoles(config.eventRoles) ?? [],
     eventSpecEnabled: config.eventSpecEnabled ?? true,
     eventSpecLabel: config.eventSpecLabel?.trim().slice(0, 24) || undefined,
@@ -470,6 +493,10 @@ export async function replaceGuildConfig(
         enabledModules: normalized.enabledModules,
         eventClassLabel: normalized.eventClassLabel,
         eventGames: normalized.eventGames ?? [],
+        eventReportChannelId: normalized.eventReportChannelId,
+        eventReportDmCreator: normalized.eventReportDmCreator,
+        eventReportRoleId: normalized.eventReportRoleId,
+        eventReportUserIds: normalized.eventReportUserIds,
         eventRoles: normalized.eventRoles ?? [],
         eventSpecEnabled: normalized.eventSpecEnabled,
         eventSpecLabel: normalized.eventSpecLabel,
@@ -506,6 +533,10 @@ export async function replaceGuildConfig(
         enabledModules: normalized.enabledModules,
         eventClassLabel: normalized.eventClassLabel,
         eventGames: normalized.eventGames ?? [],
+        eventReportChannelId: normalized.eventReportChannelId,
+        eventReportDmCreator: normalized.eventReportDmCreator,
+        eventReportRoleId: normalized.eventReportRoleId,
+        eventReportUserIds: normalized.eventReportUserIds,
         eventRoles: normalized.eventRoles ?? [],
         eventSpecEnabled: normalized.eventSpecEnabled,
         eventSpecLabel: normalized.eventSpecLabel,

@@ -46,7 +46,17 @@ type RemoteEvent = {
   title: string;
 };
 
+// A dónde va el informe de asistencia (lo configura el panel Admin): un canal
+// con menciones opcionales y/o el MD al creador del evento.
+type RemoteReportConfig = {
+  channelId?: string;
+  dmCreator?: boolean;
+  roleId?: string;
+  userIds?: string[];
+};
+
 type RemoteControl = {
+  report: RemoteReportConfig;
   reports: RemoteEvent[];
   reminders: Array<{ dueHours: number[]; event: RemoteEvent }>;
 };
@@ -66,7 +76,7 @@ function createTimeoutController(timeoutMs: number): AbortController {
 
 async function fetchControl(guildId: string): Promise<RemoteControl> {
   if (!REMOTE_BASE || !REMOTE_TOKEN) {
-    return { reports: [], reminders: [] };
+    return { report: {}, reports: [], reminders: [] };
   }
   try {
     const controller = createTimeoutController(8000);
@@ -79,13 +89,15 @@ async function fetchControl(guildId: string): Promise<RemoteControl> {
       },
     );
     if (!response.ok) {
-      return { reports: [], reminders: [] };
+      return { report: {}, reports: [], reminders: [] };
     }
     const payload = (await response.json()) as {
+      report?: RemoteReportConfig;
       reports?: RemoteEvent[];
       reminders?: Array<{ dueHours: number[]; event: RemoteEvent }>;
     };
     return {
+      report: payload.report ?? {},
       reports: payload.reports ?? [],
       reminders: payload.reminders ?? [],
     };
@@ -93,7 +105,7 @@ async function fetchControl(guildId: string): Promise<RemoteControl> {
     console.warn(
       `[event-control] No se pudo leer el control de eventos de ${guildId}: ${getErrorMessage(error)}`,
     );
-    return { reports: [], reminders: [] };
+    return { report: {}, reports: [], reminders: [] };
   }
 }
 
@@ -276,9 +288,16 @@ async function processReminder(
   }
 }
 
-// Informe al completar: DM al creador con quienes tenían el rol y no se
-// anotaron. Si el DM no llega (DMs cerrados), cae al canal del aviso.
-async function processReport(guild: Guild, event: RemoteEvent): Promise<void> {
+// Informe al completar: quiénes tenían el rol y no se anotaron. Los destinos
+// salen de la config de eventos del panel: un canal (mencionando un rol y/o
+// personas), el MD al creador, o los dos. Si no hay canal configurado se
+// mantiene el comportamiento viejo: DM al creador con el canal del aviso como
+// respaldo.
+async function processReport(
+  guild: Guild,
+  event: RemoteEvent,
+  reportConfig: RemoteReportConfig,
+): Promise<void> {
   const roleId = event.requiredRoleId;
   if (!roleId) {
     return;
@@ -291,17 +310,6 @@ async function processReport(guild: Guild, event: RemoteEvent): Promise<void> {
     const bench = signups.filter((s) => s.status === "bench").length;
     const late = signups.filter((s) => s.status === "late").length;
     const countNo = signups.filter((s) => s.status === "no").length;
-
-    const lines = [
-      `📋 **Informe de asistencia — ${event.title}**`,
-      `🗓️ ${formatEventDate(event.startsAt)}`,
-      "",
-      `Anotados: ✅ ${confirmed} · 🪑 ${bench} · ⏰ ${late} · ❌ ${countNo}`,
-      `No se anotaron (${missing.length} con el rol):`,
-      missing.length > 0
-        ? missing.map((m) => `• ${m.displayName}`).join("\n")
-        : "• Nadie: todos con el rol respondieron. 🎉",
-    ].join("\n");
 
     const embed = new EmbedBuilder()
       .setColor(0x6aa8ff)
@@ -325,34 +333,68 @@ async function processReport(guild: Guild, event: RemoteEvent): Promise<void> {
       )
       .setFooter({ text: "Bonafide Hub · Informe de asistencia" });
 
-    const delivered = await sendDm(guild, event.createdByUserId, {
-      embeds: [embed],
-    });
+    // Menciones: van en el CONTENIDO (dentro de un embed no notifican).
+    const mentions = [
+      reportConfig.roleId ? `<@&${reportConfig.roleId}>` : null,
+      ...(reportConfig.userIds ?? []).map((userId) => `<@${userId}>`),
+    ].filter((mention): mention is string => Boolean(mention));
+
+    // Canal elegido en el panel (con sus menciones).
     let channelDelivered = false;
-    if (!delivered && event.publishChannelId) {
+    if (reportConfig.channelId) {
       channelDelivered =
+        (await sendToChannel(guild, reportConfig.channelId, {
+          allowedMentions: {
+            roles: reportConfig.roleId ? [reportConfig.roleId] : [],
+            users: reportConfig.userIds ?? [],
+          },
+          content: mentions.length > 0 ? mentions.join(" ") : undefined,
+          embeds: [embed],
+        })) !== null;
+      if (!channelDelivered) {
+        console.warn(
+          `[event-control] Informe de "${event.title}": no se pudo publicar en el canal configurado (${reportConfig.channelId}).`,
+        );
+      }
+    }
+
+    // MD al creador: activado por defecto (es lo que hacía siempre).
+    const canDm =
+      reportConfig.dmCreator !== false && Boolean(event.createdByUserId);
+    const delivered = canDm
+      ? await sendDm(guild, event.createdByUserId, { embeds: [embed] })
+      : false;
+
+    // Respaldo: el canal del aviso, solo si el informe no llegó a ningún lado.
+    let fallbackDelivered = false;
+    if (!channelDelivered && !delivered && event.publishChannelId) {
+      fallbackDelivered =
         (await sendToChannel(guild, event.publishChannelId, {
           embeds: [embed],
         })) !== null;
     }
 
-    if (delivered || channelDelivered) {
+    if (channelDelivered || delivered || fallbackDelivered) {
       await postAction(guild.id, event.id, "report-sent");
       console.log(
-        `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (dm=${delivered ? "sí" : "no"})`,
+        `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (canal=${channelDelivered ? "sí" : "no"}, dm=${delivered ? "sí" : "no"})`,
       );
-    } else if (!event.createdByUserId && !event.publishChannelId) {
-      // Sin destinatario posible (ni creador ni canal): lo marcamos para no
-      // reintentar en cada tick.
+      return;
+    }
+
+    if (!reportConfig.channelId && !canDm && !event.publishChannelId) {
+      // Sin ningún destino posible: se descarta para no reintentar en cada
+      // tick.
       await postAction(guild.id, event.id, "report-sent");
       console.warn(
-        `[event-control] Informe de "${event.title}" sin destinatario (sin creador ni canal), se descarta.`,
+        `[event-control] Informe de "${event.title}" sin destinatario configurado, se descarta.`,
       );
-    } else {
-      console.warn(
-        `[event-control] Informe de "${event.title}" no entregado (DM bloqueado y sin canal de respaldo): se reintentará.`,
-      );
+      return;
     }
+
+    console.warn(
+      `[event-control] Informe de "${event.title}" no entregado: se reintentará.`,
+    );
   } catch (error) {
     console.warn(
       `[event-control] Falló el informe de "${event.title}": ${getErrorMessage(error)}`,
@@ -375,7 +417,7 @@ async function runControlPass(client: Client): Promise<void> {
         await processReminder(guild, item);
       }
       for (const event of control.reports) {
-        await processReport(guild, event);
+        await processReport(guild, event, control.report);
       }
     }
   } finally {

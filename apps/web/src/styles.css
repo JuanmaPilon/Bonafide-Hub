@@ -1280,6 +1280,22 @@ a:hover {
   background: rgba(106, 168, 255, 0.06);
 }
 
+/* Informe de asistencia de eventos: misma caja que el vigilado de logs, con
+   los campos separados por el mismo aire. */
+.event-report-editor {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(106, 168, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(106, 168, 255, 0.06);
+}
+
+/* Dentro de esa caja el texto de ayuda no necesita aire propio. */
+.event-report-editor > p {
+  margin: 0;
+}
+
 .raid-watcher-head {
   display: flex;
   align-items: center;
@@ -5034,6 +5050,24 @@ input.comm-tag-hex {
   padding: 9px 12px;
 }
 
+/* Personas que reciben el informe de asistencia: los mismos chips que los
+   permisos de staff, pero con etiqueta arriba y alineados a la izquierda
+   (en las plaquitas van al final de una fila). */
+.event-report-people {
+  display: grid;
+  gap: 6px;
+}
+
+.event-report-people > span {
+  color: #bdd8d2;
+  font-size: 0.84rem;
+}
+
+.event-report-people .staff-permission-roles {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+}
+
 /* Jerarquía de rangos (Owner → Admin → Officer → Sin acceso) */
 .staff-hierarchy {
   display: grid;
@@ -6203,7 +6237,8 @@ input.comm-tag-hex {
 :root[data-theme="light"] .event-date-field > span,
 :root[data-theme="light"] .role-multiselect-field > span,
 :root[data-theme="light"] .comm-form label span,
-:root[data-theme="light"] .suggestions-field span {
+:root[data-theme="light"] .suggestions-field span,
+:root[data-theme="light"] .event-report-people > span {
   color: #43516d;
 }
 

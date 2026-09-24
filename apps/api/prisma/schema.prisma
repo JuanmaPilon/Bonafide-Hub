@@ -73,6 +73,15 @@ model GuildConfig {
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
+  // ── Informe de asistencia (eventos) ──
+  // A quiénes les llega el informe de "quiénes no se anotaron": un canal
+  // (con un rol y/o personas mencionadas ahí) y/o el MD al creador del
+  // evento, que era el comportamiento original y viene activado.
+  eventReportChannelId String?
+  eventReportRoleId    String?
+  eventReportUserIds   String[] @default([])
+  eventReportDmCreator Boolean  @default(true)
+
   adminRoleModules  AdminRoleModule[]
 
   @@map("guild_configs")
