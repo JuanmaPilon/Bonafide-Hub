@@ -350,16 +350,16 @@ a:hover {
     inset 0 0 0 1px rgba(106, 168, 255, 0.2);
 }
 
-/* Chip de usuario según el rango: Owner (naranja rojo oscuro), Admin (naranja),
-   Officer (dorado) y Sub Officer (violeta). Sin rango queda con el estilo base. */
+/* Chip de usuario según el rango: toma los colores del rol de Discord de ese
+   rango (1º y 2º color, ver tierStyleVars), y sin rango queda el estilo base. */
 .user-chip--owner {
   border-color: rgba(var(--tier-owner-rgb), 0.75);
   background: linear-gradient(
     160deg,
     rgba(var(--tier-owner-rgb), 0.3),
-    rgba(var(--tier-owner-rgb), 0.1)
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.12)
   );
-  color: #ffd9cb;
+  color: var(--tier-owner-text);
   box-shadow: 0 0 14px rgba(var(--tier-owner-rgb), 0.28);
 }
 
@@ -371,10 +371,10 @@ a:hover {
   border-color: rgba(var(--tier-admin-rgb), 0.65);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-admin-rgb), 0.24),
-    rgba(var(--tier-admin-rgb), 0.08)
+    rgba(var(--tier-admin-rgb), 0.26),
+    rgba(var(--tier-admin-2-rgb, var(--tier-admin-rgb)), 0.1)
   );
-  color: #ffe2d3;
+  color: var(--tier-admin-text);
   box-shadow: 0 0 12px rgba(var(--tier-admin-rgb), 0.22);
 }
 
@@ -386,10 +386,10 @@ a:hover {
   border-color: rgba(var(--tier-officer-rgb), 0.6);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-officer-rgb), 0.18),
-    rgba(var(--tier-officer-rgb), 0.06)
+    rgba(var(--tier-officer-rgb), 0.22),
+    rgba(var(--tier-officer-2-rgb, var(--tier-officer-rgb)), 0.08)
   );
-  color: #fff3c9;
+  color: var(--tier-officer-text);
   box-shadow: 0 0 12px rgba(var(--tier-officer-rgb), 0.2);
 }
 
@@ -401,10 +401,10 @@ a:hover {
   border-color: rgba(var(--tier-subofficer-rgb), 0.6);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-subofficer-rgb), 0.2),
-    rgba(var(--tier-subofficer-rgb), 0.07)
+    rgba(var(--tier-subofficer-rgb), 0.24),
+    rgba(var(--tier-subofficer-2-rgb, var(--tier-subofficer-rgb)), 0.09)
   );
-  color: #e6d0ff;
+  color: var(--tier-subofficer-text);
   box-shadow: 0 0 12px rgba(var(--tier-subofficer-rgb), 0.22);
 }
 
@@ -858,7 +858,9 @@ a:hover {
   flex-direction: column;
 }
 
-/* Colores de tarjetas del Admin por rango (Owner / Admin / Officer) */
+/* Colores de tarjetas del Admin por rango: los DOS colores del rol del rango
+   (--tier-*-2-* es el segundo color del degradado de Discord; sin él, todo
+   queda con el primero). */
 .admin-card--owner {
   order: 1;
   border-color: rgba(var(--tier-owner-rgb), 0.45);
@@ -867,13 +869,22 @@ a:hover {
 .admin-card--owner > .admin-card-header {
   background: linear-gradient(
     90deg,
-    rgba(var(--tier-owner-rgb), 0.12),
-    transparent 45%
+    rgba(var(--tier-owner-rgb), 0.14),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.08) 45%,
+    transparent 78%
   );
 }
 
 .admin-card--owner .admin-card-header h3 {
-  color: var(--tier-owner-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-owner-text),
+    var(--tier-owner-2-text, var(--tier-owner-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .admin-card--admin {
@@ -884,13 +895,22 @@ a:hover {
 .admin-card--admin > .admin-card-header {
   background: linear-gradient(
     90deg,
-    rgba(var(--tier-admin-rgb), 0.09),
-    transparent 45%
+    rgba(var(--tier-admin-rgb), 0.13),
+    rgba(var(--tier-admin-2-rgb, var(--tier-admin-rgb)), 0.07) 45%,
+    transparent 78%
   );
 }
 
 .admin-card--admin .admin-card-header h3 {
-  color: var(--tier-admin-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-admin-text),
+    var(--tier-admin-2-text, var(--tier-admin-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .admin-card--officer {
@@ -901,13 +921,22 @@ a:hover {
 .admin-card--officer > .admin-card-header {
   background: linear-gradient(
     90deg,
-    rgba(var(--tier-officer-rgb), 0.1),
-    transparent 45%
+    rgba(var(--tier-officer-rgb), 0.13),
+    rgba(var(--tier-officer-2-rgb, var(--tier-officer-rgb)), 0.07) 45%,
+    transparent 78%
   );
 }
 
 .admin-card--officer .admin-card-header h3 {
-  color: var(--tier-officer-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-officer-text),
+    var(--tier-officer-2-text, var(--tier-officer-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 /* Tarjetas que alcanza el rango más bajo con acceso (Sub Officer): van al final
@@ -920,16 +949,27 @@ a:hover {
 .admin-card--subofficer > .admin-card-header {
   background: linear-gradient(
     90deg,
-    rgba(var(--tier-subofficer-rgb), 0.1),
-    transparent 45%
+    rgba(var(--tier-subofficer-rgb), 0.13),
+    rgba(var(--tier-subofficer-2-rgb, var(--tier-subofficer-rgb)), 0.07) 45%,
+    transparent 78%
   );
 }
 
 .admin-card--subofficer .admin-card-header h3 {
-  color: var(--tier-subofficer-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-subofficer-text),
+    var(--tier-subofficer-2-text, var(--tier-subofficer-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
-/* Badge de rango dentro del título de la tarjeta */
+/* Badge de rango dentro del título de la tarjeta. El texto va con su propio
+   color aunque el título tenga el degradado (background-clip no se hereda,
+   pero el relleno transparente sí: por eso se fija acá). */
 .admin-tier-badge {
   display: inline-flex;
   align-items: center;
@@ -942,26 +982,43 @@ a:hover {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   vertical-align: middle;
+  -webkit-text-fill-color: currentColor;
 }
 
 .tier-owner {
   color: var(--tier-owner-text);
-  background: rgba(var(--tier-owner-rgb), 0.14);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-owner-rgb), 0.16),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.12)
+  );
 }
 
 .tier-admin {
   color: var(--tier-admin-text);
-  background: rgba(var(--tier-admin-rgb), 0.12);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-admin-rgb), 0.16),
+    rgba(var(--tier-admin-2-rgb, var(--tier-admin-rgb)), 0.12)
+  );
 }
 
 .tier-officer {
   color: var(--tier-officer-text);
-  background: rgba(var(--tier-officer-rgb), 0.1);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-officer-rgb), 0.16),
+    rgba(var(--tier-officer-2-rgb, var(--tier-officer-rgb)), 0.12)
+  );
 }
 
 .tier-subofficer {
   color: var(--tier-subofficer-text);
-  background: rgba(var(--tier-subofficer-rgb), 0.14);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--tier-subofficer-rgb), 0.16),
+    rgba(var(--tier-subofficer-2-rgb, var(--tier-subofficer-rgb)), 0.12)
+  );
 }
 
 .plantillas-actions {
@@ -5154,7 +5211,8 @@ input.comm-tag-hex {
   border-color: rgba(var(--tier-owner-rgb), 0.55);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-owner-rgb), 0.16),
+    rgba(var(--tier-owner-rgb), 0.18),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.06) 60%,
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -5163,7 +5221,8 @@ input.comm-tag-hex {
   border-color: rgba(var(--tier-admin-rgb), 0.5);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-admin-rgb), 0.14),
+    rgba(var(--tier-admin-rgb), 0.16),
+    rgba(var(--tier-admin-2-rgb, var(--tier-admin-rgb)), 0.05) 60%,
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -5172,7 +5231,8 @@ input.comm-tag-hex {
   border-color: rgba(var(--tier-officer-rgb), 0.45);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-officer-rgb), 0.1),
+    rgba(var(--tier-officer-rgb), 0.14),
+    rgba(var(--tier-officer-2-rgb, var(--tier-officer-rgb)), 0.05) 60%,
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -5181,7 +5241,8 @@ input.comm-tag-hex {
   border-color: rgba(var(--tier-subofficer-rgb), 0.45);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-subofficer-rgb), 0.12),
+    rgba(var(--tier-subofficer-rgb), 0.16),
+    rgba(var(--tier-subofficer-2-rgb, var(--tier-subofficer-rgb)), 0.05) 60%,
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -5224,26 +5285,66 @@ input.comm-tag-hex {
   color: var(--muted);
 }
 
-/* El nombre del rango también va con su color (igual que el título de las
-   tarjetas del panel). */
+/* El nombre del rango va con el DEGRADADO de su rol (como el chip del perfil
+   y el título de las tarjetas del panel). */
 .staff-hierarchy-tier.owner .staff-hierarchy-info strong {
-  color: var(--tier-owner-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-owner-text),
+    var(--tier-owner-2-text, var(--tier-owner-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .staff-hierarchy-tier.admin .staff-hierarchy-info strong {
-  color: var(--tier-admin-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-admin-text),
+    var(--tier-admin-2-text, var(--tier-admin-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .staff-hierarchy-tier.officer .staff-hierarchy-info strong {
-  color: var(--tier-officer-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-officer-text),
+    var(--tier-officer-2-text, var(--tier-officer-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .staff-hierarchy-tier.subofficer .staff-hierarchy-info strong {
-  color: var(--tier-subofficer-text);
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-subofficer-text),
+    var(--tier-subofficer-2-text, var(--tier-subofficer-text))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .staff-hierarchy-tier.custom .staff-hierarchy-info strong {
-  color: var(--tier-custom-text, var(--text));
+  background-image: linear-gradient(
+    90deg,
+    var(--tier-custom-text, var(--text)),
+    var(--tier-custom-2-text, var(--tier-custom-text, var(--text)))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .staff-hierarchy-info {
@@ -5269,7 +5370,9 @@ input.comm-tag-hex {
   border-color: rgba(var(--tier-custom-rgb, 106, 168, 255), 0.4);
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-custom-rgb, 106, 168, 255), 0.12),
+    rgba(var(--tier-custom-rgb, 106, 168, 255), 0.14),
+    rgba(var(--tier-custom-2-rgb, var(--tier-custom-rgb, 106, 168, 255)), 0.05)
+      60%,
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -6294,11 +6397,13 @@ input.comm-tag-hex {
   filter: brightness(1.9) saturate(0.85);
 }
 
-/* Jerarquía de staff: mantener el tinte de cada rango sobre fondo claro */
+/* Jerarquía de staff: mantener el tinte de cada rango (con el degradado del
+   rol) sobre fondo claro */
 :root[data-theme="light"] .staff-hierarchy-tier.owner {
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-owner-rgb), 0.16),
+    rgba(var(--tier-owner-rgb), 0.18),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.06) 60%,
     var(--surface-card)
   );
 }
@@ -6306,7 +6411,8 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.admin {
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-admin-rgb), 0.16),
+    rgba(var(--tier-admin-rgb), 0.18),
+    rgba(var(--tier-admin-2-rgb, var(--tier-admin-rgb)), 0.06) 60%,
     var(--surface-card)
   );
 }
@@ -6314,7 +6420,8 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.officer {
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-officer-rgb), 0.14),
+    rgba(var(--tier-officer-rgb), 0.16),
+    rgba(var(--tier-officer-2-rgb, var(--tier-officer-rgb)), 0.06) 60%,
     var(--surface-card)
   );
 }
@@ -6322,7 +6429,8 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.subofficer {
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-subofficer-rgb), 0.12),
+    rgba(var(--tier-subofficer-rgb), 0.16),
+    rgba(var(--tier-subofficer-2-rgb, var(--tier-subofficer-rgb)), 0.05) 60%,
     var(--surface-card)
   );
 }
@@ -6330,7 +6438,9 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.custom {
   background: linear-gradient(
     160deg,
-    rgba(var(--tier-custom-rgb, 106, 168, 255), 0.1),
+    rgba(var(--tier-custom-rgb, 106, 168, 255), 0.14),
+    rgba(var(--tier-custom-2-rgb, var(--tier-custom-rgb, 106, 168, 255)), 0.05)
+      60%,
     var(--surface-card)
   );
 }

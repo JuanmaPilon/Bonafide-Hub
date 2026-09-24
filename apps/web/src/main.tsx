@@ -4222,37 +4222,69 @@ function App() {
   // Los rangos del panel toman SU color de los roles de Discord que tienen
   // asignados (el primero de cada rango, o sea el de mayor posición): así las
   // plaquitas de la jerarquía, los chips de rango, las tarjetas del panel y el
-  // chip de usuario quedan como un reflejo de Discord. Se escriben como
-  // variables CSS en el <html>, encima de la paleta fija de styles.css: esa
-  // paleta queda de valor por defecto para un rango sin roles, y el CSS sigue
-  // eligiendo la variante de texto de cada tema (por eso el efecto depende
-  // también de `theme`).
+  // chip de usuario quedan como un reflejo de Discord, con el DEGRADADO del rol
+  // si tiene dos colores (los --tier-*-2-* son ese segundo color). Se escriben
+  // como variables CSS en el <html>, encima de la paleta fija de styles.css:
+  // esa paleta queda de valor por defecto para un rango sin roles, y el CSS
+  // sigue eligiendo la variante de texto de cada tema (por eso el efecto
+  // depende también de `theme`).
   useEffect(() => {
     const root = document.documentElement;
-    const tierKeys: Array<StaffTier | "custom"> = [
+    const tierKeys = [
+      "owner",
       "admin",
       "officer",
       "subofficer",
       "custom",
-    ];
+    ] as const;
     const properties = tierKeys.flatMap((tier) => [
       `--tier-${tier}`,
+      `--tier-${tier}-2`,
       `--tier-${tier}-rgb`,
+      `--tier-${tier}-2-rgb`,
       `--tier-${tier}-text`,
+      `--tier-${tier}-2-text`,
     ]);
     for (const property of properties) {
       root.style.removeProperty(property);
     }
 
-    for (const tier of tierKeys) {
-      const hex = roleColorHex(staffByTier[tier][0]?.color);
+    const apply = (
+      tier: (typeof tierKeys)[number],
+      hex: string | null,
+      secondary: string | null,
+    ): void => {
       if (!hex) {
-        continue;
+        return;
       }
       const [r, g, b] = tagRgb(hex);
+      const [r2, g2, b2] = tagRgb(secondary ?? hex);
       root.style.setProperty(`--tier-${tier}`, hex);
       root.style.setProperty(`--tier-${tier}-rgb`, `${r}, ${g}, ${b}`);
       root.style.setProperty(`--tier-${tier}-text`, tierTextColor(hex, theme));
+      root.style.setProperty(`--tier-${tier}-2`, secondary ?? hex);
+      root.style.setProperty(`--tier-${tier}-2-rgb`, `${r2}, ${g2}, ${b2}`);
+      root.style.setProperty(
+        `--tier-${tier}-2-text`,
+        tierTextColor(secondary ?? hex, theme),
+      );
+    };
+
+    // Admin y "Super Admin" (la plaquita del owner) comparten color: en
+    // Discord el rango máximo de staff es el mismo rol que da el panel.
+    const adminRole = staffByTier.admin[0];
+    const adminColor = roleColorHex(adminRole?.color);
+    const adminSecondary = roleColorHex(adminRole?.secondaryColor);
+    apply("admin", adminColor, adminSecondary);
+    apply("owner", adminColor, adminSecondary);
+
+    for (const tier of ["officer", "subofficer", "custom"] as const) {
+      const role = staffByTier[tier][0];
+      apply(
+        tier,
+        roleColorHex(role?.color),
+        roleColorHex(role?.secondaryColor),
+      );
     }
   }, [staffByTier, theme]);
 
