@@ -239,13 +239,10 @@ export type XpRoleMultiplier = {
 
 export type XpRoleRule = {
   addRoleIds: string[];
-  color?: string;
   level: number;
   nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
-  // Con un segundo color, el nombre del miembro se pinta con degradado.
-  secondaryColor?: string;
   stacking: "stack" | "replace";
 };
 

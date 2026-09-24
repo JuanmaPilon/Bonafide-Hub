@@ -1510,6 +1510,9 @@ a:hover {
    perfil y en Roles por nivel; las variables --role-* las escribe el JS
    (ver roleChipStyle en main.tsx). */
 .role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
@@ -5194,6 +5197,55 @@ input.comm-tag-hex {
   flex-shrink: 0;
 }
 
+/* El punto de cada rango se pinta con el color de ESE rango (el de sus roles
+   de Discord, ver tierStyleVars en main.tsx): antes eran emojis de colores
+   fijos y quedaban desincronizados con el color real del rango. */
+.staff-hierarchy-tier.owner .staff-hierarchy-icon {
+  color: var(--tier-owner);
+}
+
+.staff-hierarchy-tier.admin .staff-hierarchy-icon {
+  color: var(--tier-admin);
+}
+
+.staff-hierarchy-tier.officer .staff-hierarchy-icon {
+  color: var(--tier-officer);
+}
+
+.staff-hierarchy-tier.subofficer .staff-hierarchy-icon {
+  color: var(--tier-subofficer);
+}
+
+.staff-hierarchy-tier.custom .staff-hierarchy-icon {
+  color: var(--tier-custom, #6aa8ff);
+}
+
+.staff-hierarchy-tier.none .staff-hierarchy-icon {
+  color: var(--muted);
+}
+
+/* El nombre del rango también va con su color (igual que el título de las
+   tarjetas del panel). */
+.staff-hierarchy-tier.owner .staff-hierarchy-info strong {
+  color: var(--tier-owner-text);
+}
+
+.staff-hierarchy-tier.admin .staff-hierarchy-info strong {
+  color: var(--tier-admin-text);
+}
+
+.staff-hierarchy-tier.officer .staff-hierarchy-info strong {
+  color: var(--tier-officer-text);
+}
+
+.staff-hierarchy-tier.subofficer .staff-hierarchy-info strong {
+  color: var(--tier-subofficer-text);
+}
+
+.staff-hierarchy-tier.custom .staff-hierarchy-info strong {
+  color: var(--tier-custom-text, var(--text));
+}
+
 .staff-hierarchy-info {
   display: grid;
   gap: 3px;
@@ -5211,12 +5263,13 @@ input.comm-tag-hex {
   line-height: 1.4;
 }
 
-/* Un rango con permisos sueltos (no el rango completo). */
+/* Un rango con permisos sueltos (no el rango completo). El color sale del
+   primer rol asignado (--tier-custom-rgb lo escribe la web desde el rol). */
 .staff-hierarchy-tier.custom {
-  border-color: rgba(106, 168, 255, 0.35);
+  border-color: rgba(var(--tier-custom-rgb, 106, 168, 255), 0.4);
   background: linear-gradient(
     160deg,
-    rgba(106, 168, 255, 0.1),
+    rgba(var(--tier-custom-rgb, 106, 168, 255), 0.12),
     rgba(10, 16, 31, 0.5)
   );
 }
@@ -6277,7 +6330,7 @@ input.comm-tag-hex {
 :root[data-theme="light"] .staff-hierarchy-tier.custom {
   background: linear-gradient(
     160deg,
-    rgba(106, 168, 255, 0.1),
+    rgba(var(--tier-custom-rgb, 106, 168, 255), 0.1),
     var(--surface-card)
   );
 }

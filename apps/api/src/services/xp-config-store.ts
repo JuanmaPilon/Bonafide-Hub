@@ -7,14 +7,10 @@ export type XpRoleMultiplier = {
 
 export type XpRoleRule = {
   addRoleIds: string[];
-  color?: string;
   level: number;
   nicknamePrefix?: string;
   removeRoleIds: string[];
   roleId: string;
-  // Segundo color del rango: con los dos, el nombre del miembro se pinta con
-  // un degradado (el mismo efecto que los roles con degradado de Discord).
-  secondaryColor?: string;
   stacking: "stack" | "replace";
 };
 
@@ -79,7 +75,6 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
         )
         .map((entry) => ({
           addRoleIds: normalizeRoleIds(entry.addRoleIds),
-          color: normalizeColor(entry.color),
           level: Number(entry.level) || 0,
           nicknamePrefix:
             typeof entry.nicknamePrefix === "string" &&
@@ -88,7 +83,6 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
               : undefined,
           removeRoleIds: normalizeRoleIds(entry.removeRoleIds),
           roleId: String(entry.roleId ?? ""),
-          secondaryColor: normalizeColor(entry.secondaryColor),
           stacking: (entry.stacking === "replace"
             ? "replace"
             : record?.roleStacking === "replace"
@@ -141,7 +135,6 @@ function normalizeLevelRoles(
   return levelRoles
     .map((rule) => ({
       addRoleIds: normalizeRoleIds(rule.addRoleIds),
-      color: normalizeColor(rule.color),
       level: Math.max(0, Math.floor(Number(rule.level) || 0)),
       nicknamePrefix:
         typeof rule.nicknamePrefix === "string" && rule.nicknamePrefix.trim()
@@ -149,7 +142,6 @@ function normalizeLevelRoles(
           : undefined,
       removeRoleIds: normalizeRoleIds(rule.removeRoleIds),
       roleId: String(rule.roleId ?? "").trim(),
-      secondaryColor: normalizeColor(rule.secondaryColor),
       stacking: (rule.stacking === "replace" ? "replace" : "stack") as
         | "stack"
         | "replace",

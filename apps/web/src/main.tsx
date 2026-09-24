@@ -249,8 +249,14 @@ function tierForModules(modules: string[]): StaffTier | null {
   return null;
 }
 
-// Un rol mostrado como chip: solo hace falta el id para quitarlo.
-type StaffRoleChip = { id: string; name: string };
+// Un rol mostrado como chip: nombre para mostrar y su color de Discord para
+// pintarlo (con degradado si el rol tiene dos colores).
+type StaffRoleChip = {
+  color?: number;
+  id: string;
+  name: string;
+  secondaryColor?: number;
+};
 
 // Chips de roles + selector "Agregar rol…". Se usa en las plaquitas de la
 // jerarquía (el rol entra con TODOS los permisos de ese rango) y en la lista
@@ -275,8 +281,12 @@ function StaffRoleControls({
   return (
     <div className="staff-permission-roles">
       {assigned.map((role) => (
-        <span className="staff-permission-role" key={role.id}>
-          {role.name}
+        <span
+          className={roleChipClass(role)}
+          key={role.id}
+          style={roleChipStyle(role)}
+        >
+          <span className="role-chip-name">{role.name}</span>
           <button
             aria-label={`Quitar ${role.name}`}
             className="staff-permission-remove"
@@ -1290,6 +1300,35 @@ function isPaleRoleColor(hex: string): boolean {
 function isDarkRoleColor(hex: string): boolean {
   const [r, g, b] = tagRgb(hex);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 60;
+}
+
+// Color de TEXTO de un rango (título de tarjeta, nombre en la plaquita): el
+// color del rol, ajustado para que se lea sobre el fondo del tema en uso — es
+// el equivalente por rol de los --tier-*-text de la paleta fija (que tiene un
+// valor para cada tema).
+function tierTextColor(hex: string, theme: "dark" | "light"): string {
+  const [r, g, b] = tagRgb(hex);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // En claro, cualquier color claro se oscurece; en oscuro, los casi negros
+  // (los grises de Discord) se aclaran.
+  const factor =
+    theme === "light"
+      ? luminance > 100
+        ? 100 / luminance
+        : 1
+      : luminance < 60
+        ? 1.9
+        : 1;
+  if (factor === 1) {
+    return hex;
+  }
+  return `#${[r, g, b]
+    .map((channel) =>
+      Math.min(255, Math.round(channel * factor))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 }
 
 function roleChipClass(role: {
@@ -4158,23 +4197,64 @@ function App() {
 
   // Roles asignados a cada rango, para la vista por jerarquía. Los que tienen
   // permisos sueltos (no el rango completo) van a "custom": así el resumen no
-  // esconde a nadie que sí tenga acceso al panel.
-  const staffByTier: Record<StaffTier | "custom", GuildRole[]> = {
-    admin: [],
-    officer: [],
-    subofficer: [],
-    custom: [],
-  };
-  for (const role of guildRoles) {
-    const rule = (config.adminRoleModules ?? []).find(
-      (entry) => entry.roleId === role.id,
-    );
-    const modules = rule?.modules ?? [];
-    if (modules.length === 0) {
-      continue;
+  // esconde a nadie que sí tenga acceso al panel. El orden de guildRoles (por
+  // posición) deja primero el rol más alto de cada rango.
+  const staffByTier = useMemo<Record<StaffTier | "custom", GuildRole[]>>(() => {
+    const byTier: Record<StaffTier | "custom", GuildRole[]> = {
+      admin: [],
+      officer: [],
+      subofficer: [],
+      custom: [],
+    };
+    for (const role of guildRoles) {
+      const rule = (config.adminRoleModules ?? []).find(
+        (entry) => entry.roleId === role.id,
+      );
+      const modules = rule?.modules ?? [];
+      if (modules.length === 0) {
+        continue;
+      }
+      byTier[tierForModules(modules) ?? "custom"].push(role);
     }
-    staffByTier[tierForModules(modules) ?? "custom"].push(role);
-  }
+    return byTier;
+  }, [config.adminRoleModules, guildRoles]);
+
+  // Los rangos del panel toman SU color de los roles de Discord que tienen
+  // asignados (el primero de cada rango, o sea el de mayor posición): así las
+  // plaquitas de la jerarquía, los chips de rango, las tarjetas del panel y el
+  // chip de usuario quedan como un reflejo de Discord. Se escriben como
+  // variables CSS en el <html>, encima de la paleta fija de styles.css: esa
+  // paleta queda de valor por defecto para un rango sin roles, y el CSS sigue
+  // eligiendo la variante de texto de cada tema (por eso el efecto depende
+  // también de `theme`).
+  useEffect(() => {
+    const root = document.documentElement;
+    const tierKeys: Array<StaffTier | "custom"> = [
+      "admin",
+      "officer",
+      "subofficer",
+      "custom",
+    ];
+    const properties = tierKeys.flatMap((tier) => [
+      `--tier-${tier}`,
+      `--tier-${tier}-rgb`,
+      `--tier-${tier}-text`,
+    ]);
+    for (const property of properties) {
+      root.style.removeProperty(property);
+    }
+
+    for (const tier of tierKeys) {
+      const hex = roleColorHex(staffByTier[tier][0]?.color);
+      if (!hex) {
+        continue;
+      }
+      const [r, g, b] = tagRgb(hex);
+      root.style.setProperty(`--tier-${tier}`, hex);
+      root.style.setProperty(`--tier-${tier}-rgb`, `${r}, ${g}, ${b}`);
+      root.style.setProperty(`--tier-${tier}-text`, tierTextColor(hex, theme));
+    }
+  }, [staffByTier, theme]);
 
   async function refreshSession(): Promise<void> {
     setLoadingSession(true);
@@ -6450,22 +6530,17 @@ function App() {
     }
   }
 
-  // Colores efectivos de un rango: manda el color del ROL en Discord (con su
-  // degradado, igual que el chip del perfil) y el color guardado en la regla
-  // queda como respaldo para roles sin color propio.
+  // Colores del rango: los del ROL de Discord (con su degradado, igual que el
+  // chip del perfil). Si el rol no tiene color, el nombre queda sin pintar.
   function ruleColorsFor(rule: XpRoleRule): {
     color?: string;
     secondary?: string;
   } {
     const role = guildRoles.find((entry) => entry.id === rule.roleId);
-    const roleColor = roleColorHex(role?.color);
-    if (roleColor) {
-      return {
-        color: roleColor,
-        secondary: roleColorHex(role?.secondaryColor) ?? undefined,
-      };
-    }
-    return { color: rule.color, secondary: rule.secondaryColor };
+    return {
+      color: roleColorHex(role?.color) ?? undefined,
+      secondary: roleColorHex(role?.secondaryColor) ?? undefined,
+    };
   }
 
   function levelColorFor(
@@ -6477,7 +6552,7 @@ function App() {
 
     let match: XpRoleRule | undefined;
     for (const rule of xpConfig.levelRoles) {
-      if (rule.level <= level && (rule.roleId || rule.color)) {
+      if (rule.level <= level && rule.roleId) {
         match = rule;
       }
     }
@@ -7866,7 +7941,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              👑
+                              ●
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Owner / Super Admin</strong>
@@ -7881,7 +7956,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              🟠
+                              ●
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Admin</strong>
@@ -7905,7 +7980,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              🟡
+                              ●
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Officer</strong>
@@ -7929,7 +8004,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              🟣
+                              ●
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Sub Officer</strong>
@@ -7956,7 +8031,7 @@ function App() {
                                 className="staff-hierarchy-icon"
                                 aria-hidden="true"
                               >
-                                🔷
+                                ●
                               </span>
                               <div className="staff-hierarchy-info">
                                 <strong>Personalizado</strong>
@@ -7981,7 +8056,7 @@ function App() {
                               className="staff-hierarchy-icon"
                               aria-hidden="true"
                             >
-                              ⚪
+                              ●
                             </span>
                             <div className="staff-hierarchy-info">
                               <strong>Sin acceso</strong>
@@ -8714,8 +8789,7 @@ function App() {
                             <h4>Roles por nivel</h4>
                             <p className="muted-text">
                               El nombre se pinta con el color del rol en Discord
-                              (con degradado si lo tiene). El color manual se usa
-                              solo si el rol no tiene color propio.
+                              (con degradado si lo tiene).
                             </p>
                             <div className="xp-roles">
                               {xpConfig.levelRoles.length === 0 ? (
@@ -8785,75 +8859,6 @@ function App() {
                                           })
                                         }
                                       />
-                                    </label>
-                                    <label
-                                      className="xp-color-input"
-                                      title="Se usa solo si el rol no tiene color en Discord"
-                                    >
-                                      <span>Color manual</span>
-                                      <span className="xp-color-row">
-                                        <input
-                                          type="color"
-                                          value={rule.color ?? "#6aa8ff"}
-                                          onChange={(event) =>
-                                            updateXpRole(rule.level, {
-                                              color: event.target.value,
-                                            })
-                                          }
-                                        />
-                                        {rule.color ? (
-                                          <button
-                                            type="button"
-                                            className="ghost-button small"
-                                            onClick={() =>
-                                              updateXpRole(rule.level, {
-                                                color: undefined,
-                                              })
-                                            }
-                                          >
-                                            Quitar
-                                          </button>
-                                        ) : null}
-                                      </span>
-                                    </label>
-                                    <label
-                                      className="xp-color-input"
-                                      title="Se usa solo si el rol no tiene color en Discord"
-                                    >
-                                      <span>2º manual</span>
-                                      <span className="xp-color-row">
-                                        <input
-                                          type="color"
-                                          value={
-                                            rule.secondaryColor ?? "#ff3700"
-                                          }
-                                          onChange={(event) =>
-                                            updateXpRole(rule.level, {
-                                              // Sin color principal el
-                                              // degradado no existe: se pone
-                                              // el mismo que muestra el
-                                              // primer selector.
-                                              color:
-                                                rule.color ?? "#6aa8ff",
-                                              secondaryColor:
-                                                event.target.value,
-                                            })
-                                          }
-                                        />
-                                        {rule.secondaryColor ? (
-                                          <button
-                                            type="button"
-                                            className="ghost-button small"
-                                            onClick={() =>
-                                              updateXpRole(rule.level, {
-                                                secondaryColor: undefined,
-                                              })
-                                            }
-                                          >
-                                            Quitar
-                                          </button>
-                                        ) : null}
-                                      </span>
                                     </label>
                                     <div
                                       className="xp-color-preview"

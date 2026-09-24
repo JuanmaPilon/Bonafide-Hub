@@ -446,16 +446,10 @@ export function describeXpConfigChanges(
     list && list.length > 0
       ? [...list]
           .sort((left, right) => left.level - right.level)
-          .map((rule) => {
-            // Los colores entran en el detalle: son una parte visible del
-            // rango (el nombre del miembro se pinta con ellos).
-            const color = rule.color
-              ? rule.secondaryColor
-                ? `, color ${rule.color}→${rule.secondaryColor}`
-                : `, color ${rule.color}`
-              : "";
-            return `nivel ${rule.level} → ${roleName(rule.roleId)} (${STACKING_LABELS[rule.stacking] ?? rule.stacking}${color})`;
-          })
+          .map(
+            (rule) =>
+              `nivel ${rule.level} → ${roleName(rule.roleId)} (${STACKING_LABELS[rule.stacking] ?? rule.stacking})`,
+          )
           .join(", ")
       : null;
 
