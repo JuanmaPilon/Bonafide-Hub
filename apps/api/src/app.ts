@@ -105,7 +105,7 @@ import {
   eventExistsAt,
   archiveEventOccurrence,
   getEvent,
-  getEventPlayerCharacter,
+  getEventPlayerProfile,
   listEventImages,
   listEvents,
   listEventsPendingAutoComplete,
@@ -5652,14 +5652,7 @@ export function buildApp() {
         ["Informe de asistencia", event.title],
         ["Evento", csvMoment(event.startsAt)],
         [],
-        [
-          `Anotados (${signups.length})`,
-          "",
-          "",
-          "",
-          "",
-          "",
-        ],
+        [`Anotados (${signups.length})`, "", "", "", "", ""],
         ["Nombre", "Estado", "Rol", "Clase", "Spec", "Personaje"],
       ];
       for (const signup of signups) {
@@ -5681,13 +5674,12 @@ export function buildApp() {
         );
         const signed = new Set(signups.map((signup) => signup.userId));
         const missing = members
-          .filter(
-            (member) =>
-              Boolean(
-                member.user?.id &&
-                  !signed.has(member.user.id) &&
-                  member.roles?.includes(event.requiredRoleId as string),
-              ),
+          .filter((member) =>
+            Boolean(
+              member.user?.id &&
+              !signed.has(member.user.id) &&
+              member.roles?.includes(event.requiredRoleId as string),
+            ),
           )
           .map(
             (member) =>
@@ -5790,17 +5782,21 @@ export function buildApp() {
           .send({ ok: false, error: "Evento no encontrado" });
       }
       // Con `?userId=` el bot recibe además el personaje RECORDADO de ese
-      // jugador, así puede exigirlo solo cuando de verdad falta (y no pedirlo
-      // de nuevo a quien ya lo cargó en otro evento).
+      // jugador y la CLASE con la que lo recordó, así puede exigirlo solo
+      // cuando de verdad falta (no pedirlo a quien ya lo cargó en otro evento,
+      // pero sí volver a pedirlo si cambió de clase: juega otro personaje).
       const query = request.query as { userId?: string };
-      const playerCharacter = query.userId
-        ? ((await getEventPlayerCharacter(params.guildId, query.userId)) ??
-          null)
-        : null;
+      const profile = query.userId
+        ? await getEventPlayerProfile(params.guildId, query.userId)
+        : {};
       return {
         ok: true,
         guildId: params.guildId,
-        event: { ...event, playerCharacter },
+        event: {
+          ...event,
+          playerCharacter: profile.character ?? null,
+          playerCharacterClass: profile.wowClass ?? null,
+        },
       };
     },
   );

@@ -952,28 +952,70 @@ export async function deleteEvent(
   return result.count > 0;
 }
 
+// ¿Es la misma clase? Se compara sin distinguir mayúsculas ni espacios, y
+// cuando falta algún dato se considera que SÍ lo es (no invalidamos nada por
+// falta de información).
+function sameClass(left?: string | null, right?: string | null): boolean {
+  const a = left?.trim().toLowerCase();
+  const b = right?.trim().toLowerCase();
+  if (!a || !b) {
+    return true;
+  }
+  return a === b;
+}
+
 // Personaje recordado de un jugador en la guild (para precargar los signups).
+// `wowClass` es la clase con la que se está anotando AHORA: si cambió de clase
+// el nombre viejo no aplica (juega otro personaje) y devolvemos undefined para
+// que se lo vuelvan a pedir.
 export async function getEventPlayerCharacter(
   guildId: string,
   userId: string,
+  wowClass?: string,
 ): Promise<string | undefined> {
   const record = await prisma.eventPlayerProfile.findUnique({
     where: { guildId_userId: { guildId, userId } },
-    select: { character: true },
+    select: { character: true, wowClass: true },
   });
-  return record?.character?.trim() || undefined;
+  const character = record?.character?.trim();
+  if (!character || !sameClass(record?.wowClass, wowClass)) {
+    return undefined;
+  }
+  return character;
+}
+
+// Datos recordados del jugador (los usa el bot para saber si el personaje que
+// tiene sirve para la clase que está eligiendo).
+export async function getEventPlayerProfile(
+  guildId: string,
+  userId: string,
+): Promise<{ character?: string; wowClass?: string }> {
+  const record = await prisma.eventPlayerProfile.findUnique({
+    where: { guildId_userId: { guildId, userId } },
+    select: { character: true, wowClass: true },
+  });
+  return {
+    character: record?.character?.trim() || undefined,
+    wowClass: record?.wowClass?.trim() || undefined,
+  };
 }
 
 // Guarda (o borra, con null) el personaje recordado del jugador.
+// `wowClass === undefined` deja la clase guardada como estaba.
 async function setEventPlayerCharacter(
   guildId: string,
   userId: string,
   character: string | null,
+  wowClass?: string | null,
 ): Promise<void> {
+  const classValue = wowClass === undefined ? undefined : wowClass?.trim() || null;
   await prisma.eventPlayerProfile.upsert({
     where: { guildId_userId: { guildId, userId } },
-    create: { character, guildId, userId },
-    update: { character },
+    create: { character, guildId, userId, wowClass: classValue ?? null },
+    update:
+      classValue === undefined
+        ? { character }
+        : { character, wowClass: classValue },
   });
 }
 
@@ -1002,18 +1044,29 @@ export async function upsertSignup(input: {
   const providedCharacter = input.character?.trim();
   let character: string | null;
   if (providedCharacter) {
-    // Vino un personaje: se guarda en la inscripción y se recuerda.
+    // Vino un personaje: se guarda en la inscripción y se recuerda CON la
+    // clase que eligió, para saber más adelante si sigue siendo el mismo PJ.
     character = providedCharacter;
-    await setEventPlayerCharacter(input.guildId, input.userId, character);
+    await setEventPlayerCharacter(
+      input.guildId,
+      input.userId,
+      character,
+      input.wowClass ?? null,
+    );
   } else if (input.character !== undefined && existing?.character) {
     // Lo vaciaron a propósito en una inscripción que ya tenía personaje.
     character = null;
-    await setEventPlayerCharacter(input.guildId, input.userId, null);
+    await setEventPlayerCharacter(input.guildId, input.userId, null, null);
   } else {
     // No lo mandaron (o es una inscripción nueva sin personaje): heredamos el
-    // que el jugador usó la última vez, así no hay que escribirlo de nuevo.
+    // que el jugador usó la última vez CON ESA MISMA CLASE, así no hay que
+    // escribirlo de nuevo. Si cambió de clase no se hereda nada.
     character =
-      (await getEventPlayerCharacter(input.guildId, input.userId)) ?? null;
+      (await getEventPlayerCharacter(
+        input.guildId,
+        input.userId,
+        input.wowClass,
+      )) ?? null;
   }
   const record = await prisma.eventSignup.upsert({
     where: {
@@ -1168,7 +1221,7 @@ export async function resetSignup(
   userId: string,
 ): Promise<boolean> {
   const deleted = await deleteSignup(guildId, eventId, userId);
-  await setEventPlayerCharacter(guildId, userId, null);
+  await setEventPlayerCharacter(guildId, userId, null, null);
   return deleted;
 }
 

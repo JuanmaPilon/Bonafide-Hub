@@ -89,6 +89,9 @@ type RemoteEvent = {
     // Personaje que el jugador usó la última vez (lo manda el API cuando se
     // pide el evento con ?userId=): así no lo volvemos a pedir en cada evento.
     playerCharacter?: string | null;
+    // Clase con la que recordó ese personaje. Si no coincide con la clase que
+    // elige ahora, el nombre viejo no sirve (juega otro personaje).
+    playerCharacterClass?: string | null;
     signups?: RemoteSignup[];
     status?: string;
   };
@@ -197,18 +200,50 @@ async function fetchEvent(
   return payload.event ?? null;
 }
 
+// ¿Es la misma clase? Sin dato de alguno de los dos lados se considera que sí:
+// no invalidamos un personaje por falta de información.
+function sameClass(left?: string | null, right?: string | null): boolean {
+  const a = left?.trim().toLowerCase();
+  const b = right?.trim().toLowerCase();
+  if (!a || !b) {
+    return true;
+  }
+  return a === b;
+}
+
+// Personaje que le SIRVE para la clase que está eligiendo: el de su propia
+// inscripción (si es de esa clase) o el recordado (si también es de esa clase).
+// Cuando cambió de clase ninguno aplica: se entiende que juega otro personaje.
+function usableCharacter(
+  event: RemoteEvent["event"] | null,
+  userId: string,
+  className?: string,
+): string | undefined {
+  const mine = event?.signups?.find((signup) => signup.userId === userId);
+  if (mine?.character && sameClass(mine.wowClass, className)) {
+    return mine.character;
+  }
+  if (
+    event?.playerCharacter &&
+    sameClass(event.playerCharacterClass, className)
+  ) {
+    return event.playerCharacter;
+  }
+  return undefined;
+}
+
 // ¿Hay que pedirle el personaje ANTES de guardar la inscripción? Solo si el
-// evento lo pide y el jugador no tiene ninguno: ni en este evento ni recordado
-// de antes. En ese caso no se guarda nada hasta que lo complete.
+// evento lo pide y no tiene ninguno que sirva para la clase elegida (ni en este
+// evento ni recordado). En ese caso no se guarda nada hasta que lo complete.
 function needsCharacter(
   event: RemoteEvent["event"] | null,
   userId: string,
+  className?: string,
 ): boolean {
   if (!event || event.characterEnabled === false) {
     return false;
   }
-  const mine = event.signups?.find((signup) => signup.userId === userId);
-  return !mine?.character && !event.playerCharacter;
+  return !usableCharacter(event, userId, className);
 }
 
 // Inscripción que quedó esperando el personaje: el modal no puede llevar
@@ -599,7 +634,7 @@ async function handleQuickStatus(
   // todavía; se lo pedimos con el modal (obligatorio) y la inscripción se
   // completa cuando lo envía. Solo para los estados que van al roster: quien
   // marca "no asisto" no necesita personaje.
-  if (needsWizard && needsCharacter(event, userId)) {
+  if (needsWizard && needsCharacter(event, userId, mine?.wowClass)) {
     pendingSignups.set(pendingKey(userId, eventId), {
       className: mine?.wowClass,
       role: mine?.role,
@@ -611,7 +646,7 @@ async function handleQuickStatus(
   }
 
   const result = await putSignup({
-    character: mine?.character,
+    character: usableCharacter(event, userId, mine?.wowClass),
     guildId,
     eventId,
     role: mine?.role,
@@ -702,10 +737,11 @@ export async function handleEventSignupInteraction(
 
     const mine = event?.signups?.find((signup) => signup.userId === userId);
 
-    // El evento pide personaje y el jugador no tiene ninguno (ni recordado):
-    // NO guardamos todavía. Se lo pedimos con el modal (obligatorio) y la
+    // El evento pide personaje y el jugador no tiene ninguno para la clase que
+    // acaba de elegir (ni en este evento ni recordado de la misma clase): NO
+    // guardamos todavía. Se lo pedimos con el modal (obligatorio) y la
     // inscripción se completa cuando lo envía.
-    if (needsCharacter(event, userId)) {
+    if (needsCharacter(event, userId, className)) {
       pendingSignups.set(pendingKey(userId, eventId), {
         className,
         role,
@@ -749,12 +785,18 @@ export async function handleEventSignupInteraction(
       return;
     }
     const event = await fetchEvent(guildId, eventId, userId);
-    const mine = event?.signups?.find((signup) => signup.userId === userId);
     await openCharacterModal(interaction, eventId, {
       // Si el evento pide personaje, el campo es obligatorio (para olvidarlo
       // está el botón "Resetear registro").
       required: event?.characterEnabled !== false,
-      value: mine?.character ?? event?.playerCharacter ?? undefined,
+      // Solo se precarga el personaje si sirve para la clase con la que está
+      // anotado (si no, es de otro PJ y se muestra vacío).
+      value: (() => {
+        const mine = event?.signups?.find(
+          (signup) => signup.userId === userId,
+        );
+        return usableCharacter(event, userId, mine?.wowClass);
+      })(),
     });
     return;
   }

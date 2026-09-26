@@ -9788,7 +9788,6 @@ function App() {
                             ) : null}
                           </div>
                         </div>
-
                       </div>
                     </details>
                   ) : null}

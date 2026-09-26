@@ -330,13 +330,16 @@ model EventSignup {
 }
 
 // Memoria por jugador de los eventos: guarda el nombre de personaje que usó
-// la última vez (por guild), así los próximos signups ya lo traen sin volver
-// a escribirlo. Se actualiza con cada inscripción: si manda un personaje se
-// guarda, si manda vacío se olvida, y si no manda nada se hereda.
+// la última vez (por guild) y la CLASE con la que lo usó, así los próximos
+// signups ya lo traen sin volver a escribirlo. Se actualiza con cada
+// inscripción: si manda un personaje se guarda, si manda vacío se olvida, y si
+// no manda nada se hereda (solo si la clase coincide: si el jugador cambió de
+// clase se entiende que juega otro personaje y se lo vuelve a pedir).
 model EventPlayerProfile {
   guildId   String
   userId    String
   character String?
+  wowClass  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

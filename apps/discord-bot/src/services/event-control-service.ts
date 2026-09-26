@@ -378,7 +378,12 @@ async function processReport(
         })) !== null;
     }
 
-    if (channelDelivered || delivered || peopleDelivered > 0 || fallbackDelivered) {
+    if (
+      channelDelivered ||
+      delivered ||
+      peopleDelivered > 0 ||
+      fallbackDelivered
+    ) {
       await postAction(guild.id, event.id, "report-sent");
       console.log(
         `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (canal=${channelDelivered ? "sí" : "no"}, dm=${delivered ? "sí" : "no"}, personas=${peopleDelivered})`,
