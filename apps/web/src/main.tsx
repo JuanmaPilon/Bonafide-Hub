@@ -10088,9 +10088,7 @@ function App() {
                       <article className="comunicado-card">
                         <div className="comunicado-detail-head">
                           <h3>{currentComunicado.title}</h3>
-                          <ComunicadoTags
-                            tags={currentComunicado.tags ?? []}
-                          />
+                          <ComunicadoTags tags={currentComunicado.tags ?? []} />
                           {currentComunicado.publishedAt ? (
                             <span className="comunicado-date">
                               {formatDate24(currentComunicado.publishedAt)}
@@ -10192,7 +10190,9 @@ function App() {
                             />
                           );
                         })}
-                        {published.some((comm) => (comm.tags ?? []).length === 0) ? (
+                        {published.some(
+                          (comm) => (comm.tags ?? []).length === 0,
+                        ) ? (
                           <button
                             className={`event-filter-chip${comunicadoTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
                             onClick={() =>

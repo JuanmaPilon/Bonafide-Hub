@@ -631,11 +631,7 @@ export function describeCommunicationChanges(
       format: (value) => snippetText(String(value ?? "")),
       label: "texto",
     },
-    auditTextChange(
-      "etiquetas",
-      tagsText(previous.tags),
-      tagsText(next.tags),
-    ),
+    auditTextChange("etiquetas", tagsText(previous.tags), tagsText(next.tags)),
     {
       after: next.channelId,
       before: previous.channelId,
