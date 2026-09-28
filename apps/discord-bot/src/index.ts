@@ -264,8 +264,15 @@ function hasEditMethod(
   return isObjectRecord(value) && typeof value.edit === "function";
 }
 
-function hasRawPosition(value: unknown): value is { rawPosition: number } {
-  return isObjectRecord(value) && typeof value.rawPosition === "number";
+// OJO: `position` (getter de discord.js) es el ÍNDICE del canal dentro del
+// grupo de canales de voz de su categoría, calculado sobre la misma lista
+// ordenada que usa `setPosition`. Es lo que hay que usar para posicionar un
+// canal: `rawPosition` es el valor crudo de la API y NO es el índice.
+function hasRelativePosition(value: unknown): value is {
+  parentId?: string | null;
+  position: number;
+} {
+  return isObjectRecord(value) && typeof value.position === "number";
 }
 
 function hasSetPosition(value: unknown): value is {
@@ -647,13 +654,23 @@ async function createDynamicVoiceChannelForMember(newState: {
     return;
   }
 
+  // Dónde va la sala nueva. El canal AFK está casi siempre en la misma
+  // categoría que el canal creador, y la sala va justo ARRIBA de él: para eso
+  // pasamos el ÍNDICE del AFK dentro de la categoría (no `rawPosition`), porque
+  // `setPosition` trabaja en índices y Discord deja HUECOS al borrar canales
+  // (visto en producción: 0, 2, 3, 4, 6 → pasar `rawPosition - 1` mandaba la
+  // sala al último lugar, o sea DEBAJO del AFK: el caso intermitente que
+  // reportó el usuario). Si el AFK no está en la misma categoría, va al
+  // principio de la categoría del canal creador.
   let targetPosition = 0;
   if (newState.guild.afkChannelId) {
     const afkChannel = await newState.guild.channels
       .fetch(newState.guild.afkChannelId)
       .catch(() => null);
-    if (hasRawPosition(afkChannel)) {
-      targetPosition = Math.max(afkChannel.rawPosition - 1, 0);
+    if (hasRelativePosition(afkChannel)) {
+      const sameParent =
+        (afkChannel.parentId ?? null) === (creatorChannel.parentId ?? null);
+      targetPosition = sameParent ? Math.max(afkChannel.position, 0) : 0;
     }
   }
 
