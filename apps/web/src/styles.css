@@ -572,13 +572,16 @@ a:hover {
   font: inherit;
   padding: 0;
   text-align: left;
+  transition: opacity 140ms ease;
   white-space: inherit;
 }
 
+/* Al pasar el mouse apenas se atenúa: el subrayado se veía como un link viejo
+   en los nombres de color plano y ni se notaba en los que tienen degradado
+   (background-clip: text). El cursor ya avisa que se puede clickear. */
 .member-link:hover,
 .member-link:focus-visible {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  opacity: 0.82;
 }
 
 .leaderboard-user {
@@ -4861,65 +4864,6 @@ select.list-order {
 .comunicado-acc-heading .comunicado-tag {
   align-self: center;
   font-size: 0.7rem;
-}
-
-.comm-tag-editor {
-  display: grid;
-  gap: 10px;
-}
-
-.comm-tag-editor label {
-  display: grid;
-  gap: 7px;
-}
-
-.comm-tag-editor label > span,
-.comm-tag-color > span {
-  color: #bdd8d2;
-  font-size: 0.84rem;
-}
-
-.comm-tag-color {
-  display: grid;
-  gap: 7px;
-}
-
-.comm-tag-color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-input.comm-tag-swatch {
-  width: 46px;
-  height: 42px;
-  flex: 0 0 auto;
-  padding: 3px;
-  cursor: pointer;
-}
-
-input.comm-tag-hex {
-  width: 130px;
-  flex: 0 0 auto;
-  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-}
-
-.comm-tag-preview {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 26px;
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-:root[data-theme="light"] .comm-tag-editor label > span,
-:root[data-theme="light"] .comm-tag-color > span {
-  color: #33415c;
-}
-
-:root[data-theme="light"] .comm-tag-preview {
-  color: #3f4f6b;
 }
 
 /* ---------- Módulos activos (toggles del panel Admin) ---------- */

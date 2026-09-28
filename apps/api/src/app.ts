@@ -7157,8 +7157,7 @@ export function buildApp() {
       authorName?: string;
       channelId?: string;
       content?: string;
-      tagColor?: string;
-      tagLabel?: string;
+      tags?: unknown;
       title?: string;
     };
 
@@ -7175,8 +7174,7 @@ export function buildApp() {
       channelId: body.channelId,
       content,
       guildId: params.guildId,
-      tagColor: body.tagColor,
-      tagLabel: body.tagLabel,
+      tags: body.tags,
       title,
     });
 
@@ -7218,8 +7216,7 @@ export function buildApp() {
         authorName?: string;
         channelId?: string;
         content?: string;
-        tagColor?: string;
-        tagLabel?: string;
+        tags?: unknown;
         title?: string;
       };
 
@@ -7228,8 +7225,7 @@ export function buildApp() {
         channelId: body.channelId,
         content: body.content?.trim(),
         id: params.communicationId,
-        tagColor: body.tagColor,
-        tagLabel: body.tagLabel,
+        tags: body.tags,
         title: body.title?.trim(),
       });
 

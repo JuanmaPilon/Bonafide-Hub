@@ -1,58 +1,18 @@
 import { Prisma, prisma } from "../db/prisma.js";
+import {
+  DEFAULT_TAG_COLOR,
+  MAX_TAGS,
+  normalizeTags,
+  tagsFromRecord,
+  type Tag,
+} from "./tags.js";
 
-export const MAX_EVENT_TAGS = 6;
-export const DEFAULT_EVENT_TAG_COLOR = "#6aa8ff";
-
-export type EventTag = {
-  color: string;
-  label: string;
-};
-
-function normalizeTagColor(value: unknown): string {
-  const hex = String(value ?? "")
-    .trim()
-    .replace(/^#/, "");
-  const expanded =
-    hex.length === 3
-      ? hex
-          .split("")
-          .map((char) => char + char)
-          .join("")
-      : hex;
-  return /^[0-9a-f]{6}$/i.test(expanded)
-    ? `#${expanded.toLowerCase()}`
-    : DEFAULT_EVENT_TAG_COLOR;
-}
-
-// Acepta lo que venga (body del request o JSON de la base) y devuelve una lista
-// limpia: sin vacíos, sin repetidos (por texto) y con tope. El color se
-// normaliza a #rrggbb para que la web y Discord pinten lo mismo.
-export function normalizeEventTags(value: unknown): EventTag[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const tags: EventTag[] = [];
-  for (const entry of value) {
-    const label = String((entry as { label?: unknown } | null)?.label ?? "")
-      .trim()
-      .slice(0, 24);
-    if (!label) {
-      continue;
-    }
-    if (tags.some((tag) => tag.label.toLowerCase() === label.toLowerCase())) {
-      continue;
-    }
-    tags.push({
-      color: normalizeTagColor((entry as { color?: unknown }).color),
-      label,
-    });
-    if (tags.length >= MAX_EVENT_TAGS) {
-      break;
-    }
-  }
-  return tags;
-}
+// Etiquetas de un evento: los helpers viven en tags.ts (los comparte con los
+// comunicados). Se mantienen los nombres viejos para no tocar los call sites.
+export const MAX_EVENT_TAGS = MAX_TAGS;
+export const DEFAULT_EVENT_TAG_COLOR = DEFAULT_TAG_COLOR;
+export const normalizeEventTags = normalizeTags;
+export type EventTag = Tag;
 
 // ── Catálogo de opciones del Módulo X ───────────────────────────────
 // Clases de WoW, roles de combate y tipos de evento. Se definen acá como
@@ -403,13 +363,7 @@ function toSignup(record: SignupRecord): EventSignup {
 // única del modelo viejo (así los eventos anteriores siguen mostrando la suya
 // sin migrar la base).
 function eventTags(record: EventRecord): EventTag[] {
-  const tags = normalizeEventTags(record.tags);
-  if (tags.length > 0) {
-    return tags;
-  }
-  return normalizeEventTags(
-    record.tagLabel ? [{ color: record.tagColor, label: record.tagLabel }] : [],
-  );
+  return tagsFromRecord(record);
 }
 
 function toEvent(record: EventRecord): HubEvent {
@@ -704,6 +658,10 @@ export async function updateEvent(
             : undefined,
       startsAt: input.startsAt ? new Date(input.startsAt) : undefined,
       status: input.status,
+      // Al guardar etiquetas se limpian las columnas viejas: si no, una lista
+      // vacía haría reaparecer la etiqueta única del modelo anterior.
+      tagColor: input.tags === undefined ? undefined : null,
+      tagLabel: input.tags === undefined ? undefined : null,
       tags:
         input.tags === undefined ? undefined : normalizeEventTags(input.tags),
       title: input.title,
@@ -1008,7 +966,8 @@ async function setEventPlayerCharacter(
   character: string | null,
   wowClass?: string | null,
 ): Promise<void> {
-  const classValue = wowClass === undefined ? undefined : wowClass?.trim() || null;
+  const classValue =
+    wowClass === undefined ? undefined : wowClass?.trim() || null;
   await prisma.eventPlayerProfile.upsert({
     where: { guildId_userId: { guildId, userId } },
     create: { character, guildId, userId, wowClass: classValue ?? null },

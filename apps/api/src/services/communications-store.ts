@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
-import { prisma } from "../db/prisma.js";
+import { Prisma, prisma } from "../db/prisma.js";
+import { normalizeTags, tagsFromRecord, type Tag } from "./tags.js";
 
 export type CommunicationStatus = "draft" | "published";
 
@@ -15,8 +16,8 @@ export type Communication = {
   // Última publicación. Sin fecha = borrador.
   publishedAt?: Date;
   status: CommunicationStatus;
-  tagColor?: string;
-  tagLabel?: string;
+  // Etiquetas visibles en la web (varias, como en los eventos).
+  tags: Tag[];
   title: string;
   updatedAt: Date;
 };
@@ -33,6 +34,7 @@ function toCommunication(record: {
   status: string;
   tagColor: string | null;
   tagLabel: string | null;
+  tags: unknown;
   title: string;
   updatedAt: Date;
 }): Communication {
@@ -48,8 +50,7 @@ function toCommunication(record: {
     status: (record.status === "published"
       ? "published"
       : "draft") as CommunicationStatus,
-    tagColor: record.tagColor ?? undefined,
-    tagLabel: record.tagLabel ?? undefined,
+    tags: tagsFromRecord(record),
     title: record.title,
     updatedAt: record.updatedAt,
   };
@@ -88,8 +89,7 @@ export async function createCommunication(input: {
   channelId?: string;
   content: string;
   guildId: string;
-  tagColor?: string;
-  tagLabel?: string;
+  tags?: unknown;
   title: string;
 }): Promise<Communication> {
   const record = await prisma.communication.create({
@@ -98,8 +98,7 @@ export async function createCommunication(input: {
       channelId: input.channelId?.trim() || null,
       content: input.content,
       guildId: input.guildId,
-      tagColor: input.tagColor?.trim() || null,
-      tagLabel: input.tagLabel?.trim() || null,
+      tags: normalizeTags(input.tags) as Prisma.InputJsonValue,
       title: input.title.trim(),
     },
   });
@@ -111,13 +110,12 @@ export async function updateCommunication(input: {
   channelId?: string;
   content?: string;
   id: string;
-  tagColor?: string;
-  tagLabel?: string;
+  tags?: unknown;
   title?: string;
 }): Promise<Communication | null> {
   try {
     // El comunicado es una sola fila (plantilla y mensaje publicado son lo
-    // mismo), así que el tag no hay que propagarlo a ningún lado.
+    // mismo), así que las etiquetas no hay que propagarlas a ningún lado.
     const record = await prisma.communication.update({
       where: { id: input.id },
       data: {
@@ -128,11 +126,14 @@ export async function updateCommunication(input: {
           ? { channelId: input.channelId.trim() || null }
           : {}),
         ...(input.content !== undefined ? { content: input.content } : {}),
-        ...(input.tagColor !== undefined
-          ? { tagColor: input.tagColor.trim() || null }
-          : {}),
-        ...(input.tagLabel !== undefined
-          ? { tagLabel: input.tagLabel.trim() || null }
+        ...(input.tags !== undefined
+          ? {
+              // Se limpian las columnas viejas: si no, una lista vacía haría
+              // reaparecer la etiqueta única del modelo anterior.
+              tagColor: null,
+              tagLabel: null,
+              tags: normalizeTags(input.tags) as Prisma.InputJsonValue,
+            }
           : {}),
         ...(input.title !== undefined ? { title: input.title.trim() } : {}),
       },

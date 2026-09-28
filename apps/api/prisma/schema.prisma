@@ -111,7 +111,10 @@ model Communication {
   authorName String?
   channelId  String?
   status     String    @default("draft")
-  // Tag visible en la web: etiqueta corta (ej: "Raid") con color hex libre.
+  // Tags visibles en la web: varias etiquetas cortas (ej: "Raid") con color
+  // hex libre. tagLabel/tagColor quedaron como LEGADO de la etiqueta única: se
+  // siguen leyendo para los comunicados viejos, pero ya no se escriben.
+  tags       Json?
   tagLabel   String?
   tagColor   String?
   // Publicación: canal + IDs de los mensajes en Discord (varios si el texto se

@@ -176,8 +176,8 @@ export type Communication = {
   // Última publicación (vacío = borrador).
   publishedAt?: string;
   status: "draft" | "published";
-  tagColor?: string;
-  tagLabel?: string;
+  // Etiquetas visibles en la web (puede tener varias, igual que los eventos).
+  tags?: EventTag[];
   title: string;
   updatedAt: string;
 };
@@ -186,8 +186,7 @@ export type CommunicationInput = {
   authorName?: string;
   channelId?: string;
   content?: string;
-  tagColor?: string;
-  tagLabel?: string;
+  tags?: EventTag[];
   title?: string;
 };
 

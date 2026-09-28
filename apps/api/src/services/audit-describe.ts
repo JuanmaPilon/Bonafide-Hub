@@ -499,6 +499,16 @@ export function describeXpConfigChanges(
   ]);
 }
 
+/** Etiquetas de un registro como texto (ordenadas) para el registro de auditoría. */
+function tagsText(tags: { label: string }[] | undefined): string | null {
+  return tags && tags.length > 0
+    ? [...tags]
+        .map((tag) => tag.label)
+        .sort((left, right) => left.localeCompare(right))
+        .join(", ")
+    : null;
+}
+
 /** Cambios de un evento, campo por campo (incluida su publicación en Discord). */
 export function describeEventChanges(
   previous: HubEvent | null,
@@ -506,13 +516,6 @@ export function describeEventChanges(
   names: AuditNames,
 ): string | null {
   const roles = orEmpty((value) => roleText(names, value));
-  const tagsText = (tags: { label: string }[] | undefined): string | null =>
-    tags && tags.length > 0
-      ? [...tags]
-          .map((tag) => tag.label)
-          .sort((left, right) => left.localeCompare(right))
-          .join(", ")
-      : null;
   const imageText = (value: string | undefined): string | null =>
     value ? "con imagen" : null;
 
@@ -628,16 +631,11 @@ export function describeCommunicationChanges(
       format: (value) => snippetText(String(value ?? "")),
       label: "texto",
     },
-    {
-      after: next.tagLabel,
-      before: previous.tagLabel,
-      label: "etiqueta",
-    },
-    {
-      after: next.tagColor,
-      before: previous.tagColor,
-      label: "color de etiqueta",
-    },
+    auditTextChange(
+      "etiquetas",
+      tagsText(previous.tags),
+      tagsText(next.tags),
+    ),
     {
       after: next.channelId,
       before: previous.channelId,

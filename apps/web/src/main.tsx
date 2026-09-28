@@ -1404,7 +1404,7 @@ function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
   );
 }
 
-const MAX_EVENT_TAGS = 6;
+const MAX_TAGS = 6;
 // Valor del filtro "eventos sin ninguna etiqueta".
 const EVENT_TAG_NONE = "__none__";
 
@@ -1479,20 +1479,34 @@ function matchesSearch(value: string, search: string): boolean {
 }
 
 // Una entrada de etiqueta por texto (sin repetir, case-insensitive) con su
-// color: alimenta los chips de filtro de cualquier lista que use tagLabel.
+// color: alimenta los chips de filtro de cualquier lista con etiquetas.
 function tagOptionsFrom(
-  items: Array<{ tagColor?: string; tagLabel?: string }>,
+  items: Array<{ tags?: EventTag[] }>,
 ): Array<{ color?: string; label: string }> {
   const byLabel = new Map<string, { color?: string; label: string }>();
   for (const item of items) {
-    const label = item.tagLabel?.trim();
-    if (label && !byLabel.has(label.toLowerCase())) {
-      byLabel.set(label.toLowerCase(), { color: item.tagColor, label });
+    for (const tag of item.tags ?? []) {
+      const label = tag.label.trim();
+      if (label && !byLabel.has(label.toLowerCase())) {
+        byLabel.set(label.toLowerCase(), { color: tag.color, label });
+      }
     }
   }
   return [...byLabel.values()].sort((a, b) =>
     a.label.localeCompare(b.label, "es"),
   );
+}
+
+// ¿Pasa el filtro de etiquetas? Coincide si tiene ALGUNA de las seleccionadas;
+// "sin etiqueta" (EVENT_TAG_NONE) es una opción más.
+function matchesTagFilter(tags: EventTag[], filter: string[]): boolean {
+  if (filter.length === 0) {
+    return true;
+  }
+  if (tags.length === 0) {
+    return filter.includes(EVENT_TAG_NONE);
+  }
+  return tags.some((tag) => filter.includes(tag.label.trim().toLowerCase()));
 }
 
 function sortByOrder<T>(
@@ -1561,9 +1575,9 @@ function ListFilterBar({
   );
 }
 
-// Editor de etiquetas de un evento: se agregan de a una (texto + color) y se
-// ven como chips con su ✕. Sugiere textos ya usados en otros eventos.
-function EventTagsField({
+// Editor de etiquetas (lo usan los eventos y los comunicados): se agregan de a
+// una (texto + color) y se ven como chips con su ✕. Sugiere textos ya usados.
+function TagsField({
   onChange,
   suggestions,
   tags,
@@ -1577,7 +1591,7 @@ function EventTagsField({
 
   const addTag = (): void => {
     const text = label.trim().slice(0, 24);
-    if (!text || tags.length >= MAX_EVENT_TAGS) {
+    if (!text || tags.length >= MAX_TAGS) {
       return;
     }
     if (tags.some((tag) => tag.label.toLowerCase() === text.toLowerCase())) {
@@ -1609,11 +1623,11 @@ function EventTagsField({
           ))}
         </div>
       ) : null}
-      {tags.length < MAX_EVENT_TAGS ? (
+      {tags.length < MAX_TAGS ? (
         <div className="event-tag-add">
           <input
             className="event-tag-input"
-            list="event-tag-suggestions"
+            list="tag-suggestions"
             maxLength={24}
             onChange={(event) => setLabel(event.target.value)}
             onKeyDown={(event) => {
@@ -1642,7 +1656,7 @@ function EventTagsField({
           </button>
         </div>
       ) : null}
-      <datalist id="event-tag-suggestions">
+      <datalist id="tag-suggestions">
         {suggestions.map((suggestion) => (
           <option key={suggestion} value={suggestion} />
         ))}
@@ -1686,55 +1700,15 @@ function EventTagFilterChip({
   );
 }
 
-// Campos del editor de tag (texto + color + vista previa). Lo usan el modal de
-// comunicado y el de las etiquetas de un evento, para no duplicar markup.
-function ComunicadoTagFields({
-  color,
-  label,
-  onColor,
-  onLabel,
-}: {
-  color: string;
-  label: string;
-  onColor: (value: string) => void;
-  onLabel: (value: string) => void;
-}) {
+// Etiquetas de un comunicado: puede tener varias, así que se pintan todas con
+// el mismo chip que usan los eventos.
+function ComunicadoTags({ tags }: { tags: EventTag[] }) {
   return (
-    <div className="comm-tag-editor">
-      <label>
-        <span>Tag (opcional)</span>
-        <input
-          type="text"
-          value={label}
-          onChange={(event) => onLabel(event.target.value)}
-          placeholder="Ej: Raid"
-          maxLength={24}
-        />
-      </label>
-      <div className="comm-tag-color">
-        <span>Color del tag</span>
-        <span className="comm-tag-color-row">
-          <input
-            type="color"
-            className="comm-tag-swatch"
-            value={normalizeTagColor(color)}
-            onChange={(event) => onColor(event.target.value)}
-          />
-          <input
-            type="text"
-            className="comm-tag-hex"
-            value={color}
-            onChange={(event) => onColor(event.target.value)}
-            placeholder="#ff7043"
-            maxLength={7}
-          />
-        </span>
-      </div>
-      <div className="comm-tag-preview">
-        <span>Vista previa:</span>
-        <ComunicadoTag color={color} label={label} />
-      </div>
-    </div>
+    <>
+      {tags.map((tag) => (
+        <ComunicadoTag color={tag.color} key={tag.label} label={tag.label} />
+      ))}
+    </>
   );
 }
 
@@ -4030,13 +4004,9 @@ function App() {
     const byTag =
       commAdminTagFilter.length === 0
         ? communications
-        : communications.filter((comm) => {
-            const label = comm.tagLabel?.trim().toLowerCase() ?? "";
-            if (label === "") {
-              return commAdminTagFilter.includes(EVENT_TAG_NONE);
-            }
-            return commAdminTagFilter.includes(label);
-          });
+        : communications.filter((comm) =>
+            matchesTagFilter(comm.tags ?? [], commAdminTagFilter),
+          );
     const searched = byTag.filter((comm) =>
       matchesSearch(`${comm.title} ${comm.content}`, commAdminSearch),
     );
@@ -4087,15 +4057,8 @@ function App() {
   // Comunicados visibles: filtro por etiqueta + buscador + orden.
   const visiblePublished = useMemo(() => {
     const filtered = published.filter((comm) => {
-      const label = comm.tagLabel?.trim().toLowerCase() ?? "";
-      if (comunicadoTagFilter.length > 0) {
-        if (label === "") {
-          if (!comunicadoTagFilter.includes(EVENT_TAG_NONE)) {
-            return false;
-          }
-        } else if (!comunicadoTagFilter.includes(label)) {
-          return false;
-        }
+      if (!matchesTagFilter(comm.tags ?? [], comunicadoTagFilter)) {
+        return false;
       }
       return matchesSearch(`${comm.title} ${comm.content}`, comunicadoSearch);
     });
@@ -5737,8 +5700,7 @@ function App() {
       title: comm.title,
       content: comm.content,
       channelId: comm.channelId ?? "",
-      tagColor: comm.tagColor ?? "",
-      tagLabel: comm.tagLabel ?? "",
+      tags: comm.tags ?? [],
     });
   }
 
@@ -5756,8 +5718,7 @@ function App() {
           selectedGuildId,
           commEditor.id,
           {
-            tagColor: commEditor.tagColor ?? "",
-            tagLabel: commEditor.tagLabel ?? "",
+            tags: commEditor.tags ?? [],
             title: commEditor.title,
             content: commEditor.content,
             channelId: commEditor.channelId,
@@ -5775,8 +5736,7 @@ function App() {
       } else {
         await createCommunication(selectedGuildId, {
           ...commEditor,
-          tagColor: commEditor.tagColor ?? "",
-          tagLabel: commEditor.tagLabel ?? "",
+          tags: commEditor.tags ?? [],
         });
         pushToast("Comunicado creado.", "success");
       }
@@ -8315,8 +8275,7 @@ function App() {
                                 title: "",
                                 content: "",
                                 channelId: "",
-                                tagColor: "",
-                                tagLabel: "",
+                                tags: [],
                               })
                             }
                             type="button"
@@ -8360,7 +8319,7 @@ function App() {
                               );
                             })}
                             {communications.some(
-                              (comm) => !comm.tagLabel?.trim(),
+                              (comm) => (comm.tags ?? []).length === 0,
                             ) ? (
                               <button
                                 className={`event-filter-chip${commAdminTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
@@ -8397,10 +8356,7 @@ function App() {
                               <div className="comunicado-admin-row">
                                 <div className="comunicado-admin-info">
                                   <strong>{comm.title}</strong>
-                                  <ComunicadoTag
-                                    color={comm.tagColor}
-                                    label={comm.tagLabel}
-                                  />
+                                  <ComunicadoTags tags={comm.tags ?? []} />
                                   <span
                                     className={`comunicado-status comunicado-status-${comm.publishedAt ? "published" : "draft"}`}
                                   >
@@ -8436,8 +8392,7 @@ function App() {
                                         title: comm.title,
                                         content: comm.content,
                                         channelId: comm.channelId ?? "",
-                                        tagColor: comm.tagColor ?? "",
-                                        tagLabel: comm.tagLabel ?? "",
+                                        tags: comm.tags ?? [],
                                       })
                                     }
                                     title="Crea un comunicado nuevo con este mismo texto"
@@ -10133,9 +10088,8 @@ function App() {
                       <article className="comunicado-card">
                         <div className="comunicado-detail-head">
                           <h3>{currentComunicado.title}</h3>
-                          <ComunicadoTag
-                            color={currentComunicado.tagColor}
-                            label={currentComunicado.tagLabel}
+                          <ComunicadoTags
+                            tags={currentComunicado.tags ?? []}
                           />
                           {currentComunicado.publishedAt ? (
                             <span className="comunicado-date">
@@ -10238,7 +10192,7 @@ function App() {
                             />
                           );
                         })}
-                        {published.some((comm) => !comm.tagLabel?.trim()) ? (
+                        {published.some((comm) => (comm.tags ?? []).length === 0) ? (
                           <button
                             className={`event-filter-chip${comunicadoTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
                             onClick={() =>
@@ -10276,10 +10230,7 @@ function App() {
                             >
                               <span className="comunicado-acc-heading">
                                 <strong>{comm.title}</strong>
-                                <ComunicadoTag
-                                  color={comm.tagColor}
-                                  label={comm.tagLabel}
-                                />
+                                <ComunicadoTags tags={comm.tags ?? []} />
                                 {comm.publishedAt ? (
                                   <span className="comunicado-date">
                                     {formatDate24(comm.publishedAt)}
@@ -10684,7 +10635,7 @@ function App() {
                         </label>
                         <div className="event-form-wide event-tag-field">
                           <span className="event-tag-title">Etiquetas</span>
-                          <EventTagsField
+                          <TagsField
                             onChange={(tags) =>
                               setEventForm((current) => ({
                                 ...current,
@@ -11514,20 +11465,18 @@ function App() {
                   ))}
                 </select>
               </label>
-              <ComunicadoTagFields
-                color={commEditor.tagColor ?? ""}
-                label={commEditor.tagLabel ?? ""}
-                onColor={(tagColor) =>
-                  setCommEditor((current) =>
-                    current ? { ...current, tagColor } : current,
-                  )
-                }
-                onLabel={(tagLabel) =>
-                  setCommEditor((current) =>
-                    current ? { ...current, tagLabel } : current,
-                  )
-                }
-              />
+              <div className="event-tag-field">
+                <span className="event-tag-title">Etiquetas</span>
+                <TagsField
+                  onChange={(tags) =>
+                    setCommEditor((current) =>
+                      current ? { ...current, tags } : current,
+                    )
+                  }
+                  suggestions={commAdminTagOptions.map((tag) => tag.label)}
+                  tags={commEditor.tags ?? []}
+                />
+              </div>
             </div>
             <div className="form-actions">
               <button

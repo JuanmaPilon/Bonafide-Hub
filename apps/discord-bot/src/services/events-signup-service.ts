@@ -187,9 +187,7 @@ async function fetchEvent(
   eventId: string,
   userId?: string,
 ): Promise<RemoteEvent["event"] | null> {
-  const suffix = userId
-    ? `?userId=${encodeURIComponent(userId)}`
-    : "";
+  const suffix = userId ? `?userId=${encodeURIComponent(userId)}` : "";
   const response = await remoteRequest(
     `/internal/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}${suffix}`,
   );
@@ -792,9 +790,7 @@ export async function handleEventSignupInteraction(
       // Solo se precarga el personaje si sirve para la clase con la que está
       // anotado (si no, es de otro PJ y se muestra vacío).
       value: (() => {
-        const mine = event?.signups?.find(
-          (signup) => signup.userId === userId,
-        );
+        const mine = event?.signups?.find((signup) => signup.userId === userId);
         return usableCharacter(event, userId, mine?.wowClass);
       })(),
     });
