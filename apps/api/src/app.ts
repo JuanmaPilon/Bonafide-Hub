@@ -1876,7 +1876,9 @@ async function syncAndStoreEventDiscord(input: {
     // publica el aviso: si cambió el juego (o se apagó la publicación), se
     // limpia para no dejar el id huérfano.
     discordPollMessageId:
-      poll && discordOpts.publishMessage ? (result.pollMessageId ?? null) : null,
+      poll && discordOpts.publishMessage
+        ? (result.pollMessageId ?? null)
+        : null,
     publishChannelId: discordOpts.publishMessage
       ? (discordOpts.publishChannelId ?? null)
       : null,

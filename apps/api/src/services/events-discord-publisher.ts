@@ -1080,8 +1080,7 @@ export async function postEventPoll(input: {
     return name ? { name } : undefined;
   };
 
-  const hours =
-    input.hours && input.hours > 0 ? Math.min(input.hours, 768) : 0;
+  const hours = input.hours && input.hours > 0 ? Math.min(input.hours, 768) : 0;
   const response = await discordFetch(
     `/channels/${encodeURIComponent(input.channelId)}/messages`,
     {
