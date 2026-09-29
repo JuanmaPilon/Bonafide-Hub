@@ -2750,6 +2750,32 @@ a:hover {
   background: #e5484d;
 }
 
+/* Botón del informe CSV: verde planilla (estilo Excel) para distinguirlo de las
+   acciones (azul) y de las destructivas (rojo). Clase propia y no una variante
+   de `.ghost-button` porque el tema claro redefine ese botón y le ganaba al
+   color por especificidad. */
+.csv-button {
+  border-radius: 999px;
+  border: 1px solid #2a8a57;
+  background: #1f6f43;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 11px 18px;
+  justify-self: start;
+  width: fit-content;
+  transition: filter 0.15s ease;
+}
+
+.csv-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.csv-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .primary-button:disabled,
 .ghost-button:disabled {
   opacity: 0.55;
@@ -2961,6 +2987,35 @@ textarea {
   border-radius: 16px;
   border: 1px solid rgba(134, 158, 214, 0.25);
   background: rgba(12, 19, 37, 0.55);
+}
+
+/* El form de crear/editar evento es un MODAL: sale en pantalla con su propio
+   scroll en vez de abrirse abajo de la lista (antes había que scrollear toda
+   la página para llegar a los últimos campos). El scroll lo hace la CAPA y no
+   la tarjeta: con `overflow` en la tarjeta, el almanaque de "Fecha y hora"
+   (position: absolute) quedaba recortado por el borde. */
+.event-form-overlay {
+  align-items: flex-start;
+  overflow-y: auto;
+}
+
+.event-form-modal {
+  margin: auto;
+  width: min(920px, 100%);
+  background: var(--panel);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.event-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.event-form-head .event-form-title {
+  margin: 0;
 }
 
 .event-form-title {
@@ -3340,7 +3395,9 @@ select.list-order {
 
 .event-form-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 12px;
 }
 
@@ -6498,19 +6555,15 @@ select.list-order {
   color: #fff;
 }
 
-/* ── Eventos: orden del form (debajo de la grilla) ──────────────────
-   El form de crear/editar evento se muestra ABAJO de la lista de eventos
-   (no arriba) para no empujar la tarjeta que se está editando. */
+/* ── Eventos: orden de la lista ─────────────────────────────────────
+   El form de crear/editar evento es un modal (`.event-form-modal`), así que ya
+   no participa del orden: solo quedan el encabezado y la grilla. */
 .event-list-header {
   order: 1;
 }
 
 .events-grid {
   order: 2;
-}
-
-.event-form-card {
-  order: 3;
 }
 
 /* ── Eventos: tema claro ────────────────────────────────────────────

@@ -2760,7 +2760,7 @@ function EventCard({
                 Duplicar
               </button>
               <button
-                className="ghost-button"
+                className="csv-button"
                 onClick={() => onDownloadReport(event)}
                 type="button"
               >
@@ -9885,7 +9885,7 @@ function App() {
                                         })
                                       )}
                                       <button
-                                        className="ghost-button"
+                                        className="csv-button"
                                         disabled={
                                           reportCsvEventId === finished.id
                                         }
@@ -10625,16 +10625,38 @@ function App() {
                     ) : null}
                   </div>
 
+                  {/* El form es un MODAL: antes se abría abajo de la lista de
+                      eventos y había que scrollear toda la página para
+                      completarlo. */}
                   {showEventForm ? (
-                    <div className="event-form-card">
-                      <h3 className="event-form-title">
-                        {editingEventId
-                          ? "Editar evento"
-                          : duplicatingEvent
-                            ? "Duplicar evento"
-                            : "Nuevo evento"}
-                      </h3>
-                      <div className="form-grid">
+                    <div
+                      className="modal-overlay event-form-overlay"
+                      onClick={handleCloseEventForm}
+                    >
+                      <div
+                        className="event-form-card event-form-modal"
+                        onClick={(clickEvent) => clickEvent.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                      >
+                        <div className="event-form-head">
+                          <h3 className="event-form-title">
+                            {editingEventId
+                              ? "Editar evento"
+                              : duplicatingEvent
+                                ? "Duplicar evento"
+                                : "Nuevo evento"}
+                          </h3>
+                          <button
+                            className="ghost-button small"
+                            onClick={handleCloseEventForm}
+                            title="Cerrar"
+                            type="button"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="form-grid">
                         <label>
                           <span>Título</span>
                           <input
@@ -11288,6 +11310,13 @@ function App() {
                       </div>
                       <div className="event-form-actions">
                         <button
+                          className="ghost-button"
+                          onClick={handleCloseEventForm}
+                          type="button"
+                        >
+                          Cancelar
+                        </button>
+                        <button
                           className="primary-button"
                           onClick={() => void handleSaveEvent()}
                           disabled={creatingEvent}
@@ -11299,6 +11328,7 @@ function App() {
                               ? "Guardar cambios"
                               : "Crear evento"}
                         </button>
+                      </div>
                       </div>
                     </div>
                   ) : null}
