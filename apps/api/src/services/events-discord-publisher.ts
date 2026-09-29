@@ -432,20 +432,7 @@ function specMention(spec?: AnnouncementSpec): string {
   return `<${marker}:${spec.emojiName}:${spec.emojiId}>`;
 }
 
-// "alias (personaje)" para el roster, con espacio DURO entre los dos: así
-// Discord los trata como una sola pieza al acomodar la línea y NUNCA parte el
-// nombre (lo baja entero). Si el par es más largo que una línea entera se usa un
-// espacio normal, porque con espacio duro Discord no tendría dónde cortar y
-// partiría la palabra al medio.
-function rosterPair(signup: AnnouncementSignup): string {
-  const nick = signup.username;
-  const character = signup.character?.trim();
-  if (!character) {
-    return nick;
-  }
-  const pair = `${nick} (${character})`;
-  return pair.length <= 34 ? pair.replace(" (", "\u00a0(") : pair;
-}
+// Comentario del roster: ver `memberLabel` dentro de buildEventAnnouncementEmbeds.
 
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars
 // (límite de Discord para el value de un field). `inline` los pone en
@@ -689,21 +676,16 @@ export function buildEventAnnouncementEmbeds(input: {
   const memberLabel = (signup: AnnouncementSignup): string => {
     const spec = resolveSpec(signup);
     const mention = specMention(spec);
-    const name = `**${rosterPair(signup)}**`;
+    // SOLO el alias: en una columna de media pantalla entran ~13 caracteres
+    // (fuente del celular), así que "alias (personaje)" no entra nunca y se
+    // partía en dos líneas. El personaje se ve en la web (tarjeta y perfil).
+    const name = `**${signup.username}**`;
     return mention ? `${mention} ${name}` : `❔ ${name}`;
   };
 
-  // Un renglón por integrante (lo usan los estados, que van a lo ancho).
+  // Un renglón por integrante (roster y estados).
   const linesFor = (members: AnnouncementSignup[]): string[] =>
     members.map(memberLabel);
-
-  // Los integrantes de un rol van en UN renglón separados por " · ": a lo ancho
-  // entran de a dos por línea y Discord los acomoda solo. Antes era una columna
-  // de media pantalla, donde entraban ~13 caracteres: el nombre largo se partía
-  // (y recortarlo tampoco alcanzaba, quedaba cortado Y partido).
-  const paragraphFor = (members: AnnouncementSignup[]): string[] => [
-    members.map(memberLabel).join(" · "),
-  ];
 
   // Orden y etiquetas de los roles: los configurados por la guild; cualquier
   // rol viejo (p. ej. "dps" legacy o un rol borrado de la config) va al final
@@ -753,11 +735,19 @@ export function buildEventAnnouncementEmbeds(input: {
     });
   }
 
-  // Roster: un bloque por rol, A LO ANCHO (no inline). Los nombres quedan
-  // completos y cada "alias (personaje)" entra en una sola línea sin importar
-  // el ancho del celular (ver rosterPair: el par va pegado con espacio duro).
-  columns.forEach((column) => {
-    pushField(fields, column.label, paragraphFor(column.members), false, true);
+  // Roster: de a DOS columnas por fila (media pantalla cada una), igual que
+  // antes: como ahora cada integrante es solo el alias (~6-10 caracteres),
+  // entra en una línea en cualquier celular. El salto entre pares se fuerza con
+  // un espacio en blanco (Discord empaqueta solo los fields inline de a tres).
+  // Con un solo rol con gente, la columna va a lo ancho (no inline).
+  // Los nombres van citados (`> `): cada rol queda con su barra, que es lo que
+  // evita que se lea como una lista pegada sin divisiones.
+  const rosterInline = columns.length > 1;
+  columns.forEach((column, index) => {
+    if (rosterInline && index > 0 && index % 2 === 0) {
+      pushSpacer(fields);
+    }
+    pushField(fields, column.label, linesFor(column.members), rosterInline, true);
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
