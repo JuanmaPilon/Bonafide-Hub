@@ -3002,8 +3002,43 @@ textarea {
 .event-form-modal {
   margin: auto;
   width: min(920px, 100%);
-  background: var(--panel);
+  /* Fondo OPACO a propósito: `--panel` tiene alfa 0.84 y el texto de la página
+     se leía a través del modal (se confundía con lo de atrás). */
+  background: #0d1424;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+/* Switches chicos DENTRO del form de eventos: son muchos (recordatorios,
+   repetición, pausa, limpieza) y con el tamaño estándar el form se hacía
+   larguísimo. El switch global (`.module-switch`) queda igual para el resto
+   de la app.
+   OJO: los toggles son <label> dentro de `.form-grid`, y esa regla les pone
+   `display: grid` → el switch caía DEBAJO del texto y cada uno ocupaba dos
+   renglones. Acá vuelven a ser una fila (texto | switch). */
+.event-form-card .module-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.event-form-card .module-switch,
+.event-form-card .module-switch-track {
+  width: 36px;
+  height: 20px;
+}
+
+.event-form-card .module-switch-thumb {
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+}
+
+.event-form-card .module-toggle.checked .module-switch-thumb {
+  transform: translateX(16px);
 }
 
 .event-form-head {
@@ -3863,10 +3898,13 @@ select.list-order {
   line-height: 1.35;
 }
 
-/* Recordatorios de asistencia (form). */
+/* Recordatorios de asistencia (form). El título va AL LADO de los toggles (y no
+   arriba) para que la sección ocupe una sola fila. */
 .event-reminders {
   display: grid;
-  gap: 10px;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px 12px;
 }
 
 .event-reminders-title {
@@ -3877,14 +3915,22 @@ select.list-order {
 .event-reminders-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px;
 }
 
 /* Cada recordatorio es un toggle compacto con el mismo switch que usa el
    resto de la app (module-switch), para mantener la UI armonizada. */
 .event-reminder-toggle {
-  flex: 1 1 190px;
-  padding: 10px 12px;
+  flex: 1 1 150px;
+  padding: 6px 10px;
+}
+
+/* En pantallas angostas el título arriba y los toggles abajo, como antes. */
+@media (max-width: 720px) {
+  .event-reminders,
+  .event-recurrence {
+    grid-template-columns: 1fr;
+  }
 }
 
 .event-reminder-toggle.disabled {
@@ -3899,19 +3945,24 @@ select.list-order {
 /* Repetición automática + pausa (mismo lenguaje visual que los recordatorios). */
 .event-recurrence {
   display: grid;
-  gap: 10px;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px 12px;
 }
 
 .event-recurrence-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px;
 }
 
 .event-recurrence-days-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  /* El título y los toggles van en la primera fila (2 columnas): los inputs de
+     días ocupan el ancho completo en la fila de abajo. */
+  grid-column: 1 / -1;
 }
 
 .event-recurrence-days {
