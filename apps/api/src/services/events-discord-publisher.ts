@@ -747,7 +747,13 @@ export function buildEventAnnouncementEmbeds(input: {
     if (rosterInline && index > 0 && index % 2 === 0) {
       pushSpacer(fields);
     }
-    pushField(fields, column.label, linesFor(column.members), rosterInline, true);
+    pushField(
+      fields,
+      column.label,
+      linesFor(column.members),
+      rosterInline,
+      true,
+    );
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
