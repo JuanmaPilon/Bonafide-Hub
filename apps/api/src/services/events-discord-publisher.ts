@@ -432,38 +432,19 @@ function specMention(spec?: AnnouncementSpec): string {
   return `<${marker}:${spec.emojiName}:${spec.emojiId}>`;
 }
 
-function signupDisplay(signup: AnnouncementSignup): string {
-  // El nombre de Discord es el principal; el personaje (opcional) va entre
-  // paréntesis, en la MISMA línea. No se omite cuando coincide con el nick: el
-  // jugador quiere ver los dos datos.
-  const character = signup.character?.trim();
-  return character ? `${signup.username} (${character})` : signup.username;
-}
-
-// Ancho útil de una columna del roster en un celular, en caracteres. Discord
-// decide el corte real según el dispositivo, así que es una estimación medida
-// en un ancho típico (~140 px de texto por columna a 13-14 px de fuente): sirve
-// para que "alias (personaje)" entre en UNA línea, que es como el staff cuenta
-// gente a ojo. Si en algún celular se sigue partiendo, se baja este número.
-const ROSTER_COLUMN_MAX_CHARS = 19;
-
-// Nombre del roster para una columna de media pantalla: si "alias (personaje)"
-// no entra, se recorta el PERSONAJE (el alias queda completo, es el que
-// identifica a la persona) y, si ni el alias entra, el alias. Sin `maxChars`
-// devuelve todo (lo usan los estados, que van a lo ancho).
-function rosterName(signup: AnnouncementSignup, maxChars?: number): string {
+// "alias (personaje)" para el roster, con espacio DURO entre los dos: así
+// Discord los trata como una sola pieza al acomodar la línea y NUNCA parte el
+// nombre (lo baja entero). Si el par es más largo que una línea entera se usa un
+// espacio normal, porque con espacio duro Discord no tendría dónde cortar y
+// partiría la palabra al medio.
+function rosterPair(signup: AnnouncementSignup): string {
   const nick = signup.username;
   const character = signup.character?.trim();
-  const full = signupDisplay(signup);
-  if (!maxChars || !character || full.length <= maxChars) {
-    return full;
+  if (!character) {
+    return nick;
   }
-  // "Azzaio (AzzaioElMaspro)" → "Azzaio (AzzaioElM…)"
-  const room = maxChars - nick.length - " (".length - "…)".length;
-  if (room >= 2) {
-    return `${nick} (${character.slice(0, room)}…)`;
-  }
-  return `${nick.slice(0, Math.max(maxChars - 1, 1))}…`;
+  const pair = `${nick} (${character})`;
+  return pair.length <= 34 ? pair.replace(" (", "\u00a0(") : pair;
 }
 
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars
@@ -705,16 +686,24 @@ export function buildEventAnnouncementEmbeds(input: {
         spec.specName === (signup.spec ?? ""),
     );
 
-  const linesFor = (
-    members: AnnouncementSignup[],
-    maxChars?: number,
-  ): string[] =>
-    members.map((signup) => {
-      const spec = resolveSpec(signup);
-      const mention = specMention(spec);
-      const name = `**${rosterName(signup, maxChars)}**`;
-      return mention ? `${mention} ${name}` : `❔ ${name}`;
-    });
+  const memberLabel = (signup: AnnouncementSignup): string => {
+    const spec = resolveSpec(signup);
+    const mention = specMention(spec);
+    const name = `**${rosterPair(signup)}**`;
+    return mention ? `${mention} ${name}` : `❔ ${name}`;
+  };
+
+  // Un renglón por integrante (lo usan los estados, que van a lo ancho).
+  const linesFor = (members: AnnouncementSignup[]): string[] =>
+    members.map(memberLabel);
+
+  // Los integrantes de un rol van en UN renglón separados por " · ": a lo ancho
+  // entran de a dos por línea y Discord los acomoda solo. Antes era una columna
+  // de media pantalla, donde entraban ~13 caracteres: el nombre largo se partía
+  // (y recortarlo tampoco alcanzaba, quedaba cortado Y partido).
+  const paragraphFor = (members: AnnouncementSignup[]): string[] => [
+    members.map(memberLabel).join(" · "),
+  ];
 
   // Orden y etiquetas de los roles: los configurados por la guild; cualquier
   // rol viejo (p. ej. "dps" legacy o un rol borrado de la config) va al final
@@ -764,33 +753,11 @@ export function buildEventAnnouncementEmbeds(input: {
     });
   }
 
-  // Columnas del roster: SIEMPRE de a DOS por fila (media pantalla cada una),
-  // que es lo que hace entrar "nick (personaje)" en una sola línea. Antes eran
-  // de a tres cuando el evento tenía 3 roles con gente y de a dos cuando tenía
-  // 4: el mismo evento se veía distinto según cuántos roles se anotaran, y de a
-  // tres el nombre se partía. El salto entre pares se fuerza con un espacio en
-  // blanco (Discord empaqueta solo los fields inline de a tres).
-  // Con un solo rol con gente, la columna va a lo ancho (no inline).
-  // Los nombres van citados (`> `): en la PC se ven en columnas como siempre y
-  // en el celular (donde Discord apila todo) cada rol queda con su barra, que
-  // es lo que evita que se lea como una lista pegada sin divisiones.
-  const rosterInline = columns.length > 1;
-  columns.forEach((column, index) => {
-    if (rosterInline && index > 0 && index % 2 === 0) {
-      pushSpacer(fields);
-    }
-    // Solo las columnas (media pantalla) necesitan el recorte: los estados van
-    // a lo ancho y tienen el doble de lugar.
-    pushField(
-      fields,
-      column.label,
-      linesFor(
-        column.members,
-        rosterInline ? ROSTER_COLUMN_MAX_CHARS : undefined,
-      ),
-      rosterInline,
-      true,
-    );
+  // Roster: un bloque por rol, A LO ANCHO (no inline). Los nombres quedan
+  // completos y cada "alias (personaje)" entra en una sola línea sin importar
+  // el ancho del celular (ver rosterPair: el par va pegado con espacio duro).
+  columns.forEach((column) => {
+    pushField(fields, column.label, paragraphFor(column.members), false, true);
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
