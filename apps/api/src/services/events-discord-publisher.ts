@@ -440,6 +440,32 @@ function signupDisplay(signup: AnnouncementSignup): string {
   return character ? `${signup.username} (${character})` : signup.username;
 }
 
+// Ancho útil de una columna del roster en un celular, en caracteres. Discord
+// decide el corte real según el dispositivo, así que es una estimación medida
+// en un ancho típico (~140 px de texto por columna a 13-14 px de fuente): sirve
+// para que "alias (personaje)" entre en UNA línea, que es como el staff cuenta
+// gente a ojo. Si en algún celular se sigue partiendo, se baja este número.
+const ROSTER_COLUMN_MAX_CHARS = 19;
+
+// Nombre del roster para una columna de media pantalla: si "alias (personaje)"
+// no entra, se recorta el PERSONAJE (el alias queda completo, es el que
+// identifica a la persona) y, si ni el alias entra, el alias. Sin `maxChars`
+// devuelve todo (lo usan los estados, que van a lo ancho).
+function rosterName(signup: AnnouncementSignup, maxChars?: number): string {
+  const nick = signup.username;
+  const character = signup.character?.trim();
+  const full = signupDisplay(signup);
+  if (!maxChars || !character || full.length <= maxChars) {
+    return full;
+  }
+  // "Azzaio (AzzaioElMaspro)" → "Azzaio (AzzaioElM…)"
+  const room = maxChars - nick.length - " (".length - "…)".length;
+  if (room >= 2) {
+    return `${nick} (${character.slice(0, room)}…)`;
+  }
+  return `${nick.slice(0, Math.max(maxChars - 1, 1))}…`;
+}
+
 // Empuja líneas a un field, partiendo en varios si supera 1024 chars
 // (límite de Discord para el value de un field). `inline` los pone en
 // columnas (3 por fila), que es lo que mantiene el embed "horizontal".
@@ -679,11 +705,14 @@ export function buildEventAnnouncementEmbeds(input: {
         spec.specName === (signup.spec ?? ""),
     );
 
-  const linesFor = (members: AnnouncementSignup[]): string[] =>
+  const linesFor = (
+    members: AnnouncementSignup[],
+    maxChars?: number,
+  ): string[] =>
     members.map((signup) => {
       const spec = resolveSpec(signup);
       const mention = specMention(spec);
-      const name = `**${signupDisplay(signup)}**`;
+      const name = `**${rosterName(signup, maxChars)}**`;
       return mention ? `${mention} ${name}` : `❔ ${name}`;
     });
 
@@ -714,7 +743,7 @@ export function buildEventAnnouncementEmbeds(input: {
 
   // Columnas del roster: un bloque por rol con gente (incluye los roles que ya
   // no están en la config y los que se anotaron sin elegir rol).
-  const columns: Array<{ label: string; lines: string[] }> = [];
+  const columns: Array<{ label: string; members: AnnouncementSignup[] }> = [];
   for (const role of orderedRoles) {
     const members = confirmed.filter((signup) => signup.role === role.key);
     if (members.length === 0) {
@@ -722,7 +751,7 @@ export function buildEventAnnouncementEmbeds(input: {
     }
     columns.push({
       label: `${roleEmoji(role)} ${role.label} (${members.length})`,
-      lines: linesFor(members),
+      members,
     });
   }
   // Quien se anotó sin elegir rol (p. ej. con los botones rápidos de estado)
@@ -731,7 +760,7 @@ export function buildEventAnnouncementEmbeds(input: {
   if (noRole.length > 0) {
     columns.push({
       label: `❔ Sin rol (${noRole.length})`,
-      lines: linesFor(noRole),
+      members: noRole,
     });
   }
 
@@ -750,7 +779,18 @@ export function buildEventAnnouncementEmbeds(input: {
     if (rosterInline && index > 0 && index % 2 === 0) {
       pushSpacer(fields);
     }
-    pushField(fields, column.label, column.lines, rosterInline, true);
+    // Solo las columnas (media pantalla) necesitan el recorte: los estados van
+    // a lo ancho y tienen el doble de lugar.
+    pushField(
+      fields,
+      column.label,
+      linesFor(
+        column.members,
+        rosterInline ? ROSTER_COLUMN_MAX_CHARS : undefined,
+      ),
+      rosterInline,
+      true,
+    );
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
   // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
