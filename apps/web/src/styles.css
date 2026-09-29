@@ -5049,7 +5049,7 @@ select.list-order {
   width: 46px;
   height: 26px;
   border-radius: 999px;
-  background: rgba(133, 156, 212, 0.28);
+  background: rgba(133, 156, 212, 0.35);
   transition: background-color 160ms ease;
   position: relative;
 }
@@ -5066,8 +5066,12 @@ select.list-order {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
+/* Encendido = VERDE, el mismo tono que el otro switch de la app
+   (`.raid-watcher-switch`, #35b96f). Antes era un gradiente azul→naranja y
+   quedaban switches de dos colores distintos según la pantalla. El apagado
+   usa el mismo gris que el otro switch (alfa 0.35). */
 .module-toggle.checked .module-switch-track {
-  background: linear-gradient(90deg, #6aa8ff, #ff8a5c);
+  background: #35b96f;
 }
 
 .module-toggle.checked .module-switch-thumb {
