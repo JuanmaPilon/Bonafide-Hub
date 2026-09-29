@@ -3622,7 +3622,7 @@ select.list-order {
    que abre el editor manual de la inscripción. */
 .event-roster-entry {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 2px;
   min-width: 0;
 }
@@ -3646,15 +3646,12 @@ select.list-order {
 
 .event-roster-member {
   font-size: 0.82rem;
-  /* El nick y el personaje van SIEMPRE en la misma línea: si no entran, se
-     recorta el final con "..." en vez de bajar el personaje a otro renglón. */
-  white-space: nowrap;
-}
-
-/* Dentro de una columna (ancho fijo) el recorte es con puntos suspensivos. */
-.event-roster-members .event-roster-member {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* El nick y el personaje se ven COMPLETOS: si no entran en el ancho de la
+     columna, el texto baja a un segundo renglón (la tarjeta se adapta sola) en
+     vez de recortarse con "…". Con `anywhere` un nombre larguísimo tampoco se
+     sale del recuadro. */
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .event-roster-empty {
