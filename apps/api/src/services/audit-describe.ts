@@ -554,6 +554,11 @@ export function describeEventChanges(
       label: "duración (min)",
     },
     {
+      after: next.pollHours,
+      before: previous?.pollHours,
+      label: "duración de la encuesta (h)",
+    },
+    {
       after: next.signupDeadline,
       before: previous?.signupDeadline,
       format: (value) => formatAuditMoment(value as Date | null),

@@ -228,6 +228,8 @@ export type HubEvent = {
   discordEventConfig?: EventDiscordConfig;
   discordEventId?: string;
   discordMessageIds: string[];
+  // Mensaje de la encuesta nativa de Discord (plantilla "encuesta").
+  discordPollMessageId?: string;
   // Si está activo, al marcar el evento como Completado se borra de Discord
   // (evento agendado + aviso) una vez guardado el registro/informe.
   discordCleanupOnComplete: boolean;
@@ -239,6 +241,8 @@ export type HubEvent = {
   imageUrl?: string;
   paused: boolean;
   publishChannelId?: string;
+  // Duración de la encuesta en horas (vacío = la de Discord: 24 h).
+  pollHours?: number;
   recurrenceEnabled: boolean;
   recurrenceEveryDays?: number;
   recurrenceNextAt?: Date;
@@ -296,6 +300,7 @@ type EventRecord = {
   discordEventConfig: unknown;
   discordEventId: string | null;
   discordMessageIds: string[];
+  discordPollMessageId: string | null;
   discordCleanupOnComplete: boolean;
   durationMinutes: number | null;
   game: string;
@@ -303,6 +308,7 @@ type EventRecord = {
   id: string;
   imageUrl: string | null;
   paused: boolean;
+  pollHours: number | null;
   publishChannelId: string | null;
   recurrenceEnabled: boolean;
   recurrenceEveryDays: number | null;
@@ -378,6 +384,7 @@ function toEvent(record: EventRecord): HubEvent {
       (record.discordEventConfig as EventDiscordConfig | null) ?? undefined,
     discordEventId: record.discordEventId ?? undefined,
     discordMessageIds: record.discordMessageIds,
+    discordPollMessageId: record.discordPollMessageId ?? undefined,
     discordCleanupOnComplete: record.discordCleanupOnComplete,
     durationMinutes: record.durationMinutes ?? undefined,
     game: record.game,
@@ -385,6 +392,7 @@ function toEvent(record: EventRecord): HubEvent {
     id: record.id,
     imageUrl: record.imageUrl ?? undefined,
     paused: record.paused,
+    pollHours: record.pollHours ?? undefined,
     publishChannelId: record.publishChannelId ?? undefined,
     recurrenceEnabled: record.recurrenceEnabled,
     recurrenceEveryDays: record.recurrenceEveryDays ?? undefined,
@@ -514,6 +522,7 @@ export async function createEvent(input: {
   guildId: string;
   imageUrl?: string;
   paused?: boolean;
+  pollHours?: number | null;
   recurrenceEnabled?: boolean;
   recurrenceEveryDays?: number | null;
   recurrencePublishDaysBefore?: number | null;
@@ -538,6 +547,7 @@ export async function createEvent(input: {
       guildId: input.guildId,
       imageUrl: input.imageUrl,
       paused: input.paused ?? false,
+      pollHours: input.pollHours ?? null,
       recurrenceEnabled: input.recurrenceEnabled ?? false,
       recurrenceEveryDays: everyDays,
       recurrencePublishDaysBefore: input.recurrencePublishDaysBefore ?? null,
@@ -574,6 +584,7 @@ export async function updateEvent(
     game?: string;
     imageUrl?: string;
     paused?: boolean;
+    pollHours?: number | null;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number | null;
     recurrencePublishDaysBefore?: number | null;
@@ -637,6 +648,8 @@ export async function updateEvent(
       game: input.game?.trim().toLowerCase() || undefined,
       imageUrl: input.imageUrl,
       paused: input.paused,
+      pollHours:
+        input.pollHours === undefined ? undefined : input.pollHours || null,
       recurrenceEnabled: input.recurrenceEnabled,
       recurrenceEveryDays: input.recurrenceEveryDays,
       recurrencePublishDaysBefore: input.recurrencePublishDaysBefore,
@@ -865,6 +878,7 @@ export async function setEventDiscordInfo(
     discordEventConfig?: EventDiscordConfig | null;
     discordEventId?: string | null;
     discordMessageIds?: string[] | null;
+    discordPollMessageId?: string | null;
     publishChannelId?: string | null;
     reminderMessageIds?: string[] | null;
     voiceChannelId?: string | null;
@@ -879,6 +893,9 @@ export async function setEventDiscordInfo(
   }
   if (input.discordMessageIds !== undefined) {
     data.discordMessageIds = input.discordMessageIds ?? [];
+  }
+  if (input.discordPollMessageId !== undefined) {
+    data.discordPollMessageId = input.discordPollMessageId;
   }
   if (input.publishChannelId !== undefined) {
     data.publishChannelId = input.publishChannelId;
@@ -1153,6 +1170,7 @@ export async function resetEventOccurrence(
       completedAt: null,
       discordEventId: null,
       discordMessageIds: [],
+      discordPollMessageId: null,
       recurrenceNextAt: input.recurrenceNextAt,
       reminderMessageIds: [],
       // Si no se limpian, la ocurrencia nueva nunca manda sus recordatorios.

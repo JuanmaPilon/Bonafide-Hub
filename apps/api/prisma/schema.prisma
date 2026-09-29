@@ -261,6 +261,12 @@ model HubEvent {
   discordEventId    String?
   // Ids de los mensajes-aviso publicados en publishChannelId.
   discordMessageIds String[] @default([])
+  // Mensaje de la ENCUESTA nativa de Discord (solo eventos de la plantilla
+  // "encuesta"): va aparte del aviso porque un poll no se puede editar.
+  discordPollMessageId String?
+  // Duración de la encuesta en horas. null = sin duración explícita: Discord
+  // usa su default (24 h).
+  pollHours            Int?
   // Recordatorios de asistencia: horas antes de startsAt en las que el bot
   // avisa a quienes tienen el rol requerido y todavía no se anotaron
   // (p. ej. [48, 24, 2]). Vacío = sin recordatorios.

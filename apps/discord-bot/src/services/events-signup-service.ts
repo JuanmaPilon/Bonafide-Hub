@@ -700,9 +700,30 @@ export async function handleEventSignupInteraction(
     }
     const selectRow = specSelectRow(context, eventId, roleKey, status);
     if (!selectRow) {
+      // El rol no tiene clases/specs en el catálogo (plantilla de encuesta, o
+      // un juego con los campeones todavía sin cargar): se anota solo con el
+      // rol, sin pedir clase ni personaje.
+      const mine = event?.signups?.find((signup) => signup.userId === userId);
+      const result = await putSignup({
+        character: mine?.character,
+        guildId,
+        eventId,
+        role: roleKey,
+        status,
+        userId,
+        username,
+      });
+      if (!result.ok) {
+        await updateWizard(
+          interaction,
+          `No se pudo guardar la inscripción: ${result.error}`,
+          [],
+        );
+        return;
+      }
       await updateWizard(
         interaction,
-        "No hay clases cargadas para ese rol en el catálogo.",
+        `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}** · **${role.label}**. ✅`,
         [],
       );
       return;

@@ -18,6 +18,9 @@ export type EventTemplate = {
   description: string;
   key: string;
   label: string;
+  // Plantilla de ENCUESTA: además del aviso, el evento se publica como
+  // encuesta nativa de Discord (una respuesta por rol, con ✅/❌).
+  poll?: boolean;
   roles: EventRoleOption[];
   specs: EventTemplateSpec[];
 };
@@ -178,6 +181,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     ],
     specs: [],
   },
+  {
+    description:
+      "Pregunta de sí/no: además del aviso, el evento se publica como encuesta de Discord (✅ Sí · ❌ No) para votar. Sin clases ni personaje.",
+    key: "encuesta",
+    label: "Encuesta (sí / no)",
+    poll: true,
+    roles: [role("si", "Sí", "✅"), role("no", "No", "❌")],
+    specs: [],
+  },
 ];
 
 export function findEventTemplate(
@@ -198,6 +210,7 @@ export function summarizeEventTemplate(template: EventTemplate): {
   description: string;
   key: string;
   label: string;
+  poll: boolean;
   roles: EventRoleOption[];
   specCount: number;
 } {
@@ -205,6 +218,7 @@ export function summarizeEventTemplate(template: EventTemplate): {
     description: template.description,
     key: template.key,
     label: template.label,
+    poll: template.poll === true,
     roles: template.roles,
     specCount: template.specs.length,
   };

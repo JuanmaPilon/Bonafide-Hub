@@ -1061,6 +1061,7 @@ async function resetSeriesOccurrence(
     discordEventId: event.discordEventId,
     discordMessageIds: event.discordMessageIds,
     guildId,
+    pollMessageId: event.discordPollMessageId,
     publishChannelId: event.publishChannelId,
     reminderMessageIds: event.reminderMessageIds,
   });
@@ -1169,12 +1170,14 @@ async function applyEventCompletion(
     discordEventId: event.discordEventId,
     discordMessageIds: event.discordMessageIds,
     guildId,
+    pollMessageId: event.discordPollMessageId,
     publishChannelId: event.publishChannelId,
     reminderMessageIds: event.reminderMessageIds,
   });
   const cleared = await setEventDiscordInfo(guildId, event.id, {
     discordEventId: null,
     discordMessageIds: [],
+    discordPollMessageId: null,
     reminderMessageIds: [],
   });
   console.log(
@@ -1799,6 +1802,7 @@ async function syncAndStoreEventDiscord(input: {
     id: string;
     imageUrl?: string;
     paused?: boolean;
+    pollHours?: number;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number;
     requiredRoleId?: string;
@@ -1814,6 +1818,7 @@ async function syncAndStoreEventDiscord(input: {
   existing?: {
     discordEventId?: string;
     messageIds?: string[];
+    pollMessageId?: string;
     publishChannelId?: string;
   };
 }): Promise<{
@@ -1823,6 +1828,8 @@ async function syncAndStoreEventDiscord(input: {
   const { discordOpts, event } = input;
   const specs = await listRaidSpecs(event.guildId, event.game);
   const eventConfig = await getGuildConfig(event.guildId);
+  // Plantilla de encuesta: además del aviso, se publica el poll nativo.
+  const poll = findEventTemplate(event.game)?.poll === true;
   const result = await syncEventToDiscord({
     characterEnabled: event.characterEnabled !== false,
     classLabel: eventConfig.eventClassLabel,
@@ -1840,6 +1847,8 @@ async function syncAndStoreEventDiscord(input: {
         ? event.recurrenceEveryDays
         : undefined,
     paused: event.paused,
+    poll,
+    pollHours: event.pollHours,
     requiredRoleId: event.requiredRoleId,
     roles: resolveEventRoles(eventConfig, event.game),
     signupDeadline: event.signupDeadline,
@@ -1863,6 +1872,11 @@ async function syncAndStoreEventDiscord(input: {
     },
     discordEventId: result.discordEventId ?? null,
     discordMessageIds: result.messageIds,
+    // La encuesta solo existe si el evento es de la plantilla de encuesta y se
+    // publica el aviso: si cambió el juego (o se apagó la publicación), se
+    // limpia para no dejar el id huérfano.
+    discordPollMessageId:
+      poll && discordOpts.publishMessage ? (result.pollMessageId ?? null) : null,
     publishChannelId: discordOpts.publishMessage
       ? (discordOpts.publishChannelId ?? null)
       : null,
@@ -2042,6 +2056,16 @@ function normalizeRecurrenceDays(value: unknown): number | null {
   }
   const days = Math.round(value);
   return days >= 1 && days <= 365 ? days : null;
+}
+
+// Duración de la encuesta de Discord en horas (1 a 768, el máximo que acepta
+// la API). null = sin duración explícita: Discord abre la encuesta 24 h.
+function normalizePollHours(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  const hours = Math.round(value);
+  return hours >= 1 ? Math.min(hours, 768) : null;
 }
 
 // ── Comunicados en Discord ──────────────────────────────────────────
@@ -4204,6 +4228,7 @@ export function buildApp() {
       game?: string;
       imageUrl?: string;
       paused?: boolean;
+      pollHours?: number;
       recurrenceEnabled?: boolean;
       recurrenceEveryDays?: number;
       recurrencePublishDaysBefore?: number;
@@ -4259,6 +4284,7 @@ export function buildApp() {
       guildId: params.guildId,
       imageUrl: body.imageUrl?.trim() || undefined,
       paused: body.paused === true,
+      pollHours: normalizePollHours(body.pollHours),
       recurrenceEnabled: body.recurrenceEnabled === true,
       recurrenceEveryDays: normalizeRecurrenceDays(body.recurrenceEveryDays),
       recurrencePublishDaysBefore: normalizeRecurrenceDays(
@@ -4341,6 +4367,7 @@ export function buildApp() {
       game?: string;
       imageUrl?: string;
       paused?: boolean;
+      pollHours?: number | null;
       recurrenceEnabled?: boolean;
       recurrenceEveryDays?: number;
       recurrencePublishDaysBefore?: number;
@@ -4390,6 +4417,7 @@ export function buildApp() {
       | {
           discordEventId?: string;
           messageIds?: string[];
+          pollMessageId?: string;
           publishChannelId?: string;
         }
       | undefined;
@@ -4419,6 +4447,7 @@ export function buildApp() {
           existingPublication = {
             discordEventId: previous.discordEventId,
             messageIds: previous.discordMessageIds,
+            pollMessageId: previous.discordPollMessageId,
             publishChannelId: previous.publishChannelId,
           };
         } else {
@@ -4426,6 +4455,7 @@ export function buildApp() {
             discordEventId: previous.discordEventId,
             discordMessageIds: previous.discordMessageIds,
             guildId: params.guildId,
+            pollMessageId: previous.discordPollMessageId,
             publishChannelId: previous.publishChannelId,
             reminderMessageIds: previous.reminderMessageIds,
           });
@@ -4452,6 +4482,10 @@ export function buildApp() {
       game,
       imageUrl: body.imageUrl?.trim() || undefined,
       paused: body.paused === undefined ? undefined : body.paused === true,
+      pollHours:
+        body.pollHours === undefined
+          ? undefined
+          : normalizePollHours(body.pollHours),
       recurrenceEnabled:
         body.recurrenceEnabled === undefined
           ? undefined
@@ -4575,6 +4609,7 @@ export function buildApp() {
           discordEventId: existing.discordEventId,
           discordMessageIds: existing.discordMessageIds,
           guildId: params.guildId,
+          pollMessageId: existing.discordPollMessageId,
           publishChannelId: existing.publishChannelId,
           reminderMessageIds: existing.reminderMessageIds,
         })

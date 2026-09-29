@@ -32,6 +32,9 @@ export type EventGameConfig = {
 export type EventGameOption = EventGameConfig & {
   // true = roles definidos por la guild; false = los de la plantilla.
   configured: boolean;
+  // true = además del aviso se publica una encuesta nativa de Discord
+  // (plantilla "encuesta", definida en el código, no en la config).
+  poll: boolean;
 };
 
 export const DEFAULT_EVENT_ROLES: EventRoleOption[] = [
@@ -189,6 +192,7 @@ export function resolveEventGames(
       configured: Boolean(custom && custom.roles.length > 0),
       key,
       label: custom?.label ?? template?.label ?? key,
+      poll: template?.poll === true,
       roles:
         custom && custom.roles.length > 0
           ? custom.roles

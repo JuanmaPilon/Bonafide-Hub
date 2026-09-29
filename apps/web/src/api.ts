@@ -1057,7 +1057,11 @@ export type HubEvent = {
   imageUrl?: string;
   // Pausa manual: frena recordatorios, recurrencia y anotaciones sin cancelar.
   paused?: boolean;
+  // Mensaje de la encuesta nativa de Discord (plantilla "encuesta").
+  discordPollMessageId?: string;
   publishChannelId?: string;
+  // Duración de la encuesta en horas (vacío = sin límite).
+  pollHours?: number;
   // Recurrencia propia: cada X días se crea y publica una copia del evento.
   recurrenceEnabled?: boolean;
   recurrenceEveryDays?: number;
@@ -1118,6 +1122,8 @@ export async function createEvent(
     game?: string;
     imageUrl?: string;
     paused?: boolean;
+    // Duración de la encuesta de Discord en horas (solo juegos de encuesta).
+    pollHours?: number;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number;
     recurrencePublishDaysBefore?: number;
@@ -1152,6 +1158,8 @@ export async function updateEvent(
     game?: string;
     imageUrl?: string;
     paused?: boolean;
+    // Duración de la encuesta de Discord en horas (null = sin límite).
+    pollHours?: number | null;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number;
     recurrencePublishDaysBefore?: number;
@@ -1348,6 +1356,9 @@ export async function getEventSpecs(guildId: string): Promise<RaidSpec[]> {
 export type EventGameOption = EventGameConfig & {
   // true = roles definidos por la guild; false = los de la plantilla.
   configured: boolean;
+  // true = además del aviso el evento publica una encuesta nativa de Discord
+  // (plantilla "encuesta").
+  poll?: boolean;
 };
 
 export async function getEventGames(

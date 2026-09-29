@@ -3659,6 +3659,13 @@ select.list-order {
   font-size: 0.85rem;
 }
 
+/* Aviso dentro del formulario de eventos (p. ej. que ese tipo de evento publica
+   una encuesta nativa de Discord). */
+.event-form-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .event-signup {
   display: grid;
   gap: 8px;

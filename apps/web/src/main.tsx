@@ -1961,6 +1961,9 @@ function EventCard({
   canManage,
   config,
   event,
+  // Evento de la plantilla de encuesta: la votación vive en Discord (poll
+  // nativo), así que la tarjeta no muestra el bloque de inscripción.
+  eventPoll,
   guildRoles,
   gameRoles,
   meId,
@@ -1980,6 +1983,8 @@ function EventCard({
   canManage: boolean;
   config: GuildConfig;
   event: HubEvent;
+  // true = el juego del evento publica una encuesta nativa en Discord.
+  eventPoll?: boolean;
   guildRoles: GuildRole[];
   // Roles de inscripción del JUEGO del evento.
   gameRoles: EventRoleOption[];
@@ -2095,6 +2100,7 @@ function EventCard({
   };
 
   const paused = event.paused === true;
+  const isPoll = eventPoll === true;
   const signupsClosed =
     paused ||
     event.status !== "scheduled" ||
@@ -2344,6 +2350,16 @@ function EventCard({
                   : "—"}
               </span>
             </div>{" "}
+            {isPoll ? (
+              <div className="event-info-item">
+                <span className="event-info-label">📊 Encuesta</span>
+                <span className="event-info-value">
+                  {event.pollHours
+                    ? `Abierta ${event.pollHours} h`
+                    : "24 h (por defecto)"}
+                </span>
+              </div>
+            ) : null}
             <div className="event-info-item">
               <span className="event-info-label">
                 ⏳ Cierre de inscripciones
@@ -2507,7 +2523,13 @@ function EventCard({
             <div className="event-roster-empty">Sin inscripciones todavía.</div>
           )}
 
-          {meId ? (
+          {isPoll ? (
+            <div className="event-form-note">
+              📊 La votación se hace en la encuesta publicada en Discord (✅ Sí
+              · ❌ No).
+            </div>
+          ) : null}
+          {meId && !isPoll ? (
             <div className="event-signup">
               {signupsClosed ? (
                 <div className="event-signup-closed">
@@ -3901,6 +3923,9 @@ function App() {
     game: string;
     imageUrl: string;
     paused: boolean;
+    // Duración de la encuesta de Discord en horas (solo juegos de encuesta).
+    // Vacío = sin duración explícita: Discord la abre 24 h (su default).
+    pollHours: string;
     recurrenceEnabled: boolean;
     recurrenceEveryDays: string;
     recurrencePublishDaysBefore: string;
@@ -3920,6 +3945,7 @@ function App() {
     game: "",
     imageUrl: "",
     paused: false,
+    pollHours: "",
     recurrenceEnabled: false,
     recurrenceEveryDays: "",
     recurrencePublishDaysBefore: "3",
@@ -3939,6 +3965,9 @@ function App() {
   // Juegos del módulo de eventos (WoW, LoL, …): cada uno trae sus roles de
   // inscripción. El evento elige juego y de ahí salen sus roles + catálogo.
   const [eventGames, setEventGames] = useState<EventGameOption[]>([]);
+  // Juego elegido en el formulario: dice si el evento publica una encuesta de
+  // Discord (plantilla "encuesta") y por lo tanto si se pide su duración.
+  const eventFormGame = eventGames.find((game) => game.key === eventForm.game);
   // Catálogo de specs de inscripción (estilo Raid Helper) + editor.
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
   const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
@@ -5292,6 +5321,7 @@ function App() {
       game: eventGames[0]?.key ?? "",
       imageUrl: "",
       paused: false,
+      pollHours: "",
       recurrenceEnabled: false,
       recurrenceEveryDays: "",
       recurrencePublishDaysBefore: "3",
@@ -5330,6 +5360,7 @@ function App() {
       game: event.game ?? "",
       imageUrl: event.imageUrl ?? "",
       paused: event.paused ?? false,
+      pollHours: event.pollHours != null ? String(event.pollHours) : "",
       recurrenceEnabled: event.recurrenceEnabled ?? false,
       recurrenceEveryDays:
         event.recurrenceEveryDays != null
@@ -5382,6 +5413,7 @@ function App() {
       imageUrl: event.imageUrl ?? "",
       // La copia no hereda pausa ni recurrencia (evita dos series andando).
       paused: false,
+      pollHours: event.pollHours != null ? String(event.pollHours) : "",
       recurrenceEnabled: false,
       recurrenceEveryDays: "",
       recurrencePublishDaysBefore: "3",
@@ -5511,6 +5543,13 @@ function App() {
           game: eventForm.game || undefined,
           imageUrl: eventForm.imageUrl || undefined,
           paused: eventForm.paused,
+          // Horas de la encuesta: solo viajan si el juego publica encuesta.
+          // null = sin duración explícita → Discord la abre 24 h.
+          pollHours: eventFormGame?.poll
+            ? eventForm.pollHours
+              ? Number(eventForm.pollHours)
+              : null
+            : undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
           recurrenceEveryDays: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrenceEveryDays) || undefined
@@ -5549,6 +5588,10 @@ function App() {
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
           imageUrl: eventForm.imageUrl || undefined,
+          pollHours:
+            eventFormGame?.poll && eventForm.pollHours
+              ? Number(eventForm.pollHours)
+              : undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
           recurrenceEveryDays: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrenceEveryDays) || undefined
@@ -10633,6 +10676,17 @@ function App() {
                             )}
                           </select>
                         </label>
+                        {/* Plantilla de encuesta: además del aviso se publica
+                            una encuesta nativa de Discord (✅ Sí · ❌ No). */}
+                        {eventFormGame?.poll ? (
+                          <div className="event-form-wide">
+                            <span className="event-form-note">
+                              📊 Este tipo de evento publica también una
+                              encuesta nativa de Discord (✅ Sí · ❌ No) en el
+                              canal del aviso.
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="event-form-wide event-tag-field">
                           <span className="event-tag-title">Etiquetas</span>
                           <TagsField
@@ -10694,6 +10748,24 @@ function App() {
                             }
                           />
                         </label>
+                        {eventFormGame?.poll ? (
+                          <label>
+                            <span>Duración de la encuesta (horas)</span>
+                            <input
+                              className="input"
+                              type="number"
+                              min="0"
+                              placeholder="24 (por defecto)"
+                              value={eventForm.pollHours}
+                              onChange={(event) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  pollHours: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        ) : null}
                         <div className="event-date-field">
                           <span>Cierre de inscripciones</span>
                           <EventDateTimeField
@@ -11319,6 +11391,11 @@ function App() {
                               onSignup={handleEventSignup}
                               onStaffRemoveSignup={handleStaffRemoveEventSignup}
                               onStaffSignup={handleStaffEventSignup}
+                              eventPoll={
+                                eventGames.find(
+                                  (game) => game.key === event.game,
+                                )?.poll === true
+                              }
                               gameRoles={rolesForGame(event.game)}
                               specs={specsForGame(event.game)}
                             />

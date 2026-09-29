@@ -26,6 +26,8 @@ export type EventPublishResult = {
   discordEventId?: string;
   error?: string;
   messageIds: string[];
+  // Mensaje de la encuesta nativa (eventos de la plantilla "encuesta").
+  pollMessageId?: string;
 };
 
 type ScheduledEventPayload = {
@@ -1047,6 +1049,67 @@ async function postAnnouncement(
   return { messageId: data.id };
 }
 
+// Publica la ENCUESTA nativa de Discord (✅ Sí · ❌ No) como mensaje aparte
+// del aviso. Discord no deja editar un poll ya publicado (las respuestas
+// quedan fijas), así que se publica una sola vez y solo se borra el mensaje
+// cuando el evento se limpia.
+// `hours` = duración en horas (Discord acepta 1..768). Sin `hours` Discord usa
+// su propio default: 24 h (verificado contra la API real).
+export async function postEventPoll(input: {
+  channelId: string;
+  hours?: number;
+  roles?: EventRoleOption[];
+  title: string;
+}): Promise<{ error?: string; messageId?: string }> {
+  const roles = (input.roles ?? []).filter((option) => option.label?.trim());
+  if (roles.length < 2) {
+    // Discord necesita al menos 2 respuestas para aceptar la encuesta.
+    return {
+      error:
+        "La plantilla de encuesta necesita al menos 2 respuestas configuradas",
+    };
+  }
+
+  // Emoji de la respuesta: custom (id + nombre) si está configurado, si no el
+  // unicode. Discord acepta cualquiera de los dos dentro del poll.
+  const emojiFor = (option: EventRoleOption) => {
+    if (option.emojiId) {
+      return { id: option.emojiId, name: option.emojiName || "emoji" };
+    }
+    const name = option.emoji?.trim() || option.emojiName?.trim();
+    return name ? { name } : undefined;
+  };
+
+  const hours =
+    input.hours && input.hours > 0 ? Math.min(input.hours, 768) : 0;
+  const response = await discordFetch(
+    `/channels/${encodeURIComponent(input.channelId)}/messages`,
+    {
+      method: "POST",
+      body: {
+        poll: {
+          allow_multiselect: false,
+          answers: roles.slice(0, 10).map((option) => ({
+            poll_media: {
+              emoji: emojiFor(option),
+              text: option.label.trim().slice(0, 55),
+            },
+          })),
+          duration: hours > 0 ? hours : undefined,
+          layout_type: 1,
+          question: { text: input.title.slice(0, 300) },
+        },
+      },
+    },
+  );
+  if (!response.ok) {
+    const detail = await errorMessage(response);
+    return { error: `No se pudo publicar la encuesta: ${detail}` };
+  }
+  const data = (await response.json()) as { id?: string };
+  return { messageId: data.id };
+}
+
 // Sincroniza un evento hacia Discord según las opciones elegidas. No toca
 // la DB: devuelve ids + errores para que el caller los persista.
 // Con `existing` (evento que ya estaba publicado) se ACTUALIZA en el lugar:
@@ -1063,6 +1126,7 @@ export async function syncEventToDiscord(input: {
   existing?: {
     discordEventId?: string;
     messageIds?: string[];
+    pollMessageId?: string;
     publishChannelId?: string;
   };
   gameLabel?: string;
@@ -1072,6 +1136,9 @@ export async function syncEventToDiscord(input: {
   options: EventDiscordOptions;
   ownRecurrenceEveryDays?: number;
   paused?: boolean;
+  // Evento de la plantilla "encuesta": además del aviso, publica el poll.
+  poll?: boolean;
+  pollHours?: number;
   requiredRoleId?: string;
   roles?: EventRoleOption[];
   signupDeadline?: Date;
@@ -1221,6 +1288,35 @@ export async function syncEventToDiscord(input: {
     }
   }
 
+  // 3) Encuesta nativa (plantilla "encuesta"): va como mensaje aparte del
+  // aviso. Como un poll publicado no se puede editar, si ya existe en el mismo
+  // canal se conserva y solo se publica cuando todavía no hay ninguno.
+  if (
+    input.poll === true &&
+    options.publishMessage &&
+    options.publishChannelId
+  ) {
+    const previousPoll =
+      input.existing?.publishChannelId === options.publishChannelId
+        ? input.existing?.pollMessageId
+        : undefined;
+    if (previousPoll) {
+      result.pollMessageId = previousPoll;
+    } else {
+      const poll = await postEventPoll({
+        channelId: options.publishChannelId,
+        hours: input.pollHours,
+        roles: input.roles,
+        title: input.title,
+      });
+      if (poll.error) {
+        result.error = result.error ?? poll.error;
+      } else if (poll.messageId) {
+        result.pollMessageId = poll.messageId;
+      }
+    }
+  }
+
   return result;
 }
 
@@ -1232,8 +1328,9 @@ export async function syncEventToDiscord(input: {
 export async function cleanupEventDiscord(input: {
   discordEventId?: string;
   guildId: string;
-  publishChannelId?: string;
   discordMessageIds?: string[];
+  pollMessageId?: string;
+  publishChannelId?: string;
   reminderMessageIds?: string[];
 }): Promise<{ failed: string[] }> {
   const failed: string[] = [];
@@ -1269,6 +1366,7 @@ export async function cleanupEventDiscord(input: {
   const messageIds = [
     ...(input.discordMessageIds ?? []),
     ...(input.reminderMessageIds ?? []),
+    ...(input.pollMessageId ? [input.pollMessageId] : []),
   ];
   if (messageIds.length > 0) {
     if (!input.publishChannelId) {
