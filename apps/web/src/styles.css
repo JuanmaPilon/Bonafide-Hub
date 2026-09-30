@@ -2849,12 +2849,6 @@ a:hover {
   line-height: 1;
 }
 
-.report-format-option small {
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.35;
-}
-
 @media (max-width: 520px) {
   .report-format-options {
     grid-template-columns: 1fr;

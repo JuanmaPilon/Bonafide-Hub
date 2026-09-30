@@ -2225,7 +2225,6 @@ function ReportFormatModal({
               📄
             </span>
             <strong>CSV</strong>
-            <small>Planilla para Excel o Google Sheets</small>
           </button>
           <button
             className="report-format-option"
@@ -2237,7 +2236,6 @@ function ReportFormatModal({
               📕
             </span>
             <strong>PDF</strong>
-            <small>Listo para compartir o imprimir</small>
           </button>
         </div>
         <div className="form-actions">
