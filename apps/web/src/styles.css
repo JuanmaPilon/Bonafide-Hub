@@ -2804,6 +2804,72 @@ a:hover {
   cursor: not-allowed;
 }
 
+/* Elección del formato del informe (CSV o PDF): modal chico con dos tarjetas. */
+.report-format-modal {
+  /* Fondo sólido: con `--panel` (alfa 0.84) se leía la página de atrás. */
+  background: #0d1424;
+}
+
+.report-format-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.report-format-option {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 16px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(134, 158, 214, 0.28);
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease,
+    filter 0.15s ease;
+}
+
+.report-format-option:hover:not(:disabled) {
+  border-color: rgba(53, 185, 111, 0.6);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.report-format-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.report-format-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.report-format-option small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 520px) {
+  .report-format-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root[data-theme="light"] .report-format-modal {
+  background: linear-gradient(160deg, #ffffff 0%, #f1f5fc 100%);
+}
+
+:root[data-theme="light"] .report-format-option {
+  background: rgba(223, 233, 246, 0.6);
+  border-color: rgba(60, 85, 130, 0.22);
+}
+
 .primary-button:disabled,
 .ghost-button:disabled {
   opacity: 0.55;

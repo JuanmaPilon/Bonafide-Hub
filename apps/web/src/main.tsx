@@ -1974,6 +1974,282 @@ function EventRoleEmoji({
 
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
+// ── Informe de asistencia (descarga en CSV o PDF) ───────────────────
+type ReportFormat = "csv" | "pdf";
+
+// Mismas etiquetas que usa el CSV del API y el informe del bot.
+const REPORT_STATUS_LABELS: Record<string, string> = {
+  bench: "Bench",
+  late: "Llega tarde",
+  no: "No asiste",
+  yes: "Asiste",
+};
+
+// Orden de la lista: primero los que asisten (igual que el roster del hub).
+const REPORT_STATUS_ORDER = ["yes", "bench", "late", "no"];
+
+// La fuente estándar de un PDF (Helvetica) no tiene glifos de emoji: en el
+// archivo saldrían como cuadraditos, así que se limpian antes de escribirlo.
+function pdfPlainText(value: string): string {
+  return value
+    .replace(
+      /[\u{1F000}-\u{1FAFF}\u{2100}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,
+      "",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Arma el PDF del informe en el navegador (mismo contenido que el CSV: los
+// anotados con su estado + quiénes tienen el rol mínimo y no se anotaron).
+// jsPDF se importa recién al usarlo para que la librería no viaje en el bundle
+// inicial.
+async function downloadEventReportPdf(
+  event: HubEvent,
+  missing: string[],
+  roleLabels: Map<string, string>,
+): Promise<void> {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ format: "a4", unit: "mm" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 14;
+  const contentWidth = pageWidth - marginX * 2;
+  const rowHeight = 6.4;
+  const bottomLimit = pageHeight - 16;
+
+  const columns = [
+    { key: "name", label: "Nombre", width: 54 },
+    { key: "status", label: "Estado", width: 24 },
+    { key: "role", label: "Rol", width: 22 },
+    { key: "class", label: "Clase", width: 24 },
+    { key: "spec", label: "Spec", width: 26 },
+    { key: "character", label: "Personaje", width: 36 },
+  ];
+  // La última columna absorbe lo que sobra para que la tabla cierre al borde.
+  const fixedWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  columns[columns.length - 1].width += contentWidth - fixedWidth;
+
+  // Recorta el texto al ancho de la celda (con puntos suspensivos) para que no
+  // se monte sobre la columna de al lado.
+  const fit = (value: string, width: number): string => {
+    if (doc.getTextWidth(value) <= width) {
+      return value;
+    }
+    let trimmed = value;
+    while (trimmed.length > 1 && doc.getTextWidth(`${trimmed}…`) > width) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    return `${trimmed}…`;
+  };
+
+  const rows = [...(event.signups ?? [])]
+    .sort((left, right) => {
+      // Un estado que no esté en la lista (dato viejo) va al final, no primero.
+      const rank = (status: string): number => {
+        const index = REPORT_STATUS_ORDER.indexOf(status);
+        return index === -1 ? REPORT_STATUS_ORDER.length : index;
+      };
+      const leftRank = rank(left.status);
+      const rightRank = rank(right.status);
+      return leftRank === rightRank
+        ? left.username.localeCompare(right.username)
+        : leftRank - rightRank;
+    })
+    .map((signup) => [
+      signup.username,
+      REPORT_STATUS_LABELS[signup.status] ?? signup.status,
+      signup.role ? (roleLabels.get(signup.role) ?? signup.role) : "",
+      signup.wowClass ?? "",
+      signup.spec ?? "",
+      signup.character ?? "",
+    ]);
+
+  let y = 34;
+
+  // Encabezado
+  doc.setFillColor(15, 22, 41);
+  doc.rect(0, 0, pageWidth, 26, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("Informe de asistencia", marginX, 12);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text(fit(pdfPlainText(event.title), contentWidth), marginX, 20);
+
+  doc.setTextColor(45, 55, 75);
+  doc.setFontSize(10);
+  doc.text(`Evento: ${formatDateTime24(event.startsAt)}`, marginX, y);
+  y += 5.5;
+  doc.text(
+    `Anotados: ${rows.length}` +
+      (missing.length > 0 ? ` · Sin anotarse: ${missing.length}` : ""),
+    marginX,
+    y,
+  );
+  y += 8;
+
+  const drawTableHead = (): void => {
+    doc.setFillColor(226, 232, 240);
+    doc.rect(marginX, y - 4.6, contentWidth, rowHeight, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(31, 41, 55);
+    let x = marginX;
+    for (const column of columns) {
+      doc.text(fit(column.label, column.width - 4), x + 2, y);
+      x += column.width;
+    }
+    doc.setFont("helvetica", "normal");
+    y += rowHeight;
+  };
+
+  const newPage = (): void => {
+    doc.addPage();
+    y = 20;
+  };
+
+  drawTableHead();
+  doc.setFontSize(9);
+  doc.setTextColor(45, 55, 75);
+
+  if (rows.length === 0) {
+    doc.text("Sin inscripciones.", marginX, y);
+    y += rowHeight;
+  }
+
+  rows.forEach((row, index) => {
+    if (y > bottomLimit) {
+      newPage();
+      drawTableHead();
+      doc.setFontSize(9);
+      doc.setTextColor(45, 55, 75);
+    }
+    if (index % 2 === 1) {
+      doc.setFillColor(243, 245, 249);
+      doc.rect(marginX, y - 4.6, contentWidth, rowHeight, "F");
+    }
+    let x = marginX;
+    row.forEach((cell, cellIndex) => {
+      const column = columns[cellIndex];
+      doc.text(fit(pdfPlainText(cell), column.width - 4), x + 2, y);
+      x += column.width;
+    });
+    y += rowHeight;
+  });
+
+  // Quiénes tienen el rol mínimo y no se anotaron.
+  if (missing.length > 0) {
+    if (y + 16 > bottomLimit) {
+      newPage();
+    }
+    y += 10;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(31, 41, 55);
+    doc.text(
+      `No se anotaron (${missing.length} con el rol mínimo)`,
+      marginX,
+      y,
+    );
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(45, 55, 75);
+    const lines = doc.splitTextToSize(
+      pdfPlainText(missing.join(" · ")),
+      contentWidth,
+    ) as string[];
+    for (const line of lines) {
+      if (y > bottomLimit) {
+        newPage();
+      }
+      doc.text(line, marginX, y);
+      y += 5;
+    }
+  }
+
+  // Pie de página con el paginado (se recorre al final porque recién ahí se
+  // sabe cuántas hojas tiene el informe).
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(130, 140, 160);
+    doc.text("Bonafide", marginX, pageHeight - 8);
+    doc.text(
+      `Página ${page} de ${pageCount}`,
+      pageWidth - marginX,
+      pageHeight - 8,
+      { align: "right" },
+    );
+  }
+
+  doc.save(`informe-${slugifyTitle(event.title) || "evento"}.pdf`);
+}
+
+// Elección del formato del informe. Es un modal y no un menú desplegable
+// porque la tarjeta del evento tiene `overflow: hidden`: cualquier panel
+// flotante adentro quedaría recortado.
+function ReportFormatModal({
+  busy,
+  onClose,
+  onSelect,
+  title,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onSelect: (format: ReportFormat) => void;
+  title: string;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        aria-modal="true"
+        className="modal report-format-modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <h4>Descargar informe</h4>
+        <p className="confirm-message">{title}</p>
+        <div className="report-format-options">
+          <button
+            className="report-format-option"
+            disabled={busy}
+            onClick={() => onSelect("csv")}
+            type="button"
+          >
+            <span aria-hidden="true" className="report-format-icon">
+              📄
+            </span>
+            <strong>CSV</strong>
+            <small>Planilla para Excel o Google Sheets</small>
+          </button>
+          <button
+            className="report-format-option"
+            disabled={busy}
+            onClick={() => onSelect("pdf")}
+            type="button"
+          >
+            <span aria-hidden="true" className="report-format-icon">
+              📕
+            </span>
+            <strong>PDF</strong>
+            <small>Listo para compartir o imprimir</small>
+          </button>
+        </div>
+        <div className="form-actions">
+          <button className="ghost-button" onClick={onClose} type="button">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EventCard({
   canManage,
   config,
@@ -1995,6 +2271,7 @@ function EventCard({
   onSignup,
   onStaffRemoveSignup,
   onStaffSignup,
+  reportBusy = false,
   specs,
 }: {
   canManage: boolean;
@@ -2007,8 +2284,8 @@ function EventCard({
   gameRoles: EventRoleOption[];
   meId?: string;
   onDelete: (event: HubEvent) => void;
-  // Baja el informe de asistencia del evento en CSV.
-  onDownloadReport: (event: HubEvent) => void;
+  // Descarga el informe de asistencia del evento (planilla o PDF).
+  onDownloadReport: (event: HubEvent, format: ReportFormat) => void;
   onDuplicate: (event: HubEvent) => void;
   onEdit: (event: HubEvent) => void;
   // Abre el perfil del miembro clickeado en el roster.
@@ -2048,6 +2325,8 @@ function EventCard({
       wowClass?: string;
     },
   ) => Promise<void>;
+  // El informe de este evento se está generando (deja el botón en espera).
+  reportBusy?: boolean;
   specs: RaidSpec[];
 }) {
   const mySignup = meId
@@ -2087,6 +2366,8 @@ function EventCard({
     wowClass: string;
   } | null>(null);
   const [staffSaving, setStaffSaving] = useState(false);
+  // Elección de formato del informe (modal con CSV / PDF).
+  const [downloadOpen, setDownloadOpen] = useState(false);
   // Avisar por MD al miembro de qué le cambió (arranca encendido: es el
   // motivo por el que el staff abre el editor).
   const [staffNotify, setStaffNotify] = useState(true);
@@ -2827,10 +3108,11 @@ function EventCard({
               </button>
               <button
                 className="csv-button"
-                onClick={() => onDownloadReport(event)}
+                disabled={reportBusy}
+                onClick={() => setDownloadOpen(true)}
                 type="button"
               >
-                ⬇️ Informe CSV
+                {reportBusy ? "Generando…" : "⬇️ Descargar informe"}
               </button>
               {event.recurrenceEnabled ? (
                 <button
@@ -2852,6 +3134,20 @@ function EventCard({
           ) : null}
         </div>
       </article>
+
+      {/* Elección del formato del informe: va acá afuera porque la tarjeta
+          tiene overflow hidden y recortaría cualquier popover. */}
+      {downloadOpen ? (
+        <ReportFormatModal
+          busy={reportBusy}
+          onClose={() => setDownloadOpen(false)}
+          onSelect={(format) => {
+            setDownloadOpen(false);
+            onDownloadReport(event, format);
+          }}
+          title={event.title}
+        />
+      ) : null}
 
       {/* Edición manual del staff: corrige la inscripción de cualquier miembro
           (estado, rol, clase/spec y personaje). El botón ✏️ de cada nombre del
@@ -4637,8 +4933,13 @@ function App() {
   );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
-  // Evento cuyo informe CSV se está generando (para el estado del botón).
-  const [reportCsvEventId, setReportCsvEventId] = useState<string | null>(null);
+  // Evento cuyo informe se está generando (estado del botón) y evento del que
+  // se está eligiendo el formato de descarga.
+  const [reportBusyEventId, setReportBusyEventId] = useState<string | null>(
+    null,
+  );
+  const [reportDownloadEvent, setReportDownloadEvent] =
+    useState<HubEvent | null>(null);
   const [eventTagFilter, setEventTagFilter] = useState<string[]>([]);
   // Filtros y buscadores de las listas (mismo mecanismo en todas).
   const [eventSearch, setEventSearch] = useState("");
@@ -6166,25 +6467,47 @@ function App() {
     });
   }
 
-  // Baja el informe de asistencia del evento (anotados con su estado + quiénes
-  // tienen el rol mínimo y no se anotaron) en CSV: lo arma el API.
-  async function handleDownloadEventReport(event: HubEvent): Promise<void> {
+  // Baja el informe de asistencia del evento (los anotados con su estado +
+  // quiénes tienen el rol mínimo y no se anotaron). El CSV lo arma el API; el
+  // PDF se arma en el navegador con los datos que ya tiene la tarjeta.
+  async function handleDownloadEventReport(
+    event: HubEvent,
+    format: ReportFormat = "csv",
+  ): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
-    setReportCsvEventId(event.id);
+    setReportBusyEventId(event.id);
     try {
-      const csv = await getEventReportCsv(selectedGuildId, event.id);
-      downloadCsvFile(
-        `informe-${slugifyTitle(event.title) || "evento"}.csv`,
-        csv,
+      if (format === "csv") {
+        const csv = await getEventReportCsv(selectedGuildId, event.id);
+        downloadCsvFile(
+          `informe-${slugifyTitle(event.title) || "evento"}.csv`,
+          csv,
+        );
+      } else {
+        // La lista de los que faltan es staff-only: si falla, el PDF sale
+        // igual (sin esa sección) en vez de no bajar nada.
+        const roster = await getEventRoster(selectedGuildId, event.id).catch(
+          () => null,
+        );
+        await downloadEventReportPdf(
+          event,
+          roster?.missing.map((entry) => entry.username) ?? [],
+          new Map(
+            rolesForGame(event.game).map((role) => [role.key, role.label]),
+          ),
+        );
+      }
+      pushToast(
+        format === "csv" ? "Informe descargado." : "PDF descargado.",
+        "success",
       );
-      pushToast("Informe descargado.", "success");
     } catch (error) {
       void error;
       pushToast("No se pudo generar el informe.", "error");
     } finally {
-      setReportCsvEventId(null);
+      setReportBusyEventId(null);
     }
   }
 
@@ -10854,18 +11177,16 @@ function App() {
                                         <button
                                           className="csv-button"
                                           disabled={
-                                            reportCsvEventId === finished.id
+                                            reportBusyEventId === finished.id
                                           }
                                           onClick={() =>
-                                            void handleDownloadEventReport(
-                                              finished,
-                                            )
+                                            setReportDownloadEvent(finished)
                                           }
                                           type="button"
                                         >
-                                          {reportCsvEventId === finished.id
+                                          {reportBusyEventId === finished.id
                                             ? "Generando…"
-                                            : "⬇️ Informe CSV"}
+                                            : "⬇️ Descargar informe"}
                                         </button>
                                         <button
                                           className="danger-button"
@@ -12407,6 +12728,7 @@ function App() {
                               onSignup={handleEventSignup}
                               onStaffRemoveSignup={handleStaffRemoveEventSignup}
                               onStaffSignup={handleStaffEventSignup}
+                              reportBusy={reportBusyEventId === event.id}
                               eventPoll={
                                 eventGames.find(
                                   (game) => game.key === event.game,
@@ -12589,6 +12911,19 @@ function App() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {reportDownloadEvent ? (
+        <ReportFormatModal
+          busy={reportBusyEventId === reportDownloadEvent.id}
+          onClose={() => setReportDownloadEvent(null)}
+          onSelect={(format) => {
+            const target = reportDownloadEvent;
+            setReportDownloadEvent(null);
+            void handleDownloadEventReport(target, format);
+          }}
+          title={reportDownloadEvent.title}
+        />
       ) : null}
 
       {confirmDialog ? (
