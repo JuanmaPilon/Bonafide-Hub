@@ -5078,6 +5078,15 @@ select.list-order {
   transform: translateX(20px);
 }
 
+/* Un toggle es un <label>: dentro de `.form-grid` la regla general de labels
+   (`display: grid`) le hace caer el switch DEBAJO del texto. Acá vuelve a ser
+   una fila, en cualquier tarjeta del panel. */
+.form-grid label.module-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* ---------- Sugerencias ---------- */
 
 .suggestions-view {
@@ -5443,6 +5452,245 @@ select.list-order {
   justify-content: flex-start;
   flex: 1 1 auto;
   margin-top: 4px;
+}
+
+/* ---------- Roles del servidor (Admin → Roles) ---------- */
+
+.role-editor {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(134, 158, 214, 0.22);
+  border-radius: 14px;
+  background: rgba(12, 19, 37, 0.4);
+  margin-bottom: 16px;
+}
+
+.role-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Color del rol: cuadradito nativo + hex editable a mano. */
+.role-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-color-input {
+  width: 52px;
+  height: 38px;
+  padding: 3px;
+  border: 1px solid rgba(133, 156, 212, 0.28);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.role-color-hex {
+  width: 92px;
+  flex: 0 0 auto;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  text-transform: lowercase;
+}
+
+/* Fila de toggles (degradado / aparte / mencionable). */
+.role-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-permissions {
+  display: grid;
+  gap: 12px;
+}
+
+.role-permission-group {
+  display: grid;
+  gap: 6px;
+}
+
+.role-permission-group-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.role-permission-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 4px 12px;
+}
+
+.role-permission-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.87rem;
+  cursor: pointer;
+}
+
+/* La regla global `input { width: 100% }` rompe los checkboxes. */
+.role-permission-check input {
+  width: auto;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+.role-editor-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.role-template-save {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.role-template-save .input {
+  max-width: 230px;
+}
+
+.role-templates {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.role-template-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-template-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid rgba(133, 156, 212, 0.22);
+  border-radius: 999px;
+  background: rgba(10, 16, 31, 0.45);
+}
+
+.role-template-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.role-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.role-bulk {
+  border: 1px dashed rgba(134, 158, 214, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.role-bulk-summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.role-bulk-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.role-bulk-colors {
+  display: flex;
+  gap: 16px;
+}
+
+.role-bulk-colors label {
+  display: grid;
+  gap: 6px;
+}
+
+.role-bulk-colors span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.role-list {
+  display: grid;
+  gap: 6px;
+}
+
+.role-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(133, 156, 212, 0.18);
+  border-radius: 10px;
+  background: rgba(10, 16, 31, 0.35);
+}
+
+.role-row:hover {
+  border-color: rgba(106, 168, 255, 0.45);
+}
+
+.role-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.role-row-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.role-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* Tema claro: las cajas usaban fondos navy fijos. */
+:root[data-theme="light"] .role-editor,
+:root[data-theme="light"] .role-row,
+:root[data-theme="light"] .role-template-chip {
+  background: var(--surface-card);
+  border-color: rgba(60, 85, 130, 0.22);
+}
+
+/* El textarea del alta en lote queda fuera de `.comm-form`, que es donde el
+   tema claro arregla los textarea: sin esto se veía texto oscuro sobre fondo
+   navy. */
+:root[data-theme="light"] .role-bulk-body .textarea {
+  background: var(--surface-input);
+  color: var(--text);
 }
 
 /* ---------- Karuta (guía de comandos + cartas raras + colección) ---------- */

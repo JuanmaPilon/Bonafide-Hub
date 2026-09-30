@@ -160,6 +160,27 @@ import {
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
 import {
+  botTopRolePosition,
+  colorRamp,
+  createGuildRole,
+  deleteGuildRole,
+  listGuildRoles,
+  modifyGuildRole,
+  setRolePositions,
+  uniqueRoleName,
+  type DiscordRole,
+  type RoleWriteInput,
+} from "./services/discord-roles.js";
+import {
+  deleteRoleTemplate,
+  listRoleTemplates,
+  MAX_ROLE_TEMPLATES,
+  normalizeRoleColor,
+  normalizePermissions,
+  normalizeRoleTemplateInput,
+  saveRoleTemplate,
+} from "./services/role-templates-store.js";
+import {
   getXpConfig,
   type XpConfig,
   type XpRoleRule,
@@ -379,6 +400,23 @@ async function fetchGuildRoleNames(
     // Sin nombres: la tarjeta cae al fallback de la web.
   }
   return names;
+}
+
+// Vista pública de un rol de Discord para el panel: los colores con degradado
+// vienen en `colors` y el legacy `color` solo trae el principal.
+function roleView(role: DiscordRole) {
+  return {
+    color: role.colors?.primary_color || role.color,
+    hoist: role.hoist,
+    id: role.id,
+    managed: role.managed,
+    mentionable: role.mentionable,
+    name: role.name,
+    permissions: role.permissions ?? "0",
+    position: role.position,
+    secondaryColor: role.colors?.secondary_color || undefined,
+    unicodeEmoji: role.unicode_emoji || undefined,
+  };
 }
 
 // Caché corta de canales: la usa el registro de auditoría para escribir
@@ -3201,33 +3239,556 @@ export function buildApp() {
       });
     }
 
-    const roles = (await rolesResponse.json()) as Array<{
-      color: number;
-      colors?: { primary_color?: number; secondary_color?: number };
-      id: string;
-      managed: boolean;
-      name: string;
-      position: number;
-    }>;
+    const roles = (await rolesResponse.json()) as DiscordRole[];
 
     const normalRoles = roles
       .filter((role) => role.id !== params.guildId)
-      .map((role) => ({
-        color: role.colors?.primary_color || role.color,
-        id: role.id,
-        managed: role.managed,
-        name: role.name,
-        position: role.position,
-        secondaryColor: role.colors?.secondary_color || undefined,
-      }))
+      .map((role) => roleView(role))
       .sort((left, right) => right.position - left.position);
 
     return {
       ok: true,
       guildId: params.guildId,
+      // Hasta qué posición puede llegar el bot (su rol más alto): la tarjeta
+      // Roles avisa cuándo Discord va a rechazar una ubicación.
+      botTopPosition: await botTopRolePosition(params.guildId),
       roles: normalRoles,
     };
   });
+
+  // ── Roles del servidor (Admin → Roles) ───────────────────────────────
+  // Discord no tiene "duplicar rol" ni plantillas: crear un rol es tedioso.
+  // Por API sí se puede y el bot ya tiene Gestionar roles, así que lo hace el
+  // hub. Gate: módulo `config`, el mismo que Permisos de staff.
+  app.post("/guilds/:guildId/roles", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      color?: string;
+      colorSecondary?: string;
+      duplicateOf?: string;
+      hoist?: boolean;
+      mentionable?: boolean;
+      name?: string;
+      permissions?: string;
+      positionBelowRoleId?: string;
+    };
+
+    const current = await listGuildRoles(params.guildId);
+    if (current.error || !current.roles) {
+      return reply.code(502).send({
+        ok: false,
+        error: current.error ?? "No se pudieron leer los roles",
+      });
+    }
+    const guildRoles = current.roles.filter(
+      (role) => role.id !== params.guildId,
+    );
+
+    const write: RoleWriteInput = {};
+    let sourceName: string | undefined;
+    if (body.duplicateOf) {
+      const source = guildRoles.find((role) => role.id === body.duplicateOf);
+      if (!source) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "No se encontró el rol a duplicar" });
+      }
+      // Se copia todo menos el emoji/ícono: Discord pide boosts para eso.
+      write.color = source.colors?.primary_color || source.color;
+      write.hoist = source.hoist;
+      write.mentionable = source.mentionable;
+      write.permissions = source.permissions ?? "0";
+      sourceName = source.name;
+    }
+
+    const name = (
+      body.name?.trim() ||
+      (sourceName
+        ? uniqueRoleName(
+            guildRoles.map((role) => role.name),
+            sourceName,
+          )
+        : "")
+    ).slice(0, 100);
+    if (!name) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Falta el nombre del rol" });
+    }
+    write.name = name;
+
+    if (body.color !== undefined) {
+      const color = normalizeRoleColor(body.color);
+      if (color === null) {
+        return reply.code(400).send({ ok: false, error: "Color inválido" });
+      }
+      write.color = Number.parseInt(color.slice(1), 16);
+    }
+
+    const secondary =
+      body.colorSecondary !== undefined
+        ? normalizeRoleColor(body.colorSecondary)
+        : null;
+    if (secondary) {
+      write.colorSecondary = Number.parseInt(secondary.slice(1), 16);
+    }
+
+    if (body.permissions !== undefined) {
+      const permissions = normalizePermissions(body.permissions);
+      if (permissions === null) {
+        return reply.code(400).send({ ok: false, error: "Permisos inválidos" });
+      }
+      write.permissions = permissions;
+    }
+    if (body.hoist !== undefined) {
+      write.hoist = body.hoist === true;
+    }
+    if (body.mentionable !== undefined) {
+      write.mentionable = body.mentionable === true;
+    }
+
+    const created = await createGuildRole(params.guildId, write);
+    if (created.error || !created.role) {
+      return reply.code(400).send({
+        ok: false,
+        error: created.error ?? "No se pudo crear el rol",
+      });
+    }
+
+    // Ubicación: Discord crea los roles AL FONDO. Si pidieron dejarlo debajo
+    // del original (o de un rol puntual) hay que moverlo con el endpoint en
+    // lote: el PATCH de un rol ignora la posición.
+    const belowId = body.positionBelowRoleId ?? body.duplicateOf;
+    let positionError: string | undefined;
+    let positionMoved = false;
+    if (belowId) {
+      const reference = guildRoles.find((role) => role.id === belowId);
+      if (reference) {
+        const target = Math.max(reference.position - 1, 1);
+        if (target !== created.role.position) {
+          const limit = await botTopRolePosition(params.guildId);
+          if (limit > 0 && target >= limit) {
+            positionError = `No se pudo ubicar: quedaría por encima del rol más alto del bot (máximo ${limit - 1}).`;
+          } else {
+            const moved = await setRolePositions(params.guildId, [
+              { id: created.role.id, position: target },
+            ]);
+            positionError = moved.error;
+            positionMoved = !moved.error;
+          }
+        }
+      }
+    }
+
+    guildRolesCache.delete(params.guildId);
+
+    await logAdminAction(session, params.guildId, "role:create", {
+      details: sourceName
+        ? `Rol creado: ${name} (copia de ${sourceName})`
+        : `Rol creado: ${name}`,
+      targetId: created.role.id,
+      targetType: "role",
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      positionError,
+      positionMoved,
+      role: roleView(created.role),
+    };
+  });
+
+  // Varios roles de una vez, con una escala de color opcional entre dos tonos
+  // (sirve para los tiers de LoL: Bronce → Challenger).
+  app.post("/guilds/:guildId/roles/bulk", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      color?: string;
+      colorTo?: string;
+      hoist?: boolean;
+      mentionable?: boolean;
+      names?: string[];
+      permissions?: string;
+    };
+
+    const names = Array.from(
+      new Set(
+        (body.names ?? [])
+          .map((name) => String(name ?? "").trim().slice(0, 100))
+          .filter(Boolean),
+      ),
+    );
+    if (names.length === 0) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Faltan los nombres de los roles" });
+    }
+    if (names.length > 25) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Máximo 25 roles por vez" });
+    }
+
+    const from = normalizeRoleColor(body.color ?? "#6aa8ff") ?? "#6aa8ff";
+    const to = normalizeRoleColor(body.colorTo ?? from) ?? from;
+    const colors = colorRamp(
+      Number.parseInt(from.slice(1), 16),
+      Number.parseInt(to.slice(1), 16),
+      names.length,
+    );
+    const permissions = normalizePermissions(body.permissions ?? "0");
+    if (permissions === null) {
+      return reply.code(400).send({ ok: false, error: "Permisos inválidos" });
+    }
+
+    const created: Array<{ color: number; id: string; name: string }> = [];
+    const failed: Array<{ error: string; name: string }> = [];
+    for (const [index, name] of names.entries()) {
+      const result = await createGuildRole(params.guildId, {
+        color: colors[index],
+        hoist: body.hoist === true,
+        mentionable: body.mentionable === true,
+        name,
+        permissions,
+      });
+      if (result.error || !result.role) {
+        failed.push({ error: result.error ?? "No se pudo crear", name });
+      } else {
+        created.push({
+          color: colors[index],
+          id: result.role.id,
+          name: result.role.name,
+        });
+      }
+    }
+
+    guildRolesCache.delete(params.guildId);
+
+    await logAdminAction(session, params.guildId, "role:create", {
+      details: `Roles creados en lote: ${created.map((role) => role.name).join(", ")}${failed.length ? ` (fallaron ${failed.length})` : ""}`,
+      targetType: "role",
+    });
+
+    return { ok: true, created, failed, guildId: params.guildId };
+  });
+
+  app.patch("/guilds/:guildId/roles/:roleId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; roleId?: string };
+    if (!params.guildId || !params.roleId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (params.roleId === params.guildId) {
+      return reply.code(400).send({
+        ok: false,
+        error: "El rol @everyone no se puede editar",
+      });
+    }
+
+    const body = (request.body ?? {}) as {
+      color?: string;
+      colorSecondary?: string;
+      hoist?: boolean;
+      mentionable?: boolean;
+      name?: string;
+      permissions?: string;
+      position?: number;
+    };
+
+    const current = await listGuildRoles(params.guildId);
+    const role = current.roles?.find((entry) => entry.id === params.roleId);
+    if (current.error || !role) {
+      return reply.code(404).send({ ok: false, error: "No se encontró el rol" });
+    }
+    if (role.managed) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Es un rol de una integración (bot): Discord no deja editarlo",
+      });
+    }
+
+    const write: RoleWriteInput = {};
+    if (body.name !== undefined) {
+      const name = body.name.trim().slice(0, 100);
+      if (!name) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Falta el nombre del rol" });
+      }
+      write.name = name;
+    }
+    if (body.color !== undefined) {
+      const color = normalizeRoleColor(body.color);
+      if (color === null) {
+        return reply.code(400).send({ ok: false, error: "Color inválido" });
+      }
+      write.color = Number.parseInt(color.slice(1), 16);
+    }
+    const secondary =
+      body.colorSecondary !== undefined
+        ? normalizeRoleColor(body.colorSecondary)
+        : null;
+    if (secondary) {
+      write.colorSecondary = Number.parseInt(secondary.slice(1), 16);
+    }
+    if (body.permissions !== undefined) {
+      const permissions = normalizePermissions(body.permissions);
+      if (permissions === null) {
+        return reply.code(400).send({ ok: false, error: "Permisos inválidos" });
+      }
+      write.permissions = permissions;
+    }
+    if (body.hoist !== undefined) {
+      write.hoist = body.hoist === true;
+    }
+    if (body.mentionable !== undefined) {
+      write.mentionable = body.mentionable === true;
+    }
+
+    let updated = role;
+    if (Object.keys(write).length > 0) {
+      const result = await modifyGuildRole(params.guildId, params.roleId, write);
+      if (result.error || !result.role) {
+        return reply.code(400).send({
+          ok: false,
+          error: result.error ?? "No se pudo actualizar el rol",
+        });
+      }
+      updated = result.role;
+    }
+
+    let positionError: string | undefined;
+    let positionMoved = false;
+    if (body.position !== undefined) {
+      const target = Math.max(Math.trunc(body.position), 1);
+      const limit = await botTopRolePosition(params.guildId);
+      if (limit > 0 && target >= limit) {
+        positionError = `Máximo ${limit - 1}: arriba queda el rol más alto del bot.`;
+      } else {
+        const moved = await setRolePositions(params.guildId, [
+          { id: params.roleId, position: target },
+        ]);
+        positionError = moved.error;
+        positionMoved = !moved.error;
+      }
+    }
+
+    guildRolesCache.delete(params.guildId);
+
+    const changes = [
+      write.name && write.name !== role.name ? `nombre: ${write.name}` : null,
+      write.color !== undefined ? "color" : null,
+      write.permissions !== undefined ? "permisos" : null,
+      write.hoist !== undefined ? `separado: ${write.hoist}` : null,
+      write.mentionable !== undefined ? `mencionable: ${write.mentionable}` : null,
+      body.position !== undefined && positionMoved
+        ? `posición: ${body.position}`
+        : null,
+    ].filter((part): part is string => Boolean(part));
+
+    await logAdminAction(session, params.guildId, "role:update", {
+      details: `Rol actualizado: ${updated.name}${changes.length ? ` (${changes.join(", ")})` : ""}`,
+      targetId: params.roleId,
+      targetType: "role",
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      positionError,
+      positionMoved,
+      role: roleView(updated),
+    };
+  });
+
+  app.delete("/guilds/:guildId/roles/:roleId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; roleId?: string };
+    if (!params.guildId || !params.roleId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    if (params.roleId === params.guildId) {
+      return reply.code(400).send({
+        ok: false,
+        error: "El rol @everyone no se puede borrar",
+      });
+    }
+
+    const current = await listGuildRoles(params.guildId);
+    const role = current.roles?.find((entry) => entry.id === params.roleId);
+    if (current.error || !role) {
+      return reply.code(404).send({ ok: false, error: "No se encontró el rol" });
+    }
+    if (role.managed) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Es un rol de una integración (bot): Discord no deja borrarlo",
+      });
+    }
+
+    const result = await deleteGuildRole(params.guildId, params.roleId);
+    if (result.error) {
+      return reply.code(400).send({ ok: false, error: result.error });
+    }
+
+    guildRolesCache.delete(params.guildId);
+
+    await logAdminAction(session, params.guildId, "role:delete", {
+      details: `Rol eliminado: ${role.name}`,
+      targetId: params.roleId,
+      targetType: "role",
+    });
+
+    return { ok: true, deleted: true, guildId: params.guildId };
+  });
+
+  // Plantillas de rol: los datos de un rol modelo para crearlo con un click.
+  app.get("/guilds/:guildId/role-templates", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      templates: await listRoleTemplates(params.guildId),
+    };
+  });
+
+  app.post("/guilds/:guildId/role-templates", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const input = normalizeRoleTemplateInput(request.body);
+    if (!input) {
+      return reply.code(400).send({
+        ok: false,
+        error: "Faltan el nombre, el color o los permisos de la plantilla",
+      });
+    }
+
+    const existing = await listRoleTemplates(params.guildId);
+    if (
+      existing.length >= MAX_ROLE_TEMPLATES &&
+      !existing.some((template) => template.label === input.label)
+    ) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: `Máximo ${MAX_ROLE_TEMPLATES} plantillas` });
+    }
+
+    const template = await saveRoleTemplate(params.guildId, input);
+
+    await logAdminAction(session, params.guildId, "role:template-save", {
+      details: `Plantilla de rol guardada: ${template.label}`,
+      targetId: template.id,
+      targetType: "role-template",
+    });
+
+    return { ok: true, guildId: params.guildId, template };
+  });
+
+  app.delete(
+    "/guilds/:guildId/role-templates/:templateId",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as {
+        guildId?: string;
+        templateId?: string;
+      };
+      if (!params.guildId || !params.templateId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "config"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const deleted = await deleteRoleTemplate(
+        params.guildId,
+        params.templateId,
+      );
+      if (deleted) {
+        await logAdminAction(session, params.guildId, "role:template-delete", {
+          details: "Plantilla de rol eliminada",
+          targetId: params.templateId,
+          targetType: "role-template",
+        });
+      }
+
+      return { ok: true, deleted, guildId: params.guildId };
+    },
+  );
 
   // Perfil de un miembro de la guild: datos públicos del user (avatar,
   // banner, acento) + membrecía (nick, roles, booster, fecha de ingreso).

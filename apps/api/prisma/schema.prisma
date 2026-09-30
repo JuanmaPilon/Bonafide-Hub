@@ -87,6 +87,27 @@ model GuildConfig {
   @@map("guild_configs")
 }
 
+// Plantilla de rol (Admin → Roles): guarda los datos de un rol modelo para
+// crearlo con un click. No guarda emoji/ícono: Discord los pide solo si el
+// servidor tiene el feature ROLE_ICONS (boosts), así que se copian a mano el
+// día que se pueda. El color se guarda en hex (#rrggbb) y los permisos como el
+// bitfield en texto, igual que los devuelve Discord.
+model RoleTemplate {
+  id              String   @id @default(cuid())
+  guildId         String
+  label           String
+  color           String
+  colorSecondary  String?
+  hoist           Boolean  @default(false)
+  mentionable     Boolean  @default(false)
+  permissions     String   @default("0")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([guildId, label])
+  @@map("role_templates")
+}
+
 // Permisos de staff: qué módulos del panel Admin ve cada rol de Discord.
 // Solo el owner puede configurarlo. El owner siempre tiene acceso total.
 model AdminRoleModule {

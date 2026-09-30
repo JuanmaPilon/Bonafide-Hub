@@ -428,6 +428,173 @@ export async function getGuildRoles(guildId: string): Promise<GuildRole[]> {
   return data.roles;
 }
 
+// ── Roles del servidor (Admin → Roles) ─────────────────────────────
+// Discord no tiene "duplicar rol" ni plantillas: el hub lo hace por API.
+
+export type GuildRoleDetail = GuildRole & {
+  hoist: boolean;
+  mentionable: boolean;
+  // Bitfield de permisos como texto, igual que lo manda Discord.
+  permissions: string;
+  unicodeEmoji?: string;
+};
+
+export type GuildRolesResponse = {
+  // Posición del rol más alto del bot: arriba de eso Discord rechaza mover.
+  botTopPosition: number;
+  roles: GuildRoleDetail[];
+};
+
+export async function getGuildRolesDetailed(
+  guildId: string,
+): Promise<GuildRolesResponse> {
+  const data = await requestJson<{
+    botTopPosition?: number;
+    roles: GuildRoleDetail[];
+  }>(`/guilds/${guildId}/roles`, { method: "GET" });
+
+  return { botTopPosition: data.botTopPosition ?? 0, roles: data.roles };
+}
+
+export type RoleWritePayload = {
+  color?: string;
+  colorSecondary?: string;
+  // Duplica un rol existente (copia color, permisos, hoist y mentionable).
+  duplicateOf?: string;
+  hoist?: boolean;
+  mentionable?: boolean;
+  name?: string;
+  permissions?: string;
+  // Ubica el rol nuevo justo debajo de ese rol.
+  positionBelowRoleId?: string;
+};
+
+export type RoleMutationResult = {
+  positionError?: string;
+  positionMoved: boolean;
+  role: GuildRoleDetail;
+};
+
+export async function createGuildRole(
+  guildId: string,
+  input: RoleWritePayload,
+): Promise<RoleMutationResult> {
+  return requestJson<RoleMutationResult>(`/guilds/${guildId}/roles`, {
+    body: JSON.stringify(input),
+    method: "POST",
+  });
+}
+
+export async function createGuildRolesBulk(
+  guildId: string,
+  input: {
+    color?: string;
+    colorTo?: string;
+    hoist?: boolean;
+    mentionable?: boolean;
+    names: string[];
+    permissions?: string;
+  },
+): Promise<{
+  created: Array<{ color: number; id: string; name: string }>;
+  failed: Array<{ error: string; name: string }>;
+}> {
+  const data = await requestJson<{
+    created: Array<{ color: number; id: string; name: string }>;
+    failed: Array<{ error: string; name: string }>;
+  }>(`/guilds/${guildId}/roles/bulk`, {
+    body: JSON.stringify(input),
+    method: "POST",
+  });
+
+  return { created: data.created, failed: data.failed };
+}
+
+export async function updateGuildRole(
+  guildId: string,
+  roleId: string,
+  input: {
+    color?: string;
+    colorSecondary?: string;
+    hoist?: boolean;
+    mentionable?: boolean;
+    name?: string;
+    permissions?: string;
+    position?: number;
+  },
+): Promise<RoleMutationResult> {
+  return requestJson<RoleMutationResult>(
+    `/guilds/${guildId}/roles/${encodeURIComponent(roleId)}`,
+    { body: JSON.stringify(input), method: "PATCH" },
+  );
+}
+
+export async function deleteGuildRole(
+  guildId: string,
+  roleId: string,
+): Promise<boolean> {
+  const data = await requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/roles/${encodeURIComponent(roleId)}`,
+    { method: "DELETE" },
+  );
+
+  return data.deleted;
+}
+
+// Plantillas de rol: datos de un rol modelo para crearlo con un click.
+export type RoleTemplate = {
+  color: string;
+  // Segundo color cuando la plantilla usa degradado (null = plano).
+  colorSecondary: string | null;
+  hoist: boolean;
+  id: string;
+  label: string;
+  mentionable: boolean;
+  permissions: string;
+};
+
+export async function getRoleTemplates(
+  guildId: string,
+): Promise<RoleTemplate[]> {
+  const data = await requestJson<{ templates: RoleTemplate[] }>(
+    `/guilds/${guildId}/role-templates`,
+    { method: "GET" },
+  );
+
+  return data.templates;
+}
+
+export async function saveRoleTemplate(
+  guildId: string,
+  input: {
+    color: string;
+    colorSecondary?: string | null;
+    hoist: boolean;
+    label: string;
+    mentionable: boolean;
+    permissions: string;
+  },
+): Promise<RoleTemplate> {
+  const data = await requestJson<{ template: RoleTemplate }>(
+    `/guilds/${guildId}/role-templates`,
+    { body: JSON.stringify(input), method: "POST" },
+  );
+
+  return data.template;
+}
+
+export async function deleteRoleTemplate(
+  guildId: string,
+  templateId: string,
+): Promise<boolean> {
+  const data = await requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/role-templates/${encodeURIComponent(templateId)}`,
+    { method: "DELETE" },
+  );
+
+  return data.deleted;
+}
+
 export type GuildEmoji = {
   animated: boolean;
   id: string;
