@@ -3664,23 +3664,21 @@ select.list-order {
   border-color: rgba(255, 180, 84, 0.45);
 }
 
-/* Control del roster: confirmados / total con el rol mínimo. Es un botón para
-   que se note que se puede clickear (abre la lista de los que faltan). */
-.event-count.roster-goal {
-  border-color: rgba(106, 168, 255, 0.5);
-  background: rgba(106, 168, 255, 0.1);
+/* Chip del total: cuando el evento tiene rol mínimo se vuelve un BOTÓN que abre
+   el roster (quiénes faltan anotarse). Mantiene el verde del total y avisa que
+   se puede clickear con el hover y el cursor. */
+.event-count.total.roster-goal {
   color: var(--text);
-  font-weight: 700;
   cursor: pointer;
   font-family: inherit;
   transition: border-color 140ms ease;
 }
 
-.event-count.roster-goal:hover:not(:disabled) {
-  border-color: rgba(106, 168, 255, 0.85);
+.event-count.total.roster-goal:hover:not(:disabled) {
+  border-color: rgba(124, 227, 139, 0.85);
 }
 
-.event-count.roster-goal:disabled {
+.event-count.total.roster-goal:disabled {
   cursor: default;
   opacity: 0.75;
 }

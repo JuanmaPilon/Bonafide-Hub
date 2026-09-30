@@ -2491,22 +2491,12 @@ function EventCard({
           <div className="event-card-assistance">
             <span className="event-info-label">📊 Asistencia</span>
             <div className="event-card-counts">
-              <span className="event-count total">
-                👥 {counts.yes}
-                {counts.bench + counts.late > 0
-                  ? ` (+${counts.bench + counts.late})`
-                  : ""}
-              </span>
-              {SIGNUP_OPTIONS.map((option) => (
-                <span className={`event-count ${option.key}`} key={option.key}>
-                  {option.emoji} {counts[option.key]}
-                </span>
-              ))}
-              {/* Control del roster: confirmados sobre el total que tiene el rol
-                  mínimo. Se clickea para ver quiénes faltan (staff). */}
+              {/* El total lleva el contador de control cuando el evento tiene rol
+                  mínimo: "confirmados (+tentativos) / esperados". Se clickea para
+                  ver quiénes faltan (staff). */}
               {event.expectedCount && event.expectedCount > 0 ? (
                 <button
-                  className="event-count roster-goal"
+                  className="event-count total roster-goal"
                   disabled={!canManage}
                   onClick={() => void openRoster()}
                   title={
@@ -2516,9 +2506,25 @@ function EventCard({
                   }
                   type="button"
                 >
-                  🎯 {counts.yes}/{event.expectedCount}
+                  👥 {counts.yes}
+                  {counts.bench + counts.late > 0
+                    ? ` (+${counts.bench + counts.late})`
+                    : ""}
+                  {` / ${event.expectedCount}`}
                 </button>
-              ) : null}
+              ) : (
+                <span className="event-count total">
+                  👥 {counts.yes}
+                  {counts.bench + counts.late > 0
+                    ? ` (+${counts.bench + counts.late})`
+                    : ""}
+                </span>
+              )}
+              {SIGNUP_OPTIONS.map((option) => (
+                <span className={`event-count ${option.key}`} key={option.key}>
+                  {option.emoji} {counts[option.key]}
+                </span>
+              ))}
             </div>
           </div>
 
@@ -3086,32 +3092,16 @@ function EventCard({
                   <span className="event-count total">
                     👥 {roster.confirmedCount} confirmados
                   </span>
-                  <span className="event-count roster-goal">
-                    🎯 {roster.expectedCount} con el rol
-                  </span>
-                  <span
-                    className={`event-count ${
-                      roster.missing.length > 0 ? "late" : "yes"
-                    }`}
-                  >
-                    {roster.missing.length > 0
-                      ? `⏳ Faltan ${roster.missing.length}`
-                      : "✅ Respondieron todos"}
-                  </span>
-                </div>
-                <p className="modal-note">
-                  Tienen el rol y todavía no respondieron
-                  {roster.missing.length > 0
-                    ? " (clickeá un nombre para ver su perfil):"
-                    : ":"}
-                </p>
-                <div className="event-roster-missing">
-                  {roster.missing.length === 0 ? (
-                    <span className="event-roster-empty">
-                      No falta nadie.
+                  {roster.missing.length > 0 ? (
+                    <span className="event-count late">
+                      ⏳ Faltan {roster.missing.length}
                     </span>
-                  ) : (
-                    roster.missing.map((member) => (
+                  ) : null}
+                </div>
+                {/* Si no falta nadie no se muestra nada: sin mensajes de relleno. */}
+                {roster.missing.length > 0 ? (
+                  <div className="event-roster-missing">
+                    {roster.missing.map((member) => (
                       <button
                         className="member-link"
                         key={member.userId}
@@ -3119,13 +3109,14 @@ function EventCard({
                           setRosterOpen(false);
                           onOpenProfile(member.userId);
                         }}
+                        title="Ver su perfil"
                         type="button"
                       >
                         {member.username}
                       </button>
-                    ))
-                  )}
-                </div>
+                    ))}
+                  </div>
+                ) : null}
               </>
             ) : null}
             <div className="form-actions">
@@ -6624,10 +6615,25 @@ function App() {
     setProfileUserId(null);
   }, [selectedGuildId]);
 
+  // Tab desde la que se abrió el perfil de otro miembro: el botón "Volver"
+  // regresa ahí (antes decía "Mi perfil" y te dejaba en el perfil propio, que no
+  // es de donde venías).
+  const [profileReturnTab, setProfileReturnTab] = useState<HubTab>("dashboard");
+
   // Abre el perfil de un miembro en la tab Perfil (el propio si es uno mismo).
   function openMemberProfile(userId: string): void {
+    if (activeTab !== "perfil") {
+      setProfileReturnTab(activeTab);
+    }
     setProfileUserId(userId === me?.id ? null : userId);
     setActiveTab("perfil");
+    window.scrollTo({ top: 0 });
+  }
+
+  // Vuelve a la pantalla anterior (de donde se abrió el perfil).
+  function closeMemberProfile(): void {
+    setProfileUserId(null);
+    setActiveTab(profileReturnTab);
     window.scrollTo({ top: 0 });
   }
 
@@ -10975,7 +10981,7 @@ function App() {
                   {profileUserId ? (
                     <button
                       className="comunicado-back"
-                      onClick={() => setProfileUserId(null)}
+                      onClick={closeMemberProfile}
                       type="button"
                     >
                       <span
@@ -10984,7 +10990,7 @@ function App() {
                       >
                         ←
                       </span>
-                      Mi perfil
+                      Volver a {tabLabel(profileReturnTab)}
                     </button>
                   ) : null}
                   {profileLoading ? (
