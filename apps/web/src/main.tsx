@@ -2109,9 +2109,7 @@ function EventCard({
       setRoster(await getEventRoster(event.guildId, event.id));
     } catch (error) {
       setRosterError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo cargar el roster.",
+        error instanceof Error ? error.message : "No se pudo cargar el roster.",
       );
     } finally {
       setRosterLoading(false);
@@ -8673,23 +8671,16 @@ function App() {
                               })}
                             </div>
                           </label>
-                        </div>
 
-                        {/* Informe de asistencia: lo manda el bot al cerrar las
-                            inscripciones (o al completarse el evento si no hay
-                            cierre cargado). Antes vivía en la tarjeta de
-                            Eventos. */}
-                        <h4 className="karuta-threshold-title">
-                          Informe de asistencia
-                        </h4>
-                        <div className="event-report-editor">
-                          <p className="muted-text">
-                            Al cerrar las inscripciones del evento. El canal lo
-                            publica sin menciones.
-                          </p>
-                          <div className="form-grid">
-                            <label>
-                              <span>Canal del informe</span>
+                          {/* Informe de asistencia: lo manda el bot al cerrar
+                              las inscripciones del evento (o al completarse si
+                              no hay cierre cargado). Va dentro del FORM de la
+                              tarjeta, sin recuadro propio. */}
+                          <h4 className="karuta-threshold-title form-grid-wide">
+                            Informe de asistencia
+                          </h4>
+                          <label>
+                            <span>Canal del informe</span>
                               <select
                                 className="select"
                                 value={config.eventReportChannelId ?? ""}
@@ -8710,14 +8701,15 @@ function App() {
                                   </option>
                                 ))}
                               </select>
-                            </label>
-                          </div>
-                          <div className="raid-watcher-head">
-                            <div>
+                          </label>
+                          <label
+                            className={`module-toggle${config.eventReportDmCreator !== false ? " checked" : ""}`}
+                          >
+                            <span className="module-toggle-text">
                               <strong>Mandar también por MD</strong>
-                              <span>Al creador del evento</span>
-                            </div>
-                            <label className="raid-watcher-toggle">
+                              <small>Al creador del evento</small>
+                            </span>
+                            <span className="module-switch">
                               <input
                                 type="checkbox"
                                 checked={config.eventReportDmCreator !== false}
@@ -8733,15 +8725,14 @@ function App() {
                                 }
                               />
                               <span
-                                className="raid-watcher-switch"
+                                className="module-switch-track"
                                 aria-hidden="true"
-                              />
-                              <span className="sr-only">
-                                Mandar el informe por MD al creador
+                              >
+                                <span className="module-switch-thumb" />
                               </span>
-                            </label>
-                          </div>
-                          <div className="event-report-people">
+                            </span>
+                          </label>
+                          <div className="event-report-people form-grid-wide">
                             <span>Personas que lo reciben por MD</span>
                             <div className="staff-permission-roles">
                               {reportUserIds.map((userId) => (
@@ -9138,11 +9129,6 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <p className="staff-hierarchy-note">
-                          Elegir los roles de cada rango: el rol recibe todos
-                          los permisos de ese nivel. Los cambios se guardan al
-                          instante.
-                        </p>
                         <div className="staff-hierarchy">
                           <div className="staff-hierarchy-tier owner">
                             <span

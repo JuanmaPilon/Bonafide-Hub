@@ -526,8 +526,7 @@ function expectedRoster(
     }
     expected.push({
       userId: user.id,
-      username:
-        member.nick ?? user.global_name ?? user.username ?? user.id,
+      username: member.nick ?? user.global_name ?? user.username ?? user.id,
     });
   }
   expected.sort((left, right) => left.username.localeCompare(right.username));
@@ -4868,9 +4867,7 @@ export function buildApp() {
 
     const event = await getEvent(params.guildId, params.eventId);
     if (!event) {
-      return reply
-        .code(404)
-        .send({ ok: false, error: "Evento no encontrado" });
+      return reply.code(404).send({ ok: false, error: "Evento no encontrado" });
     }
 
     const members = await fetchAllGuildMembers(params.guildId).catch(() => []);

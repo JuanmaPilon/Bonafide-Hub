@@ -1359,20 +1359,10 @@ a:hover {
   background: rgba(106, 168, 255, 0.06);
 }
 
-/* Informe de asistencia de eventos: misma caja que el vigilado de logs, con
-   los campos separados por el mismo aire. */
-.event-report-editor {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(106, 168, 255, 0.28);
-  border-radius: 14px;
-  background: rgba(106, 168, 255, 0.06);
-}
-
-/* Dentro de esa caja el texto de ayuda no necesita aire propio. */
-.event-report-editor > p {
-  margin: 0;
+/* Informe de asistencia de eventos: va integrado al form de la tarjeta (sin
+   recuadro propio). El título y el bloque de personas ocupan las dos columnas. */
+.form-grid-wide {
+  grid-column: 1 / -1;
 }
 
 .raid-watcher-head {
@@ -5250,14 +5240,6 @@ select.list-order {
 }
 
 /* ---------- Permisos de staff (owner) ---------- */
-
-/* Nota de la tarjeta: los roles se asignan por rango. */
-.staff-hierarchy-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
 
 /* Chips de roles de un rango/permiso + selector para agregar. */
 .staff-permission-roles {
