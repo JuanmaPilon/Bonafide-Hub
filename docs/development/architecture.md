@@ -1,7 +1,5 @@
 # Architecture Overview
 
-Este documento resume cómo se conectan bot, API, web y base de datos.
-
 ## 1. Componentes
 
 1. `apps/discord-bot`

@@ -3038,11 +3038,6 @@ textarea {
   font-size: 0.85rem;
 }
 
-.role-multiselect-hint {
-  padding: 0 14px 12px;
-  font-size: 0.8rem;
-}
-
 .empty-state {
   border-radius: 16px;
   border: 1px dashed rgba(136, 159, 216, 0.3);

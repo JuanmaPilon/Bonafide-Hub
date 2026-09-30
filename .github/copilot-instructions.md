@@ -1,10 +1,5 @@
 # Bonafide Platform - Copilot Instructions
 
-## Purpose
-
-This file consolidates project standards for all assistants and contributors.
-Use it as the primary instruction source for coding support in this repository.
-
 ## Project Scope
 
 We are building a private guild platform composed of:
@@ -39,6 +34,18 @@ Always explain:
 4. Key concepts and trade-offs.
 
 Prefer small, verifiable steps over large one-shot implementations.
+
+## Text and Descriptions
+
+Do not add descriptions, notes or explanatory copy unless they are really needed.
+
+Rules:
+
+1. No filler copy in the UI: no hints, no subtitles, no obvious clarifications, no "how it works" paragraphs.
+2. No file or section descriptions that do not change a decision.
+3. Code comments: only the non-obvious why (a trap, a limit, a Discord/API quirk).
+4. Before writing a description, ask: does anyone need this to understand or use the feature? If not, leave it out.
+5. If an existing description adds nothing, remove it.
 
 ## Architecture Principles
 

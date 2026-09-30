@@ -1,18 +1,5 @@
 # GitHub Governance — Ruleset Base
 
-## Objetivo
-
-Definir reglas claras para colaborar en Bonafide Hub sin frenar al resto del equipo.
-
-Buscamos:
-
-- Calidad minima consistente.
-- Cambios pequenos y revisables.
-- Historial de Git limpio.
-- Seguridad basica desde el inicio.
-
----
-
 ## Branching model (inicial)
 
 Branches principales:

@@ -1,7 +1,5 @@
 # Discord Bot Guide
 
-Guía técnica y funcional del bot de Discord.
-
 ## 1. Stack
 
 1. Node.js >= 20

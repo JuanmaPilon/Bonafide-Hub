@@ -1,7 +1,5 @@
 # API Guide
 
-Guía de la API de Bonafide.
-
 ## 1. Stack
 
 1. Fastify
@@ -18,10 +16,10 @@ Archivo ejemplo: `apps/api/.env.example`
 3. `DISCORD_REDIRECT_URI`
 4. `SESSION_SECRET`
 5. `DATABASE_URL`
-6. `BOT_API_TOKEN` (para el endpoint interno del bot)
-7. `DISCORD_BOT_TOKEN` (para consultar datos del servidor: preview, emojis, miembros, boosters, y publicar en Discord)
-8. `BONAFIDE_GUILD_ID` (exclusividad: solo funciona para este servidor)
-9. `WARCRAFT_LOGS_API_KEY` (API v1 gratuita para el vigilado de perfil de raid logs)
+6. `BOT_API_TOKEN`
+7. `DISCORD_BOT_TOKEN`
+8. `BONAFIDE_GUILD_ID`
+9. `WARCRAFT_LOGS_API_KEY`
 10. `CORS_ORIGINS`
 11. `COOKIE_SAME_SITE`
 12. `FRONTEND_APP_URL`

@@ -1,148 +1,6 @@
 # Guild Platform — Planning General
 
-## 1. Visión general
-
-El objetivo es crear una plataforma propia para gestionar y mejorar la experiencia de una guild/comunidad de Discord.
-
-La plataforma estaría compuesta inicialmente por dos proyectos principales:
-
-1. **Discord Guild Bot**
-2. **Guild Hub Web App**
-
-Ambos proyectos deberían diseñarse pensando desde el principio en una futura integración.
-
-La idea es que el bot y la web no sean dos sistemas aislados, sino dos interfaces distintas que interactúan con una misma lógica y una misma fuente de datos.
-
-Ejemplo:
-
-```text
-Discord
-   │
-   │
-Discord Bot
-   │
-   ├──────────────┐
-   │              │
-Servicios      Base de datos
-   │              │
-   └────── API ───┘
-              │
-          Guild Hub
-              │
-        Frontend Web
-```
-
-Ejemplo de una futura integración:
-
-```text
-Evento de Raid
-      │
-      ├── Creado desde Discord
-      │
-      └── Creado desde la Web
-             │
-             ▼
-      Sistema de Eventos
-             │
-      ┌──────┴──────┐
-      │             │
-   Discord         Web
-```
-
-El objetivo es evitar que Discord y la web implementen la misma lógica dos veces.
-
----
-
-# 2. Objetivos generales
-
-Los objetivos principales del proyecto son:
-
-- Crear herramientas útiles para la guild.
-- Automatizar tareas administrativas de Discord.
-- Crear un sistema modular que pueda crecer con nuevas funcionalidades.
-- Desarrollar una aplicación web que funcione como hub de la comunidad.
-- Integrar Discord y la web.
-- Aprender desarrollo de software durante todo el proceso.
-- Practicar arquitectura, backend, frontend, bases de datos, infraestructura y DevOps.
-- Entender cómo funciona cada parte del sistema.
-- Trabajar en equipo utilizando Git, Issues, Pull Requests y Code Review.
-
-El proyecto tiene por lo tanto un objetivo doble:
-
-```text
-Construir un producto útil
-+
-Aprender cómo funciona
-```
-
----
-
-# 3. Filosofía del proyecto
-
-Este proyecto no busca simplemente generar código hasta llegar a un resultado funcional.
-
-Uno de los objetivos principales es aprender durante el desarrollo.
-
-Queremos poder entender:
-
-- Qué estamos construyendo.
-- Por qué se toma una decisión técnica.
-- Cómo se conectan las distintas partes.
-- Qué alternativas existen.
-- Qué ventajas y desventajas tiene cada alternativa.
-- Cómo probar lo que construimos.
-- Cómo desplegarlo.
-- Cómo mantenerlo.
-
-Las herramientas de IA deberían utilizarse como apoyo y no como sustituto del aprendizaje.
-
-Idealmente, el flujo debería ser:
-
-```text
-Problema
-   │
-   ▼
-Entender qué queremos resolver
-   │
-   ▼
-Analizar posibles soluciones
-   │
-   ▼
-Explicar conceptos necesarios
-   │
-   ▼
-Elegir una solución
-   │
-   ▼
-Implementar paso a paso
-   │
-   ▼
-Probar
-   │
-   ▼
-Analizar el resultado
-   │
-   ▼
-Refactorizar o mejorar
-```
-
-El objetivo final no es únicamente terminar el proyecto.
-
-El objetivo es:
-
-```text
-Entender
-+
-Construir
-+
-Practicar
-+
-Mejorar
-```
-
----
-
-# 4. Organización recomendada del proyecto
+# 1. Organización recomendada del proyecto
 
 Si ambos proyectos van a ser desarrollados por el mismo grupo de personas, una buena opción sería utilizar un monorepo.
 
@@ -192,7 +50,7 @@ La arquitectura debería ser modular para que cada funcionalidad pueda desarroll
 
 ---
 
-# 5. Stack técnico inicial sugerido
+# 2. Stack técnico inicial sugerido
 
 Una opción razonable para comenzar sería:
 
@@ -238,7 +96,7 @@ Para cada tecnología conviene analizar:
 
 ---
 
-# 6. Proyecto 1 — Discord Guild Bot
+# 3. Proyecto 1 — Discord Guild Bot
 
 ## Objetivo
 
@@ -629,7 +487,7 @@ El bot debería ejecutarse como un proceso persistente.
 
 ---
 
-# 7. MVP recomendado del Discord Bot
+# 4. MVP recomendado del Discord Bot
 
 ## MVP 1
 
@@ -679,7 +537,7 @@ El primer objetivo debería ser:
 
 ---
 
-# 8. Proyecto 2 — Guild Hub
+# 5. Proyecto 2 — Guild Hub
 
 ## Objetivo
 
@@ -910,7 +768,7 @@ Un mismo sistema de eventos debería soportar diferentes tipos.
 
 ---
 
-# 9. Modelo de datos inicial
+# 6. Modelo de datos inicial
 
 Entidades aproximadas:
 
@@ -952,7 +810,7 @@ La base de datos debería evolucionar junto con las funcionalidades.
 
 ---
 
-# 10. División del trabajo entre compañeros
+# 7. División del trabajo entre compañeros
 
 La división debería hacerse por áreas de responsabilidad y no simplemente repartiendo archivos.
 
@@ -1026,7 +884,7 @@ Una misma persona puede cubrir varios workstreams.
 
 ---
 
-# 11. Ejemplo para un equipo de 3 personas
+# 8. Ejemplo para un equipo de 3 personas
 
 ## Persona A
 
@@ -1060,7 +918,7 @@ Infraestructura y decisiones arquitectónicas deberían ser compartidas.
 
 ---
 
-# 12. Flujo de trabajo recomendado
+# 9. Flujo de trabajo recomendado
 
 Cada feature debería seguir:
 
@@ -1099,7 +957,7 @@ fix/BOT-031-nickname-update
 
 ---
 
-# 13. Formato recomendado para las tareas
+# 10. Formato recomendado para las tareas
 
 Cada tarea debería contener:
 
@@ -1120,7 +978,7 @@ Tareas que pueden ejecutarse en paralelo
 
 ---
 
-# 14. Orden recomendado de desarrollo global
+# 11. Orden recomendado de desarrollo global
 
 ```text
 1. Repository Setup
@@ -1166,7 +1024,7 @@ Tareas que pueden ejecutarse en paralelo
 
 ---
 
-# 15. Aprendizaje durante el desarrollo
+# 12. Aprendizaje durante el desarrollo
 
 Cada implementación debería tener contexto suficiente para entender:
 
@@ -1198,7 +1056,7 @@ Resultado final
 
 ---
 
-# 16. Learning Notes
+# 13. Learning Notes
 
 Cada feature importante podría dejar documentación corta sobre lo aprendido.
 
@@ -1225,7 +1083,7 @@ El objetivo es poder volver meses después y entender:
 
 ---
 
-# 17. Principios generales
+# 14. Principios generales
 
 Durante el desarrollo se debería priorizar:
 
@@ -1249,7 +1107,7 @@ Cuando una funcionalidad pueda utilizarse tanto desde Discord como desde la web,
 
 ---
 
-# 18. Definición general de terminado
+# 15. Definición general de terminado
 
 Una tarea debería considerarse terminada cuando:
 
@@ -1262,35 +1120,3 @@ Una tarea debería considerarse terminada cuando:
 - CI está pasando.
 - La Pull Request fue aprobada.
 - La funcionalidad fue probada en un ambiente de desarrollo.
-
----
-
-# 19. Resultado esperado del proyecto
-
-El objetivo a largo plazo es terminar con una plataforma donde:
-
-```text
-Discord
-   │
-   ├── Bot
-   │
-   └── Eventos / Interacciones
-          │
-          ▼
-      Servicios compartidos
-          │
-          ▼
-      Base de datos
-          │
-          ▼
-      Backend API
-          │
-          ▼
-      Guild Hub
-```
-
-El bot y la web deberían evolucionar progresivamente.
-
-No se busca construir todo de una sola vez.
-
-Se busca construir una base sólida, aprender durante el proceso y agregar funcionalidades de forma incremental.

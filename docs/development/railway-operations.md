@@ -1,7 +1,5 @@
 # Railway Operations
 
-Guia operativa para desplegar y mantener bot, API y DB en Railway.
-
 ## 1. Servicios
 
 1. `Discord_BOT`
@@ -25,15 +23,15 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 
 ### API
 
-1. `DATABASE_URL` (referencia a DB)
+1. `DATABASE_URL`
 2. `DISCORD_CLIENT_ID`
 3. `DISCORD_CLIENT_SECRET`
 4. `DISCORD_REDIRECT_URI`
 5. `SESSION_SECRET`
 6. `BOT_API_TOKEN`
-7. `DISCORD_BOT_TOKEN` (resolver datos del server + publicar comunicados/logs en Discord)
+7. `DISCORD_BOT_TOKEN`
 8. `BONAFIDE_GUILD_ID`
-9. `WARCRAFT_LOGS_API_KEY` (vigilado de perfil de raid logs)
+9. `WARCRAFT_LOGS_API_KEY`
 10. `CORS_ORIGINS`
 11. `COOKIE_SAME_SITE`
 12. `FRONTEND_APP_URL`
@@ -125,8 +123,8 @@ Revisar en los logs de Railway de `API`:
 
 Variables necesarias en el servicio `API` (environment correcto):
 
-- `WARCRAFT_LOGS_API_KEY`: API key válida de Warcraft Logs.
-- `DISCORD_BOT_TOKEN`: token del bot que publica el resumen.
+- `WARCRAFT_LOGS_API_KEY`
+- `DISCORD_BOT_TOKEN`
 
 La Web refresca la lista de logs cada 60 segundos mientras la pestaña `Raids`
 está abierta. La API sigue siendo la fuente de verdad; un redeploy de Web no

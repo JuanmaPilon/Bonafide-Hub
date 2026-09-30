@@ -3436,14 +3436,12 @@ function RoleMultiSelect({
   value,
   onChange,
   emptyText,
-  hint,
 }: {
   label: string;
   roles: GuildRole[];
   value: string[];
   onChange: (next: string[]) => void;
   emptyText: string;
-  hint?: string;
 }) {
   const selectedNames = value
     .map((id) => roles.find((role) => role.id === id)?.name)
@@ -3500,9 +3498,6 @@ function RoleMultiSelect({
             })
           )}
         </div>
-        {hint ? (
-          <div className="muted-text role-multiselect-hint">{hint}</div>
-        ) : null}
       </details>
     </label>
   );
@@ -3618,44 +3613,6 @@ function panelTitle(tab: HubTab): string {
   }
 
   return "Panel de Admin";
-}
-
-function panelDescription(tab: HubTab): string {
-  if (tab === "home") {
-    return "Bienvenido al hub de la comunidad.";
-  }
-
-  if (tab === "dashboard") {
-    return "";
-  }
-
-  if (tab === "comunicados") {
-    return "Anuncios y comunicados de la comunidad.";
-  }
-
-  if (tab === "raids") {
-    return "";
-  }
-
-  if (tab === "eventos") {
-    // La cabecera de Eventos es propia (título + botón nuevo evento); no
-    // queremos descripción genérica.
-    return "";
-  }
-
-  if (tab === "karuta") {
-    return "";
-  }
-
-  if (tab === "perfil") {
-    return "Perfil y progreso en la comunidad.";
-  }
-
-  if (tab === "sugerencias") {
-    return "La idea llega como DM directo al staff del servidor.";
-  }
-
-  return "";
 }
 
 function ServerStats({
@@ -4390,10 +4347,7 @@ function RolesCard({
                 Plantillas ({templates.length})
               </span>
               {templates.length === 0 ? (
-                <p className="admin-card-hint">
-                  Guardá un rol modelo (nombre, color y permisos) y crealo con
-                  un click la próxima vez.
-                </p>
+                <p className="admin-card-hint">Sin plantillas.</p>
               ) : (
                 <div className="role-template-list">
                   {templates.map((template) => (
@@ -4480,10 +4434,7 @@ function RolesCard({
                   >
                     {saving ? "Creando…" : "Crear roles"}
                   </button>
-                  <p className="admin-card-hint">
-                    Se crean sin permisos (se editan después) y con el color
-                    repartido entre los dos tonos. Máximo 25 por vez.
-                  </p>
+                  <p className="admin-card-hint">Máximo 25 por vez.</p>
                 </div>
               </div>
             </details>
@@ -8515,7 +8466,6 @@ function App() {
     );
   }
 
-  const panelDesc = panelDescription(activeTab);
   const roleModalTarget =
     roleModal != null
       ? (xpConfig?.levelRoles.find((rule) => rule.level === roleModal.level) ??
@@ -8648,13 +8598,11 @@ function App() {
 
             <section className="panel content-panel">
               {/* La tab Eventos arma su propia cabecera (título + botón de
-                  nuevo evento): no mostramos el título/descripción genérico
-                  para evitar duplicar "Eventos" y descentrar el contenido. */}
+                  nuevo evento). */}
               {activeTab === "eventos" ? null : (
                 <div className="section-header">
                   <div>
                     <h2>{panelTitle(activeTab)}</h2>
-                    {panelDesc ? <p>{panelDesc}</p> : null}
                   </div>
                 </div>
               )}
@@ -8919,7 +8867,6 @@ function App() {
                               }))
                             }
                             emptyText="Ningún rol desperuanizado"
-                            hint="No podrán ver salas dinámicas."
                           />
 
                           <label>
@@ -10134,9 +10081,6 @@ function App() {
                               <strong>
                                 Eliminados ({hiddenRaidLogs.length})
                               </strong>
-                              <span className="muted-text">
-                                Se pueden restaurar o borrar para siempre.
-                              </span>
                             </div>
                             {hiddenRaidLogs.map((log) => (
                               <div className="daily-message-row" key={log.id}>
@@ -10296,10 +10240,6 @@ function App() {
                             </div>
 
                             <h4>Roles por nivel</h4>
-                            <p className="muted-text">
-                              El nombre se pinta con el color del rol en Discord
-                              (con degradado si lo tiene).
-                            </p>
                             <div className="xp-roles">
                               {xpConfig.levelRoles.length === 0 ? (
                                 <div className="empty-state">
@@ -11096,9 +11036,7 @@ function App() {
                       <div className="admin-card-body">
                         {completedEvents.length === 0 ? (
                           <p className="muted-text">
-                            Todavía no hay eventos completados. Cuando un evento
-                            se marca como "Completado" queda archivado acá con
-                            su roster final.
+                            Todavía no hay eventos completados.
                           </p>
                         ) : (
                           <>
@@ -12363,9 +12301,7 @@ function App() {
                               {eventImagesLoading ? (
                                 <span className="muted-text">Cargando…</span>
                               ) : eventImages.length === 0 ? (
-                                <span className="muted-text">
-                                  Vacía: subí una imagen para reutilizarla.
-                                </span>
+                                <span className="muted-text">Vacía.</span>
                               ) : (
                                 <div className="event-image-library-grid">
                                   {eventImages.map((image) => (
