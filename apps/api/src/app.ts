@@ -150,15 +150,23 @@ import {
 import {
   DEFAULT_EVENT_GAME,
   getGuildConfig,
+  normalizeRosterRanks,
   resolveEventGames,
   resolveEventRoles,
   resolveGameLabel,
+  ROSTER_RANKS,
   type EventGameConfig,
   type EventRoleOption,
   type GuildConfig,
+  type RosterRankKey,
   replaceGuildConfig,
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
+import {
+  listRosterProfiles,
+  upsertRosterProfile,
+  type RosterProfile,
+} from "./services/roster-store.js";
 import {
   botTopRolePosition,
   colorRamp,
@@ -4890,6 +4898,245 @@ export function buildApp() {
       missing: roster.missing,
       requiredRoleId: event.requiredRoleId,
       signedCount: signups.length,
+    };
+  });
+
+  // ── Roster de raids ────────────────────────────────────────────────
+  // Lista actual: cada rango (Raid/Bench/A prueba/Oficial guild) se llena con
+  // los miembros que tienen el rol de Discord mapeado en la config, y cada uno
+  // carga su ficha (clase, spec actual y las off que domina). Las fichas usan
+  // las claves del catálogo RaidSpec, de donde salen los emojis.
+
+  // Valida la ficha contra el catálogo del juego: la spec principal tiene que
+  // existir y las off son specs de la MISMA clase (hasta 6).
+  async function validateRosterProfile(
+    guildId: string,
+    body: unknown,
+  ): Promise<{ error: string } | { profile: RosterProfile }> {
+    const raw = (body ?? {}) as Record<string, unknown>;
+    const className = String(raw.className ?? "").trim();
+    const specName = String(raw.specName ?? "").trim();
+    if (!className || !specName) {
+      return { error: "Falta la clase o la spec" };
+    }
+
+    const game = String(raw.game ?? "")
+      .trim()
+      .toLowerCase();
+    const specs = await listRaidSpecs(guildId, game || undefined);
+    const main = specs.find(
+      (spec) => spec.className === className && spec.specName === specName,
+    );
+    if (!main) {
+      return { error: "Esa clase o spec no está en el catálogo" };
+    }
+
+    const offSpecs: string[] = [];
+    const requested = Array.isArray(raw.offSpecs) ? raw.offSpecs : [];
+    for (const entry of requested) {
+      const name = String(entry ?? "").trim();
+      if (
+        !name ||
+        name === specName ||
+        offSpecs.includes(name) ||
+        !specs.some(
+          (spec) => spec.className === className && spec.specName === name,
+        )
+      ) {
+        continue;
+      }
+      offSpecs.push(name);
+      if (offSpecs.length >= 6) {
+        break;
+      }
+    }
+
+    return {
+      profile: {
+        className,
+        game: main.game,
+        offSpecs,
+        specName,
+      },
+    };
+  }
+
+  app.get("/guilds/:guildId/roster", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    const rankRoles = config.rosterRanks ?? {};
+    const [members, profiles, specs] = await Promise.all([
+      fetchAllGuildMembers(params.guildId).catch(() => []),
+      listRosterProfiles(params.guildId),
+      listRaidSpecs(params.guildId),
+    ]);
+
+    const rankByRole = new Map<string, RosterRankKey>();
+    for (const { key } of ROSTER_RANKS) {
+      const roleId = rankRoles[key];
+      if (roleId) {
+        rankByRole.set(roleId, key);
+      }
+    }
+
+    const rows = members
+      .map((member) => {
+        const userId = member.user?.id;
+        if (!userId || member.user?.bot) {
+          return null;
+        }
+        const rankKey = (member.roles ?? [])
+          .map((roleId) => rankByRole.get(roleId))
+          .find((key) => Boolean(key));
+        const profile = profiles.get(userId) ?? null;
+        // Fuera del roster: no tiene ninguno de los roles ni ficha cargada.
+        if (!rankKey && !profile) {
+          return null;
+        }
+        return {
+          displayName:
+            member.nick ??
+            member.user?.global_name ??
+            member.user?.username ??
+            userId,
+          profile,
+          rankKey: rankKey ?? null,
+          userId,
+        };
+      })
+      .filter((row) => row !== null)
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
+
+    return {
+      ok: true,
+      games: resolveEventGames(config).map(({ key, label }) => ({
+        key,
+        label,
+      })),
+      guildId: params.guildId,
+      members: rows,
+      ranks: ROSTER_RANKS.map(({ key, label }) => ({
+        key,
+        label,
+        roleId: rankRoles[key],
+      })),
+      specs,
+    };
+  });
+
+  // Ficha propia: cualquier miembro de la guild puede cargar la suya.
+  app.put("/guilds/:guildId/roster/me", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const validation = await validateRosterProfile(
+      params.guildId,
+      request.body,
+    );
+    if ("error" in validation) {
+      return reply.code(400).send({ ok: false, error: validation.error });
+    }
+
+    const profile = await upsertRosterProfile(
+      params.guildId,
+      String(session.user.id),
+      validation.profile,
+    );
+    return { ok: true, profile };
+  });
+
+  // Ficha de otro miembro: solo staff del módulo de raids.
+  app.put("/guilds/:guildId/roster/:userId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; userId?: string };
+    if (!params.guildId || !params.userId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const validation = await validateRosterProfile(
+      params.guildId,
+      request.body,
+    );
+    if ("error" in validation) {
+      return reply.code(400).send({ ok: false, error: validation.error });
+    }
+
+    const profile = await upsertRosterProfile(
+      params.guildId,
+      params.userId,
+      validation.profile,
+    );
+    const member = await fetchGuildMemberRecord(params.guildId, params.userId);
+    await logAdminAction(session, params.guildId, "roster:profile", {
+      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}`,
+      targetId: params.userId,
+      targetType: "user",
+    });
+    return { ok: true, profile };
+  });
+
+  // Rol de Discord que representa cada rango del roster.
+  app.put("/guilds/:guildId/roster/ranks", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const raw = (request.body ?? {}) as { ranks?: unknown };
+    const config = await upsertGuildConfig(params.guildId, {
+      rosterRanks: normalizeRosterRanks(raw.ranks) ?? {},
+    });
+    await logAdminAction(session, params.guildId, "roster:ranks", {
+      details: "Rangos del roster actualizados.",
+    });
+    return {
+      ok: true,
+      ranks: ROSTER_RANKS.map(({ key, label }) => ({
+        key,
+        label,
+        roleId: config.rosterRanks?.[key],
+      })),
     };
   });
 

@@ -144,6 +144,35 @@ export function normalizeEventGames(value: unknown): EventGameConfig[] | null {
   return games;
 }
 
+// Rango del roster de raids. Cada rango se llena con los miembros que tienen
+// el rol de Discord asignado (ver `rosterRanks` en la config).
+export const ROSTER_RANKS: Array<{ key: RosterRankKey; label: string }> = [
+  { key: "raid", label: "Raid" },
+  { key: "bench", label: "Bench" },
+  { key: "trial", label: "A prueba" },
+  { key: "guild", label: "Oficial guild" },
+];
+
+export type RosterRankKey = "raid" | "bench" | "trial" | "guild";
+
+export type RosterRankRoles = Partial<Record<RosterRankKey, string>>;
+
+// Sanea el mapeo rango → rol de Discord (solo claves conocidas y snowflakes).
+export function normalizeRosterRanks(value: unknown): RosterRankRoles | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const ranks: RosterRankRoles = {};
+  for (const { key } of ROSTER_RANKS) {
+    const roleId = String(raw[key] ?? "").trim();
+    if (/^\d{5,}$/.test(roleId)) {
+      ranks[key] = roleId;
+    }
+  }
+  return ranks;
+}
+
 // Clave interna de un juego/rol (slug): minúsculas, sin espacios ni símbolos.
 function normalizeKey(value: unknown): string {
   return String(value ?? "")
@@ -250,6 +279,7 @@ export type GuildConfig = {
   memberLogChannelId?: string;
   musicEnabled?: boolean;
   musicRoleIds?: string[];
+  rosterRanks?: RosterRankRoles;
   suggestionsDmUserId?: string;
   suggestionsDmTiers?: string[];
   temporaryVoiceChannelIds?: string[];
@@ -292,6 +322,7 @@ function toGuildConfig(
     memberLogChannelId: string | null;
     musicEnabled: boolean;
     musicRoleIds: string[];
+    rosterRanks: unknown;
     suggestionsDmUserId: string | null;
     suggestionsDmTiers: string[];
     temporaryVoiceChannelIds: string[];
@@ -343,6 +374,7 @@ function toGuildConfig(
     memberLogChannelId: record.memberLogChannelId ?? undefined,
     musicEnabled: record.musicEnabled,
     musicRoleIds: record.musicRoleIds,
+    rosterRanks: normalizeRosterRanks(record.rosterRanks) ?? undefined,
     suggestionsDmUserId: record.suggestionsDmUserId ?? undefined,
     suggestionsDmTiers: record.suggestionsDmTiers,
     temporaryVoiceChannelIds: record.temporaryVoiceChannelIds,
@@ -386,6 +418,7 @@ type NormalizedGuildConfig = {
   memberLogChannelId?: string;
   musicEnabled: boolean;
   musicRoleIds: string[];
+  rosterRanks: RosterRankRoles;
   suggestionsDmUserId?: string;
   suggestionsDmTiers: string[];
   temporaryVoiceChannelIds: string[];
@@ -443,6 +476,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     memberLogChannelId: config.memberLogChannelId,
     musicEnabled: config.musicEnabled ?? true,
     musicRoleIds: config.musicRoleIds ?? [],
+    rosterRanks: normalizeRosterRanks(config.rosterRanks) ?? {},
     suggestionsDmUserId: config.suggestionsDmUserId,
     suggestionsDmTiers: config.suggestionsDmTiers ?? [],
     temporaryVoiceChannelIds: config.temporaryVoiceChannelIds ?? [],
@@ -480,6 +514,7 @@ export async function replaceGuildConfig(
       where: { guildId },
       create: {
         guildId,
+        rosterRanks: normalized.rosterRanks,
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
@@ -520,6 +555,7 @@ export async function replaceGuildConfig(
         karutaWatchEnabled: normalized.karutaWatchEnabled,
       },
       update: {
+        rosterRanks: normalized.rosterRanks,
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,

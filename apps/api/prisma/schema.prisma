@@ -70,6 +70,9 @@ model GuildConfig {
   eventClassLabel              String?
   eventSpecEnabled             Boolean  @default(true)
   eventSpecLabel               String?
+  // ── Roster de raids ──
+  // Qué rol de Discord representa cada rango: {raid, bench, trial, guild}.
+  rosterRanks                  Json?
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
@@ -596,4 +599,20 @@ model AuditLogEntry {
 
   @@index([guildId, createdAt])
   @@map("audit_log_entries")
+}
+
+// Ficha del roster: la clase y la spec actual de un miembro, más las off que
+// domina (mismas claves que el catálogo RaidSpec del juego).
+model RosterProfile {
+  guildId   String
+  userId    String
+  game      String
+  className String
+  specName  String
+  offSpecs  String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, userId])
+  @@map("roster_profiles")
 }

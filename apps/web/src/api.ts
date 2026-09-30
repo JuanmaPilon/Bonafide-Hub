@@ -1299,6 +1299,87 @@ export async function getEventRoster(
   );
 }
 
+// ── Roster de raids ─────────────────────────────────────────────────
+
+export type RosterRankKey = "bench" | "guild" | "raid" | "trial";
+
+// Ficha del roster: clase + spec actual + las off que domina (claves del
+// catálogo, que es de donde salen los emojis).
+export type RosterProfileInput = {
+  className: string;
+  game?: string;
+  offSpecs?: string[];
+  specName: string;
+};
+
+export type RosterProfile = {
+  className: string;
+  game: string;
+  offSpecs: string[];
+  specName: string;
+};
+
+export type RosterMember = {
+  displayName: string;
+  profile: RosterProfile | null;
+  // null = tiene ficha pero ninguno de los roles de rango.
+  rankKey: RosterRankKey | null;
+  userId: string;
+};
+
+export type RosterRank = {
+  key: RosterRankKey;
+  label: string;
+  roleId?: string;
+};
+
+export type GuildRoster = {
+  games: Array<{ key: string; label: string }>;
+  members: RosterMember[];
+  ranks: RosterRank[];
+  specs: RaidSpec[];
+};
+
+export async function getGuildRoster(guildId: string): Promise<GuildRoster> {
+  return requestJson<GuildRoster>(`/guilds/${guildId}/roster`, {
+    method: "GET",
+  });
+}
+
+export async function saveMyRosterProfile(
+  guildId: string,
+  input: RosterProfileInput,
+): Promise<RosterProfile> {
+  const data = await requestJson<{ profile: RosterProfile }>(
+    `/guilds/${guildId}/roster/me`,
+    { body: JSON.stringify(input), method: "PUT" },
+  );
+  return data.profile;
+}
+
+export async function saveMemberRosterProfile(
+  guildId: string,
+  userId: string,
+  input: RosterProfileInput,
+): Promise<RosterProfile> {
+  const data = await requestJson<{ profile: RosterProfile }>(
+    `/guilds/${guildId}/roster/${encodeURIComponent(userId)}`,
+    { body: JSON.stringify(input), method: "PUT" },
+  );
+  return data.profile;
+}
+
+export async function saveRosterRanks(
+  guildId: string,
+  ranks: Record<string, string>,
+): Promise<RosterRank[]> {
+  const data = await requestJson<{ ranks: RosterRank[] }>(
+    `/guilds/${guildId}/roster/ranks`,
+    { body: JSON.stringify({ ranks }), method: "PUT" },
+  );
+  return data.ranks;
+}
+
 export async function createEvent(
   guildId: string,
   input: {
