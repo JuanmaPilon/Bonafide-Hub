@@ -8674,26 +8674,26 @@ function App() {
                               las personas que lo reciben por MD. */}
                           <label>
                             <span>Informe de asistencia</span>
-                              <select
-                                className="select"
-                                value={config.eventReportChannelId ?? ""}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      eventReportChannelId: event.target.value,
-                                    }),
-                                    "eventReport",
-                                  )
-                                }
-                              >
-                                <option value="">Sin canal</option>
-                                {textChannels.map((channel) => (
-                                  <option key={channel.id} value={channel.id}>
-                                    {channel.name}
-                                  </option>
-                                ))}
-                              </select>
+                            <select
+                              className="select"
+                              value={config.eventReportChannelId ?? ""}
+                              onChange={(event) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    eventReportChannelId: event.target.value,
+                                  }),
+                                  "eventReport",
+                                )
+                              }
+                            >
+                              <option value="">Sin canal</option>
+                              {textChannels.map((channel) => (
+                                <option key={channel.id} value={channel.id}>
+                                  {channel.name}
+                                </option>
+                              ))}
+                            </select>
                           </label>
                           <label
                             className={`module-toggle${config.eventReportDmCreator !== false ? " checked" : ""}`}
@@ -8730,57 +8730,57 @@ function App() {
                           {config.eventReportDmCreator !== false ? (
                             <div className="event-report-people form-grid-wide">
                               <span>Personas que lo reciben por MD</span>
-                            <div className="staff-permission-roles">
-                              {reportUserIds.map((userId) => (
-                                <span
-                                  className="staff-permission-role"
-                                  key={userId}
-                                >
-                                  {reportMemberName(userId)}
-                                  <button
-                                    aria-label={`Quitar a ${reportMemberName(userId)}`}
-                                    className="staff-permission-remove"
-                                    onClick={() =>
-                                      toggleReportUser(userId, false)
-                                    }
-                                    title={`Quitar a ${reportMemberName(userId)}`}
-                                    type="button"
+                              <div className="staff-permission-roles">
+                                {reportUserIds.map((userId) => (
+                                  <span
+                                    className="staff-permission-role"
+                                    key={userId}
                                   >
-                                    ✕
-                                  </button>
-                                </span>
-                              ))}
-                              <select
-                                aria-label="Agregar persona al informe"
-                                className="select staff-permission-add"
-                                disabled={guildMembersLoading}
-                                onChange={(event) => {
-                                  const userId = event.target.value;
-                                  event.target.value = "";
-                                  if (userId) {
-                                    toggleReportUser(userId, true);
-                                  }
-                                }}
-                                value=""
-                              >
-                                <option value="">
-                                  {guildMembersLoading
-                                    ? "Cargando miembros…"
-                                    : "Agregar persona…"}
-                                </option>
-                                {(guildMembers ?? [])
-                                  .filter(
-                                    (member) =>
-                                      !reportUserIds.includes(member.id),
-                                  )
-                                  .map((member) => (
-                                    <option key={member.id} value={member.id}>
-                                      {member.displayName}
-                                    </option>
-                                  ))}
-                              </select>
+                                    {reportMemberName(userId)}
+                                    <button
+                                      aria-label={`Quitar a ${reportMemberName(userId)}`}
+                                      className="staff-permission-remove"
+                                      onClick={() =>
+                                        toggleReportUser(userId, false)
+                                      }
+                                      title={`Quitar a ${reportMemberName(userId)}`}
+                                      type="button"
+                                    >
+                                      ✕
+                                    </button>
+                                  </span>
+                                ))}
+                                <select
+                                  aria-label="Agregar persona al informe"
+                                  className="select staff-permission-add"
+                                  disabled={guildMembersLoading}
+                                  onChange={(event) => {
+                                    const userId = event.target.value;
+                                    event.target.value = "";
+                                    if (userId) {
+                                      toggleReportUser(userId, true);
+                                    }
+                                  }}
+                                  value=""
+                                >
+                                  <option value="">
+                                    {guildMembersLoading
+                                      ? "Cargando miembros…"
+                                      : "Agregar persona…"}
+                                  </option>
+                                  {(guildMembers ?? [])
+                                    .filter(
+                                      (member) =>
+                                        !reportUserIds.includes(member.id),
+                                    )
+                                    .map((member) => (
+                                      <option key={member.id} value={member.id}>
+                                        {member.displayName}
+                                      </option>
+                                    ))}
+                                </select>
+                              </div>
                             </div>
-                          </div>
                           ) : null}
                           {isDirty("eventReport") ? (
                             <button
@@ -8791,7 +8791,7 @@ function App() {
                             >
                               {savingAction === "config"
                                 ? "Guardando…"
-                                : "Guardar informe"}
+                                : "Guardar configuración"}
                             </button>
                           ) : null}
                         </div>
@@ -10850,22 +10850,33 @@ function App() {
                                           );
                                         })
                                       )}
-                                      <button
-                                        className="csv-button"
-                                        disabled={
-                                          reportCsvEventId === finished.id
-                                        }
-                                        onClick={() =>
-                                          void handleDownloadEventReport(
-                                            finished,
-                                          )
-                                        }
-                                        type="button"
-                                      >
-                                        {reportCsvEventId === finished.id
-                                          ? "Generando…"
-                                          : "⬇️ Informe CSV"}
-                                      </button>
+                                      <div className="event-history-actions">
+                                        <button
+                                          className="csv-button"
+                                          disabled={
+                                            reportCsvEventId === finished.id
+                                          }
+                                          onClick={() =>
+                                            void handleDownloadEventReport(
+                                              finished,
+                                            )
+                                          }
+                                          type="button"
+                                        >
+                                          {reportCsvEventId === finished.id
+                                            ? "Generando…"
+                                            : "⬇️ Informe CSV"}
+                                        </button>
+                                        <button
+                                          className="danger-button"
+                                          onClick={() =>
+                                            handleDeleteEvent(finished)
+                                          }
+                                          type="button"
+                                        >
+                                          🗑️ Eliminar evento
+                                        </button>
+                                      </div>
                                     </div>
                                   </details>
                                 ))}

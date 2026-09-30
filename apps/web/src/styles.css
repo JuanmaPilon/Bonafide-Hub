@@ -870,13 +870,12 @@ a:hover {
 .admin-card--owner {
   order: 1;
   border-color: rgba(var(--tier-owner-rgb), 0.75);
-  background:
-    linear-gradient(
-      160deg,
-      rgba(var(--tier-owner-rgb), 0.12),
-      rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.04) 42%,
-      var(--panel) 72%
-    );
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-owner-rgb), 0.12),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.04) 42%,
+    var(--panel) 72%
+  );
   box-shadow:
     0 0 0 1px rgba(var(--tier-owner-rgb), 0.22),
     0 10px 34px rgba(var(--tier-owner-rgb), 0.26);
@@ -6718,13 +6717,12 @@ select.list-order {
 
 /* En claro el halo naranja tiene que ser más suave para no ensuciar. */
 :root[data-theme="light"] .admin-card--owner {
-  background:
-    linear-gradient(
-      160deg,
-      rgba(var(--tier-owner-rgb), 0.07),
-      rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.02) 42%,
-      var(--panel) 72%
-    );
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-owner-rgb), 0.07),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.02) 42%,
+    var(--panel) 72%
+  );
   box-shadow:
     0 0 0 1px rgba(var(--tier-owner-rgb), 0.18),
     0 8px 26px rgba(var(--tier-owner-rgb), 0.16);
@@ -7035,6 +7033,14 @@ select.list-order {
   display: grid;
   gap: 6px;
   padding: 0 12px 10px;
+}
+
+.event-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .event-history-group {

@@ -362,11 +362,7 @@ async function processReport(
 
     // Respaldo: el canal del aviso, solo si el informe no llegó a ningún lado.
     let fallbackDelivered = false;
-    if (
-      !channelDelivered &&
-      peopleDelivered === 0 &&
-      event.publishChannelId
-    ) {
+    if (!channelDelivered && peopleDelivered === 0 && event.publishChannelId) {
       fallbackDelivered =
         (await sendToChannel(guild, event.publishChannelId, {
           embeds: [embed],
