@@ -47,13 +47,10 @@ type RemoteEvent = {
   title: string;
 };
 
-// A dónde va el informe de asistencia (lo configura el panel Admin: opción
-// "Informe de asistencia"): el canal donde se publica y, con el toggle
-// prendido, las personas que lo reciben por MD.
+// A dónde va el informe de asistencia (lo configura el panel Admin, opción
+// "Informe de asistencia"): un canal de texto.
 type RemoteReportConfig = {
   channelId?: string;
-  dmEnabled?: boolean;
-  userIds?: string[];
 };
 
 type RemoteControl = {
@@ -207,29 +204,6 @@ async function sendToChannel(
   }
 }
 
-async function sendDm(
-  guild: Guild,
-  userId: string | undefined,
-  payload: MessageCreateOptions | string,
-): Promise<boolean> {
-  if (!userId) {
-    return false;
-  }
-  try {
-    const user = await guild.client.users.fetch(userId).catch(() => null);
-    if (!user) {
-      return false;
-    }
-    await user.send(payload);
-    return true;
-  } catch (error) {
-    console.warn(
-      `[event-control] No se pudo mandar DM a <@${userId}>: ${getErrorMessage(error)}`,
-    );
-    return false;
-  }
-}
-
 // Envía el/los recordatorio(s) vencidos de un evento y marca las horas como
 // enviadas en el API. Si no hay nadie que avisar igual se marca (nada que
 // hacer).
@@ -334,8 +308,7 @@ async function processReport(
       )
       .setFooter({ text: "Bonafide Hub · Informe de asistencia" });
 
-    // Canal elegido en el panel: el informe va pelado, sin menciones (a las
-    // personas no se las etiqueta: se les manda el mismo informe por MD).
+    // Canal elegido en el panel: el informe va pelado, sin menciones.
     let channelDelivered = false;
     if (reportConfig.channelId) {
       channelDelivered =
@@ -349,40 +322,24 @@ async function processReport(
       }
     }
 
-    // MD a cada persona de la lista, solo si el toggle está prendido (el que
-    // quiera recibirlo se elige en el panel: ya no va al creador solo).
-    let peopleDelivered = 0;
-    if (reportConfig.dmEnabled !== false) {
-      for (const userId of reportConfig.userIds ?? []) {
-        if (await sendDm(guild, userId, { embeds: [embed] })) {
-          peopleDelivered += 1;
-        }
-      }
-    }
-
     // Respaldo: el canal del aviso, solo si el informe no llegó a ningún lado.
     let fallbackDelivered = false;
-    if (!channelDelivered && peopleDelivered === 0 && event.publishChannelId) {
+    if (!channelDelivered && event.publishChannelId) {
       fallbackDelivered =
         (await sendToChannel(guild, event.publishChannelId, {
           embeds: [embed],
         })) !== null;
     }
 
-    if (channelDelivered || peopleDelivered > 0 || fallbackDelivered) {
+    if (channelDelivered || fallbackDelivered) {
       await postAction(guild.id, event.id, "report-sent");
       console.log(
-        `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (canal=${channelDelivered ? "sí" : "no"}, personas=${peopleDelivered})`,
+        `[event-control] Informe enviado de "${event.title}" — ${missing.length} sin anotar (canal=${channelDelivered ? "sí" : "no"})`,
       );
       return;
     }
 
-    if (
-      !reportConfig.channelId &&
-      (reportConfig.dmEnabled === false ||
-        (reportConfig.userIds ?? []).length === 0) &&
-      !event.publishChannelId
-    ) {
+    if (!reportConfig.channelId && !event.publishChannelId) {
       // Sin ningún destino posible: se descarta para no reintentar en cada
       // tick.
       await postAction(guild.id, event.id, "report-sent");

@@ -74,15 +74,12 @@ model GuildConfig {
   updatedAt                    DateTime @updatedAt
 
   // ── Informe de asistencia (eventos) ──
-  // A quiénes les llega el informe de "quiénes no se anotaron": un canal
-  // (con un rol y/o personas mencionadas ahí) y/o el MD al creador del
-  // evento, que era el comportamiento original y viene activado.
+  // El informe de "quiénes no se anotaron" se publica en un canal de texto.
   eventReportChannelId String?
+  // Legacy (sin uso): el informe iba a un rol y/o a una lista de personas, y a
+  // un MD al creador del evento.
   eventReportRoleId    String?
   eventReportUserIds   String[] @default([])
-  // Toggle "Mandar también por MD": habilita el MD del informe a las personas
-  // de eventReportUserIds. El NOMBRE es legacy (antes era "MD al creador"):
-  // ya no se le manda al creador, se elige a quién en la lista.
   eventReportDmCreator Boolean  @default(true)
 
   adminRoleModules  AdminRoleModule[]

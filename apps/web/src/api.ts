@@ -24,9 +24,7 @@ export type GuildConfig = {
   enabledModules?: string[];
   eventGames?: EventGameConfig[];
   eventReportChannelId?: string;
-  eventReportDmCreator?: boolean;
   eventReportRoleId?: string;
-  eventReportUserIds?: string[];
   eventRoles?: EventRoleOption[];
   karutaChannelId?: string;
   karutaRarePrintMax?: number;

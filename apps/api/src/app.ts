@@ -6562,14 +6562,10 @@ export function buildApp() {
         guildId: params.guildId,
         reports,
         reminders,
-        // A dónde va el informe de asistencia (se configura en el panel). El
-        // canal lo recibe sin menciones y, si el toggle está prendido, cada
-        // persona elegida lo recibe por MD. Ya NO hay MD automático al creador:
-        // quien lo tenga que recibir se elige en la lista.
+        // A dónde va el informe de asistencia (se configura en el panel): un
+        // canal de texto, sin menciones.
         report: {
           channelId: config.eventReportChannelId,
-          dmEnabled: config.eventReportDmCreator !== false,
-          userIds: config.eventReportUserIds ?? [],
         },
       };
     },
@@ -7547,16 +7543,8 @@ export function buildApp() {
       allowedBody.eventReportChannelId = body.eventReportChannelId || undefined;
     }
 
-    if (body.eventReportDmCreator !== undefined) {
-      allowedBody.eventReportDmCreator = body.eventReportDmCreator === true;
-    }
-
     if (body.eventReportRoleId !== undefined) {
       allowedBody.eventReportRoleId = body.eventReportRoleId || undefined;
-    }
-
-    if (body.eventReportUserIds !== undefined) {
-      allowedBody.eventReportUserIds = body.eventReportUserIds;
     }
 
     if (body.musicEnabled !== undefined) {

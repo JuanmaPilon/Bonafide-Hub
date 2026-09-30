@@ -24,7 +24,6 @@ import {
   getEventRoster,
   getGuildBoosters,
   getGuildConfig,
-  getGuildMembers,
   getGuildRoles,
   getGuilds,
   getGuildTextChannels,
@@ -106,7 +105,6 @@ import {
   type GuildChannel,
   type GuildConfig,
   type GuildEmoji,
-  type GuildMember,
   type GuildRole,
   type GuildRoleDetail,
   type GuildWidgetStatus,
@@ -5158,10 +5156,6 @@ function App() {
   const [adminGameKey, setAdminGameKey] = useState("");
   const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
   const [guildEmojisLoading, setGuildEmojisLoading] = useState(false);
-  // Miembros de la guild para el informe de asistencia (null = sin cargar; la
-  // lista es pesada, así que se pide solo al abrir la config de eventos).
-  const [guildMembers, setGuildMembers] = useState<GuildMember[] | null>(null);
-  const [guildMembersLoading, setGuildMembersLoading] = useState(false);
   const [specDraft, setSpecDraft] = useState<{
     animated?: boolean;
     className: string;
@@ -5945,57 +5939,6 @@ function App() {
       cancelled = true;
     };
   }, [selectedGuildId, showSpecEditor]);
-
-  // Miembros de la guild, solo cuando se abre la tarjeta Configuraciones (ahí
-  // se eligen las personas que reciben el informe de asistencia por MD).
-  useEffect(() => {
-    if (!selectedGuildId || !showMainConfig || guildMembers !== null) {
-      return;
-    }
-    let cancelled = false;
-    setGuildMembersLoading(true);
-    getGuildMembers(selectedGuildId)
-      .then((list) => {
-        if (!cancelled) {
-          setGuildMembers(list);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGuildMembers([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setGuildMembersLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [guildMembers, selectedGuildId, showMainConfig]);
-
-  // Personas del informe de asistencia: el id guardado se muestra con su
-  // nombre (los que ya no están en el server quedan con el id a la vista).
-  const reportUserIds = config.eventReportUserIds ?? [];
-  function reportMemberName(userId: string): string {
-    return (
-      guildMembers?.find((member) => member.id === userId)?.displayName ??
-      userId
-    );
-  }
-
-  function toggleReportUser(userId: string, add: boolean): void {
-    editConfig((current) => {
-      const currentIds = current.eventReportUserIds ?? [];
-      return {
-        ...current,
-        eventReportUserIds: add
-          ? [...currentIds, userId]
-          : currentIds.filter((id) => id !== userId),
-      };
-    }, "eventReport");
-  }
 
   // Quita manualmente una carta del registro de posesión (admin/owner).
   function handleDeleteKarutaCard(card: KarutaCard): void {
@@ -7612,8 +7555,8 @@ function App() {
     }
   }
 
-  // Informe de asistencia: guardado parcial del canal + personas + MD.
-  // El select manda "" para limpiar (JSON no lleva undefined), y el API traduce
+  // Informe de asistencia: guardado parcial del canal al que se publica.
+  // El select manda "" para limpiar (JSON no lleva undefined) y el API traduce
   // ese "" a "borrar el valor".
   async function handleSaveEventReport(): Promise<void> {
     if (!selectedGuildId) {
@@ -7624,8 +7567,6 @@ function App() {
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
         eventReportChannelId: config.eventReportChannelId ?? "",
-        eventReportDmCreator: config.eventReportDmCreator !== false,
-        eventReportUserIds: config.eventReportUserIds ?? [],
       });
       setConfig(nextConfig);
       clearDirty("eventReport");
@@ -8274,7 +8215,6 @@ function App() {
       setDailyMessages([]);
       setHiddenRaidLogs([]);
       setAuditLogs([]);
-      setGuildMembers(null);
       return;
     }
 
@@ -8963,93 +8903,6 @@ function App() {
                               ))}
                             </select>
                           </label>
-                          <label
-                            className={`module-toggle${config.eventReportDmCreator !== false ? " checked" : ""}`}
-                          >
-                            <span className="module-toggle-text">
-                              <strong>Mandar también por MD</strong>
-                              <small>A las personas elegidas</small>
-                            </span>
-                            <span className="module-switch">
-                              <input
-                                type="checkbox"
-                                checked={config.eventReportDmCreator !== false}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      eventReportDmCreator:
-                                        event.target.checked,
-                                    }),
-                                    "eventReport",
-                                  )
-                                }
-                              />
-                              <span
-                                className="module-switch-track"
-                                aria-hidden="true"
-                              >
-                                <span className="module-switch-thumb" />
-                              </span>
-                            </span>
-                          </label>
-                          {/* Las personas solo se eligen con el toggle prendido:
-                              si está apagado el informe no se manda por MD. */}
-                          {config.eventReportDmCreator !== false ? (
-                            <div className="event-report-people form-grid-wide">
-                              <span>Personas que lo reciben por MD</span>
-                              <div className="staff-permission-roles">
-                                {reportUserIds.map((userId) => (
-                                  <span
-                                    className="staff-permission-role"
-                                    key={userId}
-                                  >
-                                    {reportMemberName(userId)}
-                                    <button
-                                      aria-label={`Quitar a ${reportMemberName(userId)}`}
-                                      className="staff-permission-remove"
-                                      onClick={() =>
-                                        toggleReportUser(userId, false)
-                                      }
-                                      title={`Quitar a ${reportMemberName(userId)}`}
-                                      type="button"
-                                    >
-                                      ✕
-                                    </button>
-                                  </span>
-                                ))}
-                                <select
-                                  aria-label="Agregar persona al informe"
-                                  className="select staff-permission-add"
-                                  disabled={guildMembersLoading}
-                                  onChange={(event) => {
-                                    const userId = event.target.value;
-                                    event.target.value = "";
-                                    if (userId) {
-                                      toggleReportUser(userId, true);
-                                    }
-                                  }}
-                                  value=""
-                                >
-                                  <option value="">
-                                    {guildMembersLoading
-                                      ? "Cargando miembros…"
-                                      : "Agregar persona…"}
-                                  </option>
-                                  {(guildMembers ?? [])
-                                    .filter(
-                                      (member) =>
-                                        !reportUserIds.includes(member.id),
-                                    )
-                                    .map((member) => (
-                                      <option key={member.id} value={member.id}>
-                                        {member.displayName}
-                                      </option>
-                                    ))}
-                                </select>
-                              </div>
-                            </div>
-                          ) : null}
                           {isDirty("eventReport") ? (
                             <button
                               className="primary-button"
