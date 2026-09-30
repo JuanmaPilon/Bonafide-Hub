@@ -864,16 +864,29 @@ a:hover {
 /* Colores de tarjetas del Admin por rango: los DOS colores del rol del rango
    (--tier-*-2-* es el segundo color del degradado de Discord; sin él, todo
    queda con el primero). */
+/* Owner: además del borde y del título con el degradado, la tarjeta lleva un
+   HALO y un tinte de fondo propios para distinguirla de un vistazo de las de
+   Admin (que solo tienen el borde tenido y el título pintado). */
 .admin-card--owner {
   order: 1;
-  border-color: rgba(var(--tier-owner-rgb), 0.45);
+  border-color: rgba(var(--tier-owner-rgb), 0.75);
+  background:
+    linear-gradient(
+      160deg,
+      rgba(var(--tier-owner-rgb), 0.12),
+      rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.04) 42%,
+      var(--panel) 72%
+    );
+  box-shadow:
+    0 0 0 1px rgba(var(--tier-owner-rgb), 0.22),
+    0 10px 34px rgba(var(--tier-owner-rgb), 0.26);
 }
 
 .admin-card--owner > .admin-card-header {
   background: linear-gradient(
     90deg,
-    rgba(var(--tier-owner-rgb), 0.14),
-    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.08) 45%,
+    rgba(var(--tier-owner-rgb), 0.24),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.12) 45%,
     transparent 78%
   );
 }
@@ -992,9 +1005,11 @@ a:hover {
   color: var(--tier-owner-text);
   background: linear-gradient(
     90deg,
-    rgba(var(--tier-owner-rgb), 0.16),
-    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.12)
+    rgba(var(--tier-owner-rgb), 0.3),
+    rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.18)
   );
+  border-color: rgba(var(--tier-owner-rgb), 0.8);
+  box-shadow: 0 0 14px rgba(var(--tier-owner-rgb), 0.45);
 }
 
 .tier-admin {
@@ -6700,6 +6715,20 @@ select.list-order {
 :root[data-theme="light"] .rr-rule,
 :root[data-theme="light"] .rr-preview,
 :root[data-theme="light"] .admin-card-footer,
+
+/* En claro el halo naranja tiene que ser más suave para no ensuciar. */
+:root[data-theme="light"] .admin-card--owner {
+  background:
+    linear-gradient(
+      160deg,
+      rgba(var(--tier-owner-rgb), 0.07),
+      rgba(var(--tier-owner-2-rgb, var(--tier-owner-rgb)), 0.02) 42%,
+      var(--panel) 72%
+    );
+  box-shadow:
+    0 0 0 1px rgba(var(--tier-owner-rgb), 0.18),
+    0 8px 26px rgba(var(--tier-owner-rgb), 0.16);
+}
 :root[data-theme="light"] .module-toggle,
 :root[data-theme="light"] .suggestion-tier-chip,
 :root[data-theme="light"] .staff-hierarchy-tier {

@@ -80,6 +80,9 @@ model GuildConfig {
   eventReportChannelId String?
   eventReportRoleId    String?
   eventReportUserIds   String[] @default([])
+  // Toggle "Mandar también por MD": habilita el MD del informe a las personas
+  // de eventReportUserIds. El NOMBRE es legacy (antes era "MD al creador"):
+  // ya no se le manda al creador, se elige a quién en la lista.
   eventReportDmCreator Boolean  @default(true)
 
   adminRoleModules  AdminRoleModule[]

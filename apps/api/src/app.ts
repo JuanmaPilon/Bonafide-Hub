@@ -6563,11 +6563,12 @@ export function buildApp() {
         reports,
         reminders,
         // A dónde va el informe de asistencia (se configura en el panel). El
-        // canal lo recibe sin menciones; las personas, por MD. El rol que
-        // existía acá quedó sin uso (el campo se sacó del panel).
+        // canal lo recibe sin menciones y, si el toggle está prendido, cada
+        // persona elegida lo recibe por MD. Ya NO hay MD automático al creador:
+        // quien lo tenga que recibir se elige en la lista.
         report: {
           channelId: config.eventReportChannelId,
-          dmCreator: config.eventReportDmCreator !== false,
+          dmEnabled: config.eventReportDmCreator !== false,
           userIds: config.eventReportUserIds ?? [],
         },
       };

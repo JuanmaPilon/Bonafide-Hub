@@ -3821,11 +3821,6 @@ function RolesCard({
           <h3>
             Roles <span className="admin-tier-badge tier-admin">Admin</span>
           </h3>
-          <p className="admin-card-hint">
-            Crear, duplicar, editar y borrar roles de Discord sin pelear con la
-            UI de Discord. Los roles nuevos nacen sin miembros: nadie los tiene
-            hasta que se los asignes.
-          </p>
         </div>
         <span className="admin-acc-chevron" aria-hidden="true">
           ▸
@@ -8674,13 +8669,11 @@ function App() {
 
                           {/* Informe de asistencia: lo manda el bot al cerrar
                               las inscripciones del evento (o al completarse si
-                              no hay cierre cargado). Va dentro del FORM de la
-                              tarjeta, sin recuadro propio. */}
-                          <h4 className="karuta-threshold-title form-grid-wide">
-                            Informe de asistencia
-                          </h4>
+                              no hay cierre cargado). Es una opción más de la
+                              tarjeta: el canal y, si el toggle está prendido,
+                              las personas que lo reciben por MD. */}
                           <label>
-                            <span>Canal del informe</span>
+                            <span>Informe de asistencia</span>
                               <select
                                 className="select"
                                 value={config.eventReportChannelId ?? ""}
@@ -8707,7 +8700,7 @@ function App() {
                           >
                             <span className="module-toggle-text">
                               <strong>Mandar también por MD</strong>
-                              <small>Al creador del evento</small>
+                              <small>A las personas elegidas</small>
                             </span>
                             <span className="module-switch">
                               <input
@@ -8732,8 +8725,11 @@ function App() {
                               </span>
                             </span>
                           </label>
-                          <div className="event-report-people form-grid-wide">
-                            <span>Personas que lo reciben por MD</span>
+                          {/* Las personas solo se eligen con el toggle prendido:
+                              si está apagado el informe no se manda por MD. */}
+                          {config.eventReportDmCreator !== false ? (
+                            <div className="event-report-people form-grid-wide">
+                              <span>Personas que lo reciben por MD</span>
                             <div className="staff-permission-roles">
                               {reportUserIds.map((userId) => (
                                 <span
@@ -8785,6 +8781,7 @@ function App() {
                               </select>
                             </div>
                           </div>
+                          ) : null}
                           {isDirty("eventReport") ? (
                             <button
                               className="primary-button"
