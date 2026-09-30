@@ -375,6 +375,9 @@ export type AnnouncementSignup = {
   role?: string;
   spec?: string;
   status: string;
+  // Id del miembro: lo usan el contador del roster y el match con el rol
+  // mínimo (los signups de la DB lo traen siempre).
+  userId?: string;
   username: string;
   wowClass?: string;
 };
@@ -563,6 +566,9 @@ export function buildEventAnnouncementEmbeds(input: {
   imageUrl?: string;
   location?: string;
   paused?: boolean;
+  // Cuántos miembros tienen el rol mínimo (roster esperado). Con esto el aviso
+  // muestra el control "confirmados / esperados".
+  expectedCount?: number;
   recurrence: EventRecurrence;
   // Recurrencia PROPIA del evento (cada X días, la maneja el API). Manda sobre
   // la recurrencia del evento agendado de Discord.
@@ -621,9 +627,14 @@ export function buildEventAnnouncementEmbeds(input: {
   // Igual que en la web: los que marcaron "no asisto" también se listan.
   const absent = input.signups.filter((signup) => signup.status === "no");
   const possibles = bench.length + late.length;
+  // Control del roster: cuántos de los que TIENEN el rol mínimo ya están
+  // confirmados. Es el mismo universo que el informe de asistencia.
+  const expected = input.expectedCount ?? 0;
   const assistanceValue =
     input.signups.length === 0
-      ? "Sin anotados todavía"
+      ? expected > 0
+        ? `Sin anotados todavía\n🎯 **0/${expected}** del roster`
+        : "Sin anotados todavía"
       : [
           `**${confirmed.length}** confirmados${
             possibles > 0 ? ` (+${possibles})` : ""
@@ -634,6 +645,9 @@ export function buildEventAnnouncementEmbeds(input: {
             `⏰ ${late.length}`,
             `❌ ${absent.length}`,
           ].join(" · "),
+          ...(expected > 0
+            ? [`🎯 **${confirmed.length}/${expected}** del roster`]
+            : []),
         ].join("\n");
 
   const fields: Array<{ inline?: boolean; name: string; value: string }> = [];
@@ -1122,6 +1136,8 @@ export async function syncEventToDiscord(input: {
   discordEventId?: string;
   durationMinutes?: number;
   eventId: string;
+  // Miembros con el rol mínimo: el aviso muestra "confirmados / esperados".
+  expectedCount?: number;
   existing?: {
     discordEventId?: string;
     messageIds?: string[];
@@ -1210,6 +1226,7 @@ export async function syncEventToDiscord(input: {
       discordEventId: result.discordEventId ?? input.discordEventId,
       durationMinutes: input.durationMinutes,
       eventId: input.eventId,
+      expectedCount: input.expectedCount,
       gameLabel: input.gameLabel,
       guildIconUrl: input.guildIconUrl,
       guildId: input.guildId,

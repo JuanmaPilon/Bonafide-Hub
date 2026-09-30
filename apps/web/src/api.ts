@@ -1216,6 +1216,10 @@ export type HubEvent = {
   // Al marcar Completado, borra el aviso/evento de Discord tras guardar.
   discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
+  // Control del roster: cuántos miembros tienen el rol mínimo (el total contra
+  // el que se compara la asistencia) y cuántos todavía no respondieron.
+  expectedCount?: number;
+  missingCount?: number;
   // Juego del evento (wow | lol | …): decide qué roles de inscripción y qué
   // catálogo de clases/specs se usan en el selector, el roster y el aviso.
   game?: string;
@@ -1275,6 +1279,26 @@ export async function getEvents(guildId: string): Promise<HubEvent[]> {
     { method: "GET" },
   );
   return data.events;
+}
+
+// Detalle del roster esperado de un evento: quiénes tienen el rol mínimo, quiénes
+// ya respondieron y quiénes faltan (lo pide el contador "N/M" al clickearse).
+export type EventRoster = {
+  confirmedCount: number;
+  expectedCount: number;
+  missing: Array<{ userId: string; username: string }>;
+  requiredRoleId?: string;
+  signedCount: number;
+};
+
+export async function getEventRoster(
+  guildId: string,
+  eventId: string,
+): Promise<EventRoster> {
+  return requestJson<EventRoster>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/roster`,
+    { method: "GET" },
+  );
 }
 
 export async function createEvent(

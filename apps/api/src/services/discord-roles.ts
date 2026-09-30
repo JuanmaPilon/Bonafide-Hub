@@ -280,10 +280,7 @@ export function colorRamp(from: number, to: number, count: number): number[] {
 
 // Nombre libre para una copia: "Raid (copia)", "Raid (copia 2)"… Discord
 // permite repetir nombres, pero dos roles iguales en la lista son un lío.
-export function uniqueRoleName(
-  existingNames: string[],
-  base: string,
-): string {
+export function uniqueRoleName(existingNames: string[], base: string): string {
   const taken = new Set(existingNames.map((name) => name.toLowerCase()));
   const clean = base.trim().slice(0, 100) || "Rol";
   const first = `${clean} (copia)`.slice(0, 100);

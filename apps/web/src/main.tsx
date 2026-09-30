@@ -21,6 +21,7 @@ import {
   exportXpData,
   getAuditLogs,
   getEventReportCsv,
+  getEventRoster,
   getGuildBoosters,
   getGuildConfig,
   getGuildMembers,
@@ -126,6 +127,7 @@ import {
   type EventRoleOption,
   type EventDiscordOptions,
   type EventSignup,
+  type EventRoster,
   type EventImage,
   type EventTag,
   type HubEvent,
@@ -2088,6 +2090,34 @@ function EventCard({
   // Avisar por MD al miembro de qué le cambió (arranca encendido: es el
   // motivo por el que el staff abre el editor).
   const [staffNotify, setStaffNotify] = useState(true);
+  // Control del roster: el contador "confirmados / esperados" (los que tienen
+  // el rol mínimo del evento). La lista de los que faltan se pide recién al
+  // abrir el modal: en la API es staff-only, así que si falla se avisa ahí.
+  const [roster, setRoster] = useState<EventRoster | null>(null);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+
+  async function openRoster(): Promise<void> {
+    setRosterOpen(true);
+    if (roster || rosterLoading) {
+      return;
+    }
+    setRosterLoading(true);
+    setRosterError(null);
+    try {
+      setRoster(await getEventRoster(event.guildId, event.id));
+    } catch (error) {
+      setRosterError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar el roster.",
+      );
+    } finally {
+      setRosterLoading(false);
+    }
+  }
+
   // Quitar la inscripción de otro miembro es destructivo: pide confirmación.
   const [staffConfirmRemove, setStaffConfirmRemove] = useState(false);
   // Si ya elegí spec y estado muestro un resumen en vez del editor completo;
@@ -2472,6 +2502,23 @@ function EventCard({
                   {option.emoji} {counts[option.key]}
                 </span>
               ))}
+              {/* Control del roster: confirmados sobre el total que tiene el rol
+                  mínimo. Se clickea para ver quiénes faltan (staff). */}
+              {event.expectedCount && event.expectedCount > 0 ? (
+                <button
+                  className="event-count roster-goal"
+                  disabled={!canManage}
+                  onClick={() => void openRoster()}
+                  title={
+                    canManage
+                      ? "Ver quiénes faltan anotarse"
+                      : "Control del roster (solo staff)"
+                  }
+                  type="button"
+                >
+                  🎯 {counts.yes}/{event.expectedCount}
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -3012,6 +3059,82 @@ function EventCard({
                 type="button"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Control del roster: quiénes tienen el rol mínimo y todavía no
+          respondieron (los que faltan anotarse). */}
+      {rosterOpen ? (
+        <div className="modal-overlay" onClick={() => setRosterOpen(false)}>
+          <div
+            className="modal modal-wide"
+            onClick={(clickEvent) => clickEvent.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <h4>Roster de {event.title}</h4>
+            {rosterLoading ? (
+              <p className="modal-note">Cargando el roster…</p>
+            ) : null}
+            {rosterError ? <p className="modal-note">{rosterError}</p> : null}
+            {roster ? (
+              <>
+                <div className="event-roster-summary">
+                  <span className="event-count total">
+                    👥 {roster.confirmedCount} confirmados
+                  </span>
+                  <span className="event-count roster-goal">
+                    🎯 {roster.expectedCount} con el rol
+                  </span>
+                  <span
+                    className={`event-count ${
+                      roster.missing.length > 0 ? "late" : "yes"
+                    }`}
+                  >
+                    {roster.missing.length > 0
+                      ? `⏳ Faltan ${roster.missing.length}`
+                      : "✅ Respondieron todos"}
+                  </span>
+                </div>
+                <p className="modal-note">
+                  Tienen el rol y todavía no respondieron
+                  {roster.missing.length > 0
+                    ? " (clickeá un nombre para ver su perfil):"
+                    : ":"}
+                </p>
+                <div className="event-roster-missing">
+                  {roster.missing.length === 0 ? (
+                    <span className="event-roster-empty">
+                      No falta nadie.
+                    </span>
+                  ) : (
+                    roster.missing.map((member) => (
+                      <button
+                        className="member-link"
+                        key={member.userId}
+                        onClick={() => {
+                          setRosterOpen(false);
+                          onOpenProfile(member.userId);
+                        }}
+                        type="button"
+                      >
+                        {member.username}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : null}
+            <div className="form-actions">
+              <button
+                className="ghost-button"
+                onClick={() => setRosterOpen(false)}
+                type="button"
+              >
+                Cerrar
               </button>
             </div>
           </div>
@@ -3707,8 +3830,7 @@ function RolesCard({
       <summary className="admin-card-header admin-acc-header">
         <div>
           <h3>
-            Roles{" "}
-            <span className="admin-tier-badge tier-admin">Admin</span>
+            Roles <span className="admin-tier-badge tier-admin">Admin</span>
           </h3>
           <p className="admin-card-hint">
             Crear, duplicar, editar y borrar roles de Discord sin pelear con la
@@ -7517,6 +7639,29 @@ function App() {
       : undefined;
   }
 
+  // Placa del nivel en el ranking: SOLO se destaca cuando el rango tiene rol con
+  // color (los que brillan o tienen degradado). Antes todos llevaban un
+  // circulito con `currentColor` y pasaba lo contrario: se veía en los rangos
+  // bajos y desaparecía en los altos (el degradado pinta el texto con relleno
+  // transparente). Los colores van como CSS vars y la placa se pinta en CSS.
+  function levelPlaqueVars(level: number): CSSProperties {
+    const colors = levelColorFor(level);
+    if (!colors) {
+      return {};
+    }
+    return {
+      "--level-border": tagTint(colors.color, 0.45),
+      "--level-glow": tagTint(colors.color, 0.35),
+      "--level-tint": tagTint(colors.color, 0.16),
+    } as CSSProperties;
+  }
+
+  function levelPlaqueClass(level: number): string {
+    return levelColorFor(level)
+      ? "leaderboard-level leaderboard-level--rich"
+      : "leaderboard-level";
+  }
+
   async function refreshAuditLogs(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -8313,11 +8458,14 @@ function App() {
                               </td>
                               <td>
                                 <span
-                                  className="leaderboard-level"
-                                  style={levelStyleFor(
-                                    entry.level,
-                                    entry.isBooster,
-                                  )}
+                                  className={levelPlaqueClass(entry.level)}
+                                  style={{
+                                    ...levelStyleFor(
+                                      entry.level,
+                                      entry.isBooster,
+                                    ),
+                                    ...levelPlaqueVars(entry.level),
+                                  }}
                                 >
                                   {entry.level}
                                 </span>

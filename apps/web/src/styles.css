@@ -1821,15 +1821,39 @@ a:hover {
   font-weight: 700;
 }
 
+/* Nivel del ranking. Antes todos llevaban un circulito con `currentColor`:
+   se veía en los rangos SIN color y desaparecía en los que tienen degradado
+   (el relleno es transparente), justo al revés de lo que importa. Ahora la
+   placa base va pelada y solo se destaca cuando el rango tiene rol con color. */
 .leaderboard-level {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 30px;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid currentColor;
+  border: 1px solid transparent;
+  color: var(--muted);
   font-weight: 700;
+}
+
+.leaderboard-level--rich {
+  border-color: var(--level-border, transparent);
+  box-shadow: 0 0 10px var(--level-glow, transparent);
+  padding: 2px 10px;
+}
+
+/* El fondo va en un pseudo: el número con degradado usa `background-clip: text`
+   y un background propio quedaría recortado a la forma del texto. */
+.leaderboard-level--rich::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--level-tint, transparent);
+  z-index: -1;
 }
 
 .leaderboard-table tr.mvp-row {
@@ -3638,6 +3662,51 @@ select.list-order {
 
 .event-count.late {
   border-color: rgba(255, 180, 84, 0.45);
+}
+
+/* Control del roster: confirmados / total con el rol mínimo. Es un botón para
+   que se note que se puede clickear (abre la lista de los que faltan). */
+.event-count.roster-goal {
+  border-color: rgba(106, 168, 255, 0.5);
+  background: rgba(106, 168, 255, 0.1);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 140ms ease;
+}
+
+.event-count.roster-goal:hover:not(:disabled) {
+  border-color: rgba(106, 168, 255, 0.85);
+}
+
+.event-count.roster-goal:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* Modal del roster: resumen arriba y los nombres que faltan en chips. */
+.event-roster-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-roster-missing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.event-roster-missing .member-link {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0;
+  text-align: left;
 }
 
 .event-roster {

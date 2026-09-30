@@ -307,6 +307,8 @@ type DiscordGuildMember = {
   roles?: string[];
   user?: {
     avatar?: string | null;
+    // Los bots no cuentan como roster esperado (tienen el rol pero no juegan).
+    bot?: boolean;
     global_name?: string | null;
     id: string;
     username: string;
@@ -490,6 +492,50 @@ async function fetchAuditNames(
     }
   }
   return { channels, roles, users };
+}
+
+// Roster esperado de un evento: los miembros HUMANOS que tienen el rol mínimo
+// (el mismo universo que usan el informe de asistencia y los recordatorios, así
+// el contador "N/M" no inventa un número nuevo). Devuelve null si el evento no
+// tiene rol mínimo: ahí no hay contra qué contar. `missing` = los que todavía no
+// respondieron nada (el que marcó "no asisto" ya respondió, no va acá).
+type RosterMember = { userId: string; username: string };
+
+function expectedRoster(
+  members: DiscordGuildMember[],
+  event: {
+    requiredRoleId?: string;
+    signups?: Array<{ userId?: string }>;
+  },
+): { expectedCount: number; missing: RosterMember[] } | null {
+  const roleId = event.requiredRoleId?.trim();
+  if (!roleId) {
+    return null;
+  }
+
+  const answered = new Set(
+    (event.signups ?? [])
+      .map((signup) => signup.userId)
+      .filter((userId): userId is string => Boolean(userId)),
+  );
+  const expected: RosterMember[] = [];
+  for (const member of members) {
+    const user = member.user;
+    if (!user?.id || user.bot === true || !member.roles?.includes(roleId)) {
+      continue;
+    }
+    expected.push({
+      userId: user.id,
+      username:
+        member.nick ?? user.global_name ?? user.username ?? user.id,
+    });
+  }
+  expected.sort((left, right) => left.username.localeCompare(right.username));
+
+  return {
+    expectedCount: expected.length,
+    missing: expected.filter((member) => !answered.has(member.userId)),
+  };
 }
 
 async function fetchAllGuildMembers(
@@ -1827,6 +1873,23 @@ function validateDiscordOptions(options: EventDiscordOptions): string | null {
   return null;
 }
 
+// Cuántos miembros tienen el rol mínimo del evento (roster esperado). Sin rol
+// mínimo no hay número: devuelve undefined. La lectura de miembros va cacheada
+// (4 min), así refrescar varios avisos seguidos no castiga a Discord.
+async function expectedCountFor(
+  guildId: string,
+  event: {
+    requiredRoleId?: string;
+    signups?: Array<{ userId?: string }>;
+  },
+): Promise<number | undefined> {
+  if (!event.requiredRoleId) {
+    return undefined;
+  }
+  const members = await fetchAllGuildMembers(guildId).catch(() => []);
+  return expectedRoster(members, event)?.expectedCount;
+}
+
 // Sincroniza el evento hacia Discord y persiste los ids resultantes.
 // Devuelve { event, discordError } para incluir en la respuesta.
 async function syncAndStoreEventDiscord(input: {
@@ -1874,6 +1937,7 @@ async function syncAndStoreEventDiscord(input: {
     description: event.description,
     durationMinutes: event.durationMinutes,
     eventId: event.id,
+    expectedCount: await expectedCountFor(event.guildId, event),
     existing: input.existing,
     guildIconUrl: await fetchGuildIconUrl(event.guildId),
     guildId: event.guildId,
@@ -1957,6 +2021,7 @@ async function refreshEventAnnouncement(
       discordEventId: event.discordEventId,
       durationMinutes: event.durationMinutes,
       eventId: event.id,
+      expectedCount: await expectedCountFor(guildId, event),
       guildIconUrl: await fetchGuildIconUrl(guildId),
       guildId,
       gameLabel: resolveGameLabel(eventConfig, event.game),
@@ -3441,7 +3506,11 @@ export function buildApp() {
     const names = Array.from(
       new Set(
         (body.names ?? [])
-          .map((name) => String(name ?? "").trim().slice(0, 100))
+          .map((name) =>
+            String(name ?? "")
+              .trim()
+              .slice(0, 100),
+          )
           .filter(Boolean),
       ),
     );
@@ -3534,7 +3603,9 @@ export function buildApp() {
     const current = await listGuildRoles(params.guildId);
     const role = current.roles?.find((entry) => entry.id === params.roleId);
     if (current.error || !role) {
-      return reply.code(404).send({ ok: false, error: "No se encontró el rol" });
+      return reply
+        .code(404)
+        .send({ ok: false, error: "No se encontró el rol" });
     }
     if (role.managed) {
       return reply.code(400).send({
@@ -3583,7 +3654,11 @@ export function buildApp() {
 
     let updated = role;
     if (Object.keys(write).length > 0) {
-      const result = await modifyGuildRole(params.guildId, params.roleId, write);
+      const result = await modifyGuildRole(
+        params.guildId,
+        params.roleId,
+        write,
+      );
       if (result.error || !result.role) {
         return reply.code(400).send({
           ok: false,
@@ -3616,7 +3691,9 @@ export function buildApp() {
       write.color !== undefined ? "color" : null,
       write.permissions !== undefined ? "permisos" : null,
       write.hoist !== undefined ? `separado: ${write.hoist}` : null,
-      write.mentionable !== undefined ? `mencionable: ${write.mentionable}` : null,
+      write.mentionable !== undefined
+        ? `mencionable: ${write.mentionable}`
+        : null,
       body.position !== undefined && positionMoved
         ? `posición: ${body.position}`
         : null,
@@ -3662,7 +3739,9 @@ export function buildApp() {
     const current = await listGuildRoles(params.guildId);
     const role = current.roles?.find((entry) => entry.id === params.roleId);
     if (current.error || !role) {
-      return reply.code(404).send({ ok: false, error: "No se encontró el rol" });
+      return reply
+        .code(404)
+        .send({ ok: false, error: "No se encontró el rol" });
     }
     if (role.managed) {
       return reply.code(400).send({
@@ -4747,15 +4826,73 @@ export function buildApp() {
     // Mandamos el nombre del rol mínimo ya resuelto (cacheado 5 min): sin esto
     // la tarjeta dibujaba "un rol" y después el nombre real (parpadeo).
     const roleNames = await fetchGuildRoleNames(params.guildId);
+    // Contador "confirmados / esperados": una sola lectura de miembros por
+    // request (va cacheada 4 min) y el filtro por rol se hace en memoria.
+    const members = events.some((event) => event.requiredRoleId)
+      ? await fetchAllGuildMembers(params.guildId).catch(() => [])
+      : [];
     return {
       ok: true,
       guildId: params.guildId,
-      events: events.map((event) => ({
-        ...event,
-        requiredRoleName: event.requiredRoleId
-          ? (roleNames.get(event.requiredRoleId) ?? undefined)
-          : undefined,
-      })),
+      events: events.map((event) => {
+        const roster = expectedRoster(members, event);
+        return {
+          ...event,
+          expectedCount: roster?.expectedCount,
+          missingCount: roster?.missing.length,
+          requiredRoleName: event.requiredRoleId
+            ? (roleNames.get(event.requiredRoleId) ?? undefined)
+            : undefined,
+        };
+      }),
+    };
+  });
+
+  // Detalle del roster esperado del evento: quiénes tienen el rol mínimo y
+  // quiénes todavía no se anotaron. Lo usa el contador "N/M" del hub cuando el
+  // staff lo clickea (el número sale en la lista, la lista se pide al abrir).
+  app.get("/guilds/:guildId/events/:eventId/roster", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { eventId?: string; guildId?: string };
+    if (!params.guildId || !params.eventId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const event = await getEvent(params.guildId, params.eventId);
+    if (!event) {
+      return reply
+        .code(404)
+        .send({ ok: false, error: "Evento no encontrado" });
+    }
+
+    const members = await fetchAllGuildMembers(params.guildId).catch(() => []);
+    const roster = expectedRoster(members, event);
+    if (!roster) {
+      return reply.code(400).send({
+        ok: false,
+        error: "El evento no tiene rol mínimo: no hay roster esperado",
+      });
+    }
+
+    const signups = event.signups ?? [];
+    return {
+      ok: true,
+      confirmedCount: signups.filter((signup) => signup.status === "yes")
+        .length,
+      eventId: params.eventId,
+      expectedCount: roster.expectedCount,
+      guildId: params.guildId,
+      missing: roster.missing,
+      requiredRoleId: event.requiredRoleId,
+      signedCount: signups.length,
     };
   });
 
