@@ -6387,7 +6387,7 @@ select.list-order {
 
 .role-compare-toolbar {
   display: grid;
-  grid-template-columns: auto minmax(180px, 280px);
+  grid-template-columns: auto minmax(180px, 280px) auto;
   align-items: center;
   gap: 10px;
   padding-top: 4px;
@@ -6405,28 +6405,16 @@ select.list-order {
   margin-top: 4px;
 }
 
-.role-compare-facts,
 .role-permission-compare-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.role-compare-fact-column {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid rgba(133, 156, 212, 0.16);
-  border-radius: 12px;
-  background: rgba(10, 16, 31, 0.28);
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.role-compare-fact-column strong {
+.role-compare-color-line {
   overflow: hidden;
-  color: var(--text);
+  color: var(--muted);
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -6496,7 +6484,6 @@ select.list-order {
 
 @media (max-width: 680px) {
   .role-color-control,
-  .role-compare-facts,
   .role-permission-compare-columns {
     grid-template-columns: 1fr;
   }

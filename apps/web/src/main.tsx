@@ -4795,6 +4795,24 @@ function RolesCard({
                           </option>
                         ))}
                     </select>
+                    {compareRole ? (
+                      <button
+                        className="ghost-button small"
+                        onClick={() =>
+                          setForm({
+                            color: hexFromRoleColor(compareRole.color),
+                            hoist: compareRole.hoist,
+                            mentionable: compareRole.mentionable,
+                            name: compareRole.name,
+                            permissions: BigInt(compareRole.permissions || "0"),
+                          })
+                        }
+                        title="Copiar nombre, color, opciones y permisos al nuevo rol"
+                        type="button"
+                      >
+                        Aplicar ← {compareRole.name}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -4835,24 +4853,57 @@ function RolesCard({
               </div>
               {compareRole ? (
                 <div className="role-permission-compare">
-                  <div className="role-compare-facts">
-                    <div className="role-compare-fact-column">
+                  <div className="role-permission-compare-columns">
+                    <div className="role-permission-compare-column">
                       <strong>{form.name.trim() || "Nuevo rol"}</strong>
-                      <span>
+                      <span className="role-compare-color-line">
                         <i
                           className="role-compare-color"
                           style={{ backgroundColor: form.color }}
                         />
                         {form.color}
                       </span>
-                      <span>Mostrar aparte: {form.hoist ? "Sí" : "No"}</span>
-                      <span>
-                        Se puede mencionar: {form.mentionable ? "Sí" : "No"}
+                      <span className="role-permission-compare-group">
+                        Opciones
                       </span>
+                      <span
+                        className={`role-permission-compare-item${form.hoist ? " enabled" : ""}`}
+                      >
+                        <span aria-hidden="true">{form.hoist ? "✓" : "·"}</span>
+                        Mostrar aparte
+                      </span>
+                      <span
+                        className={`role-permission-compare-item${form.mentionable ? " enabled" : ""}`}
+                      >
+                        <span aria-hidden="true">
+                          {form.mentionable ? "✓" : "·"}
+                        </span>
+                        Se puede mencionar
+                      </span>
+                      {ROLE_PERMISSION_GROUPS.map((group) => (
+                        <div key={group.label}>
+                          <span className="role-permission-compare-group">
+                            {group.label}
+                          </span>
+                          {group.permissions.map((permission) => (
+                            <span
+                              className={`role-permission-compare-item${(form.permissions & permission.bit) !== 0n ? " enabled" : ""}`}
+                              key={permission.label}
+                            >
+                              <span aria-hidden="true">
+                                {(form.permissions & permission.bit) !== 0n
+                                  ? "✓"
+                                  : "·"}
+                              </span>
+                              {permission.label}
+                            </span>
+                          ))}
+                        </div>
+                      ))}
                     </div>
-                    <div className="role-compare-fact-column">
+                    <div className="role-permission-compare-column">
                       <strong>{compareRole.name}</strong>
-                      <span>
+                      <span className="role-compare-color-line">
                         <i
                           className="role-compare-color"
                           style={{
@@ -4861,65 +4912,50 @@ function RolesCard({
                         />
                         {hexFromRoleColor(compareRole.color)}
                       </span>
-                      <span>
-                        Mostrar aparte: {compareRole.hoist ? "Sí" : "No"}
+                      <span className="role-permission-compare-group">
+                        Opciones
                       </span>
-                      <span>
-                        Se puede mencionar: {compareRole.mentionable ? "Sí" : "No"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="role-permission-compare-columns">
-                    <div className="role-permission-compare-column">
-                    <strong>{form.name.trim() || "Nuevo rol"}</strong>
-                    {ROLE_PERMISSION_GROUPS.map((group) => (
-                      <div key={group.label}>
-                        <span className="role-permission-compare-group">
-                          {group.label}
+                      <span
+                        className={`role-permission-compare-item${compareRole.hoist ? " enabled" : ""}`}
+                      >
+                        <span aria-hidden="true">
+                          {compareRole.hoist ? "✓" : "·"}
                         </span>
-                        {group.permissions.map((permission) => (
-                          <span
-                            className={`role-permission-compare-item${(form.permissions & permission.bit) !== 0n ? " enabled" : ""}`}
-                            key={permission.label}
-                          >
-                            <span aria-hidden="true">
-                              {(form.permissions & permission.bit) !== 0n
-                                ? "✓"
-                                : "·"}
-                            </span>
-                            {permission.label}
+                        Mostrar aparte
+                      </span>
+                      <span
+                        className={`role-permission-compare-item${compareRole.mentionable ? " enabled" : ""}`}
+                      >
+                        <span aria-hidden="true">
+                          {compareRole.mentionable ? "✓" : "·"}
+                        </span>
+                        Se puede mencionar
+                      </span>
+                      {ROLE_PERMISSION_GROUPS.map((group) => (
+                        <div key={group.label}>
+                          <span className="role-permission-compare-group">
+                            {group.label}
                           </span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                    <div className="role-permission-compare-column">
-                    <strong>{compareRole.name}</strong>
-                    {ROLE_PERMISSION_GROUPS.map((group) => (
-                      <div key={group.label}>
-                        <span className="role-permission-compare-group">
-                          {group.label}
-                        </span>
-                        {group.permissions.map((permission) => {
-                          const comparePermissions = BigInt(
-                            compareRole.permissions || "0",
-                          );
-                          const enabled =
-                            (comparePermissions & permission.bit) !== 0n;
-                          return (
-                            <span
-                              className={`role-permission-compare-item${enabled ? " enabled" : ""}`}
-                              key={permission.label}
-                            >
-                              <span aria-hidden="true">
-                                {enabled ? "✓" : "·"}
+                          {group.permissions.map((permission) => {
+                            const comparePermissions = BigInt(
+                              compareRole.permissions || "0",
+                            );
+                            const enabled =
+                              (comparePermissions & permission.bit) !== 0n;
+                            return (
+                              <span
+                                className={`role-permission-compare-item${enabled ? " enabled" : ""}`}
+                                key={permission.label}
+                              >
+                                <span aria-hidden="true">
+                                  {enabled ? "✓" : "·"}
+                                </span>
+                                {permission.label}
                               </span>
-                              {permission.label}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ))}
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
