@@ -1599,12 +1599,12 @@ a:hover {
   gap: 12px;
 }
 
-.roster-class {
+.roster-role {
   display: grid;
   gap: 6px;
 }
 
-.roster-class-title {
+.roster-role-title {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1613,7 +1613,7 @@ a:hover {
   color: var(--text);
 }
 
-.roster-class-icon {
+.roster-role-icon {
   display: inline-flex;
   width: 20px;
   align-items: center;
@@ -1621,7 +1621,7 @@ a:hover {
   font-size: 1rem;
 }
 
-.roster-class-count {
+.roster-role-count {
   color: var(--muted);
   font-weight: 500;
 }

@@ -82,6 +82,7 @@ import {
   getGuildRolesDetailed,
   getGuildRoster,
   publishRaidLog,
+  ROLE_META,
   resetEventOccurrence,
   resolveEventRoles,
   saveMemberRosterProfile,
@@ -2043,7 +2044,7 @@ function RosterSheet({
     [game, specs],
   );
   const [className, setClassName] = useState(
-    profile?.game === "wow" ? profile.className : classes[0] ?? "",
+    profile?.game === "wow" ? profile.className : (classes[0] ?? ""),
   );
   const classSpecs = useMemo(
     () =>
@@ -2053,7 +2054,9 @@ function RosterSheet({
     [className, game, specs],
   );
   const [specName, setSpecName] = useState(
-    profile?.game === "wow" ? profile.specName : classSpecs[0]?.specName ?? "",
+    profile?.game === "wow"
+      ? profile.specName
+      : (classSpecs[0]?.specName ?? ""),
   );
   const [offSpecs, setOffSpecs] = useState<string[]>(
     profile?.game === "wow" ? profile.offSpecs : [],
@@ -2228,7 +2231,8 @@ function RosterSection({
 
   const query = search.trim().toLowerCase();
   const members = (roster?.members ?? []).filter(
-    (member) => member.rankKey === "raid" || (member.rankKey === null && member.profile),
+    (member) =>
+      member.rankKey === "raid" || (member.rankKey === null && member.profile),
   );
   const visible = query
     ? members.filter((member) =>
@@ -2351,25 +2355,40 @@ function RosterSection({
   }
 
   function renderMembers(rows: RosterMember[]) {
-    const byClass = new Map<string, RosterMember[]>();
+    const byRole = new Map<string, RosterMember[]>();
     for (const row of rows) {
-      const className = row.profile?.className ?? "";
-      byClass.set(className, [...(byClass.get(className) ?? []), row]);
+      const profile = row.profile;
+      const main = profile
+        ? specsByKey.get(
+            rosterSpecKey(profile.game, profile.className, profile.specName),
+          )
+        : undefined;
+      const role = main?.role ?? "unknown";
+      byRole.set(role, [...(byRole.get(role) ?? []), row]);
     }
-    return [...byClass.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([className, classRows]) => (
-        <div className="roster-class" key={className || "sin-ficha"}>
-          <span className="roster-class-title">
-            <span className="roster-class-icon" aria-hidden="true">
-              {classEmoji(className)}
+    const roleOrder = ["melee", "ranged", "healer", "tank", "unknown"];
+    return [...byRole.entries()]
+      .sort(
+        ([left], [right]) =>
+          roleOrder.indexOf(left) - roleOrder.indexOf(right),
+      )
+      .map(([role, roleRows]) => {
+        const meta = ROLE_META.find((entry) => entry.key === role);
+        const label =
+          role === "ranged" ? "Ranged" : meta?.label ?? "Sin rol";
+        return (
+          <div className="roster-role" key={role}>
+            <span className="roster-role-title">
+              <span className="roster-role-icon" aria-hidden="true">
+                {meta?.emoji ?? "❔"}
+              </span>
+              {label}
+              <span className="roster-role-count">{roleRows.length}</span>
             </span>
-            {className || "Sin ficha"}
-            <span className="roster-class-count">{classRows.length}</span>
-          </span>
-          {classRows.map((row) => renderMember(row))}
-        </div>
-      ));
+            {roleRows.map((row) => renderMember(row))}
+          </div>
+        );
+      });
   }
 
   return (
