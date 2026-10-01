@@ -4500,10 +4500,61 @@ const ROLE_PERMISSION_GROUPS: Array<{
   },
 ];
 
-// Máscara de los permisos que la tarjeta puede tocar.
-const ROLE_PERMISSION_MASK = ROLE_PERMISSION_GROUPS.flatMap((group) =>
-  group.permissions.map((permission) => permission.bit),
-).reduce((mask, bit) => mask | bit, 0n);
+const ROLE_COLOR_SWATCHES = [
+  "#f04444",
+  "#f97316",
+  "#f5c542",
+  "#35c985",
+  "#22b8cf",
+  "#4f8cff",
+  "#8b6cff",
+  "#e85aad",
+];
+
+function RoleColorControl({
+  label,
+  onChange,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div className="role-color-control">
+      <div className="role-color-palette" aria-label={label} role="group">
+        {ROLE_COLOR_SWATCHES.map((color) => (
+          <button
+            aria-label={`Usar color ${color}`}
+            className={`role-color-swatch-button${value.toLowerCase() === color ? " active" : ""}`}
+            key={color}
+            onClick={() => onChange(color)}
+            style={{ backgroundColor: color }}
+            title={color}
+            type="button"
+          />
+        ))}
+        <div className="role-color-custom" title="Elegir otro color">
+          <input
+            aria-label={`${label}: personalizado`}
+            className="role-color-native-input"
+            onChange={(event) => onChange(event.target.value)}
+            type="color"
+            value={value}
+          />
+          <span aria-hidden="true">+</span>
+        </div>
+      </div>
+      <input
+        aria-label={`${label}: HEX`}
+        className="input role-color-hex"
+        maxLength={7}
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+    </div>
+  );
+}
 
 function hexFromRoleColor(color?: number): string {
   return `#${((color ?? 0) & 0xffffff).toString(16).padStart(6, "0")}`;
@@ -4523,16 +4574,12 @@ function RolesCard({
 }) {
   const blankForm = {
     color: "#6aa8ff",
-    colorSecondary: "#ff8a5c",
-    gradient: false,
     hoist: false,
     mentionable: false,
     name: "",
     permissions: 0n,
-    positionBelowRoleId: "",
   };
   const [roles, setRoles] = useState<GuildRoleDetail[]>([]);
-  // Posición del rol más alto del bot: arriba de eso Discord rechaza mover.
   const [botTopPosition, setBotTopPosition] = useState(0);
   const [templates, setTemplates] = useState<RoleTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4542,7 +4589,6 @@ function RolesCard({
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkNames, setBulkNames] = useState("");
   const [bulkFrom, setBulkFrom] = useState("#6aa8ff");
-  const [bulkTo, setBulkTo] = useState("#ff8a5c");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(blankForm);
 
@@ -4590,15 +4636,10 @@ function RolesCard({
     setEditingId(mode === "edit" ? role.id : null);
     setForm({
       color: hexFromRoleColor(role.color),
-      colorSecondary: hexFromRoleColor(
-        role.secondaryColor ?? role.color ?? undefined,
-      ),
-      gradient: role.secondaryColor !== undefined,
       hoist: role.hoist,
       mentionable: role.mentionable,
       name: mode === "copy" ? `${role.name} (copia)` : role.name,
       permissions: BigInt(role.permissions || "0"),
-      positionBelowRoleId: mode === "copy" ? role.id : "",
     });
   }
 
@@ -4606,13 +4647,10 @@ function RolesCard({
     setEditingId(null);
     setForm({
       color: template.color,
-      colorSecondary: template.colorSecondary ?? "#ff8a5c",
-      gradient: Boolean(template.colorSecondary),
       hoist: template.hoist,
       mentionable: template.mentionable,
       name: template.label,
       permissions: BigInt(template.permissions || "0"),
-      positionBelowRoleId: "",
     });
   }
 
@@ -4624,7 +4662,6 @@ function RolesCard({
     }
     const payload = {
       color: form.color,
-      colorSecondary: form.gradient ? form.colorSecondary : undefined,
       hoist: form.hoist,
       mentionable: form.mentionable,
       name,
@@ -4641,16 +4678,8 @@ function RolesCard({
           pushToast(result.positionError, "error");
         }
       } else {
-        const result = await createGuildRole(guildId, {
-          ...payload,
-          positionBelowRoleId: form.positionBelowRoleId || undefined,
-        });
-        pushToast(
-          form.positionBelowRoleId
-            ? "Rol creado debajo del original."
-            : "Rol creado.",
-          "success",
-        );
+        const result = await createGuildRole(guildId, payload);
+        pushToast("Rol creado.", "success");
         if (result.positionError) {
           pushToast(result.positionError, "error");
         }
@@ -4677,7 +4706,7 @@ function RolesCard({
     try {
       const template = await saveRoleTemplate(guildId, {
         color: form.color,
-        colorSecondary: form.gradient ? form.colorSecondary : null,
+        colorSecondary: null,
         hoist: form.hoist,
         label,
         mentionable: form.mentionable,
@@ -4714,7 +4743,7 @@ function RolesCard({
     try {
       const result = await createGuildRolesBulk(guildId, {
         color: bulkFrom,
-        colorTo: bulkTo,
+        colorTo: bulkFrom,
         hoist: false,
         mentionable: false,
         names,
@@ -4791,9 +4820,6 @@ function RolesCard({
   const editable = (role: GuildRoleDetail): boolean =>
     !role.managed && (botTopPosition === 0 || role.position < botTopPosition);
 
-  // Permisos que el rol tiene y la tarjeta no muestra (quedan intactos).
-  const hiddenPermissions = form.permissions & ~ROLE_PERMISSION_MASK;
-
   return (
     <details open className="admin-card admin-card-acc admin-card--admin">
       <summary className="admin-card-header admin-acc-header">
@@ -4816,9 +4842,7 @@ function RolesCard({
                 <strong>
                   {editingId
                     ? `Editar ${roles.find((role) => role.id === editingId)?.name ?? "rol"}`
-                    : form.positionBelowRoleId
-                      ? "Copia nueva"
-                      : "Nuevo rol"}
+                    : "Nuevo rol"}
                 </strong>
                 {editingId || form.name ? (
                   <button
@@ -4848,125 +4872,16 @@ function RolesCard({
                 </label>
                 <label>
                   <span>Color</span>
-                  <div className="role-color-row">
-                    <div className="role-color-picker">
-                      <input
-                        aria-label="Elegir color del rol"
-                        className="role-color-input"
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            color: event.target.value,
-                          }))
-                        }
-                        type="color"
-                        value={form.color}
-                      />
-                      <span
-                        aria-hidden="true"
-                        className="role-color-swatch"
-                        style={{ backgroundColor: form.color }}
-                      />
-                      <span>Elegir color</span>
-                    </div>
-                    <input
-                      className="input role-color-hex"
-                      maxLength={7}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          color: event.target.value,
-                        }))
-                      }
-                      value={form.color}
-                    />
-                  </div>
-                </label>
-                {form.gradient ? (
-                  <label>
-                    <span>Segundo color (degradado)</span>
-                    <div className="role-color-row">
-                      <div className="role-color-picker">
-                        <input
-                          aria-label="Elegir segundo color del rol"
-                          className="role-color-input"
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              colorSecondary: event.target.value,
-                            }))
-                          }
-                          type="color"
-                          value={form.colorSecondary}
-                        />
-                        <span
-                          aria-hidden="true"
-                          className="role-color-swatch"
-                          style={{ backgroundColor: form.colorSecondary }}
-                        />
-                        <span>Elegir color</span>
-                      </div>
-                      <input
-                        className="input role-color-hex"
-                        maxLength={7}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            colorSecondary: event.target.value,
-                          }))
-                        }
-                        value={form.colorSecondary}
-                      />
-                    </div>
-                  </label>
-                ) : null}
-                <label>
-                  <span>Ubicación</span>
-                  <select
-                    className="select"
-                    disabled={Boolean(editingId)}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        positionBelowRoleId: event.target.value,
-                      }))
+                  <RoleColorControl
+                    label="Color del rol"
+                    onChange={(color) =>
+                      setForm((current) => ({ ...current, color }))
                     }
-                    value={form.positionBelowRoleId}
-                  >
-                    <option value="">Al fondo de la lista</option>
-                    {roles
-                      .filter((role) => editable(role))
-                      .map((role) => (
-                        <option key={role.id} value={role.id}>
-                          Debajo de {role.name}
-                        </option>
-                      ))}
-                  </select>
+                    value={form.color}
+                  />
                 </label>
               </div>
               <div className="role-toggle-row">
-                <label
-                  className={`module-toggle event-reminder-toggle${form.gradient ? " checked" : ""}`}
-                >
-                  <span className="module-toggle-text">
-                    <strong>Degradado</strong>
-                  </span>
-                  <span className="module-switch">
-                    <input
-                      type="checkbox"
-                      checked={form.gradient}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          gradient: event.target.checked,
-                        }))
-                      }
-                    />
-                    <span className="module-switch-track" aria-hidden="true">
-                      <span className="module-switch-thumb" />
-                    </span>
-                  </span>
-                </label>
                 <label
                   className={`module-toggle event-reminder-toggle${form.hoist ? " checked" : ""}`}
                 >
@@ -5046,13 +4961,6 @@ function RolesCard({
                     </div>
                   </div>
                 ))}
-                <p className="admin-card-hint">
-                  Los permisos que no están en esta lista quedan como estaban
-                  (no se pierden al guardar).
-                  {hiddenPermissions !== 0n
-                    ? " Este rol además tiene permisos avanzados que no se listan acá: se conservan."
-                    : ""}
-                </p>
               </div>
               <div className="role-editor-actions">
                 <button
@@ -5153,20 +5061,10 @@ function RolesCard({
                 <div className="role-bulk-colors">
                   <label>
                     <span>Color inicial</span>
-                    <input
-                      className="role-color-input"
-                      onChange={(event) => setBulkFrom(event.target.value)}
-                      type="color"
+                    <RoleColorControl
+                      label="Color de los roles"
+                      onChange={setBulkFrom}
                       value={bulkFrom}
-                    />
-                  </label>
-                  <label>
-                    <span>Color final</span>
-                    <input
-                      className="role-color-input"
-                      onChange={(event) => setBulkTo(event.target.value)}
-                      type="color"
-                      value={bulkTo}
                     />
                   </label>
                 </div>
@@ -5184,67 +5082,72 @@ function RolesCard({
               </div>
             </details>
 
-            <div className="role-list">
-              <span className="role-permission-group-title">
-                Roles del servidor ({roles.length})
-              </span>
-              {roles.map((role) => (
-                <div className="role-row" key={role.id}>
-                  <span
-                    className="role-color-dot"
-                    style={{
-                      background: role.secondaryColor
-                        ? `linear-gradient(90deg, ${hexFromRoleColor(role.color)}, ${hexFromRoleColor(role.secondaryColor)})`
-                        : hexFromRoleColor(role.color),
-                    }}
-                  />
-                  <span className="role-row-name">{role.name}</span>
-                  <span className="role-row-meta">
-                    {role.unicodeEmoji ? `${role.unicodeEmoji} · ` : ""}
-                    posición {role.position}
-                    {role.hoist ? " · aparte" : ""}
-                    {role.mentionable ? " · mencionable" : ""}
-                    {role.managed ? " · bot" : ""}
-                  </span>
-                  <span className="role-row-actions">
-                    <button
-                      className="ghost-button small"
-                      onClick={() => loadRole(role, "copy")}
-                      title="Crear una copia con el mismo color y permisos"
-                      type="button"
-                    >
-                      Duplicar
-                    </button>
-                    <button
-                      className="ghost-button small"
-                      disabled={!editable(role)}
-                      onClick={() => loadRole(role, "edit")}
-                      title={
-                        editable(role)
-                          ? "Editar nombre, color y permisos"
-                          : "Discord no deja tocar este rol"
-                      }
-                      type="button"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className="ghost-button small"
-                      disabled={!editable(role)}
-                      onClick={() => void removeRole(role)}
-                      title={
-                        editable(role)
-                          ? "Eliminar el rol"
-                          : "Discord no deja borrar este rol"
-                      }
-                      type="button"
-                    >
-                      🗑️
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
+            <details className="role-list-panel">
+              <summary className="role-list-summary">
+                <span>Roles del servidor</span>
+                <span className="role-list-summary-meta">
+                  {roles.length} roles <span aria-hidden="true">▸</span>
+                </span>
+              </summary>
+              <div className="role-list">
+                {roles.map((role) => (
+                  <div className="role-row" key={role.id}>
+                    <span
+                      className="role-color-dot"
+                      style={{
+                        background: role.secondaryColor
+                          ? `linear-gradient(90deg, ${hexFromRoleColor(role.color)}, ${hexFromRoleColor(role.secondaryColor)})`
+                          : hexFromRoleColor(role.color),
+                      }}
+                    />
+                    <span className="role-row-name">{role.name}</span>
+                    <span className="role-row-meta">
+                      {role.unicodeEmoji ? `${role.unicodeEmoji} · ` : ""}
+                      posición {role.position}
+                      {role.hoist ? " · aparte" : ""}
+                      {role.mentionable ? " · mencionable" : ""}
+                      {role.managed ? " · bot" : ""}
+                    </span>
+                    <span className="role-row-actions">
+                      <button
+                        className="ghost-button small"
+                        onClick={() => loadRole(role, "copy")}
+                        title="Crear una copia con el mismo color y permisos"
+                        type="button"
+                      >
+                        Duplicar
+                      </button>
+                      <button
+                        className="ghost-button small"
+                        disabled={!editable(role)}
+                        onClick={() => loadRole(role, "edit")}
+                        title={
+                          editable(role)
+                            ? "Editar nombre, color y permisos"
+                            : "Discord no deja tocar este rol"
+                        }
+                        type="button"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="ghost-button small"
+                        disabled={!editable(role)}
+                        onClick={() => void removeRole(role)}
+                        title={
+                          editable(role)
+                            ? "Eliminar el rol"
+                            : "Discord no deja borrar este rol"
+                        }
+                        type="button"
+                      >
+                        🗑️
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
           </>
         )}
       </div>

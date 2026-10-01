@@ -6171,55 +6171,67 @@ select.list-order {
   gap: 10px;
 }
 
-/* Color del rol: cuadradito nativo + hex editable a mano. */
-.role-color-row {
+.role-color-control {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 104px;
+  grid-template-columns: minmax(0, 1fr) 104px;
   align-items: center;
   gap: 8px;
 }
 
-.role-color-picker {
-  position: relative;
+.role-color-palette {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 12px 6px 8px;
-  border: 1px solid rgba(133, 156, 212, 0.28);
-  border-radius: 12px;
+  gap: 7px;
+  min-height: 42px;
+  padding: 5px 8px;
+  border: 1px solid rgba(133, 156, 212, 0.22);
+  border-radius: 13px;
   background: rgba(10, 16, 31, 0.72);
-  color: var(--text);
+}
+
+.role-color-swatch-button,
+.role-color-custom {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 2px solid transparent;
+  border-radius: 9px;
   cursor: pointer;
-  font-size: 0.86rem;
-  font-weight: 600;
   transition:
-    border-color 160ms ease,
-    background-color 160ms ease;
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.role-color-picker:hover {
-  border-color: rgba(106, 168, 255, 0.65);
-  background: rgba(16, 27, 50, 0.9);
+.role-color-swatch-button:hover,
+.role-color-swatch-button.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(106, 168, 255, 0.55);
+  transform: translateY(-1px);
 }
 
-.role-color-input {
+.role-color-custom {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.role-color-custom:hover {
+  border-color: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+}
+
+.role-color-native-input {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   opacity: 0;
   cursor: pointer;
-}
-
-.role-color-swatch {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  border-radius: 9px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.32),
-    0 3px 12px rgba(0, 0, 0, 0.24);
 }
 
 .role-color-hex {
@@ -6270,9 +6282,87 @@ select.list-order {
 
 /* La regla global `input { width: 100% }` rompe los checkboxes. */
 .role-permission-check input {
-  width: auto;
+  appearance: none;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
-  accent-color: var(--accent);
+  margin: 0;
+  border: 1px solid rgba(148, 172, 228, 0.42);
+  border-radius: 5px;
+  background: rgba(10, 16, 31, 0.72);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.role-permission-check input:hover {
+  border-color: rgba(106, 168, 255, 0.85);
+}
+
+.role-permission-check input:checked {
+  border-color: var(--accent);
+  background-color: var(--accent);
+  background-image: linear-gradient(
+    135deg,
+    transparent 42%,
+    #0b1020 42% 52%,
+    transparent 52%
+  );
+  box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.14);
+}
+
+.role-permission-check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.role-permission-check span {
+  cursor: pointer;
+}
+
+.role-list-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 14px;
+}
+
+.role-list-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.role-list-summary::-webkit-details-marker {
+  display: none;
+}
+
+.role-list-summary-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.role-list-panel[open] .role-list-summary-meta span {
+  transform: rotate(90deg);
+}
+
+.role-list-panel .role-list {
+  margin-top: 8px;
+}
+
+.role-permission-check input {
+  flex: 0 0 auto;
 }
 
 .role-editor-actions {
