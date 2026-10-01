@@ -1084,6 +1084,20 @@ export async function deleteSignup(
   return result.count > 0;
 }
 
+function archivedEventTitle(title: string, startsAt: Date): string {
+  const dateParts = new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Europe/Madrid",
+    weekday: "long",
+    year: "numeric",
+  }).formatToParts(startsAt);
+  const getPart = (type: string): string =>
+    dateParts.find((part) => part.type === type)?.value ?? "";
+
+  return `${title.trim()} - ${getPart("weekday").toUpperCase()} ${getPart("day")}/${getPart("month")}/${getPart("year")}`;
+}
+
 // Archiva la ocurrencia que terminó: crea una fila "completed" con los datos de
 // esa fecha y MUEVE las inscripciones, así el historial del admin conserva el
 // roster de cada ocurrencia aunque el molde de la serie siga avanzando.
@@ -1117,7 +1131,7 @@ export async function archiveEventOccurrence(
       startsAt: event.startsAt,
       status: "completed",
       tags: (event.tags ?? []) as Prisma.InputJsonValue,
-      title: event.title,
+      title: archivedEventTitle(event.title, event.startsAt),
       type: event.type,
     },
   });

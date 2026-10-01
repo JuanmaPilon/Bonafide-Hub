@@ -2188,7 +2188,11 @@ function RosterSheet({
           </div>
         ) : null}
         <div className="form-actions">
-          <button className="ghost-button" onClick={onClose} type="button">
+          <button
+            className="ghost-button cancel-button"
+            onClick={onClose}
+            type="button"
+          >
             Cancelar
           </button>
           <button
@@ -2890,7 +2894,11 @@ function ReportFormatModal({
           </button>
         </div>
         <div className="form-actions">
-          <button className="ghost-button" onClick={onClose} type="button">
+          <button
+            className="ghost-button cancel-button"
+            onClick={onClose}
+            type="button"
+          >
             Cancelar
           </button>
         </div>
@@ -4001,7 +4009,7 @@ function EventCard({
                 </button>
               )}
               <button
-                className="ghost-button"
+                className="ghost-button cancel-button"
                 disabled={staffSaving}
                 onClick={() => {
                   setStaffConfirmRemove(false);
@@ -4407,7 +4415,11 @@ function ConfirmModal({
         <h4>{dialog.title}</h4>
         <p className="confirm-message">{dialog.message}</p>
         <div className="form-actions">
-          <button className="ghost-button" onClick={onClose} type="button">
+          <button
+            className="ghost-button cancel-button"
+            onClick={onClose}
+            type="button"
+          >
             Cancelar
           </button>
           <button
@@ -4837,17 +4849,26 @@ function RolesCard({
                 <label>
                   <span>Color</span>
                   <div className="role-color-row">
-                    <input
-                      className="role-color-input"
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          color: event.target.value,
-                        }))
-                      }
-                      type="color"
-                      value={form.color}
-                    />
+                    <div className="role-color-picker">
+                      <input
+                        aria-label="Elegir color del rol"
+                        className="role-color-input"
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            color: event.target.value,
+                          }))
+                        }
+                        type="color"
+                        value={form.color}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="role-color-swatch"
+                        style={{ backgroundColor: form.color }}
+                      />
+                      <span>Elegir color</span>
+                    </div>
                     <input
                       className="input role-color-hex"
                       maxLength={7}
@@ -4865,17 +4886,26 @@ function RolesCard({
                   <label>
                     <span>Segundo color (degradado)</span>
                     <div className="role-color-row">
-                      <input
-                        className="role-color-input"
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            colorSecondary: event.target.value,
-                          }))
-                        }
-                        type="color"
-                        value={form.colorSecondary}
-                      />
+                      <div className="role-color-picker">
+                        <input
+                          aria-label="Elegir segundo color del rol"
+                          className="role-color-input"
+                          onChange={(event) =>
+                            setForm((current) => ({
+                              ...current,
+                              colorSecondary: event.target.value,
+                            }))
+                          }
+                          type="color"
+                          value={form.colorSecondary}
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="role-color-swatch"
+                          style={{ backgroundColor: form.colorSecondary }}
+                        />
+                        <span>Elegir color</span>
+                      </div>
                       <input
                         className="input role-color-hex"
                         maxLength={7}
@@ -11703,7 +11733,7 @@ function App() {
                             </button>
                             {specDraft.id ? (
                               <button
-                                className="ghost-button"
+                                className="ghost-button cancel-button"
                                 onClick={() =>
                                   setSpecDraft({
                                     className: "",
@@ -12563,7 +12593,11 @@ function App() {
                     <h2>Eventos</h2>
                     {canAccess("eventos") ? (
                       <button
-                        className="primary-button"
+                        className={
+                          showEventForm
+                            ? "ghost-button cancel-button"
+                            : "primary-button"
+                        }
                         onClick={() =>
                           showEventForm
                             ? handleCloseEventForm()
@@ -13268,7 +13302,7 @@ function App() {
                         </div>
                         <div className="event-form-actions">
                           <button
-                            className="ghost-button"
+                            className="ghost-button cancel-button"
                             onClick={handleCloseEventForm}
                             type="button"
                           >
@@ -13546,7 +13580,7 @@ function App() {
             </div>
             <div className="form-actions">
               <button
-                className="ghost-button"
+                className="ghost-button cancel-button"
                 onClick={() => setCommEditor(null)}
                 type="button"
               >
