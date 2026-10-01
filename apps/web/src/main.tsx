@@ -59,7 +59,6 @@ import {
   updateCommunication,
   updateDailyMessage,
   EVENT_TYPES,
-  classColor,
   classEmoji,
   createEvent,
   createEventSpec,
@@ -87,7 +86,6 @@ import {
   resolveEventRoles,
   saveMemberRosterProfile,
   saveMyRosterProfile,
-  saveRosterRanks,
   scanRaidLogs,
   updateEvent,
   updateGuildRole,
@@ -133,7 +131,6 @@ import {
   type RosterMember,
   type RosterProfile,
   type RosterProfileInput,
-  type RosterRank,
 } from "./api";
 import "./styles.css";
 
@@ -2007,19 +2004,6 @@ function EventRoleEmoji({
 // rol de Discord mapeado en el panel, y cada uno carga su ficha (clase, spec
 // actual y las off que domina). Las claves de la ficha son las del catálogo
 // RaidSpec, que es de donde salen los emojis.
-const ROSTER_RANK_EMOJI: Record<string, string> = {
-  bench: "🪑",
-  guild: "🏰",
-  raid: "🐉",
-  trial: "🧪",
-};
-
-// Los tanques van con los melee y los healers con los ranged: el roster se lee
-// como se arma el raid. El rol sale del catálogo (spec principal).
-function rosterColumn(role?: string): "melee" | "ranged" {
-  return role === "ranged" || role === "healer" ? "ranged" : "melee";
-}
-
 function rosterSpecKey(
   game: string,
   className: string,
@@ -2206,18 +2190,14 @@ function RosterSheet({
 }
 
 function RosterSection({
-  canEditRanks,
   canEditOthers,
   guildId,
-  guildRoles,
   meId,
   notify,
   onOpenProfile,
 }: {
   canEditOthers: boolean;
-  canEditRanks: boolean;
   guildId: string;
-  guildRoles: GuildRole[];
   meId?: string;
   notify: (message: string, kind: "error" | "success") => void;
   onOpenProfile: (userId: string) => void;
@@ -2226,15 +2206,11 @@ function RosterSection({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
-  const [openRanks, setOpenRanks] = useState<string[]>(["raid"]);
   const [sheetFor, setSheetFor] = useState<{
     displayName: string;
     userId: string;
   } | null>(null);
   const [savingSheet, setSavingSheet] = useState(false);
-  const [ranksOpen, setRanksOpen] = useState(false);
-  const [rankDraft, setRankDraft] = useState<Record<string, string>>({});
-  const [savingRanks, setSavingRanks] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2246,11 +2222,6 @@ function RosterSection({
           return;
         }
         setRoster(data);
-        setRankDraft(
-          Object.fromEntries(
-            data.ranks.map((rank) => [rank.key, rank.roleId ?? ""]),
-          ),
-        );
       })
       .catch(() => {
         if (!cancelled) {
@@ -2276,7 +2247,9 @@ function RosterSection({
   }, [roster]);
 
   const query = search.trim().toLowerCase();
-  const members = roster?.members ?? [];
+  const members = (roster?.members ?? []).filter(
+    (member) => member.rankKey === "raid",
+  );
   const visible = query
     ? members.filter((member) =>
         `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")}`
@@ -2284,17 +2257,6 @@ function RosterSection({
           .includes(query),
       )
     : members;
-  const unranked = visible.filter((member) => !member.rankKey);
-
-  function memberRole(member: RosterMember): string | undefined {
-    const profile = member.profile;
-    if (!profile) {
-      return undefined;
-    }
-    return specsByKey.get(
-      rosterSpecKey(profile.game, profile.className, profile.specName),
-    )?.role;
-  }
 
   async function saveSheet(input: RosterProfileInput): Promise<void> {
     const target = sheetFor;
@@ -2328,26 +2290,6 @@ function RosterSection({
       );
     } finally {
       setSavingSheet(false);
-    }
-  }
-
-  async function saveRanks(): Promise<void> {
-    setSavingRanks(true);
-    try {
-      await saveRosterRanks(guildId, rankDraft);
-      // Cambian los rangos de todos: se recarga la lista entera.
-      setRoster(await getGuildRoster(guildId));
-      setRanksOpen(false);
-      notify("Rangos del roster guardados.", "success");
-    } catch (error) {
-      notify(
-        error instanceof Error
-          ? error.message
-          : "No se pudieron guardar los rangos.",
-        "error",
-      );
-    } finally {
-      setSavingRanks(false);
     }
   }
 
@@ -2413,6 +2355,7 @@ function RosterSection({
                     <DiscordEmojiImage
                       animated={spec.animated}
                       emojiId={spec.emojiId}
+                      fallback={classEmoji(profile.className)}
                       name={off}
                       size={14}
                     />
@@ -2439,15 +2382,11 @@ function RosterSection({
         <div
           className="roster-class"
           key={className || "sin-ficha"}
-          style={
-            {
-              "--class-color":
-                classColor(className) ?? "rgba(134, 158, 214, 0.45)",
-            } as CSSProperties
-          }
         >
           <span className="roster-class-title">
-            <span className="roster-class-dot" aria-hidden="true" />
+            <span className="roster-class-icon" aria-hidden="true">
+              {classEmoji(className)}
+            </span>
             {className || "Sin ficha"}
             <span className="roster-class-count">{classRows.length}</span>
           </span>
@@ -2457,14 +2396,7 @@ function RosterSection({
   }
 
   return (
-    <details className="roster-panel" open>
-      <summary className="roster-panel-head">
-        <h3>Roster</h3>
-        <span className="admin-acc-chevron" aria-hidden="true">
-          ▸
-        </span>
-      </summary>
-      <div className="roster-panel-body">
+    <div className="roster-view">
         <div className="roster-toolbar">
           <button
             className="primary-button"
@@ -2483,7 +2415,9 @@ function RosterSection({
             type="search"
             value={search}
           />
-          <span className="roster-total">{visible.length} en el roster</span>
+          <span className="roster-total">
+            {visible.length} jugador{visible.length === 1 ? "" : "es"} activos
+          </span>
         </div>
 
         {loading ? (
@@ -2493,119 +2427,16 @@ function RosterSection({
         ) : (
           <>
             <div className="roster-list">
-              {(roster?.ranks ?? []).map((rank) => {
-                const rows = visible.filter(
-                  (member) => member.rankKey === rank.key,
-                );
-                const melee = rows.filter(
-                  (member) => rosterColumn(memberRole(member)) === "melee",
-                );
-                const ranged = rows.filter(
-                  (member) => rosterColumn(memberRole(member)) === "ranged",
-                );
-                return (
-                  <details
-                    className="roster-rank"
-                    key={rank.key}
-                    onToggle={(event) => {
-                      const isOpen = event.currentTarget.open;
-                      setOpenRanks((current) =>
-                        isOpen
-                          ? [...new Set([...current, rank.key])]
-                          : current.filter((key) => key !== rank.key),
-                      );
-                    }}
-                    open={openRanks.includes(rank.key)}
-                  >
-                    <summary className="roster-rank-head">
-                      <strong>
-                        {ROSTER_RANK_EMOJI[rank.key] ?? "•"} {rank.label}
-                      </strong>
-                      <span className="roster-count">{rows.length}</span>
-                      {rank.roleId ? null : (
-                        <span className="roster-rank-off">
-                          Sin rol asignado
-                        </span>
-                      )}
-                    </summary>
-                    <div className="roster-rank-body">
-                      <div className="roster-split">
-                        <div className="roster-col">
-                          <span className="roster-col-title">
-                            ⚔️ Melee ({melee.length})
-                          </span>
-                          {renderMembers(melee)}
-                        </div>
-                        <div className="roster-col">
-                          <span className="roster-col-title">
-                            🏹 Range ({ranged.length})
-                          </span>
-                          {renderMembers(ranged)}
-                        </div>
-                      </div>
-                    </div>
-                  </details>
-                );
-              })}
-
-              {unranked.length > 0 ? (
-                <div className="roster-col">
-                  <span className="roster-col-title">
-                    Sin rango ({unranked.length})
-                  </span>
-                  {renderMembers(unranked)}
-                </div>
-              ) : null}
+              {visible.length > 0 ? (
+                renderMembers(visible)
+              ) : (
+                <p className="muted-text">
+                  No hay jugadores activos del core para mostrar.
+                </p>
+              )}
             </div>
-
-            {canEditRanks ? (
-              <details
-                className="roster-ranks"
-                onToggle={(event) => setRanksOpen(event.currentTarget.open)}
-                open={ranksOpen}
-              >
-                <summary className="roster-ranks-head">
-                  ⚙️ Rangos: qué rol de Discord llena cada grupo
-                </summary>
-                <div className="roster-ranks-body">
-                  {(roster?.ranks ?? []).map((rank) => (
-                    <label className="roster-rank-field" key={rank.key}>
-                      <span>
-                        {ROSTER_RANK_EMOJI[rank.key] ?? "•"} {rank.label}
-                      </span>
-                      <select
-                        className="select"
-                        onChange={(event) =>
-                          setRankDraft((current) => ({
-                            ...current,
-                            [rank.key]: event.target.value,
-                          }))
-                        }
-                        value={rankDraft[rank.key] ?? ""}
-                      >
-                        <option value="">Sin rol</option>
-                        {guildRoles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
-                  <button
-                    className="primary-button"
-                    disabled={savingRanks}
-                    onClick={() => void saveRanks()}
-                    type="button"
-                  >
-                    {savingRanks ? "Guardando…" : "Guardar rangos"}
-                  </button>
-                </div>
-              </details>
-            ) : null}
           </>
         )}
-      </div>
 
       {sheetFor ? (
         <RosterSheet
@@ -2621,7 +2452,7 @@ function RosterSection({
           specs={roster?.specs ?? []}
         />
       ) : null}
-    </details>
+    </div>
   );
 }
 
@@ -4854,7 +4685,10 @@ function RolesCard({
                       type="button"
                     >
                       <span>{form.name.trim() || "Nuevo rol"}</span>
-                      <span aria-hidden="true" className="role-compare-apply-arrow">
+                      <span
+                        aria-hidden="true"
+                        className="role-compare-apply-arrow"
+                      >
                         ←
                       </span>
                       <strong>{compareRole.name}</strong>
@@ -9192,7 +9026,9 @@ function App() {
                     >
                       {activeTab === "admin"
                         ? (activeAdminSection?.label ?? panelTitle(activeTab))
-                        : panelTitle(activeTab)}
+                        : activeTab === "raids" && sectionFor("raids") === "roster"
+                          ? "Roster"
+                          : panelTitle(activeTab)}
                     </h2>
                   </div>
                   {activeTab === "admin" && activeAdminSection?.tier ? (
@@ -11705,9 +11541,7 @@ function App() {
                   {sectionFor("raids") === "roster" && selectedGuildId ? (
                     <RosterSection
                       canEditOthers={canAccess("raids")}
-                      canEditRanks={canAccess("raids")}
                       guildId={selectedGuildId}
-                      guildRoles={guildRoles}
                       meId={me?.id}
                       notify={pushToast}
                       onOpenProfile={openMemberProfile}

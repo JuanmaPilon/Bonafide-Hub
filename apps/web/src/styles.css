@@ -1576,44 +1576,9 @@ a:hover {
 }
 
 /* ── Roster de raids ─────────────────────────────────────────────── */
-.roster-panel {
+.roster-view {
   display: grid;
   gap: 14px;
-  padding: 20px;
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  background: var(--panel);
-}
-
-.roster-panel-head {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-}
-
-.roster-panel-head::-webkit-details-marker,
-.roster-rank-head::-webkit-details-marker,
-.roster-ranks-head::-webkit-details-marker {
-  display: none;
-}
-
-.roster-panel-head h3 {
-  margin: 0;
-}
-
-.roster-panel[open] .admin-acc-chevron {
-  transform: rotate(90deg);
-}
-
-.roster-panel-body {
-  display: grid;
-  gap: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--panel-border);
 }
 
 .roster-toolbar {
@@ -1634,70 +1599,6 @@ a:hover {
   gap: 12px;
 }
 
-.roster-rank {
-  border: 1px solid rgba(134, 158, 214, 0.18);
-  border-radius: 14px;
-  background: rgba(12, 19, 37, 0.35);
-}
-
-.roster-rank-head {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-}
-
-.roster-count {
-  border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.3);
-  color: var(--muted);
-  font-size: 0.75rem;
-  padding: 2px 9px;
-}
-
-.roster-rank-off {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.roster-rank-body {
-  display: grid;
-  gap: 12px;
-  padding: 0 14px 14px;
-}
-
-.roster-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-@media (max-width: 820px) {
-  .roster-split {
-    grid-template-columns: 1fr;
-  }
-}
-
-.roster-col {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(134, 158, 214, 0.14);
-  background: rgba(9, 15, 30, 0.45);
-}
-
-.roster-col-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 .roster-class {
   display: grid;
   gap: 6px;
@@ -1712,11 +1613,12 @@ a:hover {
   color: var(--text);
 }
 
-.roster-class-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--class-color);
+.roster-class-icon {
+  display: inline-flex;
+  width: 20px;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
 }
 
 .roster-class-count {
@@ -1794,34 +1696,6 @@ a:hover {
   opacity: 1;
 }
 
-.roster-ranks {
-  border-top: 1px solid var(--panel-border);
-  padding-top: 12px;
-}
-
-.roster-ranks-head {
-  cursor: pointer;
-  list-style: none;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.roster-ranks-body {
-  display: grid;
-  gap: 10px;
-  justify-items: start;
-  padding-top: 12px;
-}
-
-.roster-rank-field {
-  display: grid;
-  grid-template-columns: 180px minmax(200px, 320px);
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
 .roster-sheet {
   max-width: 520px;
 }
@@ -1873,12 +1747,6 @@ a:hover {
 .roster-off-chip--on {
   border-color: #35b96f;
   background: rgba(53, 185, 111, 0.18);
-}
-
-:root[data-theme="light"] .roster-rank,
-:root[data-theme="light"] .roster-col {
-  background: rgba(223, 233, 246, 0.55);
-  border-color: rgba(60, 85, 130, 0.18);
 }
 
 :root[data-theme="light"] .roster-member,
