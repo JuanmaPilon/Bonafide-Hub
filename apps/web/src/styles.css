@@ -2381,6 +2381,60 @@ a:hover {
   margin-top: 0;
 }
 
+/* Podio: la escala baja como los rangos de LoL — diamante, platino, oro,
+   plata y bronce. Cada puesto define su color (--podium-c) y el mismo en
+   canales (--podium-rgb) para las transparencias. */
+:root {
+  --podium-1: #5bc0f8;
+  --podium-1-rgb: 91, 192, 248;
+  --podium-2: #43c6a0;
+  --podium-2-rgb: 67, 198, 160;
+  --podium-3: #ffd700;
+  --podium-3-rgb: 255, 215, 0;
+  --podium-4: #c0c0c0;
+  --podium-4-rgb: 192, 192, 192;
+  --podium-5: #cd7f32;
+  --podium-5-rgb: 205, 127, 50;
+}
+
+:root[data-theme="light"] {
+  --podium-1: #1a6fa8;
+  --podium-1-rgb: 26, 111, 168;
+  --podium-2: #0f7a63;
+  --podium-2-rgb: 15, 122, 99;
+  --podium-3: #a67905;
+  --podium-3-rgb: 166, 121, 5;
+  --podium-4: #5f6b78;
+  --podium-4-rgb: 95, 107, 120;
+  --podium-5: #96511f;
+  --podium-5-rgb: 150, 81, 31;
+}
+
+.podium-place-1 {
+  --podium-c: var(--podium-1);
+  --podium-rgb: var(--podium-1-rgb);
+}
+
+.podium-place-2 {
+  --podium-c: var(--podium-2);
+  --podium-rgb: var(--podium-2-rgb);
+}
+
+.podium-place-3 {
+  --podium-c: var(--podium-3);
+  --podium-rgb: var(--podium-3-rgb);
+}
+
+.podium-place-4 {
+  --podium-c: var(--podium-4);
+  --podium-rgb: var(--podium-4-rgb);
+}
+
+.podium-place-5 {
+  --podium-c: var(--podium-5);
+  --podium-rgb: var(--podium-5-rgb);
+}
+
 .podium {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2395,74 +2449,27 @@ a:hover {
   padding: 16px 10px;
   border-radius: 16px;
   background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
+  border: 1px solid rgba(var(--podium-rgb), 0.5);
+  box-shadow: 0 0 20px rgba(var(--podium-rgb), 0.16);
   text-align: center;
 }
 
-.podium-place-1 {
-  border-color: rgba(255, 215, 0, 0.55);
-  box-shadow: 0 0 22px rgba(255, 215, 0, 0.18);
-}
-
-.podium-place-2 {
-  border-color: rgba(192, 192, 192, 0.45);
-  box-shadow: 0 0 18px rgba(192, 192, 192, 0.12);
-}
-
-.podium-place-3 {
-  border-color: rgba(205, 127, 50, 0.5);
-  box-shadow: 0 0 18px rgba(205, 127, 50, 0.14);
-}
-
-.podium-place-4 {
-  border-color: rgba(154, 163, 173, 0.5);
-  box-shadow: 0 0 16px rgba(154, 163, 173, 0.12);
-}
-
-.podium-place-5 {
-  border-color: rgba(184, 115, 51, 0.5);
-  box-shadow: 0 0 16px rgba(184, 115, 51, 0.12);
-}
-
 .podium-rank {
+  color: var(--podium-c);
   font-size: 1.4rem;
   font-weight: 800;
   line-height: 1;
+  text-shadow:
+    0 0 8px rgba(var(--podium-rgb), 0.6),
+    0 0 18px rgba(var(--podium-rgb), 0.3);
 }
 
-.podium-place-1 .podium-rank {
-  color: #ffd700;
-  text-shadow:
-    0 0 8px rgba(255, 215, 0, 0.7),
-    0 0 18px rgba(255, 215, 0, 0.35);
+:root[data-theme="light"] .podium-item {
+  box-shadow: 0 0 0 1px rgba(var(--podium-rgb), 0.5);
 }
 
-.podium-place-2 .podium-rank {
-  color: #c0c0c0;
-  text-shadow:
-    0 0 8px rgba(192, 192, 192, 0.6),
-    0 0 18px rgba(192, 192, 192, 0.3);
-}
-
-.podium-place-3 .podium-rank {
-  color: #cd7f32;
-  text-shadow:
-    0 0 8px rgba(205, 127, 50, 0.65),
-    0 0 18px rgba(205, 127, 50, 0.3);
-}
-
-.podium-place-4 .podium-rank {
-  color: #9aa3ad;
-  text-shadow:
-    0 0 8px rgba(154, 163, 173, 0.65),
-    0 0 18px rgba(154, 163, 173, 0.3);
-}
-
-.podium-place-5 .podium-rank {
-  color: #b87333;
-  text-shadow:
-    0 0 8px rgba(184, 115, 51, 0.65),
-    0 0 18px rgba(184, 115, 51, 0.3);
+:root[data-theme="light"] .podium-rank {
+  text-shadow: none;
 }
 
 .podium-avatar,
@@ -6969,51 +6976,8 @@ select.list-order {
   filter: drop-shadow(0 1px 1px rgba(28, 45, 80, 0.22));
 }
 
-/* Podio: metales más oscuros para que contrasten sobre blanco y sin glow */
-:root[data-theme="light"] .podium-place-1 {
-  box-shadow: 0 0 0 1px rgba(210, 160, 0, 0.55);
-}
-
-:root[data-theme="light"] .podium-place-2 {
-  box-shadow: 0 0 0 1px rgba(120, 132, 148, 0.45);
-}
-
-:root[data-theme="light"] .podium-place-3 {
-  box-shadow: 0 0 0 1px rgba(176, 98, 45, 0.45);
-}
-
-:root[data-theme="light"] .podium-place-4 {
-  box-shadow: 0 0 0 1px rgba(110, 122, 138, 0.4);
-}
-
-:root[data-theme="light"] .podium-place-5 {
-  box-shadow: 0 0 0 1px rgba(150, 92, 34, 0.45);
-}
-
-:root[data-theme="light"] .podium-place-1 .podium-rank {
-  color: #a67905;
-  text-shadow: none;
-}
-
-:root[data-theme="light"] .podium-place-2 .podium-rank {
-  color: #5f6b78;
-  text-shadow: none;
-}
-
-:root[data-theme="light"] .podium-place-3 .podium-rank {
-  color: #96511f;
-  text-shadow: none;
-}
-
-:root[data-theme="light"] .podium-place-4 .podium-rank {
-  color: #59636f;
-  text-shadow: none;
-}
-
-:root[data-theme="light"] .podium-place-5 .podium-rank {
-  color: #8a4c14;
-  text-shadow: none;
-}
+/* Podio: los colores del tema claro y el "sin glow" viven con las variables
+   del podio (arriba, junto a las reglas .podium-*). */
 
 /* Barra superior */
 :root[data-theme="light"] .topbar {
