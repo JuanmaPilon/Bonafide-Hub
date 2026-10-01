@@ -221,6 +221,7 @@ const HUB_MODULES: Array<{
 // (y la clase admin-card--*) de esa tarjeta. Hoy: comunicados/eventos/raids →
 // Sub Officer; daily/karuta → Officer; config/xp → Admin.
 type StaffTier = "admin" | "officer" | "subofficer";
+type AccessTier = "owner" | StaffTier;
 
 const STAFF_TIERS: Record<
   StaffTier,
@@ -4185,7 +4186,10 @@ function userAvatarUrl(user: {
 // ofrece en un submenú al pasar el mouse. Una pestaña sin entrada acá es una
 // sola página.
 const TAB_SECTIONS: Partial<
-  Record<HubTab, Array<{ key: string; label: string; module?: string }>>
+  Record<
+    HubTab,
+    Array<{ key: string; label: string; module?: string; tier?: AccessTier }>
+  >
 > = {
   raids: [
     { key: "roster", label: "Roster" },
@@ -4197,18 +4201,48 @@ const TAB_SECTIONS: Partial<
     { key: "guia", label: "Comandos" },
   ],
   admin: [
-    { key: "config", label: "Configuraciones", module: "config" },
-    { key: "karuta", label: "Karuta", module: "karuta" },
-    { key: "modulos", label: "Módulos", module: "config" },
-    { key: "roles", label: "Roles", module: "config" },
-    { key: "permisos", label: "Permisos", module: "config" },
-    { key: "comunicados", label: "Comunicados", module: "comunicados" },
-    { key: "karpindomo", label: "Karpindomo", module: "daily" },
-    { key: "logs", label: "Logs", module: "raids" },
-    { key: "xp", label: "XP", module: "xp" },
-    { key: "registros", label: "Registros", module: "config" },
-    { key: "eventos", label: "Eventos", module: "config" },
-    { key: "historial", label: "Historial", module: "eventos" },
+    {
+      key: "config",
+      label: "Configuraciones",
+      module: "config",
+      tier: "admin",
+    },
+    { key: "karuta", label: "Karuta", module: "karuta", tier: "officer" },
+    { key: "modulos", label: "Módulos", module: "config", tier: "owner" },
+    { key: "roles", label: "Roles", module: "config", tier: "admin" },
+    {
+      key: "permisos",
+      label: "Permisos",
+      module: "config",
+      tier: "owner",
+    },
+    {
+      key: "comunicados",
+      label: "Comunicados",
+      module: "comunicados",
+      tier: "subofficer",
+    },
+    {
+      key: "karpindomo",
+      label: "Karpindomo",
+      module: "daily",
+      tier: "officer",
+    },
+    { key: "logs", label: "Logs", module: "raids", tier: "subofficer" },
+    { key: "xp", label: "XP", module: "xp", tier: "admin" },
+    {
+      key: "registros",
+      label: "Registros",
+      module: "config",
+      tier: "owner",
+    },
+    { key: "eventos", label: "Eventos", module: "config", tier: "admin" },
+    {
+      key: "historial",
+      label: "Historial",
+      module: "eventos",
+      tier: "subofficer",
+    },
   ],
 };
 
@@ -9153,17 +9187,14 @@ function App() {
               const visibleSections =
                 tab === "admin"
                   ? sections?.filter(
-                      (section) =>
-                        !section.module || canAccess(section.module),
+                      (section) => !section.module || canAccess(section.module),
                     )
                   : sections;
               return (
                 <div className="nav-item" key={tab}>
                   <button
                     className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                    onClick={
-                      sections ? undefined : () => setActiveTab(tab)
-                    }
+                    onClick={sections ? undefined : () => setActiveTab(tab)}
                     type="button"
                   >
                     {tabLabel(tab)}
@@ -9185,6 +9216,16 @@ function App() {
                           type="button"
                         >
                           {section.label}
+                          {tab === "admin" && section.tier ? (
+                            <span
+                              className={`admin-nav-tier tier-${section.tier}`}
+                            >
+                              {section.tier === "subofficer"
+                                ? "Sub Officer"
+                                : section.tier[0].toUpperCase() +
+                                  section.tier.slice(1)}
+                            </span>
+                          ) : null}
                         </button>
                       ))}
                     </div>
@@ -9446,7 +9487,7 @@ function App() {
               ) : null}
 
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
-                <div className="admin-card-stack">
+                <div className="admin-page-stack">
                   {sectionFor("admin") === "config" && canAccess("config") ? (
                     <details
                       className="admin-card admin-card-acc admin-card--admin"

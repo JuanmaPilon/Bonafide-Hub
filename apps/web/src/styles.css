@@ -334,6 +334,10 @@ a:hover {
 }
 
 .nav-sublink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -343,6 +347,36 @@ a:hover {
   font-size: 0.88rem;
   padding: 8px 12px;
   text-align: left;
+}
+
+.admin-nav-tier {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.admin-nav-tier.tier-owner {
+  color: var(--tier-owner-text);
+  background: rgba(var(--tier-owner-rgb), 0.14);
+}
+
+.admin-nav-tier.tier-admin {
+  color: var(--tier-admin-text);
+  background: rgba(var(--tier-admin-rgb), 0.14);
+}
+
+.admin-nav-tier.tier-officer {
+  color: var(--tier-officer-text);
+  background: rgba(var(--tier-officer-rgb), 0.14);
+}
+
+.admin-nav-tier.tier-subofficer {
+  color: var(--tier-subofficer-text);
+  background: rgba(var(--tier-subofficer-rgb), 0.14);
 }
 
 .nav-sublink:hover {
@@ -930,6 +964,44 @@ a:hover {
 .admin-card-stack {
   display: flex;
   flex-direction: column;
+}
+
+/* Admin ya está dividido por rutas: cada sección ocupa la página como el
+   resto de los módulos. Los acordeones internos siguen conservándose. */
+.admin-page-stack {
+  display: block;
+}
+
+.admin-page-stack > .admin-card {
+  display: grid;
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.admin-page-stack > .admin-card-acc > .admin-acc-header {
+  padding: 0 0 16px;
+  pointer-events: none;
+  cursor: default;
+}
+
+.admin-page-stack > .admin-card-acc > .admin-acc-header .admin-acc-chevron {
+  display: none;
+}
+
+.admin-page-stack > .admin-card > .admin-card-body {
+  display: grid;
+  padding: 0;
+}
+
+.admin-page-stack > .admin-card > .admin-card-footer {
+  margin-top: 18px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--panel-border);
+  background: transparent;
 }
 
 /* Colores de tarjetas del Admin por rango: los DOS colores del rol del rango
