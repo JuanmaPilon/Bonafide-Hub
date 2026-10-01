@@ -6293,6 +6293,53 @@ select.list-order {
   cursor: pointer;
 }
 
+.role-controls-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.role-option-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.role-option-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.role-option-check input {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid rgba(148, 172, 228, 0.42);
+  border-radius: 5px;
+  background: rgba(10, 16, 31, 0.72);
+  cursor: pointer;
+}
+
+.role-option-check input:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.14);
+}
+
+.role-option-check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .role-list-panel {
   margin-top: 18px;
   border-top: 1px solid var(--panel-border);
@@ -6412,9 +6459,17 @@ select.list-order {
 
 @media (max-width: 680px) {
   .role-color-control,
-  .role-compare-toolbar,
   .role-permission-compare {
     grid-template-columns: 1fr;
+  }
+
+  .role-controls-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .role-compare-toolbar {
+    width: 100%;
   }
 }
 

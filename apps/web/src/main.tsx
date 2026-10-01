@@ -4863,16 +4863,10 @@ function RolesCard({
                   />
                 </label>
               </div>
-              <div className="role-toggle-row">
-                <label
-                  className={`module-toggle event-reminder-toggle${form.hoist ? " checked" : ""}`}
-                >
-                  <span className="module-toggle-text">
-                    <strong>Mostrar aparte</strong>
-                  </span>
-                  <span className="module-switch">
+              <div className="role-controls-row">
+                <div className="role-option-list">
+                  <label className="role-option-check">
                     <input
-                      type="checkbox"
                       checked={form.hoist}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -4880,21 +4874,12 @@ function RolesCard({
                           hoist: event.target.checked,
                         }))
                       }
-                    />
-                    <span className="module-switch-track" aria-hidden="true">
-                      <span className="module-switch-thumb" />
-                    </span>
-                  </span>
-                </label>
-                <label
-                  className={`module-toggle event-reminder-toggle${form.mentionable ? " checked" : ""}`}
-                >
-                  <span className="module-toggle-text">
-                    <strong>Se puede mencionar</strong>
-                  </span>
-                  <span className="module-switch">
-                    <input
                       type="checkbox"
+                    />
+                    <span>Mostrar aparte</span>
+                  </label>
+                  <label className="role-option-check">
+                    <input
                       checked={form.mentionable}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -4902,35 +4887,36 @@ function RolesCard({
                           mentionable: event.target.checked,
                         }))
                       }
+                      type="checkbox"
                     />
-                    <span className="module-switch-track" aria-hidden="true">
-                      <span className="module-switch-thumb" />
-                    </span>
-                  </span>
-                </label>
-              </div>
-              {roles.length > 0 ? (
-                <div className="role-compare-toolbar">
-                  <label htmlFor="role-permission-compare">
-                    Comparar permisos
+                    <span>Se puede mencionar</span>
                   </label>
-                  <select
-                    className="select"
-                    id="role-permission-compare"
-                    onChange={(event) => setCompareRoleId(event.target.value)}
-                    value={compareRoleId}
-                  >
-                    <option value="">Seleccionar otro rol</option>
-                    {roles
-                      .filter((role) => role.id !== editingId)
-                      .map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.name}
-                        </option>
-                      ))}
-                  </select>
                 </div>
-              ) : null}
+                {roles.length > 0 ? (
+                  <div className="role-compare-toolbar">
+                    <label htmlFor="role-permission-compare">
+                      Comparar permisos
+                    </label>
+                    <select
+                      className="select"
+                      id="role-permission-compare"
+                      onChange={(event) =>
+                        setCompareRoleId(event.target.value)
+                      }
+                      value={compareRoleId}
+                    >
+                      <option value="">Seleccionar otro rol</option>
+                      {roles
+                        .filter((role) => role.id !== editingId)
+                        .map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
               <div className="role-permissions">
                 {ROLE_PERMISSION_GROUPS.map((group) => (
                   <div className="role-permission-group" key={group.label}>
