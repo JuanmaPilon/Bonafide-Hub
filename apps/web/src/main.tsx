@@ -367,18 +367,34 @@ function isModuleEnabled(config: GuildConfig, moduleKey: string): boolean {
 
 type KarutaSection = "raras" | "coleccion" | "guia";
 
-// Slugs de URL para cada sección de Karuta.
+// Slugs de URL de las páginas de Karuta (se mantienen para no romper los
+// enlaces que ya se compartieron).
 const KARUTA_SECTION_SLUGS: Record<KarutaSection, string> = {
   raras: "raras",
   coleccion: "coleccion",
   guia: "guia-de-comandos",
 };
 
-function karutaSectionFromSlug(slug: string): KarutaSection | null {
-  const entry = Object.entries(KARUTA_SECTION_SLUGS).find(
-    ([, value]) => value === slug,
+// Slug de URL de una sub-página. Por defecto es la clave de la sección
+// (#/raids/roster, #/raids/logs).
+function sectionSlug(tab: HubTab, key: string): string {
+  if (tab === "karuta") {
+    return KARUTA_SECTION_SLUGS[key as KarutaSection] ?? key;
+  }
+  return key;
+}
+
+// Clave de la sección a partir del slug de la URL (lo que va después de la
+// pestaña).
+function sectionFromSlug(tab: HubTab, slug: string): string | null {
+  const sections = TAB_SECTIONS[tab];
+  if (!sections) {
+    return null;
+  }
+  return (
+    sections.find((section) => sectionSlug(tab, section.key) === slug)?.key ??
+    null
   );
-  return entry ? (entry[0] as KarutaSection) : null;
 }
 
 // Convierte un título a slug de URL (p. ej. "Sistema de Loot y Addons" →
@@ -407,11 +423,12 @@ function downloadCsvFile(name: string, content: string): void {
 }
 
 // Parsea el hash:
-//   #/karuta/raras → tab "karuta", karutaSection "raras"
+//   #/raids/logs → tab "raids" + sección "logs"
+//   #/karuta/guia-de-comandos → tab "karuta" + sección "guia"
 //   #/comunicados/sistema-de-loot-y-addons → tab "comunicados" + slug
 function parseLocationHash(): {
+  section: string | null;
   tab: HubTab;
-  karutaSection: KarutaSection;
   comunicadoSlug: string | null;
 } {
   const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
@@ -419,12 +436,9 @@ function parseLocationHash(): {
   const tab = (VALID_TABS as string[]).includes(parts[0])
     ? (parts[0] as HubTab)
     : "home";
-  const karutaSection =
-    tab === "karuta" && parts[1]
-      ? (karutaSectionFromSlug(parts[1]) ?? "raras")
-      : "raras";
+  const section = parts[1] ? sectionFromSlug(tab, parts[1]) : null;
   const comunicadoSlug = tab === "comunicados" && parts[1] ? parts[1] : null;
-  return { tab, karutaSection, comunicadoSlug };
+  return { comunicadoSlug, section, tab };
 }
 
 function tabFromHash(): HubTab {
@@ -5922,10 +5936,13 @@ function App() {
   >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
   // Sub-secciones de la pestaña abierta (la primera es la que se ve si no
-  // elegiste ninguna). Karuta arranca con la sección del hash para que un
-  // enlace directo (#/karuta/coleccion) abra esa página.
+  // elegiste ninguna). Arranca con la sección del hash para que un enlace
+  // directo (#/raids/logs) abra esa página.
   const [tabSections, setTabSections] = useState<Record<string, string>>(
-    () => ({ karuta: parseLocationHash().karutaSection }),
+    () => {
+      const { tab, section } = parseLocationHash();
+      return section ? { [tab]: section } : {};
+    },
   );
 
   // Sección activa de una pestaña: la última elegida o la primera.
@@ -8839,13 +8856,13 @@ function App() {
 
   useEffect(() => {
     const onHashChange = (): void => {
-      const { tab, karutaSection, comunicadoSlug } = parseLocationHash();
+      const { tab, section, comunicadoSlug } = parseLocationHash();
       setActiveTab(tab);
-      setTabSections((current) =>
-        current.karuta === karutaSection
-          ? current
-          : { ...current, karuta: karutaSection },
-      );
+      if (section) {
+        setTabSections((current) =>
+          current[tab] === section ? current : { ...current, [tab]: section },
+        );
+      }
       setComunicadoSlug(comunicadoSlug);
     };
 
@@ -8856,9 +8873,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const section = TAB_SECTIONS[activeTab]
+      ? sectionFor(activeTab)
+      : "";
     const target =
-      activeTab === "karuta"
-        ? `#/karuta/${KARUTA_SECTION_SLUGS[sectionFor("karuta") as KarutaSection]}`
+      section
+        ? `#/${activeTab}/${sectionSlug(activeTab, section)}`
         : activeTab === "comunicados" && comunicadoSlug
           ? `#/comunicados/${comunicadoSlug}`
           : `#/${activeTab}`;
