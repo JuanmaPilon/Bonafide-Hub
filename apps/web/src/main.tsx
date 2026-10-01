@@ -5213,13 +5213,9 @@ function MoonIcon() {
   );
 }
 
-const PODIUM_TIERS = [
-  { color: "#ffd700", label: "Oro" },
-  { color: "#c0c0c0", label: "Plata" },
-  { color: "#cd7f32", label: "Bronce" },
-  { color: "#9aa3ad", label: "Hierro" },
-  { color: "#b87333", label: "Cobre" },
-] as const;
+// Etiqueta de cada puesto del podio. El color del puesto lo pone el CSS
+// (`.podium-place-N`).
+const PODIUM_LABELS = ["1ro", "2do", "3ro", "4to", "5to"];
 
 // Guía de comandos de Karuta con el prefijo del server ("k" + comando).
 // Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
@@ -5405,7 +5401,9 @@ function HomeView({
                 className={`podium-item podium-place-${entry.rank}`}
                 key={entry.userId}
               >
-                <span className="podium-rank">{entry.rank}</span>
+                <span className="podium-rank">
+                  {PODIUM_LABELS[entry.rank - 1] ?? entry.rank}
+                </span>
                 {entry.avatarUrl ? (
                   <img className="podium-avatar" src={entry.avatarUrl} alt="" />
                 ) : (
@@ -5422,10 +5420,6 @@ function HomeView({
                   >
                     {entry.nickname || entry.username || `@${entry.userId}`}
                   </button>
-                </span>
-                <span className="podium-tier">
-                  {entry.rank === 1 ? "👑 " : ""}
-                  {PODIUM_TIERS[entry.rank - 1]?.label ?? ""}
                 </span>
                 <span className="podium-meta">
                   Nivel {entry.level} · {entry.xp} XP
