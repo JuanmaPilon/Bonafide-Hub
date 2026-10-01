@@ -2028,7 +2028,9 @@ function RosterSheet({
   const classes = useMemo(
     () => [
       ...new Set(
-        specs.filter((spec) => spec.game === game).map((spec) => spec.className),
+        specs
+          .filter((spec) => spec.game === game)
+          .map((spec) => spec.className),
       ),
     ],
     [game, specs],
@@ -2038,7 +2040,9 @@ function RosterSheet({
   );
   const classSpecs = useMemo(
     () =>
-      specs.filter((spec) => spec.game === game && spec.className === className),
+      specs.filter(
+        (spec) => spec.game === game && spec.className === className,
+      ),
     [className, game, specs],
   );
   const [specName, setSpecName] = useState(
@@ -2047,7 +2051,8 @@ function RosterSheet({
   const [offSpecs, setOffSpecs] = useState<string[]>(profile?.offSpecs ?? []);
 
   function pickGame(next: string): void {
-    const firstClass = specs.find((spec) => spec.game === next)?.className ?? "";
+    const firstClass =
+      specs.find((spec) => spec.game === next)?.className ?? "";
     setGame(next);
     setClassName(firstClass);
     setSpecName(
@@ -2358,7 +2363,8 @@ function RosterSection({
             className="roster-edit"
             onClick={() =>
               setSheetFor({
-                displayName: member.userId === meId ? "Mi ficha" : member.displayName,
+                displayName:
+                  member.userId === meId ? "Mi ficha" : member.displayName,
                 userId: member.userId,
               })
             }
@@ -4169,7 +4175,7 @@ const TAB_SECTIONS: Partial<
 > = {
   raids: [
     { key: "roster", label: "Roster" },
-    { key: "logs", label: "Logs de Raid" },
+    { key: "logs", label: "Logs" },
   ],
 };
 
@@ -9093,39 +9099,16 @@ function App() {
           </button>
 
           <nav className="top-nav">
-            {visibleTabs.map((tab) => {
-              const sections = TAB_SECTIONS[tab];
-              return (
-                <div className="nav-item" key={tab}>
-                  <button
-                    className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                    onClick={() => setActiveTab(tab)}
-                    type="button"
-                  >
-                    {tabLabel(tab)}
-                    {sections ? (
-                      <span aria-hidden="true" className="nav-caret">
-                        ▾
-                      </span>
-                    ) : null}
-                  </button>
-                  {sections ? (
-                    <div className="nav-submenu">
-                      {sections.map((section) => (
-                        <button
-                          className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
-                          key={section.key}
-                          onClick={() => goToSection(tab, section.key)}
-                          type="button"
-                        >
-                          {section.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab}
+                className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
+                onClick={() => setActiveTab(tab)}
+                type="button"
+              >
+                {tabLabel(tab)}
+              </button>
+            ))}
           </nav>
 
           <div className="topbar-user">
@@ -9217,6 +9200,20 @@ function App() {
                 <div className="section-header">
                   <div>
                     <h2>{panelTitle(activeTab)}</h2>
+                    {TAB_SECTIONS[activeTab] ? (
+                      <div className="section-tabs">
+                        {TAB_SECTIONS[activeTab]?.map((section) => (
+                          <button
+                            className={`section-tab${sectionFor(activeTab) === section.key ? " active" : ""}`}
+                            key={section.key}
+                            onClick={() => goToSection(activeTab, section.key)}
+                            type="button"
+                          >
+                            {section.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               )}
@@ -11695,78 +11692,79 @@ function App() {
                   ) : null}
                   {sectionFor("raids") === "logs" ? (
                     <details className="raid-logs-panel raid-logs-acc" open>
-                    <summary className="raid-logs-acc-header">
-                      <h3>Logs de Raid</h3>
-                      <span className="admin-acc-chevron" aria-hidden="true">
-                        ▸
-                      </span>
-                    </summary>
-                    <div className="raid-logs-acc-body">
-                      {config.logsWatchEnabled && config.logsWatchGuild ? (
-                        <div className="raid-log-watcher">
-                          <strong>{config.logsWatchGuild}</strong>
-                          <span className="muted-text">
-                            {config.logsWatchServer} · {config.logsWatchRegion}
-                          </span>
-                        </div>
-                      ) : null}
-                      <div className="comunicados-stack">
-                        {raidLogsLoading ? (
-                          <LoadingState label="Cargando logs de raid…" />
-                        ) : (
-                          <>
-                            <div className="raid-log-toolbar">
-                              {canAccess("raids") ? (
-                                <button
-                                  className="primary-button"
-                                  disabled={scanningRaidLogs}
-                                  onClick={() => void handleScanRaidLogs()}
-                                  type="button"
-                                >
-                                  {scanningRaidLogs
-                                    ? "Escaneando…"
-                                    : "Escanear Warcraft Logs"}
-                                </button>
-                              ) : null}
-                              {raidLogs.length > 0 ? (
-                                <ListFilterBar
-                                  onOrderChange={setRaidLogOrder}
-                                  onSearchChange={setRaidLogSearch}
-                                  order={raidLogOrder}
-                                  placeholder="Buscar log…"
-                                  search={raidLogSearch}
-                                />
-                              ) : null}
-                            </div>
-                            {raidLogs.length > 0 &&
-                            visibleRaidLogs.length === 0 ? (
-                              <div className="empty-state">
-                                Ningún log coincide con el filtro.
+                      <summary className="raid-logs-acc-header">
+                        <h3>Logs de Raid</h3>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="raid-logs-acc-body">
+                        {config.logsWatchEnabled && config.logsWatchGuild ? (
+                          <div className="raid-log-watcher">
+                            <strong>{config.logsWatchGuild}</strong>
+                            <span className="muted-text">
+                              {config.logsWatchServer} ·{" "}
+                              {config.logsWatchRegion}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="comunicados-stack">
+                          {raidLogsLoading ? (
+                            <LoadingState label="Cargando logs de raid…" />
+                          ) : (
+                            <>
+                              <div className="raid-log-toolbar">
+                                {canAccess("raids") ? (
+                                  <button
+                                    className="primary-button"
+                                    disabled={scanningRaidLogs}
+                                    onClick={() => void handleScanRaidLogs()}
+                                    type="button"
+                                  >
+                                    {scanningRaidLogs
+                                      ? "Escaneando…"
+                                      : "Escanear Warcraft Logs"}
+                                  </button>
+                                ) : null}
+                                {raidLogs.length > 0 ? (
+                                  <ListFilterBar
+                                    onOrderChange={setRaidLogOrder}
+                                    onSearchChange={setRaidLogSearch}
+                                    order={raidLogOrder}
+                                    placeholder="Buscar log…"
+                                    search={raidLogSearch}
+                                  />
+                                ) : null}
                               </div>
-                            ) : null}
-                            <RaidLogsList
-                              logs={visibleRaidLogs}
-                              onHide={
-                                canAccess("raids")
-                                  ? requestHideRaidLog
-                                  : undefined
-                              }
-                              onPublish={
-                                canAccess("raids")
-                                  ? handlePublishRaidLog
-                                  : undefined
-                              }
-                              onUpdate={
-                                canAccess("raids")
-                                  ? handleUpdateRaidLog
-                                  : undefined
-                              }
-                            />
-                          </>
-                        )}
+                              {raidLogs.length > 0 &&
+                              visibleRaidLogs.length === 0 ? (
+                                <div className="empty-state">
+                                  Ningún log coincide con el filtro.
+                                </div>
+                              ) : null}
+                              <RaidLogsList
+                                logs={visibleRaidLogs}
+                                onHide={
+                                  canAccess("raids")
+                                    ? requestHideRaidLog
+                                    : undefined
+                                }
+                                onPublish={
+                                  canAccess("raids")
+                                    ? handlePublishRaidLog
+                                    : undefined
+                                }
+                                onUpdate={
+                                  canAccess("raids")
+                                    ? handleUpdateRaidLog
+                                    : undefined
+                                }
+                              />
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </details>
+                    </details>
                   ) : null}
                 </div>
               ) : activeTab === "perfil" ? (

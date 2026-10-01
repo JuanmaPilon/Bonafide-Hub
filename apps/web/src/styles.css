@@ -290,75 +290,45 @@ a:hover {
   box-shadow: 0 0 14px rgba(var(--tier-admin-rgb), 0.25);
 }
 
-/* Submenú del nav: aparece al pasar el mouse (o al enfocar con teclado) y
-   ofrece las sub-secciones de la pestaña. */
-.nav-item {
-  position: relative;
+/* Sub-secciones de una pestaña: son páginas enteras, así que van como tabs
+   debajo del título (no escondidas en un desplegable). */
+.section-tabs {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
-.nav-caret {
-  margin-left: 5px;
-  font-size: 0.65rem;
-  opacity: 0.7;
-}
-
-.nav-submenu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 60;
-  display: grid;
-  gap: 2px;
-  min-width: 170px;
-  padding: 6px;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border);
-  /* Sólido: con --panel (alfa 0.84) se transparenta el contenido de atrás. */
-  background: #0d1424;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  transition:
-    opacity 0.12s ease,
-    transform 0.12s ease,
-    visibility 0.12s ease;
-}
-
-.nav-item:hover .nav-submenu,
-.nav-item:focus-within .nav-submenu {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.nav-sublink {
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
+.section-tab {
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.28);
+  background: rgba(15, 23, 42, 0.5);
   color: var(--muted);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.88rem;
-  padding: 8px 12px;
-  text-align: left;
+  font-size: 0.85rem;
+  padding: 7px 16px;
 }
 
-.nav-sublink:hover {
-  background: rgba(134, 158, 214, 0.14);
+.section-tab:hover {
   color: var(--text);
 }
 
-.nav-sublink.active {
+.section-tab.active {
   background: rgba(106, 168, 255, 0.16);
+  border-color: rgba(106, 168, 255, 0.5);
   color: var(--text);
   font-weight: 700;
 }
 
-:root[data-theme="light"] .nav-submenu {
-  background: linear-gradient(160deg, #ffffff 0%, #f1f5fc 100%);
-  box-shadow: 0 14px 34px rgba(38, 58, 92, 0.18);
+:root[data-theme="light"] .section-tab {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(60, 85, 130, 0.25);
+}
+
+:root[data-theme="light"] .section-tab.active {
+  background: rgba(106, 168, 255, 0.18);
+  border-color: rgba(42, 95, 208, 0.55);
 }
 
 .topbar-user {
