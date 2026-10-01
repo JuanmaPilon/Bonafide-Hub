@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -4523,6 +4524,7 @@ function RoleColorControl({
   return (
     <div className="role-color-control">
       <div className="role-color-palette" aria-label={label} role="group">
+        <span className="role-color-favorites-label">Favoritos</span>
         {ROLE_COLOR_SWATCHES.map((color) => (
           <button
             aria-label={`Usar color ${color}`}
@@ -4590,6 +4592,7 @@ function RolesCard({
   const [bulkNames, setBulkNames] = useState("");
   const [bulkFrom, setBulkFrom] = useState("#6aa8ff");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [compareRoleId, setCompareRoleId] = useState("");
   const [form, setForm] = useState(blankForm);
 
   useEffect(() => {
@@ -4819,6 +4822,7 @@ function RolesCard({
 
   const editable = (role: GuildRoleDetail): boolean =>
     !role.managed && (botTopPosition === 0 || role.position < botTopPosition);
+  const compareRole = roles.find((role) => role.id === compareRoleId);
 
   return (
     <details open className="admin-card admin-card-acc admin-card--admin">
@@ -4927,6 +4931,28 @@ function RolesCard({
                   </span>
                 </label>
               </div>
+              {roles.length > 0 ? (
+                <div className="role-compare-toolbar">
+                  <label htmlFor="role-permission-compare">
+                    Comparar permisos
+                  </label>
+                  <select
+                    className="select"
+                    id="role-permission-compare"
+                    onChange={(event) => setCompareRoleId(event.target.value)}
+                    value={compareRoleId}
+                  >
+                    <option value="">Seleccionar otro rol</option>
+                    {roles
+                      .filter((role) => role.id !== editingId)
+                      .map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="role-permissions">
                 {ROLE_PERMISSION_GROUPS.map((group) => (
                   <div className="role-permission-group" key={group.label}>
@@ -4962,6 +4988,61 @@ function RolesCard({
                   </div>
                 ))}
               </div>
+              {compareRole ? (
+                <div className="role-permission-compare">
+                  <div className="role-permission-compare-column">
+                    <strong>{form.name.trim() || "Nuevo rol"}</strong>
+                    {ROLE_PERMISSION_GROUPS.map((group) => (
+                      <div key={group.label}>
+                        <span className="role-permission-compare-group">
+                          {group.label}
+                        </span>
+                        {group.permissions.map((permission) => (
+                          <span
+                            className={`role-permission-compare-item${(form.permissions & permission.bit) !== 0n ? " enabled" : ""}`}
+                            key={permission.label}
+                          >
+                            <span aria-hidden="true">
+                              {(form.permissions & permission.bit) !== 0n
+                                ? "✓"
+                                : "·"}
+                            </span>
+                            {permission.label}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="role-permission-compare-column">
+                    <strong>{compareRole.name}</strong>
+                    {ROLE_PERMISSION_GROUPS.map((group) => (
+                      <div key={group.label}>
+                        <span className="role-permission-compare-group">
+                          {group.label}
+                        </span>
+                        {group.permissions.map((permission) => {
+                          const comparePermissions = BigInt(
+                            compareRole.permissions || "0",
+                          );
+                          const enabled =
+                            (comparePermissions & permission.bit) !== 0n;
+                          return (
+                            <span
+                              className={`role-permission-compare-item${enabled ? " enabled" : ""}`}
+                              key={permission.label}
+                            >
+                              <span aria-hidden="true">
+                                {enabled ? "✓" : "·"}
+                              </span>
+                              {permission.label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="role-editor-actions">
                 <button
                   className="primary-button"
@@ -5985,13 +6066,16 @@ function App() {
   const loading = loadingSession || loadingGuildData;
   const importFileRef = useRef<HTMLInputElement | null>(null);
 
-  function pushToast(message: string, kind: ToastKind = "success"): void {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
-    setToasts((current) => [...current, { id, kind, message }]);
-    setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 4000);
-  }
+  const pushToast = useCallback(
+    (message: string, kind: ToastKind = "success"): void => {
+      const id = Date.now() + Math.floor(Math.random() * 1000);
+      setToasts((current) => [...current, { id, kind, message }]);
+      setTimeout(() => {
+        setToasts((current) => current.filter((toast) => toast.id !== id));
+      }, 4000);
+    },
+    [],
+  );
 
   // Karpindomo random: solo con sesión. La primera vez aparece sí o sí al
   // poco de entrar; después sigue apareciendo solo con tiempos aleatorios.

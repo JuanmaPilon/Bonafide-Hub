@@ -6189,11 +6189,20 @@ select.list-order {
   background: rgba(10, 16, 31, 0.72);
 }
 
+.role-color-favorites-label {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .role-color-swatch-button,
 .role-color-custom {
   position: relative;
-  width: 26px;
-  height: 26px;
+  width: 23px;
+  height: 23px;
   flex: 0 0 auto;
   border: 2px solid transparent;
   border-radius: 9px;
@@ -6363,6 +6372,88 @@ select.list-order {
 
 .role-permission-check input {
   flex: 0 0 auto;
+}
+
+.role-compare-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 280px);
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.role-compare-toolbar label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.role-permission-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.role-permission-compare-column {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(133, 156, 212, 0.18);
+  border-radius: 12px;
+  background: rgba(10, 16, 31, 0.42);
+}
+
+.role-permission-compare-column > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.role-permission-compare-group {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.role-permission-compare-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(188, 198, 222, 0.52);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.role-permission-compare-item > span {
+  width: 14px;
+  color: rgba(188, 198, 222, 0.42);
+  text-align: center;
+}
+
+.role-permission-compare-item.enabled {
+  color: var(--text);
+}
+
+.role-permission-compare-item.enabled > span {
+  color: #5ee0a0;
+  font-weight: 800;
+}
+
+@media (max-width: 680px) {
+  .role-color-control,
+  .role-compare-toolbar,
+  .role-permission-compare {
+    grid-template-columns: 1fr;
+  }
 }
 
 .role-editor-actions {
