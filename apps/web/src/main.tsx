@@ -4161,6 +4161,18 @@ function userAvatarUrl(user: {
   return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${extension}?size=128`;
 }
 
+// Sub-secciones de una pestaña: cada una es una página propia y el nav las
+// ofrece en un submenú al pasar el mouse. Una pestaña sin entrada acá es una
+// sola página.
+const TAB_SECTIONS: Partial<
+  Record<HubTab, Array<{ key: string; label: string }>>
+> = {
+  raids: [
+    { key: "roster", label: "Roster" },
+    { key: "logs", label: "Logs de Raid" },
+  ],
+};
+
 function tabLabel(tab: HubTab): string {
   if (tab === "home") {
     return "Inicio";
@@ -5901,6 +5913,25 @@ function App() {
     (CommunicationInput & { id: string | null }) | null
   >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
+  // Sub-sección elegida por pestaña ("roster" / "logs" en Raids).
+  const [tabSections, setTabSections] = useState<Record<string, string>>({});
+
+  // Sección activa de una pestaña: la última elegida o la primera.
+  function sectionFor(tab: HubTab): string {
+    const sections = TAB_SECTIONS[tab];
+    if (!sections || sections.length === 0) {
+      return "";
+    }
+    const saved = tabSections[tab];
+    return sections.some((section) => section.key === saved)
+      ? (saved as string)
+      : sections[0].key;
+  }
+
+  function goToSection(tab: HubTab, section: string): void {
+    setTabSections((current) => ({ ...current, [tab]: section }));
+    setActiveTab(tab);
+  }
   // Tema visual: oscuro por defecto, con persistencia en localStorage.
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     try {
@@ -9062,16 +9093,39 @@ function App() {
           </button>
 
           <nav className="top-nav">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab}
-                className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                onClick={() => setActiveTab(tab)}
-                type="button"
-              >
-                {tabLabel(tab)}
-              </button>
-            ))}
+            {visibleTabs.map((tab) => {
+              const sections = TAB_SECTIONS[tab];
+              return (
+                <div className="nav-item" key={tab}>
+                  <button
+                    className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
+                    onClick={() => setActiveTab(tab)}
+                    type="button"
+                  >
+                    {tabLabel(tab)}
+                    {sections ? (
+                      <span aria-hidden="true" className="nav-caret">
+                        ▾
+                      </span>
+                    ) : null}
+                  </button>
+                  {sections ? (
+                    <div className="nav-submenu">
+                      {sections.map((section) => (
+                        <button
+                          className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
+                          key={section.key}
+                          onClick={() => goToSection(tab, section.key)}
+                          type="button"
+                        >
+                          {section.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </nav>
 
           <div className="topbar-user">
@@ -11628,7 +11682,7 @@ function App() {
                 </div>
               ) : activeTab === "raids" ? (
                 <div className="dashboard-stack">
-                  {selectedGuildId ? (
+                  {sectionFor("raids") === "roster" && selectedGuildId ? (
                     <RosterSection
                       canEditOthers={canAccess("raids")}
                       canEditRanks={canAccess("raids")}
@@ -11639,7 +11693,8 @@ function App() {
                       onOpenProfile={openMemberProfile}
                     />
                   ) : null}
-                  <details className="raid-logs-panel raid-logs-acc" open>
+                  {sectionFor("raids") === "logs" ? (
+                    <details className="raid-logs-panel raid-logs-acc" open>
                     <summary className="raid-logs-acc-header">
                       <h3>Logs de Raid</h3>
                       <span className="admin-acc-chevron" aria-hidden="true">
@@ -11712,6 +11767,7 @@ function App() {
                       </div>
                     </div>
                   </details>
+                  ) : null}
                 </div>
               ) : activeTab === "perfil" ? (
                 <div className="profile-view">
