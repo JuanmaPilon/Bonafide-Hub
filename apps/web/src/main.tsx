@@ -9336,7 +9336,9 @@ function App() {
               </p>
             </section>
 
-            <section className="panel content-panel">
+            <section
+              className={`panel content-panel${activeTab === "admin" && activeAdminSection?.tier ? ` content-panel-admin admin-tier-panel-${activeAdminSection.tier}` : ""}`}
+            >
               {/* La tab Eventos arma su propia cabecera (título + botón de
                   nuevo evento). */}
               {activeTab === "eventos" ? null : (

@@ -993,13 +993,12 @@ a:hover {
 
 .admin-page-stack[class*="admin-tier-page-"] {
   border-color: rgba(var(--admin-page-tier-rgb), 0.62);
-  background:
-    linear-gradient(
-      145deg,
-      rgba(var(--admin-page-tier-rgb), 0.16),
-      rgba(var(--admin-page-tier-rgb), 0.04) 42%,
-      rgba(var(--panel-rgb, 12, 19, 37), 0.2) 100%
-    );
+  background: linear-gradient(
+    145deg,
+    rgba(var(--admin-page-tier-rgb), 0.16),
+    rgba(var(--admin-page-tier-rgb), 0.04) 42%,
+    rgba(var(--panel-rgb, 12, 19, 37), 0.2) 100%
+  );
   box-shadow: 0 10px 34px rgba(var(--admin-page-tier-rgb), 0.16);
 }
 
@@ -1017,6 +1016,18 @@ a:hover {
 
 .admin-section-title.tier-subofficer {
   color: var(--tier-subofficer-text);
+}
+.admin-section-title {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  background-image: none;
+  background-clip: border-box;
+  box-shadow: none;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
 }
 
 .admin-page-stack > .admin-card {
@@ -1049,6 +1060,13 @@ a:hover {
   padding: 14px 0 0;
   border-top: 1px solid var(--panel-border);
   background: transparent;
+}
+.content-panel-admin .admin-page-stack[class*="admin-tier-page-"] {
+  padding: 0 24px 24px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 /* Colores de tarjetas del Admin por rango: los DOS colores del rol del rango
@@ -3051,6 +3069,16 @@ a:hover {
   padding: 24px;
 }
 
+.content-panel-admin {
+  padding: 0;
+  overflow: hidden;
+}
+
+.content-panel-admin .section-header {
+  margin: 0;
+  padding: 24px 24px 18px;
+}
+
 .section-header p,
 .meta-text {
   color: var(--muted);
@@ -3069,10 +3097,50 @@ a:hover {
   gap: 14px;
 }
 
+.content-panel-admin.admin-tier-panel-owner {
+  border-color: rgba(var(--tier-owner-rgb), 0.62);
+  background: linear-gradient(
+    145deg,
+    rgba(var(--tier-owner-rgb), 0.16),
+    rgba(var(--tier-owner-rgb), 0.04) 42%,
+    var(--panel) 100%
+  );
+  box-shadow: 0 10px 34px rgba(var(--tier-owner-rgb), 0.16);
+}
+.content-panel-admin.admin-tier-panel-admin {
+  border-color: rgba(var(--tier-admin-rgb), 0.62);
+  background: linear-gradient(
+    145deg,
+    rgba(var(--tier-admin-rgb), 0.16),
+    rgba(var(--tier-admin-rgb), 0.04) 42%,
+    var(--panel) 100%
+  );
+  box-shadow: 0 10px 34px rgba(var(--tier-admin-rgb), 0.16);
+}
+.content-panel-admin.admin-tier-panel-officer {
+  border-color: rgba(var(--tier-officer-rgb), 0.62);
+  background: linear-gradient(
+    145deg,
+    rgba(var(--tier-officer-rgb), 0.16),
+    rgba(var(--tier-officer-rgb), 0.04) 42%,
+    var(--panel) 100%
+  );
+  box-shadow: 0 10px 34px rgba(var(--tier-officer-rgb), 0.16);
+}
+.content-panel-admin.admin-tier-panel-subofficer {
+  border-color: rgba(var(--tier-subofficer-rgb), 0.62);
+  background: linear-gradient(
+    145deg,
+    rgba(var(--tier-subofficer-rgb), 0.16),
+    rgba(var(--tier-subofficer-rgb), 0.04) 42%,
+    var(--panel) 100%
+  );
+  box-shadow: 0 10px 34px rgba(var(--tier-subofficer-rgb), 0.16);
+}
+
 .stat-tile {
   border-radius: 18px;
   background: rgba(12, 19, 37, 0.66);
-  border: 1px solid rgba(134, 158, 214, 0.2);
   padding: 18px;
 }
 
