@@ -1246,6 +1246,19 @@ a:hover {
   );
 }
 
+.section-header .admin-section-title[class*="tier-"] {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+}
+
 .plantillas-actions {
   display: flex;
   justify-content: flex-end;
