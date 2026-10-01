@@ -9109,16 +9109,38 @@ function App() {
           </button>
 
           <nav className="top-nav">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab}
-                className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                onClick={() => setActiveTab(tab)}
-                type="button"
-              >
-                {tabLabel(tab)}
-              </button>
-            ))}
+            {visibleTabs.map((tab) => {
+              const sections = TAB_SECTIONS[tab];
+              if (!sections) {
+                return (
+                  <button
+                    key={tab}
+                    className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
+                    onClick={() => setActiveTab(tab)}
+                    type="button"
+                  >
+                    {tabLabel(tab)}
+                  </button>
+                );
+              }
+              // Módulo con sub-secciones: cada una es una página propia, así
+              // que va como entrada del nav agrupada bajo el nombre del módulo.
+              return (
+                <div className="nav-group" key={tab}>
+                  <span className="nav-group-label">{tabLabel(tab)}</span>
+                  {sections.map((section) => (
+                    <button
+                      className={`nav-link nav-link--section${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
+                      key={section.key}
+                      onClick={() => goToSection(tab, section.key)}
+                      type="button"
+                    >
+                      {section.label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
           </nav>
 
           <div className="topbar-user">
@@ -9210,20 +9232,6 @@ function App() {
                 <div className="section-header">
                   <div>
                     <h2>{panelTitle(activeTab)}</h2>
-                    {TAB_SECTIONS[activeTab] ? (
-                      <div className="section-tabs">
-                        {TAB_SECTIONS[activeTab]?.map((section) => (
-                          <button
-                            className={`section-tab${sectionFor(activeTab) === section.key ? " active" : ""}`}
-                            key={section.key}
-                            onClick={() => goToSection(activeTab, section.key)}
-                            type="button"
-                          >
-                            {section.label}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               )}
