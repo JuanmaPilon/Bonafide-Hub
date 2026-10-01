@@ -64,14 +64,12 @@ import {
   createEvent,
   createEventSpec,
   createGuildRole,
-  createGuildRolesBulk,
   deleteEvent,
   deleteEventImage,
   deleteEventSpec,
   deleteGuildRole,
   deleteMyEventSignup,
   deleteMemberEventSignup,
-  deleteRoleTemplate,
   resetMyEventSignup,
   apiAssetUrl,
   DEFAULT_EVENT_ROLES,
@@ -84,14 +82,12 @@ import {
   getGuildEmojis,
   getGuildRolesDetailed,
   getGuildRoster,
-  getRoleTemplates,
   publishRaidLog,
   resetEventOccurrence,
   resolveEventRoles,
   saveMemberRosterProfile,
   saveMyRosterProfile,
   saveRosterRanks,
-  saveRoleTemplate,
   scanRaidLogs,
   updateEvent,
   updateGuildRole,
@@ -118,7 +114,6 @@ import {
   type MemberProfile,
   type PublicLeaderboardEntry,
   type RaidLog,
-  type RoleTemplate,
   type KarutaCard,
   type KarutaAlbum,
   type XpConfig,
@@ -4561,14 +4556,8 @@ function RolesCard({
   };
   const [roles, setRoles] = useState<GuildRoleDetail[]>([]);
   const [botTopPosition, setBotTopPosition] = useState(0);
-  const [templates, setTemplates] = useState<RoleTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
-  const [templateLabel, setTemplateLabel] = useState("");
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkNames, setBulkNames] = useState("");
-  const [bulkFrom, setBulkFrom] = useState("#6aa8ff");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [compareRoleId, setCompareRoleId] = useState("");
   const [form, setForm] = useState(blankForm);
@@ -4576,14 +4565,13 @@ function RolesCard({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([getGuildRolesDetailed(guildId), getRoleTemplates(guildId)])
-      .then(([rolesResponse, templateList]) => {
+    getGuildRolesDetailed(guildId)
+      .then((rolesResponse) => {
         if (cancelled) {
           return;
         }
         setRoles(rolesResponse.roles);
         setBotTopPosition(rolesResponse.botTopPosition);
-        setTemplates(templateList);
       })
       .catch(() => {
         if (!cancelled) {
@@ -4621,17 +4609,6 @@ function RolesCard({
       mentionable: role.mentionable,
       name: mode === "copy" ? `${role.name} (copia)` : role.name,
       permissions: BigInt(role.permissions || "0"),
-    });
-  }
-
-  function applyTemplate(template: RoleTemplate): void {
-    setEditingId(null);
-    setForm({
-      color: template.color,
-      hoist: template.hoist,
-      mentionable: template.mentionable,
-      name: template.label,
-      permissions: BigInt(template.permissions || "0"),
     });
   }
 
@@ -4677,83 +4654,6 @@ function RolesCard({
     }
   }
 
-  async function saveAsTemplate(): Promise<void> {
-    const label = (templateLabel.trim() || form.name.trim()).slice(0, 60);
-    if (!label) {
-      pushToast("Poné un nombre para la plantilla.", "error");
-      return;
-    }
-    setSavingTemplate(true);
-    try {
-      const template = await saveRoleTemplate(guildId, {
-        color: form.color,
-        colorSecondary: null,
-        hoist: form.hoist,
-        label,
-        mentionable: form.mentionable,
-        permissions: form.permissions.toString(),
-      });
-      setTemplates((current) => [
-        ...current.filter((entry) => entry.id !== template.id),
-        template,
-      ]);
-      setTemplateLabel("");
-      pushToast(`Plantilla "${template.label}" guardada.`, "success");
-    } catch (error) {
-      pushToast(
-        error instanceof Error
-          ? error.message
-          : "No se pudo guardar la plantilla.",
-        "error",
-      );
-    } finally {
-      setSavingTemplate(false);
-    }
-  }
-
-  async function createBulk(): Promise<void> {
-    const names = bulkNames
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (names.length === 0) {
-      pushToast("Escribí al menos un nombre (uno por línea).", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      const result = await createGuildRolesBulk(guildId, {
-        color: bulkFrom,
-        colorTo: bulkFrom,
-        hoist: false,
-        mentionable: false,
-        names,
-        permissions: "0",
-      });
-      if (result.created.length > 0) {
-        pushToast(
-          `Se crearon ${result.created.length} rol${result.created.length === 1 ? "" : "es"}.`,
-          "success",
-        );
-        setBulkNames("");
-      }
-      if (result.failed.length > 0) {
-        pushToast(
-          `Fallaron ${result.failed.length}: ${result.failed[0].error}`,
-          "error",
-        );
-      }
-      await reloadRoles();
-    } catch (error) {
-      pushToast(
-        error instanceof Error ? error.message : "No se pudieron crear.",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function removeRole(role: GuildRoleDetail): Promise<void> {
     onConfirm({
       kind: "danger",
@@ -4779,23 +4679,6 @@ function RolesCard({
       },
       title: "Eliminar rol",
     });
-  }
-
-  async function removeTemplate(template: RoleTemplate): Promise<void> {
-    try {
-      await deleteRoleTemplate(guildId, template.id);
-      setTemplates((current) =>
-        current.filter((entry) => entry.id !== template.id),
-      );
-      pushToast("Plantilla eliminada.", "success");
-    } catch (error) {
-      pushToast(
-        error instanceof Error
-          ? error.message
-          : "No se pudo borrar la plantilla.",
-        "error",
-      );
-    }
   }
 
   const editable = (role: GuildRoleDetail): boolean =>
@@ -4900,9 +4783,7 @@ function RolesCard({
                     <select
                       className="select"
                       id="role-permission-compare"
-                      onChange={(event) =>
-                        setCompareRoleId(event.target.value)
-                      }
+                      onChange={(event) => setCompareRoleId(event.target.value)}
                       value={compareRoleId}
                     >
                       <option value="">Seleccionar otro rol</option>
@@ -4954,7 +4835,42 @@ function RolesCard({
               </div>
               {compareRole ? (
                 <div className="role-permission-compare">
-                  <div className="role-permission-compare-column">
+                  <div className="role-compare-facts">
+                    <div className="role-compare-fact-column">
+                      <strong>{form.name.trim() || "Nuevo rol"}</strong>
+                      <span>
+                        <i
+                          className="role-compare-color"
+                          style={{ backgroundColor: form.color }}
+                        />
+                        {form.color}
+                      </span>
+                      <span>Mostrar aparte: {form.hoist ? "Sí" : "No"}</span>
+                      <span>
+                        Se puede mencionar: {form.mentionable ? "Sí" : "No"}
+                      </span>
+                    </div>
+                    <div className="role-compare-fact-column">
+                      <strong>{compareRole.name}</strong>
+                      <span>
+                        <i
+                          className="role-compare-color"
+                          style={{
+                            backgroundColor: hexFromRoleColor(compareRole.color),
+                          }}
+                        />
+                        {hexFromRoleColor(compareRole.color)}
+                      </span>
+                      <span>
+                        Mostrar aparte: {compareRole.hoist ? "Sí" : "No"}
+                      </span>
+                      <span>
+                        Se puede mencionar: {compareRole.mentionable ? "Sí" : "No"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="role-permission-compare-columns">
+                    <div className="role-permission-compare-column">
                     <strong>{form.name.trim() || "Nuevo rol"}</strong>
                     {ROLE_PERMISSION_GROUPS.map((group) => (
                       <div key={group.label}>
@@ -4977,7 +4893,7 @@ function RolesCard({
                       </div>
                     ))}
                   </div>
-                  <div className="role-permission-compare-column">
+                    <div className="role-permission-compare-column">
                     <strong>{compareRole.name}</strong>
                     {ROLE_PERMISSION_GROUPS.map((group) => (
                       <div key={group.label}>
@@ -5004,6 +4920,7 @@ function RolesCard({
                         })}
                       </div>
                     ))}
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -5020,112 +4937,8 @@ function RolesCard({
                       ? "Guardar cambios"
                       : "Crear rol"}
                 </button>
-                <span className="role-template-save">
-                  <input
-                    className="input"
-                    maxLength={60}
-                    onChange={(event) => setTemplateLabel(event.target.value)}
-                    placeholder="Nombre de la plantilla"
-                    value={templateLabel}
-                  />
-                  <button
-                    className="ghost-button"
-                    disabled={savingTemplate}
-                    onClick={() => void saveAsTemplate()}
-                    type="button"
-                  >
-                    {savingTemplate ? "Guardando…" : "Guardar plantilla"}
-                  </button>
-                </span>
               </div>
             </div>
-
-            <div className="role-templates">
-              <span className="role-permission-group-title">
-                Plantillas ({templates.length})
-              </span>
-              {templates.length === 0 ? (
-                <p className="admin-card-hint">Sin plantillas.</p>
-              ) : (
-                <div className="role-template-list">
-                  {templates.map((template) => (
-                    <span className="role-template-chip" key={template.id}>
-                      <span
-                        className="role-color-dot"
-                        style={{
-                          background: template.colorSecondary
-                            ? `linear-gradient(90deg, ${template.color}, ${template.colorSecondary})`
-                            : template.color,
-                        }}
-                      />
-                      <span className="role-template-name">
-                        {template.label}
-                      </span>
-                      <button
-                        className="ghost-button small"
-                        onClick={() => applyTemplate(template)}
-                        type="button"
-                      >
-                        Usar
-                      </button>
-                      <button
-                        className="ghost-button small"
-                        onClick={() => void removeTemplate(template)}
-                        title="Eliminar la plantilla"
-                        type="button"
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <details
-              className="role-bulk"
-              onToggle={(event) =>
-                setBulkOpen((event.target as HTMLDetailsElement).open)
-              }
-              open={bulkOpen}
-            >
-              <summary className="role-bulk-summary">
-                Crear varios roles a la vez
-              </summary>
-              <div className="role-bulk-body">
-                <label>
-                  <span>Nombres (uno por línea)</span>
-                  <textarea
-                    className="textarea"
-                    onChange={(event) => setBulkNames(event.target.value)}
-                    placeholder={"Bronce\nPlata\nOro\nPlatino"}
-                    rows={5}
-                    value={bulkNames}
-                  />
-                </label>
-                <div className="role-bulk-colors">
-                  <label>
-                    <span>Color inicial</span>
-                    <RoleColorControl
-                      label="Color de los roles"
-                      onChange={setBulkFrom}
-                      value={bulkFrom}
-                    />
-                  </label>
-                </div>
-                <div className="role-editor-actions">
-                  <button
-                    className="primary-button"
-                    disabled={saving}
-                    onClick={() => void createBulk()}
-                    type="button"
-                  >
-                    {saving ? "Creando…" : "Crear roles"}
-                  </button>
-                  <p className="admin-card-hint">Máximo 25 por vez.</p>
-                </div>
-              </div>
-            </details>
 
             <details className="role-list-panel">
               <summary className="role-list-summary">

@@ -6187,7 +6187,9 @@ select.list-order {
   border-radius: 9px;
   cursor: pointer;
   box-shadow: 0 0 0 2px rgba(106, 168, 255, 0.18);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .role-color-custom:hover {
@@ -6399,9 +6401,44 @@ select.list-order {
 
 .role-permission-compare {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 4px;
+}
+
+.role-compare-facts,
+.role-permission-compare-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-compare-fact-column {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(133, 156, 212, 0.16);
+  border-radius: 12px;
+  background: rgba(10, 16, 31, 0.28);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.role-compare-fact-column strong {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-compare-color {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  vertical-align: -1px;
 }
 
 .role-permission-compare-column {
@@ -6459,7 +6496,8 @@ select.list-order {
 
 @media (max-width: 680px) {
   .role-color-control,
-  .role-permission-compare {
+  .role-compare-facts,
+  .role-permission-compare-columns {
     grid-template-columns: 1fr;
   }
 
@@ -6480,84 +6518,12 @@ select.list-order {
   gap: 10px;
 }
 
-.role-template-save {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 auto;
-}
-
-.role-template-save .input {
-  max-width: 230px;
-}
-
-.role-templates {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.role-template-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.role-template-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px 4px 10px;
-  border: 1px solid rgba(133, 156, 212, 0.22);
-  border-radius: 999px;
-  background: rgba(10, 16, 31, 0.45);
-}
-
-.role-template-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
 .role-color-dot {
   width: 12px;
   height: 12px;
   border-radius: 50%;
   flex: 0 0 auto;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
-}
-
-.role-bulk {
-  border: 1px dashed rgba(134, 158, 214, 0.25);
-  border-radius: 12px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
-}
-
-.role-bulk-summary {
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.role-bulk-body {
-  display: grid;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.role-bulk-colors {
-  display: flex;
-  gap: 16px;
-}
-
-.role-bulk-colors label {
-  display: grid;
-  gap: 6px;
-}
-
-.role-bulk-colors span {
-  color: var(--muted);
-  font-size: 0.8rem;
 }
 
 .role-list {
@@ -6608,18 +6574,9 @@ select.list-order {
 
 /* Tema claro: las cajas usaban fondos navy fijos. */
 :root[data-theme="light"] .role-editor,
-:root[data-theme="light"] .role-row,
-:root[data-theme="light"] .role-template-chip {
+:root[data-theme="light"] .role-row {
   background: var(--surface-card);
   border-color: rgba(60, 85, 130, 0.22);
-}
-
-/* El textarea del alta en lote queda fuera de `.comm-form`, que es donde el
-   tema claro arregla los textarea: sin esto se veía texto oscuro sobre fondo
-   navy. */
-:root[data-theme="light"] .role-bulk-body .textarea {
-  background: var(--surface-input);
-  color: var(--text);
 }
 
 /* ---------- Karuta (guía de comandos + cartas raras + colección) ---------- */
