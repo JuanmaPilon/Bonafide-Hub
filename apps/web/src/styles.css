@@ -1588,6 +1588,15 @@ a:hover {
   gap: 10px;
 }
 
+.roster-toolbar .list-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.roster-filter {
+  min-width: 150px;
+}
+
 .roster-total {
   margin-left: auto;
   color: var(--muted);
@@ -1601,10 +1610,12 @@ a:hover {
 
 .roster-role {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 6px;
 }
 
 .roster-role-title {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1630,8 +1641,8 @@ a:hover {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 4px 8px;
-  padding: 8px 10px;
+  gap: 2px 8px;
+  padding: 6px 8px;
   border-radius: 10px;
   border: 1px solid rgba(134, 158, 214, 0.16);
   background: rgba(17, 25, 45, 0.7);
@@ -1667,6 +1678,13 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.roster-member-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .roster-off {

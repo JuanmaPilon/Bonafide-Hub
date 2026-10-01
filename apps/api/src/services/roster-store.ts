@@ -8,7 +8,29 @@ export type RosterProfile = {
   game: string;
   offSpecs: string[];
   specName: string;
+  tags: RosterTag[];
 };
+
+export type RosterTag = {
+  color: string;
+  label: string;
+};
+
+function normalizeTags(value: unknown): RosterTag[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((entry): entry is { color?: unknown; label?: unknown } =>
+      Boolean(entry && typeof entry === "object"),
+    )
+    .map((entry) => ({
+      color: String(entry.color ?? "#6aa8ff"),
+      label: String(entry.label ?? "").trim().slice(0, 24),
+    }))
+    .filter((entry) => entry.label)
+    .slice(0, 8);
+}
 
 export async function listRosterProfiles(
   guildId: string,
@@ -22,6 +44,7 @@ export async function listRosterProfiles(
         game: record.game,
         offSpecs: record.offSpecs,
         specName: record.specName,
+        tags: normalizeTags(record.tags),
       },
     ]),
   );
@@ -42,5 +65,6 @@ export async function upsertRosterProfile(
     game: record.game,
     offSpecs: record.offSpecs,
     specName: record.specName,
+    tags: normalizeTags(record.tags),
   };
 }

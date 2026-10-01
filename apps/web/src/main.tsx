@@ -2061,6 +2061,7 @@ function RosterSheet({
   const [offSpecs, setOffSpecs] = useState<string[]>(
     profile?.game === "wow" ? profile.offSpecs : [],
   );
+  const [tags, setTags] = useState<EventTag[]>(profile?.tags ?? []);
 
   function pickClass(next: string): void {
     setClassName(next);
@@ -2150,6 +2151,10 @@ function RosterSheet({
             </div>
           </div>
         ) : null}
+        <label className="roster-sheet-field">
+          <span>Tags</span>
+          <TagsField onChange={setTags} suggestions={[]} tags={tags} />
+        </label>
         <div className="form-actions">
           <button
             className="ghost-button cancel-button"
@@ -2161,7 +2166,7 @@ function RosterSheet({
           <button
             className="primary-button"
             disabled={saving || !className || !specName}
-            onClick={() => onSave({ className, game, offSpecs, specName })}
+            onClick={() => onSave({ className, game, offSpecs, specName, tags })}
             type="button"
           >
             {saving ? "Guardando…" : "Guardar ficha"}
@@ -2189,6 +2194,8 @@ function RosterSection({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [sheetFor, setSheetFor] = useState<{
     displayName: string;
     userId: string;
@@ -2234,13 +2241,39 @@ function RosterSection({
     (member) =>
       member.rankKey === "raid" || (member.rankKey === null && member.profile),
   );
-  const visible = query
-    ? members.filter((member) =>
-        `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")}`
-          .toLowerCase()
-          .includes(query),
-      )
-    : members;
+
+  function memberRole(member: RosterMember): string {
+    const profile = member.profile;
+    if (!profile) {
+      return "unknown";
+    }
+    return (
+      specsByKey.get(
+        rosterSpecKey(profile.game, profile.className, profile.specName),
+      )?.role ?? "unknown"
+    );
+  }
+
+  const availableTags = tagOptionsFrom(
+    members.map((member) => ({ tags: member.profile?.tags ?? [] })),
+  ).sort((left, right) => left.label.localeCompare(right.label, "es"));
+  const visible = members
+    .filter((member) => !roleFilter || memberRole(member) === roleFilter)
+    .filter(
+      (member) =>
+        !tagFilter ||
+        (member.profile?.tags ?? []).some(
+          (tag) => tag.label.toLowerCase() === tagFilter,
+        ),
+    )
+    .filter((member) => {
+      if (!query) {
+        return true;
+      }
+      return `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")} ${(member.profile?.tags ?? []).map((tag) => tag.label).join(" ")}`
+        .toLowerCase()
+        .includes(query);
+    });
 
   async function saveSheet(input: RosterProfileInput): Promise<void> {
     const target = sheetFor;
@@ -2350,6 +2383,17 @@ function RosterSection({
             })}
           </div>
         ) : null}
+        {profile && profile.tags.length > 0 ? (
+          <div className="roster-member-tags">
+            {profile.tags.map((tag) => (
+              <ComunicadoTag
+                color={tag.color}
+                label={tag.label}
+                key={tag.label}
+              />
+            ))}
+          </div>
+        ) : null}
       </article>
     );
   }
@@ -2357,31 +2401,31 @@ function RosterSection({
   function renderMembers(rows: RosterMember[]) {
     const byRole = new Map<string, RosterMember[]>();
     for (const row of rows) {
-      const profile = row.profile;
-      const main = profile
-        ? specsByKey.get(
-            rosterSpecKey(profile.game, profile.className, profile.specName),
-          )
-        : undefined;
-      const role = main?.role ?? "unknown";
+      const role = memberRole(row);
       byRole.set(role, [...(byRole.get(role) ?? []), row]);
     }
     const roleOrder = ["melee", "ranged", "healer", "tank", "unknown"];
     return [...byRole.entries()]
       .sort(
-        ([left], [right]) =>
-          roleOrder.indexOf(left) - roleOrder.indexOf(right),
+        ([left], [right]) => roleOrder.indexOf(left) - roleOrder.indexOf(right),
       )
       .map(([role, roleRows]) => {
-        const meta = ROLE_META.find((entry) => entry.key === role);
+        const meta = roster?.roles.find((entry) => entry.key === role);
+        const fallback = ROLE_META.find((entry) => entry.key === role);
         const label =
-          role === "ranged" ? "Ranged" : meta?.label ?? "Sin rol";
+          role === "ranged"
+            ? "Ranged"
+            : (meta?.label ?? fallback?.label ?? "Sin rol");
         return (
           <div className="roster-role" key={role}>
             <span className="roster-role-title">
-              <span className="roster-role-icon" aria-hidden="true">
-                {meta?.emoji ?? "❔"}
-              </span>
+              <DiscordEmojiImage
+                animated={meta?.animated ?? false}
+                emojiId={meta?.emojiId}
+                fallback={meta?.emoji ?? fallback?.emoji ?? "❔"}
+                name={meta?.emojiName ?? label}
+                size={20}
+              />
               {label}
               <span className="roster-role-count">{roleRows.length}</span>
             </span>
@@ -2402,7 +2446,7 @@ function RosterSection({
           }
           type="button"
         >
-          Mi ficha
+          Agregar ficha
         </button>
         <input
           className="list-search"
@@ -2411,6 +2455,30 @@ function RosterSection({
           type="search"
           value={search}
         />
+        <select
+          className="select roster-filter"
+          onChange={(event) => setRoleFilter(event.target.value)}
+          value={roleFilter}
+        >
+          <option value="">Todos los roles</option>
+          {(roster?.roles ?? ROLE_META).map((role) => (
+            <option key={role.key} value={role.key}>
+              {role.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="select roster-filter"
+          onChange={(event) => setTagFilter(event.target.value)}
+          value={tagFilter}
+        >
+          <option value="">Todos los tags</option>
+          {availableTags.map((tag) => (
+            <option key={tag.label} value={tag.label.toLowerCase()}>
+              {tag.label}
+            </option>
+          ))}
+        </select>
         <span className="roster-total">
           {visible.length} jugador{visible.length === 1 ? "" : "es"} activos
         </span>

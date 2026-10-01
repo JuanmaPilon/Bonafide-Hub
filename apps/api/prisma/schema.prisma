@@ -610,6 +610,7 @@ model RosterProfile {
   className String
   specName  String
   offSpecs  String[] @default([])
+  tags      Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

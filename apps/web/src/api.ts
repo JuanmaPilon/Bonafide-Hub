@@ -1310,6 +1310,7 @@ export type RosterProfileInput = {
   game?: string;
   offSpecs?: string[];
   specName: string;
+  tags?: EventTag[];
 };
 
 export type RosterProfile = {
@@ -1317,6 +1318,7 @@ export type RosterProfile = {
   game: string;
   offSpecs: string[];
   specName: string;
+  tags: EventTag[];
 };
 
 export type RosterMember = {
@@ -1337,6 +1339,7 @@ export type GuildRoster = {
   games: Array<{ key: string; label: string }>;
   members: RosterMember[];
   ranks: RosterRank[];
+  roles: EventRoleOption[];
   specs: RaidSpec[];
 };
 
