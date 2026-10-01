@@ -4920,10 +4920,8 @@ export function buildApp() {
       return { error: "Falta la clase o la spec" };
     }
 
-    const game = String(raw.game ?? "")
-      .trim()
-      .toLowerCase();
-    const specs = await listRaidSpecs(guildId, game || undefined);
+    const game = "wow";
+    const specs = await listRaidSpecs(guildId, game);
     const main = specs.find(
       (spec) => spec.className === className && spec.specName === specName,
     );
@@ -4981,7 +4979,7 @@ export function buildApp() {
     const [members, profiles, specs] = await Promise.all([
       fetchAllGuildMembers(params.guildId).catch(() => []),
       listRosterProfiles(params.guildId),
-      listRaidSpecs(params.guildId),
+      listRaidSpecs(params.guildId, "wow"),
     ]);
 
     const rankByRole = new Map<string, RosterRankKey>();

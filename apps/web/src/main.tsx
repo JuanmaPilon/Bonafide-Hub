@@ -2031,7 +2031,7 @@ function RosterSheet({
   saving: boolean;
   specs: RaidSpec[];
 }) {
-  const [game, setGame] = useState(profile?.game ?? games[0]?.key ?? "");
+  const [game] = useState("wow");
   const classes = useMemo(
     () => [
       ...new Set(
@@ -2043,7 +2043,7 @@ function RosterSheet({
     [game, specs],
   );
   const [className, setClassName] = useState(
-    profile?.className ?? classes[0] ?? "",
+    profile?.game === "wow" ? profile.className : classes[0] ?? "",
   );
   const classSpecs = useMemo(
     () =>
@@ -2053,21 +2053,11 @@ function RosterSheet({
     [className, game, specs],
   );
   const [specName, setSpecName] = useState(
-    profile?.specName ?? classSpecs[0]?.specName ?? "",
+    profile?.game === "wow" ? profile.specName : classSpecs[0]?.specName ?? "",
   );
-  const [offSpecs, setOffSpecs] = useState<string[]>(profile?.offSpecs ?? []);
-
-  function pickGame(next: string): void {
-    const firstClass =
-      specs.find((spec) => spec.game === next)?.className ?? "";
-    setGame(next);
-    setClassName(firstClass);
-    setSpecName(
-      specs.find((spec) => spec.game === next && spec.className === firstClass)
-        ?.specName ?? "",
-    );
-    setOffSpecs([]);
-  }
+  const [offSpecs, setOffSpecs] = useState<string[]>(
+    profile?.game === "wow" ? profile.offSpecs : [],
+  );
 
   function pickClass(next: string): void {
     setClassName(next);
@@ -2095,22 +2085,12 @@ function RosterSheet({
         role="dialog"
       >
         <h4>{memberName}</h4>
-        {games.length > 1 ? (
-          <label className="roster-sheet-field">
-            <span>Juego</span>
-            <select
-              className="select"
-              onChange={(event) => pickGame(event.target.value)}
-              value={game}
-            >
-              {games.map((entry) => (
-                <option key={entry.key} value={entry.key}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+        <label className="roster-sheet-field">
+          <span>Juego</span>
+          <select className="select" disabled value={game}>
+            <option value="wow">World of Warcraft</option>
+          </select>
+        </label>
         <div className="roster-sheet-grid">
           <label className="roster-sheet-field">
             <span>Clase</span>
@@ -2248,7 +2228,7 @@ function RosterSection({
 
   const query = search.trim().toLowerCase();
   const members = (roster?.members ?? []).filter(
-    (member) => member.rankKey === "raid",
+    (member) => member.rankKey === "raid" || (member.rankKey === null && member.profile),
   );
   const visible = query
     ? members.filter((member) =>
@@ -2379,10 +2359,7 @@ function RosterSection({
     return [...byClass.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([className, classRows]) => (
-        <div
-          className="roster-class"
-          key={className || "sin-ficha"}
-        >
+        <div className="roster-class" key={className || "sin-ficha"}>
           <span className="roster-class-title">
             <span className="roster-class-icon" aria-hidden="true">
               {classEmoji(className)}
@@ -2397,46 +2374,46 @@ function RosterSection({
 
   return (
     <div className="roster-view">
-        <div className="roster-toolbar">
-          <button
-            className="primary-button"
-            disabled={!meId}
-            onClick={() =>
-              meId && setSheetFor({ displayName: "Mi ficha", userId: meId })
-            }
-            type="button"
-          >
-            Mi ficha
-          </button>
-          <input
-            className="list-search"
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar jugador, clase o spec…"
-            type="search"
-            value={search}
-          />
-          <span className="roster-total">
-            {visible.length} jugador{visible.length === 1 ? "" : "es"} activos
-          </span>
-        </div>
+      <div className="roster-toolbar">
+        <button
+          className="primary-button"
+          disabled={!meId}
+          onClick={() =>
+            meId && setSheetFor({ displayName: "Mi ficha", userId: meId })
+          }
+          type="button"
+        >
+          Mi ficha
+        </button>
+        <input
+          className="list-search"
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar jugador, clase o spec…"
+          type="search"
+          value={search}
+        />
+        <span className="roster-total">
+          {visible.length} jugador{visible.length === 1 ? "" : "es"} activos
+        </span>
+      </div>
 
-        {loading ? (
-          <LoadingState label="Cargando roster…" />
-        ) : failed ? (
-          <p className="muted-text">No se pudo cargar el roster.</p>
-        ) : (
-          <>
-            <div className="roster-list">
-              {visible.length > 0 ? (
-                renderMembers(visible)
-              ) : (
-                <p className="muted-text">
-                  No hay jugadores activos del core para mostrar.
-                </p>
-              )}
-            </div>
-          </>
-        )}
+      {loading ? (
+        <LoadingState label="Cargando roster…" />
+      ) : failed ? (
+        <p className="muted-text">No se pudo cargar el roster.</p>
+      ) : (
+        <>
+          <div className="roster-list">
+            {visible.length > 0 ? (
+              renderMembers(visible)
+            ) : (
+              <p className="muted-text">
+                No hay jugadores activos del core para mostrar.
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       {sheetFor ? (
         <RosterSheet
@@ -9026,7 +9003,8 @@ function App() {
                     >
                       {activeTab === "admin"
                         ? (activeAdminSection?.label ?? panelTitle(activeTab))
-                        : activeTab === "raids" && sectionFor("raids") === "roster"
+                        : activeTab === "raids" &&
+                            sectionFor("raids") === "roster"
                           ? "Roster"
                           : panelTitle(activeTab)}
                     </h2>
