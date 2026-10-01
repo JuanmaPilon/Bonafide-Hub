@@ -222,6 +222,12 @@ const HUB_MODULES: Array<{
 // Sub Officer; daily/karuta → Officer; config/xp → Admin.
 type StaffTier = "admin" | "officer" | "subofficer";
 type AccessTier = "owner" | StaffTier;
+const ACCESS_TIER_ORDER: Record<AccessTier, number> = {
+  owner: 0,
+  admin: 1,
+  officer: 2,
+  subofficer: 3,
+};
 
 const STAFF_TIERS: Record<
   StaffTier,
@@ -4771,7 +4777,7 @@ function RolesCard({
   const hiddenPermissions = form.permissions & ~ROLE_PERMISSION_MASK;
 
   return (
-    <details className="admin-card admin-card-acc admin-card--admin">
+    <details open className="admin-card admin-card-acc admin-card--admin">
       <summary className="admin-card-header admin-acc-header">
         <div>
           <h3>
@@ -9188,6 +9194,10 @@ function App() {
                 tab === "admin"
                   ? sections?.filter(
                       (section) => !section.module || canAccess(section.module),
+                    ).sort(
+                      (left, right) =>
+                        ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
+                        ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
                     )
                   : sections;
               return (
@@ -9490,6 +9500,7 @@ function App() {
                 <div className="admin-page-stack">
                   {sectionFor("admin") === "config" && canAccess("config") ? (
                     <details
+                      open
                       className="admin-card admin-card-acc admin-card--admin"
                       onToggle={(event) =>
                         setShowMainConfig(event.currentTarget.open)
@@ -9717,7 +9728,7 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "karuta" && canAccess("karuta") ? (
-                    <details className="admin-card admin-card-acc admin-card--officer">
+                    <details open className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -9946,7 +9957,7 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "modulos" && isAdminOwner ? (
-                    <details className="admin-card admin-card-acc admin-card--owner">
+                    <details open className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10017,7 +10028,7 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "permisos" && isAdminOwner ? (
-                    <details className="admin-card admin-card-acc admin-card--owner">
+                    <details open className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10167,7 +10178,7 @@ function App() {
 
                   {sectionFor("admin") === "comunicados" &&
                   canAccess("comunicados") ? (
-                    <details className="admin-card admin-card-acc admin-card--subofficer">
+                    <details open className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10336,7 +10347,7 @@ function App() {
 
                   {sectionFor("admin") === "karpindomo" &&
                   canAccess("daily") ? (
-                    <details className="admin-card admin-card-acc admin-card--officer">
+                    <details open className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10547,7 +10558,7 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "logs" && canAccess("raids") ? (
-                    <details className="admin-card admin-card-acc admin-card--subofficer">
+                    <details open className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10755,7 +10766,7 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "xp" && canAccess("xp") ? (
-                    <details className="admin-card admin-card-acc admin-card--admin">
+                    <details open className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -11173,7 +11184,7 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "registros" && isAdminOwner ? (
-                    <details className="admin-card admin-card-acc admin-card--owner">
+                    <details open className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -11260,6 +11271,7 @@ function App() {
                   ) : null}
                   {sectionFor("admin") === "eventos" && canAccess("config") ? (
                     <details
+                      open
                       className="admin-card admin-card-acc admin-card--admin"
                       onToggle={(event) =>
                         setShowSpecEditor(event.currentTarget.open)
@@ -11658,7 +11670,7 @@ function App() {
                   ) : null}
                   {sectionFor("admin") === "historial" &&
                   canAccess("eventos") ? (
-                    <details className="admin-card admin-card-acc admin-card--subofficer">
+                    <details open className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
