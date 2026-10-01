@@ -970,6 +970,53 @@ a:hover {
    resto de los módulos. Los acordeones internos siguen conservándose. */
 .admin-page-stack {
   display: block;
+  padding: 22px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+}
+
+.admin-tier-page-owner {
+  --admin-page-tier-rgb: var(--tier-owner-rgb);
+}
+
+.admin-tier-page-admin {
+  --admin-page-tier-rgb: var(--tier-admin-rgb);
+}
+
+.admin-tier-page-officer {
+  --admin-page-tier-rgb: var(--tier-officer-rgb);
+}
+
+.admin-tier-page-subofficer {
+  --admin-page-tier-rgb: var(--tier-subofficer-rgb);
+}
+
+.admin-page-stack[class*="admin-tier-page-"] {
+  border-color: rgba(var(--admin-page-tier-rgb), 0.62);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(var(--admin-page-tier-rgb), 0.16),
+      rgba(var(--admin-page-tier-rgb), 0.04) 42%,
+      rgba(var(--panel-rgb, 12, 19, 37), 0.2) 100%
+    );
+  box-shadow: 0 10px 34px rgba(var(--admin-page-tier-rgb), 0.16);
+}
+
+.admin-section-title.tier-owner {
+  color: var(--tier-owner-text);
+}
+
+.admin-section-title.tier-admin {
+  color: var(--tier-admin-text);
+}
+
+.admin-section-title.tier-officer {
+  color: var(--tier-officer-text);
+}
+
+.admin-section-title.tier-subofficer {
+  color: var(--tier-subofficer-text);
 }
 
 .admin-page-stack > .admin-card {
@@ -983,7 +1030,7 @@ a:hover {
 }
 
 .admin-page-stack > .admin-card-acc > .admin-acc-header {
-  padding: 0 0 16px;
+  display: none;
   pointer-events: none;
   cursor: default;
 }

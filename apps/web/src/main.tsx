@@ -229,6 +229,12 @@ const ACCESS_TIER_ORDER: Record<AccessTier, number> = {
   subofficer: 3,
 };
 
+function accessTierLabel(tier: AccessTier): string {
+  return tier === "subofficer"
+    ? "Sub Officer"
+    : tier[0].toUpperCase() + tier.slice(1);
+}
+
 const STAFF_TIERS: Record<
   StaffTier,
   { label: string; description: string; modules: string[] }
@@ -9157,6 +9163,9 @@ function App() {
       ? (xpConfig?.levelRoles.find((rule) => rule.level === roleModal.level) ??
         null)
       : null;
+  const activeAdminSection = TAB_SECTIONS.admin?.find(
+    (section) => section.key === sectionFor("admin"),
+  );
 
   return (
     <div className="app-shell">
@@ -9192,13 +9201,16 @@ function App() {
               const sections = TAB_SECTIONS[tab];
               const visibleSections =
                 tab === "admin"
-                  ? sections?.filter(
-                      (section) => !section.module || canAccess(section.module),
-                    ).sort(
-                      (left, right) =>
-                        ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
-                        ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
-                    )
+                  ? sections
+                      ?.filter(
+                        (section) =>
+                          !section.module || canAccess(section.module),
+                      )
+                      .sort(
+                        (left, right) =>
+                          ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
+                          ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
+                      )
                   : sections;
               return (
                 <div className="nav-item" key={tab}>
@@ -9230,10 +9242,7 @@ function App() {
                             <span
                               className={`admin-nav-tier tier-${section.tier}`}
                             >
-                              {section.tier === "subofficer"
-                                ? "Sub Officer"
-                                : section.tier[0].toUpperCase() +
-                                  section.tier.slice(1)}
+                              {accessTierLabel(section.tier)}
                             </span>
                           ) : null}
                         </button>
@@ -9333,8 +9342,25 @@ function App() {
               {activeTab === "eventos" ? null : (
                 <div className="section-header">
                   <div>
-                    <h2>{panelTitle(activeTab)}</h2>
+                    <h2
+                      className={
+                        activeTab === "admin" && activeAdminSection?.tier
+                          ? `admin-section-title tier-${activeAdminSection.tier}`
+                          : undefined
+                      }
+                    >
+                      {activeTab === "admin"
+                        ? (activeAdminSection?.label ?? panelTitle(activeTab))
+                        : panelTitle(activeTab)}
+                    </h2>
                   </div>
+                  {activeTab === "admin" && activeAdminSection?.tier ? (
+                    <span
+                      className={`admin-nav-tier tier-${activeAdminSection.tier}`}
+                    >
+                      {accessTierLabel(activeAdminSection.tier)}
+                    </span>
+                  ) : null}
                 </div>
               )}
 
@@ -9497,7 +9523,9 @@ function App() {
               ) : null}
 
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
-                <div className="admin-page-stack">
+                <div
+                  className={`admin-page-stack${activeAdminSection?.tier ? ` admin-tier-page-${activeAdminSection.tier}` : ""}`}
+                >
                   {sectionFor("admin") === "config" && canAccess("config") ? (
                     <details
                       open
@@ -9728,7 +9756,10 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "karuta" && canAccess("karuta") ? (
-                    <details open className="admin-card admin-card-acc admin-card--officer">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--officer"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -9957,7 +9988,10 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "modulos" && isAdminOwner ? (
-                    <details open className="admin-card admin-card-acc admin-card--owner">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--owner"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10028,7 +10062,10 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "permisos" && isAdminOwner ? (
-                    <details open className="admin-card admin-card-acc admin-card--owner">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--owner"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10178,7 +10215,10 @@ function App() {
 
                   {sectionFor("admin") === "comunicados" &&
                   canAccess("comunicados") ? (
-                    <details open className="admin-card admin-card-acc admin-card--subofficer">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--subofficer"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10347,7 +10387,10 @@ function App() {
 
                   {sectionFor("admin") === "karpindomo" &&
                   canAccess("daily") ? (
-                    <details open className="admin-card admin-card-acc admin-card--officer">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--officer"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10558,7 +10601,10 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "logs" && canAccess("raids") ? (
-                    <details open className="admin-card admin-card-acc admin-card--subofficer">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--subofficer"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -10766,7 +10812,10 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "xp" && canAccess("xp") ? (
-                    <details open className="admin-card admin-card-acc admin-card--admin">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--admin"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -11184,7 +11233,10 @@ function App() {
                   ) : null}
 
                   {sectionFor("admin") === "registros" && isAdminOwner ? (
-                    <details open className="admin-card admin-card-acc admin-card--owner">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--owner"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
@@ -11670,7 +11722,10 @@ function App() {
                   ) : null}
                   {sectionFor("admin") === "historial" &&
                   canAccess("eventos") ? (
-                    <details open className="admin-card admin-card-acc admin-card--subofficer">
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--subofficer"
+                    >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
