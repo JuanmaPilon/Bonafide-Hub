@@ -5547,6 +5547,7 @@ function App() {
   const [raidLogSearch, setRaidLogSearch] = useState("");
   const [raidLogOrder, setRaidLogOrder] = useState<ListOrder>("newest");
   const [karutaSearch, setKarutaSearch] = useState("");
+  const [karutaCommandSearch, setKarutaCommandSearch] = useState("");
   const [karutaRarity, setKarutaRarity] = useState<KarutaRarityFilter>("all");
   // Listas del panel: mismas dos piezas que las tabs (buscador + orden) y, en
   // los comunicados, los chips de etiqueta.
@@ -5591,6 +5592,21 @@ function App() {
       );
     });
   }, [config, karutaCards, karutaRarity, karutaSearch]);
+
+  const visibleKarutaCommandGroups = useMemo(() => {
+    if (!karutaCommandSearch.trim()) {
+      return KARUTA_COMMAND_GROUPS;
+    }
+    return KARUTA_COMMAND_GROUPS.map((group) => ({
+      ...group,
+      commands: group.commands.filter((entry) =>
+        matchesSearch(
+          `${group.title} ${entry.command} ${entry.description}`,
+          karutaCommandSearch,
+        ),
+      ),
+    })).filter((group) => group.commands.length > 0);
+  }, [karutaCommandSearch]);
 
   // Logs de raid visibles: buscador (título o código) + orden. Se filtra antes
   // de agrupar, así las partes de una misma noche siguen viajando juntas.
@@ -12367,27 +12383,44 @@ function App() {
                       <p className="meta-text">
                         Comandos de Karuta con el prefijo de este server.
                       </p>
-                      <div className="karuta-command-groups">
-                        {KARUTA_COMMAND_GROUPS.map((group) => (
-                          <div
-                            className="karuta-command-group"
-                            key={group.title}
-                          >
-                            <h4>{group.title}</h4>
-                            <div className="karuta-command-list">
-                              {group.commands.map((entry) => (
-                                <div
-                                  className="karuta-command-row"
-                                  key={entry.command}
-                                >
-                                  <code>{entry.command}</code>
-                                  <span>{entry.description}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                      <div className="karuta-filters">
+                        <input
+                          className="input list-search"
+                          onChange={(event) =>
+                            setKarutaCommandSearch(event.target.value)
+                          }
+                          placeholder="Buscar comando…"
+                          type="search"
+                          value={karutaCommandSearch}
+                        />
                       </div>
+                      {visibleKarutaCommandGroups.length === 0 ? (
+                        <div className="empty-state">
+                          Ningún comando coincide con la búsqueda.
+                        </div>
+                      ) : (
+                        <div className="karuta-command-groups">
+                          {visibleKarutaCommandGroups.map((group) => (
+                            <div
+                              className="karuta-command-group"
+                              key={group.title}
+                            >
+                              <h4>{group.title}</h4>
+                              <div className="karuta-command-list">
+                                {group.commands.map((entry) => (
+                                  <div
+                                    className="karuta-command-row"
+                                    key={entry.command}
+                                  >
+                                    <code>{entry.command}</code>
+                                    <span>{entry.description}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </section>
                   )}
                 </div>
