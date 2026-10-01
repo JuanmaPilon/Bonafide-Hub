@@ -2403,10 +2403,23 @@ a:hover {
 }
 
 .leaderboard-table tr.mvp-row {
-  background: rgba(106, 168, 255, 0.07);
+  background: transparent;
 }
 
-.leaderboard-table tr.mvp-row:hover {
+.leaderboard-table tr.mvp-row td {
+  background: rgba(106, 168, 255, 0.07);
+  border-bottom-color: transparent;
+}
+
+.leaderboard-table tr.mvp-row td:first-child {
+  border-radius: 12px 0 0 12px;
+}
+
+.leaderboard-table tr.mvp-row td:last-child {
+  border-radius: 0 12px 12px 0;
+}
+
+.leaderboard-table tr.mvp-row:hover td {
   background: rgba(106, 168, 255, 0.11);
 }
 
@@ -3106,7 +3119,7 @@ a:hover {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -3153,8 +3166,14 @@ a:hover {
 
 .stat-tile {
   border-radius: 18px;
-  background: rgba(12, 19, 37, 0.66);
-  padding: 18px;
+  border: 1px solid rgba(134, 158, 214, 0.2);
+  background: linear-gradient(
+    145deg,
+    rgba(28, 42, 76, 0.78),
+    rgba(12, 19, 37, 0.7)
+  );
+  box-shadow: 0 10px 24px rgba(2, 8, 13, 0.2);
+  padding: 20px;
 }
 
 .stat-tile strong {

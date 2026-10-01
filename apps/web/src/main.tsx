@@ -4721,7 +4721,6 @@ function RolesCard({
               </div>
               <div className="form-grid">
                 <label>
-                  <span>Nombre</span>
                   <input
                     className="input"
                     maxLength={100}
