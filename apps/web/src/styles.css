@@ -6178,60 +6178,21 @@ select.list-order {
   gap: 8px;
 }
 
-.role-color-palette {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 42px;
-  padding: 5px 8px;
-  border: 1px solid rgba(133, 156, 212, 0.22);
-  border-radius: 13px;
-  background: rgba(10, 16, 31, 0.72);
-}
-
-.role-color-favorites-label {
-  margin-right: 2px;
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.role-color-swatch-button,
 .role-color-custom {
   position: relative;
-  width: 23px;
-  height: 23px;
+  width: 42px;
+  height: 32px;
   flex: 0 0 auto;
-  border: 2px solid transparent;
+  border: 2px solid rgba(255, 255, 255, 0.75);
   border-radius: 9px;
   cursor: pointer;
-  transition:
-    transform 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.role-color-swatch-button:hover,
-.role-color-swatch-button.active {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px rgba(106, 168, 255, 0.55);
-  transform: translateY(-1px);
-}
-
-.role-color-custom {
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--muted);
-  font-size: 1.1rem;
-  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(106, 168, 255, 0.18);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .role-color-custom:hover {
-  border-color: rgba(255, 255, 255, 0.7);
-  color: var(--text);
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.32);
 }
 
 .role-color-native-input {
@@ -6277,23 +6238,24 @@ select.list-order {
 
 .role-permission-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-  gap: 4px 12px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 2px 8px;
 }
 
 .role-permission-check {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.87rem;
+  min-height: 24px;
+  font-size: 0.8rem;
   cursor: pointer;
 }
 
 /* La regla global `input { width: 100% }` rompe los checkboxes. */
 .role-permission-check input {
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
   margin: 0;
   border: 1px solid rgba(148, 172, 228, 0.42);

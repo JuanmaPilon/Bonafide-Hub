@@ -4501,17 +4501,6 @@ const ROLE_PERMISSION_GROUPS: Array<{
   },
 ];
 
-const ROLE_COLOR_SWATCHES = [
-  "#f04444",
-  "#f97316",
-  "#f5c542",
-  "#35c985",
-  "#22b8cf",
-  "#4f8cff",
-  "#8b6cff",
-  "#e85aad",
-];
-
 function RoleColorControl({
   label,
   onChange,
@@ -4523,29 +4512,18 @@ function RoleColorControl({
 }) {
   return (
     <div className="role-color-control">
-      <div className="role-color-palette" aria-label={label} role="group">
-        <span className="role-color-favorites-label">Favoritos</span>
-        {ROLE_COLOR_SWATCHES.map((color) => (
-          <button
-            aria-label={`Usar color ${color}`}
-            className={`role-color-swatch-button${value.toLowerCase() === color ? " active" : ""}`}
-            key={color}
-            onClick={() => onChange(color)}
-            style={{ backgroundColor: color }}
-            title={color}
-            type="button"
-          />
-        ))}
-        <div className="role-color-custom" title="Elegir otro color">
-          <input
-            aria-label={`${label}: personalizado`}
-            className="role-color-native-input"
-            onChange={(event) => onChange(event.target.value)}
-            type="color"
-            value={value}
-          />
-          <span aria-hidden="true">+</span>
-        </div>
+      <div
+        className="role-color-custom"
+        style={{ backgroundColor: value }}
+        title="Elegir color"
+      >
+        <input
+          aria-label={`${label}: personalizado`}
+          className="role-color-native-input"
+          onChange={(event) => onChange(event.target.value)}
+          type="color"
+          value={value}
+        />
       </div>
       <input
         aria-label={`${label}: HEX`}
