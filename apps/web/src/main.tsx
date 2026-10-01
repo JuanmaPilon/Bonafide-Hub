@@ -4747,34 +4747,6 @@ function RolesCard({
                 </label>
               </div>
               <div className="role-controls-row">
-                <div className="role-option-list">
-                  <label className="role-option-check">
-                    <input
-                      checked={form.hoist}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          hoist: event.target.checked,
-                        }))
-                      }
-                      type="checkbox"
-                    />
-                    <span>Mostrar aparte</span>
-                  </label>
-                  <label className="role-option-check">
-                    <input
-                      checked={form.mentionable}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          mentionable: event.target.checked,
-                        }))
-                      }
-                      type="checkbox"
-                    />
-                    <span>Se puede mencionar</span>
-                  </label>
-                </div>
                 {roles.length > 0 ? (
                   <div className="role-compare-toolbar">
                     <label htmlFor="role-permission-compare">
@@ -4795,28 +4767,41 @@ function RolesCard({
                           </option>
                         ))}
                     </select>
-                    {compareRole ? (
-                      <button
-                        className="ghost-button small"
-                        onClick={() =>
-                          setForm({
-                            color: hexFromRoleColor(compareRole.color),
-                            hoist: compareRole.hoist,
-                            mentionable: compareRole.mentionable,
-                            name: compareRole.name,
-                            permissions: BigInt(compareRole.permissions || "0"),
-                          })
-                        }
-                        title="Copiar nombre, color, opciones y permisos al nuevo rol"
-                        type="button"
-                      >
-                        Aplicar ← {compareRole.name}
-                      </button>
-                    ) : null}
                   </div>
                 ) : null}
               </div>
               <div className="role-permissions">
+                <div className="role-permission-group">
+                  <span className="role-permission-group-title">Opciones</span>
+                  <div className="role-permission-list">
+                    <label className="role-permission-check">
+                      <input
+                        checked={form.hoist}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            hoist: event.target.checked,
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>Mostrar aparte</span>
+                    </label>
+                    <label className="role-permission-check">
+                      <input
+                        checked={form.mentionable}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            mentionable: event.target.checked,
+                          }))
+                        }
+                        type="checkbox"
+                      />
+                      <span>Se puede mencionar</span>
+                    </label>
+                  </div>
+                </div>
                 {ROLE_PERMISSION_GROUPS.map((group) => (
                   <div className="role-permission-group" key={group.label}>
                     <span className="role-permission-group-title">
@@ -4853,6 +4838,29 @@ function RolesCard({
               </div>
               {compareRole ? (
                 <div className="role-permission-compare">
+                  <div className="role-compare-apply-row">
+                    <button
+                      aria-label={`Aplicar ${compareRole.name} al nuevo rol`}
+                      className="role-compare-apply"
+                      onClick={() =>
+                        setForm({
+                          color: hexFromRoleColor(compareRole.color),
+                          hoist: compareRole.hoist,
+                          mentionable: compareRole.mentionable,
+                          name: compareRole.name,
+                          permissions: BigInt(compareRole.permissions || "0"),
+                        })
+                      }
+                      title="Copiar nombre, color, opciones y permisos al nuevo rol"
+                      type="button"
+                    >
+                      <span>{form.name.trim() || "Nuevo rol"}</span>
+                      <span aria-hidden="true" className="role-compare-apply-arrow">
+                        ←
+                      </span>
+                      <strong>{compareRole.name}</strong>
+                    </button>
+                  </div>
                   <div className="role-permission-compare-columns">
                     <div className="role-permission-compare-column">
                       <strong>{form.name.trim() || "Nuevo rol"}</strong>
@@ -4907,7 +4915,9 @@ function RolesCard({
                         <i
                           className="role-compare-color"
                           style={{
-                            backgroundColor: hexFromRoleColor(compareRole.color),
+                            backgroundColor: hexFromRoleColor(
+                              compareRole.color,
+                            ),
                           }}
                         />
                         {hexFromRoleColor(compareRole.color)}
