@@ -4185,7 +4185,7 @@ function userAvatarUrl(user: {
 // ofrece en un submenú al pasar el mouse. Una pestaña sin entrada acá es una
 // sola página.
 const TAB_SECTIONS: Partial<
-  Record<HubTab, Array<{ key: string; label: string }>>
+  Record<HubTab, Array<{ key: string; label: string; module?: string }>>
 > = {
   raids: [
     { key: "roster", label: "Roster" },
@@ -4195,6 +4195,20 @@ const TAB_SECTIONS: Partial<
     { key: "raras", label: "Raras" },
     { key: "coleccion", label: "Colecciones" },
     { key: "guia", label: "Comandos" },
+  ],
+  admin: [
+    { key: "config", label: "Configuraciones", module: "config" },
+    { key: "karuta", label: "Karuta", module: "karuta" },
+    { key: "modulos", label: "Módulos", module: "config" },
+    { key: "roles", label: "Roles", module: "config" },
+    { key: "permisos", label: "Permisos", module: "config" },
+    { key: "comunicados", label: "Comunicados", module: "comunicados" },
+    { key: "karpindomo", label: "Karpindomo", module: "daily" },
+    { key: "logs", label: "Logs", module: "raids" },
+    { key: "xp", label: "XP", module: "xp" },
+    { key: "registros", label: "Registros", module: "config" },
+    { key: "eventos", label: "Eventos", module: "config" },
+    { key: "historial", label: "Historial", module: "eventos" },
   ],
 };
 
@@ -5948,12 +5962,10 @@ function App() {
   // Sub-secciones de la pestaña abierta (la primera es la que se ve si no
   // elegiste ninguna). Arranca con la sección del hash para que un enlace
   // directo (#/raids/logs) abra esa página.
-  const [tabSections, setTabSections] = useState<Record<string, string>>(
-    () => {
-      const { tab, section } = parseLocationHash();
-      return section ? { [tab]: section } : {};
-    },
-  );
+  const [tabSections, setTabSections] = useState<Record<string, string>>(() => {
+    const { tab, section } = parseLocationHash();
+    return section ? { [tab]: section } : {};
+  });
 
   // Sección activa de una pestaña: la última elegida o la primera.
   function sectionFor(tab: HubTab): string {
@@ -8883,15 +8895,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const section = TAB_SECTIONS[activeTab]
-      ? sectionFor(activeTab)
-      : "";
-    const target =
-      section
-        ? `#/${activeTab}/${sectionSlug(activeTab, section)}`
-        : activeTab === "comunicados" && comunicadoSlug
-          ? `#/comunicados/${comunicadoSlug}`
-          : `#/${activeTab}`;
+    const section = TAB_SECTIONS[activeTab] ? sectionFor(activeTab) : "";
+    const target = section
+      ? `#/${activeTab}/${sectionSlug(activeTab, section)}`
+      : activeTab === "comunicados" && comunicadoSlug
+        ? `#/comunicados/${comunicadoSlug}`
+        : `#/${activeTab}`;
     if (window.location.hash !== target) {
       window.location.hash = target;
     }
@@ -9141,15 +9150,24 @@ function App() {
           <nav className="top-nav">
             {visibleTabs.map((tab) => {
               const sections = TAB_SECTIONS[tab];
+              const visibleSections =
+                tab === "admin"
+                  ? sections?.filter(
+                      (section) =>
+                        !section.module || canAccess(section.module),
+                    )
+                  : sections;
               return (
                 <div className="nav-item" key={tab}>
                   <button
                     className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={
+                      sections ? undefined : () => setActiveTab(tab)
+                    }
                     type="button"
                   >
                     {tabLabel(tab)}
-                    {sections ? (
+                    {visibleSections ? (
                       <span aria-hidden="true" className="nav-caret">
                         ▾
                       </span>
@@ -9157,9 +9175,9 @@ function App() {
                   </button>
                   {/* Módulo con sub-secciones: al pasar el mouse (o al enfocar
                       con teclado) el nav ofrece cada página. */}
-                  {sections ? (
+                  {visibleSections ? (
                     <div className="nav-submenu">
-                      {sections.map((section) => (
+                      {visibleSections.map((section) => (
                         <button
                           className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
                           key={section.key}
@@ -9429,7 +9447,7 @@ function App() {
 
               {activeTab === "admin" && selectedGuild && adminEnabled ? (
                 <div className="admin-card-stack">
-                  {canAccess("config") ? (
+                  {sectionFor("admin") === "config" && canAccess("config") ? (
                     <details
                       className="admin-card admin-card-acc admin-card--admin"
                       onToggle={(event) =>
@@ -9657,7 +9675,7 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("karuta") ? (
+                  {sectionFor("admin") === "karuta" && canAccess("karuta") ? (
                     <details className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -9886,7 +9904,7 @@ function App() {
                     </details>
                   ) : null}
 
-                  {isAdminOwner ? (
+                  {sectionFor("admin") === "modulos" && isAdminOwner ? (
                     <details className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -9947,7 +9965,9 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("config") && selectedGuildId ? (
+                  {sectionFor("admin") === "roles" &&
+                  canAccess("config") &&
+                  selectedGuildId ? (
                     <RolesCard
                       guildId={selectedGuildId}
                       onConfirm={setConfirmDialog}
@@ -9955,7 +9975,7 @@ function App() {
                     />
                   ) : null}
 
-                  {isAdminOwner ? (
+                  {sectionFor("admin") === "permisos" && isAdminOwner ? (
                     <details className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -10104,7 +10124,8 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("comunicados") ? (
+                  {sectionFor("admin") === "comunicados" &&
+                  canAccess("comunicados") ? (
                     <details className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -10272,7 +10293,8 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("daily") ? (
+                  {sectionFor("admin") === "karpindomo" &&
+                  canAccess("daily") ? (
                     <details className="admin-card admin-card-acc admin-card--officer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -10483,7 +10505,7 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("raids") ? (
+                  {sectionFor("admin") === "logs" && canAccess("raids") ? (
                     <details className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -10691,7 +10713,7 @@ function App() {
                     </details>
                   ) : null}
 
-                  {canAccess("xp") ? (
+                  {sectionFor("admin") === "xp" && canAccess("xp") ? (
                     <details className="admin-card admin-card-acc admin-card--admin">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -11109,7 +11131,7 @@ function App() {
                     </details>
                   ) : null}
 
-                  {isAdminOwner ? (
+                  {sectionFor("admin") === "registros" && isAdminOwner ? (
                     <details className="admin-card admin-card-acc admin-card--owner">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -11195,7 +11217,7 @@ function App() {
                       </div>
                     </details>
                   ) : null}
-                  {canAccess("config") ? (
+                  {sectionFor("admin") === "eventos" && canAccess("config") ? (
                     <details
                       className="admin-card admin-card-acc admin-card--admin"
                       onToggle={(event) =>
@@ -11593,7 +11615,8 @@ function App() {
                       </div>
                     </details>
                   ) : null}
-                  {canAccess("eventos") ? (
+                  {sectionFor("admin") === "historial" &&
+                  canAccess("eventos") ? (
                     <details className="admin-card admin-card-acc admin-card--subofficer">
                       <summary className="admin-card-header admin-acc-header">
                         <div>
