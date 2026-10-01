@@ -4177,6 +4177,11 @@ const TAB_SECTIONS: Partial<
     { key: "roster", label: "Roster" },
     { key: "logs", label: "Logs" },
   ],
+  karuta: [
+    { key: "raras", label: "Raras" },
+    { key: "coleccion", label: "Colecciones" },
+    { key: "guia", label: "Comandos" },
+  ],
 };
 
 function tabLabel(tab: HubTab): string {
@@ -5512,9 +5517,6 @@ function App() {
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
   const [karutaAlbums, setKarutaAlbums] = useState<KarutaAlbum[]>([]);
   const [karutaLoading, setKarutaLoading] = useState(false);
-  const [karutaSection, setKarutaSection] = useState<KarutaSection>(
-    () => parseLocationHash().karutaSection,
-  );
   const [comunicadoSlug, setComunicadoSlug] = useState<string | null>(
     () => parseLocationHash().comunicadoSlug,
   );
@@ -5919,8 +5921,12 @@ function App() {
     (CommunicationInput & { id: string | null }) | null
   >(null);
   const [activeTab, setActiveTab] = useState<HubTab>(() => tabFromHash());
-  // Sub-sección elegida por pestaña ("roster" / "logs" en Raids).
-  const [tabSections, setTabSections] = useState<Record<string, string>>({});
+  // Sub-secciones de la pestaña abierta (la primera es la que se ve si no
+  // elegiste ninguna). Karuta arranca con la sección del hash para que un
+  // enlace directo (#/karuta/coleccion) abra esa página.
+  const [tabSections, setTabSections] = useState<Record<string, string>>(
+    () => ({ karuta: parseLocationHash().karutaSection }),
+  );
 
   // Sección activa de una pestaña: la última elegida o la primera.
   function sectionFor(tab: HubTab): string {
@@ -8835,7 +8841,11 @@ function App() {
     const onHashChange = (): void => {
       const { tab, karutaSection, comunicadoSlug } = parseLocationHash();
       setActiveTab(tab);
-      setKarutaSection(karutaSection);
+      setTabSections((current) =>
+        current.karuta === karutaSection
+          ? current
+          : { ...current, karuta: karutaSection },
+      );
       setComunicadoSlug(comunicadoSlug);
     };
 
@@ -8848,14 +8858,14 @@ function App() {
   useEffect(() => {
     const target =
       activeTab === "karuta"
-        ? `#/karuta/${KARUTA_SECTION_SLUGS[karutaSection]}`
+        ? `#/karuta/${KARUTA_SECTION_SLUGS[sectionFor("karuta") as KarutaSection]}`
         : activeTab === "comunicados" && comunicadoSlug
           ? `#/comunicados/${comunicadoSlug}`
           : `#/${activeTab}`;
     if (window.location.hash !== target) {
       window.location.hash = target;
     }
-  }, [activeTab, karutaSection, comunicadoSlug]);
+  }, [activeTab, comunicadoSlug, tabSections]);
 
   // Al salir de Comunicados se limpia el slug: volver a la tab siempre
   // muestra la lista (no un comunicado puntual anterior).
@@ -12152,33 +12162,9 @@ function App() {
                 </div>
               ) : activeTab === "karuta" ? (
                 <div className="karuta-view">
-                  <div className="karuta-subtabs" role="tablist">
-                    <button
-                      className={`karuta-subtab${karutaSection === "raras" ? " active" : ""}`}
-                      onClick={() => setKarutaSection("raras")}
-                      type="button"
-                    >
-                      Raras
-                    </button>
-                    <button
-                      className={`karuta-subtab${karutaSection === "coleccion" ? " active" : ""}`}
-                      onClick={() => setKarutaSection("coleccion")}
-                      type="button"
-                    >
-                      Colección
-                    </button>
-                    <button
-                      className={`karuta-subtab${karutaSection === "guia" ? " active" : ""}`}
-                      onClick={() => setKarutaSection("guia")}
-                      type="button"
-                    >
-                      Comandos
-                    </button>
-                  </div>
-
                   {karutaLoading ? (
                     <LoadingState label="Cargando Karuta…" />
-                  ) : karutaSection === "raras" ? (
+                  ) : sectionFor("karuta") === "raras" ? (
                     <section className="karuta-section">
                       {karutaCards.length === 0 ? (
                         <div className="empty-state">
@@ -12315,7 +12301,7 @@ function App() {
                         </>
                       )}
                     </section>
-                  ) : karutaSection === "coleccion" ? (
+                  ) : sectionFor("karuta") === "coleccion" ? (
                     <section className="karuta-section">
                       {karutaAlbums.length === 0 ? (
                         <div className="empty-state">
