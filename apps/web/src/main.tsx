@@ -9109,38 +9109,16 @@ function App() {
           </button>
 
           <nav className="top-nav">
-            {visibleTabs.map((tab) => {
-              const sections = TAB_SECTIONS[tab];
-              if (!sections) {
-                return (
-                  <button
-                    key={tab}
-                    className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                    onClick={() => setActiveTab(tab)}
-                    type="button"
-                  >
-                    {tabLabel(tab)}
-                  </button>
-                );
-              }
-              // Módulo con sub-secciones: cada una es una página propia, así
-              // que va como entrada del nav agrupada bajo el nombre del módulo.
-              return (
-                <div className="nav-group" key={tab}>
-                  <span className="nav-group-label">{tabLabel(tab)}</span>
-                  {sections.map((section) => (
-                    <button
-                      className={`nav-link nav-link--section${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
-                      key={section.key}
-                      onClick={() => goToSection(tab, section.key)}
-                      type="button"
-                    >
-                      {section.label}
-                    </button>
-                  ))}
-                </div>
-              );
-            })}
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab}
+                className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
+                onClick={() => setActiveTab(tab)}
+                type="button"
+              >
+                {tabLabel(tab)}
+              </button>
+            ))}
           </nav>
 
           <div className="topbar-user">
@@ -9203,6 +9181,23 @@ function App() {
             </button>
           </div>
         </div>
+        {/* Sub-secciones del módulo abierto: cada una es una página propia. */}
+        {TAB_SECTIONS[activeTab] ? (
+          <div className="section-bar">
+            <div className="section-bar-inner">
+              {TAB_SECTIONS[activeTab]?.map((section) => (
+                <button
+                  className={`section-bar-link${sectionFor(activeTab) === section.key ? " active" : ""}`}
+                  key={section.key}
+                  onClick={() => goToSection(activeTab, section.key)}
+                  type="button"
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <main className="page">

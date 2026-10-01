@@ -290,29 +290,40 @@ a:hover {
   box-shadow: 0 0 14px rgba(var(--tier-admin-rgb), 0.25);
 }
 
-/* Módulo con sub-secciones: cada una es una página propia y va como entrada
-   del nav, agrupada bajo el nombre del módulo. */
-.nav-group {
+/* Barra de sub-secciones del módulo abierto: va pegada abajo del nav y cada
+   entrada es una página propia. */
+.section-bar {
+  border-top: 1px solid var(--panel-border);
+}
+
+.section-bar-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 6px 24px 10px;
   display: flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 6px;
-  padding-left: 10px;
-  border-left: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.nav-group-label {
-  margin-right: 4px;
+.section-bar-link {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+  padding: 6px 12px;
 }
 
-.nav-link--section {
-  font-size: 0.85rem;
-  padding: 8px 10px;
+.section-bar-link:hover {
+  color: var(--text);
+}
+
+.section-bar-link.active {
+  color: var(--text);
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 rgba(106, 168, 255, 0.9);
 }
 
 .topbar-user {
