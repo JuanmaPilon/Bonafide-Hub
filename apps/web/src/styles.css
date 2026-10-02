@@ -662,6 +662,24 @@ a:hover {
   border-bottom: none;
 }
 
+.leaderboard-table tr.mvp-row td {
+  background: rgba(106, 168, 255, 0.035);
+  border-bottom-color: rgba(106, 168, 255, 0.12);
+}
+
+.leaderboard-table tr.mvp-row td:first-child {
+  border-left: 2px solid rgba(106, 168, 255, 0.7);
+  border-radius: 10px 0 0 10px;
+}
+
+.leaderboard-table tr.mvp-row td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.leaderboard-table tr.mvp-row:hover td {
+  background: rgba(106, 168, 255, 0.075);
+}
+
 .user-mention {
   color: var(--text);
   font-weight: 600;
