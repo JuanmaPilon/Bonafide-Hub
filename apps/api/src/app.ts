@@ -635,6 +635,52 @@ async function fetchGuildMemberRecord(
   }
 }
 
+async function syncGuildMemberRole(
+  guildId: string,
+  userId: string,
+  roleId: string,
+  active: boolean,
+): Promise<boolean> {
+  if (!env.DISCORD_BOT_TOKEN) {
+    return false;
+  }
+  const response = await fetchWithDiscordRetry(
+    `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
+    {
+      headers: {
+        Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+        "User-Agent": "DiscordBot (https://bonafide-cum.com, 1.0)",
+      },
+      method: active ? "PUT" : "DELETE",
+    },
+  );
+  return response.ok;
+}
+
+async function syncRosterRaidRole(
+  guildId: string,
+  userId: string,
+  rosterRanks: Partial<Record<string, string>> | undefined,
+  active: boolean,
+): Promise<boolean> {
+  const raidRoleId = rosterRanks?.raid;
+  if (!raidRoleId) {
+    return false;
+  }
+  if (!(await syncGuildMemberRole(guildId, userId, raidRoleId, active))) {
+    return false;
+  }
+  if (active) {
+    for (const key of ["trial", "bench"]) {
+      const roleId = rosterRanks?.[key];
+      if (roleId && roleId !== raidRoleId) {
+        await syncGuildMemberRole(guildId, userId, roleId, false);
+      }
+    }
+  }
+  return true;
+}
+
 // Nombre para mostrar de un miembro: nick de servidor, si no global_name,
 // si no username.
 function memberDisplayName(member: DiscordGuildMember | null): string | null {
@@ -5077,6 +5123,21 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: validation.error });
     }
 
+    const config = await getGuildConfig(params.guildId);
+    if (
+      !(await syncRosterRaidRole(
+        params.guildId,
+        String(session.user.id),
+        config.rosterRanks,
+        validation.profile.active,
+      ))
+    ) {
+      return reply.code(502).send({
+        ok: false,
+        error: "No se pudo actualizar el rol de raid en Discord.",
+      });
+    }
+
     const profile = await upsertRosterProfile(
       params.guildId,
       String(session.user.id),
@@ -5107,6 +5168,21 @@ export function buildApp() {
     );
     if ("error" in validation) {
       return reply.code(400).send({ ok: false, error: validation.error });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    if (
+      !(await syncRosterRaidRole(
+        params.guildId,
+        params.userId,
+        config.rosterRanks,
+        validation.profile.active,
+      ))
+    ) {
+      return reply.code(502).send({
+        ok: false,
+        error: "No se pudo actualizar el rol de raid en Discord.",
+      });
     }
 
     const profile = await upsertRosterProfile(

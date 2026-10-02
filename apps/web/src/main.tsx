@@ -2273,7 +2273,10 @@ function RosterSection({
   const query = search.trim().toLowerCase();
   const members = (roster?.members ?? []).filter(
     (member) =>
-      member.rankKey === "raid" || (member.rankKey === null && member.profile),
+      member.rankKey === "raid" ||
+      member.rankKey === "trial" ||
+      member.rankKey === "bench" ||
+      (member.rankKey === null && member.profile),
   );
 
   function memberRole(member: RosterMember): string {
@@ -2326,7 +2329,11 @@ function RosterSection({
               ...current,
               members: current.members.map((member) =>
                 member.userId === target.userId
-                  ? { ...member, profile }
+                  ? {
+                      ...member,
+                      profile,
+                      rankKey: profile.active ? "raid" : null,
+                    }
                   : member,
               ),
             }
@@ -2358,7 +2365,13 @@ function RosterSection({
           ? {
               ...current,
               members: current.members.map((row) =>
-                row.userId === member.userId ? { ...row, profile } : row,
+                row.userId === member.userId
+                  ? {
+                      ...row,
+                      profile,
+                      rankKey: profile.active ? "raid" : null,
+                    }
+                  : row,
               ),
             }
           : current,
@@ -2414,6 +2427,19 @@ function RosterSection({
           rosterSpecKey(profile.game, profile.className, profile.specName),
         )
       : undefined;
+    const rosterStatus =
+      member.rankKey === "trial"
+        ? "Prueba"
+        : member.rankKey === "bench"
+          ? "Bench"
+          : member.rankKey === "raid" && !profile
+            ? "Sin ficha"
+          : profile?.active
+            ? "Activo"
+            : "Inactivo";
+    const canToggleStatus =
+      canEditOthers && Boolean(profile) && member.rankKey !== "trial" && member.rankKey !== "bench";
+    const rosterStatusClass = rosterStatus.toLowerCase().replaceAll(" ", "-");
     return (
       <article
         className={`roster-member${profile && !profile.active ? " roster-member--inactive" : ""}`}
@@ -2489,7 +2515,7 @@ function RosterSection({
             })}
           </div>
         ) : null}
-        {canEditOthers && profile ? (
+        {canToggleStatus && profile ? (
           <label
             className={`roster-status-toggle roster-card-toggle${profile.active ? " roster-status-toggle--active" : ""}`}
           >
@@ -2499,10 +2525,16 @@ function RosterSection({
               type="checkbox"
             />
             <span className="roster-status-badge">
-              {profile.active ? "Activo" : "Inactivo"}
+              {rosterStatus}
             </span>
           </label>
-        ) : null}
+        ) : (
+          <span
+            className={`roster-status-badge roster-card-toggle roster-status-badge--${rosterStatusClass}`}
+          >
+            {rosterStatus}
+          </span>
+        )}
       </article>
     );
   }

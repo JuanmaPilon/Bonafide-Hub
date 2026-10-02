@@ -1655,7 +1655,7 @@ a:hover {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 2px 8px;
-  padding: 6px 8px;
+  padding: 10px 8px;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--roster-class-color) 62%, transparent);
   border-left: 3px solid var(--roster-class-color);
@@ -1675,6 +1675,7 @@ a:hover {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  padding-right: 82px;
 }
 
 .roster-member-name {
@@ -1747,6 +1748,19 @@ a:hover {
   color: #6ee7a1;
 }
 
+.roster-status-badge--prueba,
+.roster-status-badge--bench {
+  border-color: rgba(245, 181, 64, 0.65);
+  background: rgba(245, 181, 64, 0.16);
+  color: #ffd477;
+}
+
+.roster-status-badge--sin-ficha {
+  border-color: rgba(106, 168, 255, 0.62);
+  background: rgba(106, 168, 255, 0.14);
+  color: #9ec7ff;
+}
+
 .roster-delete-button {
   align-self: flex-start;
   margin-top: 14px;
@@ -1769,6 +1783,9 @@ a:hover {
 }
 
 .roster-edit {
+  position: absolute;
+  top: 7px;
+  right: 66px;
   border: 0;
   background: transparent;
   cursor: pointer;
