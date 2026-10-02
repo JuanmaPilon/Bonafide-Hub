@@ -635,14 +635,19 @@ async function fetchGuildMemberRecord(
   }
 }
 
+type GuildRoleSyncResult = {
+  detail?: string;
+  ok: boolean;
+};
+
 async function syncGuildMemberRole(
   guildId: string,
   userId: string,
   roleId: string,
   active: boolean,
-): Promise<boolean> {
+): Promise<GuildRoleSyncResult> {
   if (!env.DISCORD_BOT_TOKEN) {
-    return false;
+    return { detail: "Falta DISCORD_BOT_TOKEN en el API.", ok: false };
   }
   const response = await fetchWithDiscordRetry(
     `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
@@ -654,7 +659,15 @@ async function syncGuildMemberRole(
       method: active ? "PUT" : "DELETE",
     },
   );
-  return response.ok;
+  if (response.ok) {
+    return { ok: true };
+  }
+  const body = await response.text().catch(() => "");
+  const detail = body ? `Discord ${response.status}: ${body}` : `Discord ${response.status}`;
+  console.warn(
+    `[api] roster role sync failed guild=${guildId} user=${userId} role=${roleId} active=${active}: ${detail}`,
+  );
+  return { detail, ok: false };
 }
 
 async function syncRosterRaidRole(
@@ -662,13 +675,22 @@ async function syncRosterRaidRole(
   userId: string,
   rosterRanks: Partial<Record<string, string>> | undefined,
   active: boolean,
-): Promise<boolean> {
+): Promise<GuildRoleSyncResult> {
   const raidRoleId = rosterRanks?.raid;
   if (!raidRoleId) {
-    return false;
+    return {
+      detail: "No hay un rol raid configurado en la guild.",
+      ok: false,
+    };
   }
-  if (!(await syncGuildMemberRole(guildId, userId, raidRoleId, active))) {
-    return false;
+  const raidResult = await syncGuildMemberRole(
+    guildId,
+    userId,
+    raidRoleId,
+    active,
+  );
+  if (!raidResult.ok) {
+    return raidResult;
   }
   if (active) {
     for (const key of ["trial", "bench"]) {
@@ -678,7 +700,7 @@ async function syncRosterRaidRole(
       }
     }
   }
-  return true;
+  return { ok: true };
 }
 
 // Nombre para mostrar de un miembro: nick de servidor, si no global_name,
@@ -5124,17 +5146,17 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
-    if (
-      !(await syncRosterRaidRole(
-        params.guildId,
-        String(session.user.id),
-        config.rosterRanks,
-        validation.profile.active,
-      ))
-    ) {
+    const roleSync = await syncRosterRaidRole(
+      params.guildId,
+      String(session.user.id),
+      config.rosterRanks,
+      validation.profile.active,
+    );
+    if (!roleSync.ok) {
       return reply.code(502).send({
         ok: false,
-        error: "No se pudo actualizar el rol de raid en Discord.",
+        error:
+          roleSync.detail ?? "No se pudo actualizar el rol de raid en Discord.",
       });
     }
 
@@ -5171,17 +5193,17 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
-    if (
-      !(await syncRosterRaidRole(
-        params.guildId,
-        params.userId,
-        config.rosterRanks,
-        validation.profile.active,
-      ))
-    ) {
+    const roleSync = await syncRosterRaidRole(
+      params.guildId,
+      params.userId,
+      config.rosterRanks,
+      validation.profile.active,
+    );
+    if (!roleSync.ok) {
       return reply.code(502).send({
         ok: false,
-        error: "No se pudo actualizar el rol de raid en Discord.",
+        error:
+          roleSync.detail ?? "No se pudo actualizar el rol de raid en Discord.",
       });
     }
 

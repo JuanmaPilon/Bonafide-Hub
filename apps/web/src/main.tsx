@@ -2382,7 +2382,9 @@ function RosterSection({
       );
     } catch (error) {
       notify(
-        error instanceof Error ? error.message : "No se pudo cambiar el estado.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar el estado.",
         "error",
       );
     }
@@ -2414,7 +2416,9 @@ function RosterSection({
       notify("Ficha eliminada.", "success");
     } catch (error) {
       notify(
-        error instanceof Error ? error.message : "No se pudo eliminar la ficha.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la ficha.",
         "error",
       );
     }
@@ -2434,11 +2438,14 @@ function RosterSection({
           ? "Bench"
           : member.rankKey === "raid" && !profile
             ? "Sin ficha"
-          : profile?.active
-            ? "Activo"
-            : "Inactivo";
+            : profile?.active
+              ? "Activo"
+              : "Inactivo";
     const canToggleStatus =
-      canEditOthers && Boolean(profile) && member.rankKey !== "trial" && member.rankKey !== "bench";
+      canEditOthers &&
+      Boolean(profile) &&
+      member.rankKey !== "trial" &&
+      member.rankKey !== "bench";
     const rosterStatusClass = rosterStatus.toLowerCase().replaceAll(" ", "-");
     return (
       <article
@@ -2446,8 +2453,7 @@ function RosterSection({
         key={member.userId}
         style={
           {
-            "--roster-class-color":
-              classColor(profile?.className) ?? "#6aa8ff",
+            "--roster-class-color": classColor(profile?.className) ?? "#6aa8ff",
           } as CSSProperties
         }
       >
@@ -2524,9 +2530,7 @@ function RosterSection({
               onChange={() => void toggleProfileActive(member)}
               type="checkbox"
             />
-            <span className="roster-status-badge">
-              {rosterStatus}
-            </span>
+            <span className="roster-status-badge">{rosterStatus}</span>
           </label>
         ) : (
           <span

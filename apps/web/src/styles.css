@@ -1657,10 +1657,12 @@ a:hover {
   gap: 2px 8px;
   padding: 10px 8px;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--roster-class-color) 62%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--roster-class-color) 62%, transparent);
   border-left: 3px solid var(--roster-class-color);
   background: rgba(17, 25, 45, 0.7);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--roster-class-color) 20%, transparent);
+  box-shadow: 0 0 18px
+    color-mix(in srgb, var(--roster-class-color) 20%, transparent);
 }
 
 .roster-member--inactive {
