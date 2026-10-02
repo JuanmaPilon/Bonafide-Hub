@@ -2157,15 +2157,6 @@ function RosterSheet({
             </div>
           </div>
         ) : null}
-        {canDelete && profile ? (
-          <button
-            className="danger-button roster-delete-button"
-            onClick={onDelete}
-            type="button"
-          >
-            Eliminar ficha
-          </button>
-        ) : null}
         <div className="form-actions">
           <button
             className="ghost-button cancel-button"
@@ -2193,15 +2184,27 @@ function RosterSheet({
           </button>
         </div>
         {canDelete && profile ? (
-          <label className="roster-active-toggle">
-            <span>Ficha activa</span>
+          <label
+            className={`roster-status-toggle${active ? " roster-status-toggle--active" : ""}`}
+          >
             <input
               checked={active}
               onChange={(event) => setActive(event.target.checked)}
               type="checkbox"
             />
-            <span className="raid-watcher-switch" aria-hidden="true" />
+            <span className="roster-status-badge">
+              {active ? "Activo" : "Inactivo"}
+            </span>
           </label>
+        ) : null}
+        {canDelete && profile ? (
+          <button
+            className="danger-button roster-delete-button"
+            onClick={onDelete}
+            type="button"
+          >
+            Eliminar ficha
+          </button>
         ) : null}
       </div>
     </div>
@@ -2487,14 +2490,17 @@ function RosterSection({
           </div>
         ) : null}
         {canEditOthers && profile ? (
-          <label className="roster-card-toggle">
-            <span>{profile.active ? "Activo" : "Inactivo"}</span>
+          <label
+            className={`roster-status-toggle roster-card-toggle${profile.active ? " roster-status-toggle--active" : ""}`}
+          >
             <input
               checked={profile.active}
               onChange={() => void toggleProfileActive(member)}
               type="checkbox"
             />
-            <span className="raid-watcher-switch" aria-hidden="true" />
+            <span className="roster-status-badge">
+              {profile.active ? "Activo" : "Inactivo"}
+            </span>
           </label>
         ) : null}
       </article>
