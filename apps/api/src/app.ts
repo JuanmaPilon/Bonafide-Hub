@@ -4952,13 +4952,14 @@ export function buildApp() {
 
     const tags: RosterTag[] = Array.isArray(raw.tags)
       ? raw.tags
-          .filter(
-            (entry): entry is Record<string, unknown> =>
-              Boolean(entry && typeof entry === "object"),
+          .filter((entry): entry is Record<string, unknown> =>
+            Boolean(entry && typeof entry === "object"),
           )
           .map((entry) => ({
             color: String(entry.color ?? "#6aa8ff"),
-            label: String(entry.label ?? "").trim().slice(0, 24),
+            label: String(entry.label ?? "")
+              .trim()
+              .slice(0, 24),
           }))
           .filter((entry) => entry.label)
           .slice(0, 8)

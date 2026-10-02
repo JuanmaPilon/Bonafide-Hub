@@ -1515,14 +1515,10 @@ a:hover {
   flex-wrap: wrap;
 }
 
-/* Card Logs de Raid en la tab Raids */
-.raid-logs-panel {
+/* Vista de Logs de Raid en la tab Raids */
+.raid-logs-view {
   display: grid;
   gap: 14px;
-  padding: 20px;
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  background: var(--panel);
 }
 
 .raid-log-watcher {
@@ -1545,36 +1541,6 @@ a:hover {
   font-weight: 700;
 }
 
-/* Card Logs de Raid colapsable (acordeón) */
-.raid-logs-acc-header {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-}
-
-.raid-logs-acc-header::-webkit-details-marker {
-  display: none;
-}
-
-.raid-logs-acc-header h3 {
-  margin: 0;
-}
-
-.raid-logs-acc[open] .admin-acc-chevron {
-  transform: rotate(90deg);
-}
-
-.raid-logs-acc-body {
-  display: grid;
-  gap: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--panel-border);
-}
-
 /* ── Roster de raids ─────────────────────────────────────────────── */
 .roster-view {
   display: grid;
@@ -1593,8 +1559,11 @@ a:hover {
   min-width: 180px;
 }
 
-.roster-filter {
-  min-width: 150px;
+.roster-filter-chips {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .roster-total {
@@ -2286,27 +2255,6 @@ a:hover {
   border-radius: inherit;
   background: var(--level-tint, transparent);
   z-index: -1;
-}
-
-.leaderboard-table tr.mvp-row {
-  background: transparent;
-}
-
-.leaderboard-table tr.mvp-row td {
-  background: rgba(106, 168, 255, 0.07);
-  border-bottom-color: transparent;
-}
-
-.leaderboard-table tr.mvp-row td:first-child {
-  border-radius: 12px 0 0 12px;
-}
-
-.leaderboard-table tr.mvp-row td:last-child {
-  border-radius: 0 12px 12px 0;
-}
-
-.leaderboard-table tr.mvp-row:hover td {
-  background: rgba(106, 168, 255, 0.11);
 }
 
 .mvp-rank {

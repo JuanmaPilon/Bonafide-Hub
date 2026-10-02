@@ -26,7 +26,9 @@ function normalizeTags(value: unknown): RosterTag[] {
     )
     .map((entry) => ({
       color: String(entry.color ?? "#6aa8ff"),
-      label: String(entry.label ?? "").trim().slice(0, 24),
+      label: String(entry.label ?? "")
+        .trim()
+        .slice(0, 24),
     }))
     .filter((entry) => entry.label)
     .slice(0, 8);
