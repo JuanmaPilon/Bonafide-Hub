@@ -1383,11 +1383,31 @@ export async function handleMusicCommand(
             query,
             fuente,
           });
-          await interaction.editReply(
-            "No pude obtener el tema en este momento (posible bloqueo 429 o problema temporal). " +
-              "Probá de nuevo en unos minutos.",
-          );
-          return;
+          track = null;
+          if (fuente === "youtube" && !/^https?:\/\//.test(query.trim())) {
+            try {
+              track = await resolveTrack(query, "soundcloud");
+              if (track) {
+                console.warn(
+                  "[music] YouTube no resolvió la búsqueda; usando SoundCloud",
+                  { guildId, query, title: track.title },
+                );
+              }
+            } catch (fallbackError) {
+              console.error("[music] SoundCloud resolve fallback failed", {
+                error: fallbackError,
+                guildId,
+                query,
+              });
+            }
+          }
+          if (!track) {
+            await interaction.editReply(
+              "No pude obtener el tema desde YouTube ni SoundCloud. " +
+                "Probá con otra búsqueda o una URL directa.",
+            );
+            return;
+          }
         }
 
         if (!track) {
