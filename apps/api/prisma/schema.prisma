@@ -611,6 +611,7 @@ model RosterProfile {
   specName  String
   offSpecs  String[] @default([])
   tags      Json?
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

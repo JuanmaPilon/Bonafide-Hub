@@ -663,12 +663,12 @@ a:hover {
 }
 
 .leaderboard-table tr.mvp-row td {
-  background: rgba(106, 168, 255, 0.035);
-  border-bottom-color: rgba(106, 168, 255, 0.12);
+  background: rgba(var(--podium-rgb), 0.055);
+  border-bottom-color: rgba(var(--podium-rgb), 0.16);
 }
 
 .leaderboard-table tr.mvp-row td:first-child {
-  border-left: 2px solid rgba(106, 168, 255, 0.7);
+  border-left: 2px solid var(--podium-c);
   border-radius: 10px 0 0 10px;
 }
 
@@ -677,7 +677,32 @@ a:hover {
 }
 
 .leaderboard-table tr.mvp-row:hover td {
-  background: rgba(106, 168, 255, 0.075);
+  background: rgba(var(--podium-rgb), 0.11);
+}
+
+.leaderboard-table tr.mvp-row-1 {
+  --podium-c: var(--podium-1);
+  --podium-rgb: var(--podium-1-rgb);
+}
+
+.leaderboard-table tr.mvp-row-2 {
+  --podium-c: var(--podium-2);
+  --podium-rgb: var(--podium-2-rgb);
+}
+
+.leaderboard-table tr.mvp-row-3 {
+  --podium-c: var(--podium-3);
+  --podium-rgb: var(--podium-3-rgb);
+}
+
+.leaderboard-table tr.mvp-row-4 {
+  --podium-c: var(--podium-4);
+  --podium-rgb: var(--podium-4-rgb);
+}
+
+.leaderboard-table tr.mvp-row-5 {
+  --podium-c: var(--podium-5);
+  --podium-rgb: var(--podium-5-rgb);
 }
 
 .user-mention {
@@ -1631,8 +1656,14 @@ a:hover {
   gap: 2px 8px;
   padding: 6px 8px;
   border-radius: 10px;
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid color-mix(in srgb, var(--roster-class-color) 38%, transparent);
+  border-left: 3px solid var(--roster-class-color);
   background: rgba(17, 25, 45, 0.7);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--roster-class-color) 10%, transparent);
+}
+
+.roster-member--inactive {
+  opacity: 0.58;
 }
 
 .roster-member-main {
@@ -1672,6 +1703,53 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.roster-card-toggle,
+.roster-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.roster-card-toggle {
+  grid-column: 1 / -1;
+}
+
+.roster-card-toggle input,
+.roster-active-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.roster-card-toggle .raid-watcher-switch,
+.roster-active-toggle .raid-watcher-switch {
+  width: 30px;
+  height: 17px;
+}
+
+.roster-card-toggle .raid-watcher-switch::after,
+.roster-active-toggle .raid-watcher-switch::after {
+  width: 11px;
+  height: 11px;
+}
+
+.roster-card-toggle input:checked + .raid-watcher-switch,
+.roster-active-toggle input:checked + .raid-watcher-switch {
+  background: var(--accent);
+}
+
+.roster-card-toggle input:checked + .raid-watcher-switch::after,
+.roster-active-toggle input:checked + .raid-watcher-switch::after {
+  transform: translateX(13px);
+}
+
+.roster-delete-button {
+  justify-self: start;
 }
 
 .roster-off {

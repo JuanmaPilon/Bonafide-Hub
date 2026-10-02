@@ -1306,6 +1306,7 @@ export type RosterRankKey = "bench" | "guild" | "raid" | "trial";
 // Ficha del roster: clase + spec actual + las off que domina (claves del
 // catálogo, que es de donde salen los emojis).
 export type RosterProfileInput = {
+  active?: boolean;
   className: string;
   game?: string;
   offSpecs?: string[];
@@ -1314,6 +1315,7 @@ export type RosterProfileInput = {
 };
 
 export type RosterProfile = {
+  active: boolean;
   className: string;
   game: string;
   offSpecs: string[];
@@ -1370,6 +1372,16 @@ export async function saveMemberRosterProfile(
     { body: JSON.stringify(input), method: "PUT" },
   );
   return data.profile;
+}
+
+export async function deleteMemberRosterProfile(
+  guildId: string,
+  userId: string,
+): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(
+    `/guilds/${guildId}/roster/${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function saveRosterRanks(

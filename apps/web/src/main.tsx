@@ -59,10 +59,12 @@ import {
   updateCommunication,
   updateDailyMessage,
   EVENT_TYPES,
+  classColor,
   classEmoji,
   createEvent,
   createEventSpec,
   createGuildRole,
+  deleteMemberRosterProfile,
   deleteEvent,
   deleteEventImage,
   deleteEventSpec,
@@ -2016,17 +2018,21 @@ function rosterSpecKey(
 // Panel de la ficha: clase + spec actual + las off que domina (solo specs de
 // esa clase).
 function RosterSheet({
+  canDelete,
   games,
   memberName,
   onClose,
+  onDelete,
   onSave,
   profile,
   saving,
   specs,
 }: {
+  canDelete: boolean;
   games: Array<{ key: string; label: string }>;
   memberName: string;
   onClose: () => void;
+  onDelete: () => void;
   onSave: (input: RosterProfileInput) => void;
   profile: RosterProfile | null;
   saving: boolean;
@@ -2061,7 +2067,7 @@ function RosterSheet({
   const [offSpecs, setOffSpecs] = useState<string[]>(
     profile?.game === "wow" ? profile.offSpecs : [],
   );
-  const [tags, setTags] = useState<EventTag[]>(profile?.tags ?? []);
+  const [active, setActive] = useState(profile?.active ?? true);
 
   function pickClass(next: string): void {
     setClassName(next);
@@ -2151,10 +2157,15 @@ function RosterSheet({
             </div>
           </div>
         ) : null}
-        <label className="roster-sheet-field">
-          <span>Tags</span>
-          <TagsField onChange={setTags} suggestions={[]} tags={tags} />
-        </label>
+        {canDelete && profile ? (
+          <button
+            className="danger-button roster-delete-button"
+            onClick={onDelete}
+            type="button"
+          >
+            Eliminar ficha
+          </button>
+        ) : null}
         <div className="form-actions">
           <button
             className="ghost-button cancel-button"
@@ -2167,13 +2178,31 @@ function RosterSheet({
             className="primary-button"
             disabled={saving || !className || !specName}
             onClick={() =>
-              onSave({ className, game, offSpecs, specName, tags })
+              onSave({
+                active,
+                className,
+                game,
+                offSpecs,
+                specName,
+                tags: profile?.tags ?? [],
+              })
             }
             type="button"
           >
             {saving ? "Guardando…" : "Guardar ficha"}
           </button>
         </div>
+        {canDelete && profile ? (
+          <label className="roster-active-toggle">
+            <span>Ficha activa</span>
+            <input
+              checked={active}
+              onChange={(event) => setActive(event.target.checked)}
+              type="checkbox"
+            />
+            <span className="raid-watcher-switch" aria-hidden="true" />
+          </label>
+        ) : null}
       </div>
     </div>
   );
@@ -2312,6 +2341,69 @@ function RosterSection({
     }
   }
 
+  async function toggleProfileActive(member: RosterMember): Promise<void> {
+    if (!member.profile || !canEditOthers) {
+      return;
+    }
+    try {
+      const profile = await saveMemberRosterProfile(guildId, member.userId, {
+        ...member.profile,
+        active: !member.profile.active,
+      });
+      setRoster((current) =>
+        current
+          ? {
+              ...current,
+              members: current.members.map((row) =>
+                row.userId === member.userId ? { ...row, profile } : row,
+              ),
+            }
+          : current,
+      );
+      notify(
+        profile.active ? "Ficha activada." : "Ficha desactivada.",
+        "success",
+      );
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "No se pudo cambiar el estado.",
+        "error",
+      );
+    }
+  }
+
+  async function deleteProfile(): Promise<void> {
+    const target = sheetFor;
+    if (!target || !canEditOthers) {
+      return;
+    }
+    if (!window.confirm("¿Eliminar esta ficha del roster?")) {
+      return;
+    }
+    try {
+      await deleteMemberRosterProfile(guildId, target.userId);
+      setRoster((current) =>
+        current
+          ? {
+              ...current,
+              members: current.members.map((member) =>
+                member.userId === target.userId
+                  ? { ...member, profile: null }
+                  : member,
+              ),
+            }
+          : current,
+      );
+      setSheetFor(null);
+      notify("Ficha eliminada.", "success");
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "No se pudo eliminar la ficha.",
+        "error",
+      );
+    }
+  }
+
   function renderMember(member: RosterMember) {
     const profile = member.profile;
     const main = profile
@@ -2320,7 +2412,16 @@ function RosterSection({
         )
       : undefined;
     return (
-      <article className="roster-member" key={member.userId}>
+      <article
+        className={`roster-member${profile && !profile.active ? " roster-member--inactive" : ""}`}
+        key={member.userId}
+        style={
+          {
+            "--roster-class-color":
+              classColor(profile?.className) ?? "#6aa8ff",
+          } as CSSProperties
+        }
+      >
         <div className="roster-member-main">
           <button
             className="member-link roster-member-name"
@@ -2385,16 +2486,16 @@ function RosterSection({
             })}
           </div>
         ) : null}
-        {profile && profile.tags.length > 0 ? (
-          <div className="roster-member-tags">
-            {profile.tags.map((tag) => (
-              <ComunicadoTag
-                color={tag.color}
-                label={tag.label}
-                key={tag.label}
-              />
-            ))}
-          </div>
+        {canEditOthers && profile ? (
+          <label className="roster-card-toggle">
+            <span>{profile.active ? "Activo" : "Inactivo"}</span>
+            <input
+              checked={profile.active}
+              onChange={() => void toggleProfileActive(member)}
+              type="checkbox"
+            />
+            <span className="raid-watcher-switch" aria-hidden="true" />
+          </label>
         ) : null}
       </article>
     );
@@ -2516,9 +2617,11 @@ function RosterSection({
 
       {sheetFor ? (
         <RosterSheet
+          canDelete={canEditOthers}
           games={roster?.games ?? []}
           memberName={sheetFor.displayName}
           onClose={() => setSheetFor(null)}
+          onDelete={() => void deleteProfile()}
           onSave={(input) => void saveSheet(input)}
           profile={
             members.find((member) => member.userId === sheetFor.userId)
@@ -9184,7 +9287,9 @@ function App() {
                             <tr
                               key={entry.userId}
                               className={
-                                entry.rank <= 5 ? "mvp-row" : undefined
+                                entry.rank <= 5
+                                  ? `mvp-row mvp-row-${entry.rank}`
+                                  : undefined
                               }
                             >
                               <td>

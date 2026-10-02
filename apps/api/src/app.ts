@@ -163,6 +163,7 @@ import {
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
 import {
+  deleteRosterProfile,
   listRosterProfiles,
   upsertRosterProfile,
   type RosterProfile,
@@ -4922,6 +4923,7 @@ export function buildApp() {
     }
 
     const game = "wow";
+    const active = raw.active !== false;
     const specs = await listRaidSpecs(guildId, game);
     const main = specs.find(
       (spec) => spec.className === className && spec.specName === specName,
@@ -4967,6 +4969,7 @@ export function buildApp() {
 
     return {
       profile: {
+        active,
         className,
         game: main.game,
         offSpecs,
@@ -5118,6 +5121,30 @@ export function buildApp() {
       targetType: "user",
     });
     return { ok: true, profile };
+  });
+
+  app.delete("/guilds/:guildId/roster/:userId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; userId?: string };
+    if (!params.guildId || !params.userId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const deleted = await deleteRosterProfile(params.guildId, params.userId);
+    await logAdminAction(session, params.guildId, "roster:delete", {
+      details: `Ficha de ${params.userId} eliminada.`,
+      targetId: params.userId,
+      targetType: "user",
+    });
+    return { ok: true, deleted };
   });
 
   // Rol de Discord que representa cada rango del roster.

@@ -4,6 +4,7 @@ import { prisma } from "../db/prisma.js";
 // off que domina. `game`/`className`/`specName` son las claves del catálogo
 // RaidSpec de la guild (de ahí salen los emojis).
 export type RosterProfile = {
+  active: boolean;
   className: string;
   game: string;
   offSpecs: string[];
@@ -42,6 +43,7 @@ export async function listRosterProfiles(
     records.map((record) => [
       record.userId,
       {
+        active: record.active,
         className: record.className,
         game: record.game,
         offSpecs: record.offSpecs,
@@ -63,10 +65,21 @@ export async function upsertRosterProfile(
     where: { guildId_userId: { guildId, userId } },
   });
   return {
+    active: record.active,
     className: record.className,
     game: record.game,
     offSpecs: record.offSpecs,
     specName: record.specName,
     tags: normalizeTags(record.tags),
   };
+}
+
+export async function deleteRosterProfile(
+  guildId: string,
+  userId: string,
+): Promise<boolean> {
+  const result = await prisma.rosterProfile.deleteMany({
+    where: { guildId, userId },
+  });
+  return result.count > 0;
 }
