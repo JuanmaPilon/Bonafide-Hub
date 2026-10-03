@@ -1809,13 +1809,13 @@ a:hover {
   gap: 6px;
 }
 
-/* Etiqueta de Raid Lead: cuelga del borde superior de la tarjeta, como la
+/* Etiqueta de Raid Officer: cuelga del borde superior de la tarjeta, como la
    etiqueta de rareza de Karuta. Va centrada y por encima del borde para no
    pisar el tag de estado ni el lápiz de edición (ambos arriba a la derecha). */
-.roster-lead-flag {
-  /* Color del rol de Raid Lead: el inline lo pisa con el de Discord. */
-  --roster-lead-color: #c98a1b;
-  --roster-lead-color-2: #ffe9a8;
+.roster-officer-flag {
+  /* Color del rol de Raid Officer: el inline lo pisa con el de Discord. */
+  --roster-officer-color: #c98a1b;
+  --roster-officer-color-2: #ffe9a8;
   position: absolute;
   top: -9px;
   left: 50%;
@@ -1823,12 +1823,12 @@ a:hover {
   transform: translateX(-50%);
   padding: 2px 10px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--roster-lead-color) 78%, white);
+  border: 1px solid color-mix(in srgb, var(--roster-officer-color) 78%, white);
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--roster-lead-color) 68%, black) 0%,
-    var(--roster-lead-color) 52%,
-    var(--roster-lead-color-2) 100%
+    color-mix(in srgb, var(--roster-officer-color) 68%, black) 0%,
+    var(--roster-officer-color) 52%,
+    var(--roster-officer-color-2) 100%
   );
   color: #fff;
   font-size: 0.62rem;

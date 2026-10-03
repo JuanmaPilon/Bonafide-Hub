@@ -5119,7 +5119,7 @@ export function buildApp() {
   });
 
   // ── Roster de raids ────────────────────────────────────────────────
-  // Lista actual: cada rango (Raid/Bench/Raid Lead) se llena con los miembros
+  // Lista actual: cada rango (Raid/Bench/Raid Officer) se llena con los miembros
   // que tienen el rol de Discord mapeado, y cada uno carga su ficha (clase,
   // spec actual y las off que domina). Las fichas usan las claves del catálogo
   // RaidSpec, de donde salen los emojis.
@@ -5218,9 +5218,9 @@ export function buildApp() {
       listRaidSpecs(params.guildId, "wow"),
     ]);
 
-    // El estado (raid/bench) y ser Raid Lead son cosas distintas: alguien
-    // puede ser Raid Lead y estar inactivo a la vez. Compartir el mismo campo
-    // hacía que el Raid Lead tapara el estado, o que se perdiera.
+    // El estado (raid/bench) y ser Raid Officer son cosas distintas: alguien
+    // puede ser Raid Officer y estar inactivo a la vez. Compartir el mismo
+    // campo hacía que el Raid Officer tapara el estado, o que se perdiera.
     const stateByRole = new Map<string, RosterRankKey>();
     for (const key of ROSTER_STATE_RANKS) {
       const roleId = rankRoles[key];
@@ -5228,7 +5228,7 @@ export function buildApp() {
         stateByRole.set(roleId, key);
       }
     }
-    const raidLeadRoleId = rankRoles.guild;
+    const raidOfficerRoleId = rankRoles.guild;
 
     const rows = members
       .map((member) => {
@@ -5241,11 +5241,12 @@ export function buildApp() {
           roles
             .map((roleId) => stateByRole.get(roleId))
             .find((key): key is RosterRankKey => Boolean(key)) ?? null;
-        const isRaidLead =
-          Boolean(raidLeadRoleId) && roles.includes(raidLeadRoleId as string);
+        const isRaidOfficer =
+          Boolean(raidOfficerRoleId) &&
+          roles.includes(raidOfficerRoleId as string);
         const profile = profiles.get(userId) ?? null;
-        // Fuera del roster: sin rol de estado, sin Raid Lead y sin ficha.
-        if (!rankKey && !isRaidLead && !profile) {
+        // Fuera del roster: sin rol de estado, sin Raid Officer y sin ficha.
+        if (!rankKey && !isRaidOfficer && !profile) {
           return null;
         }
         return {
@@ -5254,7 +5255,7 @@ export function buildApp() {
             member.user?.global_name ??
             member.user?.username ??
             userId,
-          isRaidLead,
+          isRaidOfficer,
           profile,
           rankKey,
           userId,

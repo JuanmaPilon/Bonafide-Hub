@@ -1358,8 +1358,8 @@ export type RosterProfile = {
 
 export type RosterMember = {
   displayName: string;
-  // Ser Raid Lead va aparte del estado: se puede ser Raid Lead e inactivo.
-  isRaidLead: boolean;
+  // Ser Raid Officer va aparte del estado: se puede ser Raid Officer e inactivo.
+  isRaidOfficer: boolean;
   profile: RosterProfile | null;
   // null = tiene ficha pero ninguno de los roles de estado.
   rankKey: RosterRankKey | null;

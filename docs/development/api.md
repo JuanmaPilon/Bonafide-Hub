@@ -73,7 +73,7 @@ Roster de raids:
 
 El estado del roster **es** el rol de Discord del miembro: solo el endpoint de
 rango mueve roles. Administra `raid` (Activo) y `trial` (Prueba); `guild`
-(officer) se mapea aparte y el roster nunca lo toca. Guardar la ficha no toca
+(Raid Officer) se mapea aparte y el roster nunca lo toca. Guardar la ficha no toca
 los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
 el motivo y el guardado no se pierde.
 

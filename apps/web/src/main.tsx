@@ -2560,13 +2560,13 @@ function RosterSection({
     (member) =>
       member.rankKey === "raid" ||
       member.rankKey === "bench" ||
-      member.isRaidLead ||
+      member.isRaidOfficer ||
       (member.rankKey === null && member.profile),
   );
 
-  // Color del rol de Raid Lead (el que se mapeó en Admin → Mapeo), para que la
-  // etiqueta se vea como el rol en Discord.
-  const raidLeadColors = useMemo(() => {
+  // Color del rol de Raid Officer (el que se mapeó en Admin → Mapeo), para que
+  // la etiqueta se vea como el rol en Discord.
+  const raidOfficerColors = useMemo(() => {
     const roleId = (roster?.ranks ?? []).find(
       (rank) => rank.key === "guild",
     )?.roleId;
@@ -2753,9 +2753,9 @@ function RosterSection({
     const classEmojiMeta = profile
       ? roster?.classEmojis?.[profile.className]
       : undefined;
-    const isOfficer = member.isRaidLead;
-    // El estado va con la ficha, sin importar si es Raid Lead: son cosas
-    // distintas y se puede ser Raid Lead e inactivo a la vez.
+    const isRaidOfficer = member.isRaidOfficer;
+    // El estado va con la ficha, sin importar si es Raid Officer: son cosas
+    // distintas y se puede ser Raid Officer e inactivo a la vez.
     const rosterStatus = profile ? rosterRankLabel(member.rankKey) : null;
     const canToggleStatus = canEditOthers && rosterStatus !== null;
     // La tarjeta entera abre la edición: el lápiz flotante quedaba descolgado
@@ -2785,18 +2785,18 @@ function RosterSection({
           } as CSSProperties
         }
       >
-        {isOfficer ? (
+        {isRaidOfficer ? (
           <span
-            className="roster-lead-flag"
+            className="roster-officer-flag"
             style={
               {
-                "--roster-lead-color": raidLeadColors.primary,
-                "--roster-lead-color-2":
-                  raidLeadColors.secondary ?? raidLeadColors.primary,
+                "--roster-officer-color": raidOfficerColors.primary,
+                "--roster-officer-color-2":
+                  raidOfficerColors.secondary ?? raidOfficerColors.primary,
               } as CSSProperties
             }
           >
-            Raid Lead
+            Raid Officer
           </span>
         ) : null}
         <div className="roster-member-main">

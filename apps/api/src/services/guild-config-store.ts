@@ -149,11 +149,11 @@ export function normalizeEventGames(value: unknown): EventGameConfig[] | null {
 export const ROSTER_RANKS: Array<{ key: RosterRankKey; label: string }> = [
   { key: "raid", label: "Raid" },
   { key: "bench", label: "Bench" },
-  { key: "guild", label: "Raid Lead" },
+  { key: "guild", label: "Raid Officer" },
 ];
 
 // Rangos que el roster administra al cambiar el estado de una tarjeta.
-// `guild` (Raid Lead) se mapea aparte: el roster nunca lo toca.
+// `guild` (Raid Officer) se mapea aparte: el roster nunca lo toca.
 export const ROSTER_STATE_RANKS: RosterRankKey[] = ["raid", "bench"];
 
 export type RosterRankKey = "bench" | "guild" | "raid";
