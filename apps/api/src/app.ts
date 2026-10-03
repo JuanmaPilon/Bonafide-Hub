@@ -748,13 +748,6 @@ function parseRosterRank(value: unknown): RosterRankKey | null | "invalid" {
 // El catálogo de entidades lo define el código (rangos del roster, clases del
 // catálogo); la guild solo elige el rol y/o el emoji de cada una.
 
-// Etiquetas del roster en el registro: las mismas que muestra la tarjeta.
-const ROSTER_MAPPING_LABELS: Record<RosterRankKey, string> = {
-  guild: "Officer",
-  raid: "Activo",
-  trial: "Prueba",
-};
-
 function rosterMappingKey(rank: RosterRankKey): string {
   return `roster.${rank}`;
 }
@@ -815,7 +808,7 @@ function buildMappingGroups(
         return {
           emoji: mapping?.emoji,
           key: rosterMappingKey(rank.key),
-          label: ROSTER_MAPPING_LABELS[rank.key],
+          label: rank.label,
           roleId: mapping?.roleId,
         };
       }),

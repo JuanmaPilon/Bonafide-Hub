@@ -1809,7 +1809,7 @@ a:hover {
   gap: 6px;
 }
 
-.roster-officer-badge {
+.roster-lead-badge {
   padding: 3px 7px;
   border: 1px solid rgba(134, 158, 214, 0.5);
   border-radius: 999px;
@@ -1826,17 +1826,26 @@ a:hover {
   position: relative;
 }
 
-.mapping-rows {
-  display: grid;
-  gap: 8px;
+.mapping-group + .mapping-group {
+  margin-top: 18px;
+}
+
+.mapping-group-title {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mapping-item + .mapping-item {
+  margin-top: 6px;
 }
 
 .mapping-row {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(
-      110px,
-      1fr
-    );
+  grid-template-columns: minmax(96px, 1fr) minmax(150px, 1.2fr) auto;
   align-items: center;
   gap: 8px;
 }
@@ -1845,9 +1854,40 @@ a:hover {
   font-weight: 700;
 }
 
+.mapping-emoji-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px dashed rgba(134, 158, 214, 0.5);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.mapping-emoji-button.active {
+  border-style: solid;
+  border-color: rgba(106, 168, 255, 0.55);
+}
+
+.mapping-emoji-button:hover,
+.mapping-emoji-button:focus-visible {
+  border-color: rgba(134, 158, 214, 0.85);
+  color: var(--text);
+}
+
+.mapping-item .spec-emoji-grid {
+  margin-top: 8px;
+}
+
 @media (max-width: 720px) {
-  .mapping-row {
-    grid-template-columns: 1fr;
+  .mapping-label {
+    grid-column: 1 / -1;
   }
 }
 

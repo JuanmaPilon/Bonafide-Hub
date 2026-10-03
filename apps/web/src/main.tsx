@@ -2243,6 +2243,8 @@ function AdminMappingsSection({
   >({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Fila con el selector de emojis abierto: solo una a la vez.
+  const [emojiPickerFor, setEmojiPickerFor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -2331,60 +2333,111 @@ function AdminMappingsSection({
   }
 
   return (
-    <div className="admin-grid">
-      {groups.map((group) => (
-        <section className="admin-card" key={group.key}>
-          <h3>{group.label}</h3>
-          <div className="mapping-rows">
-            {group.rows.map((row) => (
-              <div className="mapping-row" key={row.key}>
-                <span className="mapping-label">{row.label}</span>
-                <select
-                  aria-label={`Rol de ${row.label}`}
-                  className="select"
-                  onChange={(event) =>
-                    patch(row.key, { roleId: event.target.value })
-                  }
-                  value={draft[row.key]?.roleId ?? ""}
-                >
-                  <option value="">Sin rol</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  aria-label={`Emoji de ${row.label}`}
-                  className="select"
-                  onChange={(event) =>
-                    patch(row.key, { emojiId: event.target.value })
-                  }
-                  value={draft[row.key]?.emojiId ?? ""}
-                >
-                  <option value="">Sin emoji</option>
-                  {emojis.map((emoji) => (
-                    <option key={emoji.id} value={emoji.id}>
-                      {emoji.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+    <details open className="admin-card admin-card-acc admin-card--admin">
+      <summary className="admin-card-header admin-acc-header">
+        <div>
+          <h3>
+            Mapeo <span className="admin-tier-badge tier-admin">Admin</span>
+          </h3>
+        </div>
+        <span className="admin-acc-chevron" aria-hidden="true">
+          ▸
+        </span>
+      </summary>
+      <div className="admin-card-body">
+        {groups.map((group) => (
+          <div className="mapping-group" key={group.key}>
+            <h4 className="mapping-group-title">{group.label}</h4>
+            {group.rows.map((row) => {
+              const emojiId = draft[row.key]?.emojiId;
+              const emoji = emojis.find((entry) => entry.id === emojiId);
+              return (
+                <div className="mapping-item" key={row.key}>
+                  <div className="mapping-row">
+                    <span className="mapping-label">{row.label}</span>
+                    <select
+                      aria-label={`Rol de ${row.label}`}
+                      className="select"
+                      onChange={(event) =>
+                        patch(row.key, { roleId: event.target.value })
+                      }
+                      value={draft[row.key]?.roleId ?? ""}
+                    >
+                      <option value="">Sin rol</option>
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className={`mapping-emoji-button${emoji ? " active" : ""}`}
+                      onClick={() =>
+                        setEmojiPickerFor((current) =>
+                          current === row.key ? null : row.key,
+                        )
+                      }
+                      title={emoji ? `:${emoji.name}:` : "Elegir emoji"}
+                      type="button"
+                    >
+                      {emoji ? (
+                        <DiscordEmojiImage
+                          animated={emoji.animated}
+                          emojiId={emoji.id}
+                          name={emoji.name}
+                          size={20}
+                        />
+                      ) : (
+                        "＋"
+                      )}
+                    </button>
+                  </div>
+                  {emojiPickerFor === row.key ? (
+                    <div className="spec-emoji-grid">
+                      {emojis.map((entry) => {
+                        const selected = emojiId === entry.id;
+                        return (
+                          <button
+                            className={`spec-emoji-option${selected ? " active" : ""}`}
+                            key={entry.id}
+                            onClick={() =>
+                              patch(row.key, {
+                                emojiId: selected ? undefined : entry.id,
+                              })
+                            }
+                            title={
+                              selected ? `Quitar :${entry.name}:` : `:${entry.name}:`
+                            }
+                            type="button"
+                          >
+                            <DiscordEmojiImage
+                              animated={entry.animated}
+                              emojiId={entry.id}
+                              name={entry.name}
+                              size={22}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
-        </section>
-      ))}
-      <div className="form-actions">
-        <button
-          className="primary-button"
-          disabled={saving}
-          onClick={() => void save()}
-          type="button"
-        >
-          {saving ? "Guardando…" : "Guardar mapeos"}
-        </button>
+        ))}
+        <div className="admin-card-footer">
+          <button
+            className="primary-button"
+            disabled={saving}
+            onClick={() => void save()}
+            type="button"
+          >
+            {saving ? "Guardando…" : "Guardar mapeos"}
+          </button>
+        </div>
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -2729,7 +2782,7 @@ function RosterSection({
         ) : null}
         <div className="roster-flags">
           {isOfficer ? (
-            <span className="roster-officer-badge">Officer</span>
+            <span className="roster-lead-badge">Raid Lead</span>
           ) : null}
           {rosterStatus ? (
             canToggleStatus ? (
