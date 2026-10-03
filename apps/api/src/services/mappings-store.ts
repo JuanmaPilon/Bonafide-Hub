@@ -81,6 +81,13 @@ export async function saveGuildMappings(
     }))
     .filter((mapping) => mapping.key.length > 0);
 
+  // Un payload vacío borraría TODOS los mapeos: `notIn: []` no filtra nada y el
+  // deleteMany se lleva la tabla entera. La web siempre manda el catálogo
+  // completo, así que llegar vacío es un bug del cliente, no una intención.
+  if (clean.length === 0) {
+    throw new Error("No llegó ningún mapeo para guardar.");
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.guildMapping.deleteMany({
       where: { guildId, key: { notIn: clean.map((mapping) => mapping.key) } },

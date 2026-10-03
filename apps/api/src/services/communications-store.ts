@@ -13,6 +13,8 @@ export type Communication = {
   discordMessageIds: string[];
   guildId: string;
   id: string;
+  // Lugar que ocupa en el tablero del hub (0 = primero).
+  position: number;
   // Última publicación. Sin fecha = borrador.
   publishedAt?: Date;
   status: CommunicationStatus;
@@ -30,6 +32,7 @@ function toCommunication(record: {
   discordMessageIds: string[];
   guildId: string;
   id: string;
+  position: number;
   publishedAt: Date | null;
   status: string;
   tagColor: string | null;
@@ -46,6 +49,7 @@ function toCommunication(record: {
     discordMessageIds: record.discordMessageIds,
     guildId: record.guildId,
     id: record.id,
+    position: record.position,
     publishedAt: record.publishedAt ?? undefined,
     status: (record.status === "published"
       ? "published"
@@ -74,14 +78,37 @@ export async function getCommunication(
 }
 
 // Comunicados publicados: es lo que ve el hub (cualquier miembro de la guild).
+// El orden lo manda `position` (lo que el staff acomodó arrastrando las
+// tarjetas); los que todavía están en 0 caen por fecha, así una guild que nunca
+// reordenó sigue viendo lo último publicado primero.
 export async function listPublishedCommunications(
   guildId: string,
 ): Promise<Communication[]> {
   const records = await prisma.communication.findMany({
     where: { guildId, status: "published" },
-    orderBy: { publishedAt: "desc" },
+    orderBy: [{ position: "asc" }, { publishedAt: "desc" }],
   });
   return records.map(toCommunication);
+}
+
+// Guarda el orden del tablero: la lista llega tal como quedó (el índice es el
+// puesto). El filtro por guildId evita tocar filas de otra guild.
+export async function reorderCommunications(
+  guildId: string,
+  ids: string[],
+): Promise<void> {
+  const unique = [...new Set(ids.filter((id) => typeof id === "string"))];
+  if (unique.length === 0) {
+    return;
+  }
+  await prisma.$transaction(
+    unique.map((id, index) =>
+      prisma.communication.updateMany({
+        data: { position: index },
+        where: { guildId, id },
+      }),
+    ),
+  );
 }
 
 export async function createCommunication(input: {
@@ -92,12 +119,18 @@ export async function createCommunication(input: {
   tags?: unknown;
   title: string;
 }): Promise<Communication> {
+  // Los nuevos van al final del tablero: el orden se cambia arrastrando.
+  const last = await prisma.communication.aggregate({
+    where: { guildId: input.guildId },
+    _max: { position: true },
+  });
   const record = await prisma.communication.create({
     data: {
       authorName: input.authorName?.trim() || null,
       channelId: input.channelId?.trim() || null,
       content: input.content,
       guildId: input.guildId,
+      position: (last._max.position ?? 0) + 1,
       tags: normalizeTags(input.tags) as Prisma.InputJsonValue,
       title: input.title.trim(),
     },

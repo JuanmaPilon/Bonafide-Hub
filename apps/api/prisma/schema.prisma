@@ -166,6 +166,9 @@ model Communication {
   // actualiza el mensaje de Discord en su lugar).
   discordMessageIds String[]  @default([])
   publishedAt       DateTime?
+  // Orden de las tarjetas en el tablero del hub. Lo define quien arrastra una
+  // tarjeta (PUT /communications/order); lo nuevo arranca al final.
+  position          Int       @default(0)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   // LEGACY: cuando cada publicación creaba una instancia (snapshot) con su

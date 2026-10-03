@@ -171,6 +171,8 @@ export type Communication = {
   discordMessageIds: string[];
   guildId: string;
   id: string;
+  // Lugar que ocupa la tarjeta en el tablero del hub (0 = primera).
+  position: number;
   // Última publicación (vacío = borrador).
   publishedAt?: string;
   status: "draft" | "published";
@@ -1979,6 +1981,18 @@ export async function deleteCommunication(
   return requestJson<{ deleted: boolean }>(
     `/guilds/${guildId}/communications/${communicationId}`,
     { method: "DELETE" },
+  );
+}
+
+// Guarda el orden del tablero: la lista va en el orden en que quedó (el índice
+// es el puesto de cada tarjeta).
+export async function reorderCommunications(
+  guildId: string,
+  ids: string[],
+): Promise<void> {
+  await requestJson<{ ok: boolean }>(
+    `/guilds/${guildId}/communications/order`,
+    { body: JSON.stringify({ ids }), method: "PUT" },
   );
 }
 

@@ -29,6 +29,7 @@ import {
   listCommunications,
   listPublishedCommunications,
   postMessages,
+  reorderCommunications,
   setCommunicationPublication,
   splitForDiscord,
   updateCommunication,
@@ -125,6 +126,7 @@ import {
   setEventRecurrenceNext,
   type EventTag,
   type HubEvent,
+  type RaidSpec,
   updateEvent,
   updateRaidSpec,
   upsertSignup,
@@ -806,10 +808,34 @@ function resolveClassEmojis(
   return emojis;
 }
 
+// Emoji de clase EFECTIVO: manda el registro central (`class.<Clase>`) y, si la
+// clase no está mapeada, se usa el emoji que quedó guardado en las specs de esa
+// clase. Ese era el origen antes del módulo de Mapeo: sin este respaldo, las
+// clases que la guild ya había personalizado volvían al emoji fijo del código.
+function resolveClassEmojisWithFallback(
+  mappings: Map<string, GuildMapping>,
+  specs: RaidSpec[],
+): Record<string, MappingEmoji> {
+  const emojis = resolveClassEmojis(mappings);
+  for (const spec of specs) {
+    const emojiId = spec.emojiId?.trim();
+    if (emojis[spec.className] || !emojiId) {
+      continue;
+    }
+    emojis[spec.className] = {
+      animated: spec.animated,
+      emojiId,
+      emojiName: spec.emojiName,
+    };
+  }
+  return emojis;
+}
+
 // Filas del Admin de Mapeo: el catálogo completo con lo elegido por la guild.
 function buildMappingGroups(
   mappings: Map<string, GuildMapping>,
   classes: string[],
+  classEmojis: Record<string, MappingEmoji>,
 ): Array<{
   key: string;
   label: string;
@@ -840,7 +866,9 @@ function buildMappingGroups(
       rows: classes.map((className) => {
         const mapping = mappings.get(classMappingKey(className));
         return {
-          emoji: mapping?.emoji,
+          // Respaldo de las specs: sin esto el Admin mostraba la clase vacía
+          // aunque el roster estuviera usando un emoji guardado en la spec.
+          emoji: mapping?.emoji ?? classEmojis[className],
           key: classMappingKey(className),
           label: className,
           roleId: mapping?.roleId,
@@ -5266,7 +5294,7 @@ export function buildApp() {
 
     return {
       ok: true,
-      classEmojis: resolveClassEmojis(mappings),
+      classEmojis: resolveClassEmojisWithFallback(mappings, specs),
       games: [{ key: "wow", label: "World of Warcraft" }],
       guildId: params.guildId,
       members: rows,
@@ -5485,7 +5513,14 @@ export function buildApp() {
       left.localeCompare(right, "en"),
     );
 
-    return { ok: true, groups: buildMappingGroups(mappings, classes) };
+    return {
+      ok: true,
+      groups: buildMappingGroups(
+        mappings,
+        classes,
+        resolveClassEmojisWithFallback(mappings, specs),
+      ),
+    };
   });
 
   app.put("/guilds/:guildId/mappings", async (request, reply) => {
@@ -5515,7 +5550,17 @@ export function buildApp() {
         roleId: entry.roleId == null ? undefined : String(entry.roleId),
       }));
 
-    await saveGuildMappings(params.guildId, mappings);
+    try {
+      await saveGuildMappings(params.guildId, mappings);
+    } catch (error) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "No se pudieron guardar los mapeos.",
+      });
+    }
     await logAdminAction(session, params.guildId, "mappings:save", {
       details: `${mappings.length} vínculo/s guardados.`,
     });
@@ -8535,6 +8580,40 @@ export function buildApp() {
     });
 
     return { ok: true, communication };
+  });
+
+  // Orden de las tarjetas del tablero del hub. La web lo manda después de un
+  // arrastre; el índice de cada id pasa a ser su `position`.
+  app.put("/guilds/:guildId/communications/order", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "comunicados"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { ids?: unknown };
+    const ids = Array.isArray(body.ids)
+      ? body.ids
+          .filter((id): id is string => typeof id === "string")
+          .slice(0, 500)
+      : [];
+    if (ids.length === 0) {
+      return reply.code(400).send({ ok: false, error: "Faltan ids" });
+    }
+
+    await reorderCommunications(params.guildId, ids);
+    await logAdminAction(session, params.guildId, "reorder:communication", {
+      details: `Tablero de comunicados reordenado (${ids.length}).`,
+    });
+    return { ok: true };
   });
 
   app.patch(

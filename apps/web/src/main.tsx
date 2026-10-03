@@ -17,6 +17,7 @@ import {
   createDailyMessage,
   createRaidLog,
   deleteCommunication,
+  reorderCommunications,
   deleteDailyMessage,
   deleteRaidLogPermanent,
   exportXpData,
@@ -1514,7 +1515,7 @@ function auditActionLabel(action: string): string {
 // ── Filtros de listas (comunicados, eventos, raids, cartas) ─────────
 // Todas las listas comparten el mecanismo: buscador, orden por fecha o
 // alfabético y, donde haya etiquetas, chips para filtrar.
-type ListOrder = "az" | "newest" | "oldest" | "za";
+type ListOrder = "az" | "board" | "newest" | "oldest" | "za";
 type KarutaRarityFilter = "all" | "normal" | "super" | "ultra";
 
 const LIST_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
@@ -1522,6 +1523,14 @@ const LIST_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
   { key: "oldest", label: "Más antiguos" },
   { key: "az", label: "A-Z" },
   { key: "za", label: "Z-A" },
+];
+
+// El tablero de comunicados tiene un orden propio: el que arma el staff
+// arrastrando las tarjetas. Solo tiene sentido ahí, por eso no está en la lista
+// compartida.
+const COMUNICADO_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
+  { key: "board", label: "Orden del tablero" },
+  ...LIST_ORDER_OPTIONS,
 ];
 
 // Chips del filtro de rareza de Karuta: cada uno lleva el MATERIAL de su
@@ -1596,6 +1605,11 @@ function sortByOrder<T>(
 ): T[] {
   const time = (value?: string): number =>
     value ? new Date(value).getTime() : 0;
+  // "board": sin reordenar. Deja el orden con el que llegó la lista, que en los
+  // comunicados es el del tablero (lo que el staff acomodó arrastrando).
+  if (order === "board") {
+    return [...items];
+  }
   return [...items].sort((a, b) => {
     if (order === "az") {
       return labelOf(a).localeCompare(labelOf(b), "es");
@@ -1616,11 +1630,14 @@ function ListFilterBar({
   onOrderChange,
   onSearchChange,
   order,
+  orderOptions,
   placeholder,
   search,
 }: {
   children?: ReactNode;
   onOrderChange?: (order: ListOrder) => void;
+  // Opciones de orden propias de la lista (ej: el tablero de comunicados).
+  orderOptions?: Array<{ key: ListOrder; label: string }>;
   onSearchChange: (value: string) => void;
   order?: ListOrder;
   placeholder: string;
@@ -1642,7 +1659,7 @@ function ListFilterBar({
           onChange={(event) => onOrderChange(event.target.value as ListOrder)}
           value={order ?? "newest"}
         >
-          {LIST_ORDER_OPTIONS.map((option) => (
+          {(orderOptions ?? LIST_ORDER_OPTIONS).map((option) => (
             <option key={option.key} value={option.key}>
               {option.label}
             </option>
@@ -2258,9 +2275,11 @@ function AdminMappingsSection({
   const [botTopPosition, setBotTopPosition] = useState(0);
   const [emojis, setEmojis] = useState<GuildEmoji[]>([]);
   const [draft, setDraft] = useState<
-    Record<string, { emojiId?: string; roleId?: string }>
+    Record<string, { emojiId?: string; roleId?: string; unicode?: string }>
   >({});
   const [loading, setLoading] = useState(true);
+  // El catálogo no cargó: guardar en ese estado borraría los mapeos.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   // Fila con el selector de emojis abierto: solo una a la vez.
   const [emojiPickerFor, setEmojiPickerFor] = useState<string | null>(null);
@@ -2268,6 +2287,7 @@ function AdminMappingsSection({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadFailed(false);
     Promise.all([
       getGuildMappings(guildId),
       getGuildRolesDetailed(guildId),
@@ -2286,7 +2306,13 @@ function AdminMappingsSection({
             nextGroups.flatMap((group) =>
               group.rows.map((row) => [
                 row.key,
-                { emojiId: row.emoji?.emojiId, roleId: row.roleId },
+                {
+                  emojiId: row.emoji?.emojiId,
+                  roleId: row.roleId,
+                  // Los emojis unicode se guardan tal cual: si no se
+                  // conservan, guardar los borraba (quedaban como "sin emoji").
+                  unicode: row.emoji?.unicode,
+                },
               ]),
             ),
           ),
@@ -2294,6 +2320,7 @@ function AdminMappingsSection({
       })
       .catch(() => {
         if (!cancelled) {
+          setLoadFailed(true);
           notify("No se pudieron cargar los mapeos.", "error");
         }
       })
@@ -2309,7 +2336,7 @@ function AdminMappingsSection({
 
   function patch(
     key: string,
-    value: { emojiId?: string; roleId?: string },
+    value: { emojiId?: string; roleId?: string; unicode?: string },
   ): void {
     setDraft((current) => ({
       ...current,
@@ -2337,11 +2364,22 @@ function AdminMappingsSection({
   }
 
   async function save(): Promise<void> {
+    const rows = Object.entries(draft);
+    // El API reemplaza el catálogo entero: si llegara vacío, borraría todos los
+    // mapeos de la guild. Un guardado sin nada cargado es un error, no un
+    // "vaciar todo".
+    if (rows.length === 0) {
+      notify(
+        "No hay mapeos cargados para guardar. Recargá la página.",
+        "error",
+      );
+      return;
+    }
     setSaving(true);
     try {
       await saveGuildMappings(
         guildId,
-        Object.entries(draft).map(([key, row]) => ({
+        rows.map(([key, row]) => ({
           emoji: row.emojiId
             ? {
                 emojiId: row.emojiId,
@@ -2349,7 +2387,9 @@ function AdminMappingsSection({
                   emojis.find((emoji) => emoji.id === row.emojiId)?.name ??
                   "emoji",
               }
-            : undefined,
+            : row.unicode
+              ? { unicode: row.unicode }
+              : undefined,
           key,
           roleId: row.roleId || undefined,
         })),
@@ -2392,7 +2432,10 @@ function AdminMappingsSection({
           >
             <summary className="mapping-group-header">
               <span className="mapping-group-title">{group.label}</span>
-              <span className="mapping-group-count">{group.rows.length}</span>
+              <span className="mapping-group-count">
+                {group.rows.filter((row) => draft[row.key]?.emojiId).length} de{" "}
+                {group.rows.length} con emoji
+              </span>
               <span className="mapping-group-chevron" aria-hidden="true">
                 ▸
               </span>
@@ -2485,9 +2528,15 @@ function AdminMappingsSection({
         ))}
       </div>
       <div className="admin-card-footer">
+        {loadFailed ? (
+          <p className="mapping-warning">
+            El catálogo no cargó: guardar en este estado borra los mapeos.
+            Recargá la página.
+          </p>
+        ) : null}
         <button
           className="primary-button"
-          disabled={saving}
+          disabled={saving || loadFailed}
           onClick={() => void save()}
           type="button"
         >
@@ -5935,7 +5984,7 @@ function App() {
   const [eventSearch, setEventSearch] = useState("");
   const [eventOrder, setEventOrder] = useState<ListOrder>("newest");
   const [comunicadoSearch, setComunicadoSearch] = useState("");
-  const [comunicadoOrder, setComunicadoOrder] = useState<ListOrder>("newest");
+  const [comunicadoOrder, setComunicadoOrder] = useState<ListOrder>("board");
   const [comunicadoTagFilter, setComunicadoTagFilter] = useState<string[]>([]);
   const [raidLogSearch, setRaidLogSearch] = useState("");
   const [raidLogOrder, setRaidLogOrder] = useState<ListOrder>("newest");
@@ -7826,6 +7875,63 @@ function App() {
     setComunicadoSlug(null);
   }
 
+  // Un slug de la URL que no corresponde a ningún comunicado (enlace viejo, o
+  // el comunicado que se acaba de borrar) vuelve a la lista en vez de dejar la
+  // pestaña vacía. Se espera a que termine la carga: mientras `published` está
+  // vacío ningún slug resuelve.
+  useEffect(() => {
+    if (!comunicadoSlug || publishedLoading) {
+      return;
+    }
+    const exists = published.some(
+      (comm) => slugifyTitle(comm.title) === comunicadoSlug,
+    );
+    if (!exists) {
+      setComunicadoSlug(null);
+    }
+  }, [comunicadoSlug, published, publishedLoading]);
+
+  // Arrastre de las tarjetas del tablero. Solo el staff reordena: el orden es
+  // uno solo para toda la guild, no el de cada uno. Y solo con el orden del
+  // tablero activo: con otro orden la tarjeta no queda donde se suelta.
+  const canReorderCommunications =
+    canAccess("comunicados") && comunicadoOrder === "board";
+  const [draggedComunicadoId, setDraggedComunicadoId] = useState<string | null>(
+    null,
+  );
+  const [dragOverComunicadoId, setDragOverComunicadoId] = useState<
+    string | null
+  >(null);
+
+  async function dropComunicado(targetId: string): Promise<void> {
+    const draggedId = draggedComunicadoId;
+    setDraggedComunicadoId(null);
+    setDragOverComunicadoId(null);
+    if (!draggedId || !selectedGuildId || draggedId === targetId) {
+      return;
+    }
+    const from = published.findIndex((comm) => comm.id === draggedId);
+    const to = published.findIndex((comm) => comm.id === targetId);
+    if (from < 0 || to < 0) {
+      return;
+    }
+    const next = [...published];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    // Se pinta el orden nuevo ya mismo y se guarda detrás: el arrastre no
+    // debería esperar a la red.
+    setPublished(next);
+    try {
+      await reorderCommunications(
+        selectedGuildId,
+        next.map((comm) => comm.id),
+      );
+    } catch {
+      pushToast("No se pudo guardar el orden del tablero.", "error");
+      await refreshCommunications();
+    }
+  }
+
   // Escape cierra el comunicado abierto.
   useEffect(() => {
     if (!comunicadoSlug) {
@@ -7943,9 +8049,15 @@ function App() {
     if (!selectedGuildId) {
       return;
     }
+    const target = published.find((comm) => comm.id === id);
     try {
       await deleteCommunication(selectedGuildId, id);
       pushToast("Comunicado eliminado.", "success");
+      // Si el que estaba abierto era ese, se cierra: si no, el hash seguía
+      // apuntando a un comunicado que ya no existe.
+      if (target && comunicadoSlug === slugifyTitle(target.title)) {
+        setComunicadoSlug(null);
+      }
       await refreshCommunications();
     } catch (error) {
       pushToast(
@@ -12038,6 +12150,7 @@ function App() {
                         onOrderChange={setComunicadoOrder}
                         onSearchChange={setComunicadoSearch}
                         order={comunicadoOrder}
+                        orderOptions={COMUNICADO_ORDER_OPTIONS}
                         placeholder="Buscar comunicado…"
                         search={comunicadoSearch}
                       >
@@ -12094,9 +12207,41 @@ function App() {
                       <div className="comunicado-board">
                         {visiblePublished.map((comm) => (
                           <button
-                            className="comunicado-note"
+                            className={[
+                              "comunicado-note",
+                              canReorderCommunications
+                                ? "comunicado-note--draggable"
+                                : "",
+                              draggedComunicadoId === comm.id
+                                ? "comunicado-note--dragging"
+                                : "",
+                              dragOverComunicadoId === comm.id &&
+                              draggedComunicadoId !== comm.id
+                                ? "comunicado-note--over"
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            draggable={canReorderCommunications}
                             key={comm.id}
                             onClick={() => openComunicado(comm)}
+                            onDragEnd={() => {
+                              setDraggedComunicadoId(null);
+                              setDragOverComunicadoId(null);
+                            }}
+                            onDragOver={(event) => {
+                              if (!canReorderCommunications) {
+                                return;
+                              }
+                              // Sin esto el navegador no permite soltar acá.
+                              event.preventDefault();
+                              setDragOverComunicadoId(comm.id);
+                            }}
+                            onDragStart={() => setDraggedComunicadoId(comm.id)}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              void dropComunicado(comm.id);
+                            }}
                             type="button"
                           >
                             <span className="comunicado-note-title">
