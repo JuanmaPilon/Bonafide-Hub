@@ -161,7 +161,8 @@ export async function listRaidSpecs(
   return [
     ...fromCode,
     ...stored.filter(
-      (spec) => !codeKeys.has(`${spec.game}|${spec.className}|${spec.specName}`),
+      (spec) =>
+        !codeKeys.has(`${spec.game}|${spec.className}|${spec.specName}`),
     ),
   ];
 }

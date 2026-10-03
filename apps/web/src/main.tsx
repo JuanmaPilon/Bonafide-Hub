@@ -78,6 +78,7 @@ import {
   getEventImages,
   getEventSpecs,
   getEventGames,
+  getEventTemplates,
   getEvents,
   getGuildEmojis,
   getGuildMappings,
@@ -124,6 +125,7 @@ import {
   type RaidSpec,
   type EventGameOption,
   type EventRoleOption,
+  type EventTemplateSummary,
   type EventDiscordOptions,
   type EventSignup,
   type EventRoster,
@@ -6183,6 +6185,11 @@ function App() {
   // Catálogo de specs de inscripción (estilo Raid Helper). Los roles de cada
   // tipo de evento salen del código (event-templates), no de la guild.
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
+  // Tipos de evento (solo lectura en el panel): qué roles y qué catálogo trae
+  // cada uno. Los define el código.
+  const [eventTemplates, setEventTemplates] = useState<EventTemplateSummary[]>(
+    [],
+  );
   // Tarjeta Configuraciones del panel Admin (ahí vive el informe de
   // asistencia, que necesita la lista de miembros de la guild).
   const [showMainConfig, setShowMainConfig] = useState(false);
@@ -6841,6 +6848,25 @@ function App() {
       cancelled = true;
     };
   }, [activeTab, selectedGuildId]);
+
+  // Tipos de evento para el panel (solo lectura).
+  useEffect(() => {
+    if (!selectedGuildId || activeTab !== "admin" || !canAccess("config")) {
+      return;
+    }
+    let cancelled = false;
+    getEventTemplates(selectedGuildId)
+      .then((list) => {
+        if (!cancelled) {
+          setEventTemplates(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedGuildId, adminAccess]);
 
   // Canales de texto/voz para el editor de publicación en Discord de un
   // evento (solo staff). Se cargan la primera vez que se abre el form; el
@@ -11397,6 +11423,82 @@ function App() {
                     </details>
                   ) : null}
 
+                  {sectionFor("admin") === "eventos" && canAccess("config") ? (
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--admin"
+                    >
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>
+                            Eventos{" "}
+                            <span className="admin-tier-badge tier-admin">
+                              Admin
+                            </span>
+                          </h3>
+                          <p>
+                            Tipos de evento disponibles y qué selecciones
+                            ofrece cada uno.
+                          </p>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        {eventTemplates.length === 0 ? (
+                          <p className="admin-card-loading">
+                            Cargando tipos de evento…
+                          </p>
+                        ) : (
+                          eventTemplates.map((template) => (
+                            <details
+                              className="event-template-picker"
+                              key={template.key}
+                            >
+                              <summary>
+                                <strong>{template.label}</strong>
+                                {template.poll ? (
+                                  <span className="admin-tier-badge tier-officer">
+                                    Encuesta
+                                  </span>
+                                ) : null}
+                                <span
+                                  className="admin-acc-chevron"
+                                  aria-hidden="true"
+                                >
+                                  ▸
+                                </span>
+                              </summary>
+                              <div className="event-template-preview">
+                                <p>{template.description}</p>
+                                <div className="event-template-roles">
+                                  {template.roles.map((role) => (
+                                    <span
+                                      className="event-template-role"
+                                      key={role.key}
+                                    >
+                                      <EventRoleEmoji
+                                        role={role.key}
+                                        roles={template.roles}
+                                        size={18}
+                                      />
+                                      {role.label}
+                                    </span>
+                                  ))}
+                                </div>
+                                <span className="event-template-note muted-text">
+                                  {template.specCount > 0
+                                    ? `${template.specCount} clases/specs en el catálogo`
+                                    : "Sin catálogo de clases/specs"}
+                                </span>
+                              </div>
+                            </details>
+                          ))
+                        )}
+                      </div>
+                    </details>
+                  ) : null}
                   {sectionFor("admin") === "historial" &&
                   canAccess("eventos") ? (
                     <details

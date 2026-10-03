@@ -5089,6 +5089,27 @@ select.list-order {
 }
 
 /* Plantillas de juego: elegís el preset, ves un resumen y lo aplicás. */
+.event-template-picker > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.event-template-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-template-picker > summary .admin-acc-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.event-template-picker[open] > summary .admin-acc-chevron {
+  transform: rotate(90deg);
+}
+
 .event-template-picker {
   display: grid;
   gap: 12px;
