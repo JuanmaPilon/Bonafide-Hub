@@ -190,21 +190,15 @@ function normalizeKey(value: unknown): string {
     .replace(/[^a-z0-9_-]/g, "");
 }
 
-// Roles efectivos de un juego: los configurados por la guild para ese juego o,
-// si no los personalizó, los de su plantilla (wow/lol del código). Sin juego
-// conocido se cae a los 4 clásicos, así un juego borrado nunca deja el roster
-// sin roles.
+// Roles de un tipo de evento: SIEMPRE los de la plantilla del código. La guild
+// ya no los personaliza (label + emoji viven en event-templates.ts), así el
+// mismo tipo se ve igual en todos lados. El primer parámetro se mantiene por
+// compatibilidad con los llamadores y se ignora a propósito.
 export function resolveEventRoles(
-  config: { eventGames?: unknown } | null | undefined,
+  _config: { eventGames?: unknown } | null | undefined,
   game?: string | null,
 ): EventRoleOption[] {
   const key = normalizeKey(game) || DEFAULT_EVENT_GAME;
-  const configured = normalizeEventGames(config?.eventGames)?.find(
-    (entry) => entry.key === key,
-  );
-  if (configured && configured.roles.length > 0) {
-    return configured.roles;
-  }
   return findEventTemplate(key)?.roles ?? DEFAULT_EVENT_ROLES;
 }
 
@@ -231,10 +225,7 @@ export function resolveEventGames(
       key,
       label: custom?.label ?? template?.label ?? key,
       poll: template?.poll === true,
-      roles:
-        custom && custom.roles.length > 0
-          ? custom.roles
-          : (template?.roles ?? DEFAULT_EVENT_ROLES),
+      roles: template?.roles ?? DEFAULT_EVENT_ROLES,
     });
   }
   return games;

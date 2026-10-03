@@ -63,12 +63,10 @@ import {
   classColor,
   classEmoji,
   createEvent,
-  createEventSpec,
   createGuildRole,
   deleteMemberRosterProfile,
   deleteEvent,
   deleteEventImage,
-  deleteEventSpec,
   deleteGuildRole,
   deleteMyEventSignup,
   deleteMemberEventSignup,
@@ -88,7 +86,6 @@ import {
   publishRaidLog,
   ROLE_META,
   resetEventOccurrence,
-  resolveEventRoles,
   saveMemberRosterProfile,
   saveMyRosterProfile,
   setRosterRank,
@@ -96,7 +93,6 @@ import {
   updateEvent,
   updateGuildRole,
   updateRaidLogMessage,
-  updateEventSpec,
   uploadEventImage,
   upsertEventSignup,
   upsertMemberEventSignup,
@@ -126,7 +122,6 @@ import {
   type XpRoleMultiplier,
   type XpRoleRule,
   type RaidSpec,
-  type EventGameConfig,
   type EventGameOption,
   type EventRoleOption,
   type EventDiscordOptions,
@@ -6185,30 +6180,12 @@ function App() {
   // Juego elegido en el formulario: dice si el evento publica una encuesta de
   // Discord (plantilla "encuesta") y por lo tanto si se pide su duración.
   const eventFormGame = eventGames.find((game) => game.key === eventForm.game);
-  // Catálogo de specs de inscripción (estilo Raid Helper) + editor.
+  // Catálogo de specs de inscripción (estilo Raid Helper). Los roles de cada
+  // tipo de evento salen del código (event-templates), no de la guild.
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
-  const [eventSpecsLoading, setEventSpecsLoading] = useState(false);
-  const [showSpecEditor, setShowSpecEditor] = useState(false);
   // Tarjeta Configuraciones del panel Admin (ahí vive el informe de
   // asistencia, que necesita la lista de miembros de la guild).
   const [showMainConfig, setShowMainConfig] = useState(false);
-  // Tipo de evento que se está editando en "Configuración de eventos"
-  // (roles + catálogo). Las claves internas son las de las plantillas
-  // (wow/lol/…) o las que configure la guild.
-  const [adminGameKey, setAdminGameKey] = useState("");
-  const [guildEmojis, setGuildEmojis] = useState<GuildEmoji[]>([]);
-  const [guildEmojisLoading, setGuildEmojisLoading] = useState(false);
-  const [specDraft, setSpecDraft] = useState<{
-    animated?: boolean;
-    className: string;
-    emojiId?: string;
-    emojiName?: string;
-    // Juego al que pertenece la fila que se está editando.
-    game?: string;
-    id?: string;
-    role: string;
-    specName: string;
-  }>({ className: "", role: "", specName: "" });
   const [savingAction, setSavingAction] = useState<
     | "config"
     | "xp"
@@ -6821,41 +6798,30 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, selectedGuildId]);
 
-  // El catálogo de roles/specs se carga donde se usa: en la tab Eventos
-  // (selector de inscripción y roster) o en Admin → Configuración de eventos.
+  // El catálogo de specs de inscripción se carga en la tab Eventos, que es
+  // donde se usa (selector de inscripción y roster).
   useEffect(() => {
-    const adminOpen =
-      activeTab === "admin" && showSpecEditor && canAccess("config");
-    if (!selectedGuildId || (activeTab !== "eventos" && !adminOpen)) {
+    if (!selectedGuildId || activeTab !== "eventos") {
       setEventSpecs([]);
-      setEventSpecsLoading(false);
       return;
     }
     let cancelled = false;
-    setEventSpecsLoading(true);
     getEventSpecs(selectedGuildId)
       .then((list) => {
         if (!cancelled) {
           setEventSpecs(list);
         }
       })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) {
-          setEventSpecsLoading(false);
-        }
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [activeTab, selectedGuildId, showSpecEditor]);
+  }, [activeTab, selectedGuildId]);
 
-  // Tipos de evento (roles de cada uno): los usa el selector del formulario de
-  // evento, el roster y el editor del panel.
+  // Tipos de evento: los roles de cada uno salen del código. Los usa el
+  // selector del formulario de evento, el roster y los avisos.
   useEffect(() => {
-    const adminOpen =
-      activeTab === "admin" && showSpecEditor && canAccess("config");
-    if (!selectedGuildId || (activeTab !== "eventos" && !adminOpen)) {
+    if (!selectedGuildId || activeTab !== "eventos") {
       return;
     }
     let cancelled = false;
@@ -6865,8 +6831,6 @@ function App() {
           return;
         }
         setEventGames(list);
-        // Juego que se edita en el panel: el primero disponible.
-        setAdminGameKey((current) => current || (list[0]?.key ?? ""));
         // Un evento nuevo arranca con el primer juego (normalmente WoW).
         setEventForm((current) =>
           current.game ? current : { ...current, game: list[0]?.key ?? "" },
@@ -6876,7 +6840,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, selectedGuildId, showSpecEditor]);
+  }, [activeTab, selectedGuildId]);
 
   // Canales de texto/voz para el editor de publicación en Discord de un
   // evento (solo staff). Se cargan la primera vez que se abre el form; el
@@ -6980,34 +6944,6 @@ function App() {
       cancelled = true;
     };
   }, [selectedGuildId]);
-
-  // Emojis custom de la guild, solo cuando se abre el editor de catálogo.
-  useEffect(() => {
-    if (!selectedGuildId || !showSpecEditor) {
-      return;
-    }
-    let cancelled = false;
-    setGuildEmojisLoading(true);
-    getGuildEmojis(selectedGuildId)
-      .then((list) => {
-        if (!cancelled) {
-          setGuildEmojis(list);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGuildEmojis([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setGuildEmojisLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedGuildId, showSpecEditor]);
 
   // Quita manualmente una carta del registro de posesión (admin/owner).
   function handleDeleteKarutaCard(card: KarutaCard): void {
@@ -7246,140 +7182,6 @@ function App() {
         "error",
       );
     }
-  }
-
-  // Guarda los roles del TIPO DE EVENTO que se está editando en el panel
-  // (cada tipo tiene los suyos). Es config de admin/super admin.
-  async function handleSaveEventRoleConfig(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    setSavingAction("eventRoles");
-    try {
-      // Mandamos todos los juegos materializados en la config, con las
-      // etiquetas ya recortadas (así guardar un juego no borra los otros).
-      const games: EventGameConfig[] = (config.eventGames ?? []).map(
-        (game) => ({
-          key: game.key,
-          label: game.label,
-          roles: game.roles.map((role) => ({
-            ...role,
-            label: role.label.trim() || role.key,
-          })),
-        }),
-      );
-      const nextConfig = await saveGuildConfig(selectedGuildId, {
-        eventGames: games,
-      });
-      setConfig(nextConfig);
-      setEventGames(await getEventGames(selectedGuildId));
-      pushToast("Roles del tipo de evento guardados.", "success");
-    } catch (error) {
-      pushToast(
-        error instanceof Error ? error.message : "No se pudo guardar.",
-        "error",
-      );
-    } finally {
-      setSavingAction(null);
-    }
-  }
-
-  // Agrega o edita una clase/spec (rol + emoji) del catálogo del tipo de
-  // evento que se está editando.
-  async function handleSaveEventSpec(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    if (!specDraft.className.trim() || !specDraft.specName.trim()) {
-      pushToast("Faltan datos del catálogo.", "error");
-      return;
-    }
-    const game = specDraft.game || adminGameKey;
-    // Rol: si el draft todavía no eligió uno, va el primero del tipo (es el que
-    // muestra el select).
-    const role = specDraft.role || adminRoles[0]?.key || "";
-    if (!role) {
-      pushToast("Ese tipo de evento no tiene roles configurados.", "error");
-      return;
-    }
-    const editing = Boolean(specDraft.id);
-    try {
-      if (editing) {
-        await updateEventSpec(selectedGuildId, specDraft.id!, {
-          animated: specDraft.animated,
-          className: specDraft.className.trim(),
-          emojiId: specDraft.emojiId ?? null,
-          emojiName: specDraft.emojiName ?? null,
-          game,
-          role,
-          specName: specDraft.specName.trim(),
-        });
-      } else {
-        await createEventSpec(selectedGuildId, {
-          animated: specDraft.animated,
-          className: specDraft.className.trim(),
-          emojiId: specDraft.emojiId,
-          emojiName: specDraft.emojiName,
-          game,
-          role,
-          specName: specDraft.specName.trim(),
-        });
-      }
-      setEventSpecs(await getEventSpecs(selectedGuildId));
-      setSpecDraft({ className: "", game, role, specName: "" });
-      pushToast(
-        editing ? "Cambios guardados." : "Clase/spec agregada.",
-        "success",
-      );
-    } catch (error) {
-      pushToast(
-        error instanceof Error ? error.message : "No se pudo guardar.",
-        "error",
-      );
-    }
-  }
-
-  // Carga una clase/spec existente en el formulario para editarla.
-  function handleEditEventSpec(spec: RaidSpec): void {
-    setSpecDraft({
-      animated: spec.animated,
-      className: spec.className,
-      emojiId: spec.emojiId,
-      emojiName: spec.emojiName,
-      game: spec.game,
-      id: spec.id,
-      role: spec.role,
-      specName: spec.specName,
-    });
-  }
-
-  function handleDeleteEventSpec(spec: RaidSpec): void {
-    if (!selectedGuildId) {
-      return;
-    }
-    setConfirmDialog({
-      kind: "danger",
-      title: "Quitar del catálogo de eventos",
-      message: `¿Quitar "${spec.specName}" (${spec.className}) del catálogo de eventos? Las inscripciones existentes conservan su texto pero pierden el emoji.`,
-      onConfirm: () => {
-        void (async () => {
-          try {
-            await deleteEventSpec(selectedGuildId, spec.id);
-            setEventSpecs((current) =>
-              current.filter((entry) => entry.id !== spec.id),
-            );
-            pushToast("Spec quitada del catálogo.", "success");
-          } catch (error) {
-            pushToast(
-              error instanceof Error
-                ? error.message
-                : "No se pudo quitar la spec.",
-              "error",
-            );
-          }
-        })();
-      },
-    });
   }
 
   function handleDeleteEvent(event: HubEvent): void {
@@ -9150,69 +8952,6 @@ function App() {
   function specsForGame(game?: string): RaidSpec[] {
     return eventSpecs.filter((spec) => spec.game === (game ?? ""));
   }
-
-  // ── Panel: edición por juego ────────────────────────────────────
-  // El juego que se edita puede venir solo de la plantilla (no estar en la
-  // config guardada). Para poder editarlo y guardarlo, lo "materializamos" en
-  // la config local con los roles de la plantilla; recién se persiste cuando
-  // el staff toca "Guardar roles".
-  useEffect(() => {
-    if (!adminGameKey || eventGames.length === 0) {
-      return;
-    }
-    setConfig((current) => {
-      if (
-        (current.eventGames ?? []).some((game) => game.key === adminGameKey)
-      ) {
-        return current;
-      }
-      const fromList = eventGames.find((game) => game.key === adminGameKey);
-      if (!fromList) {
-        return current;
-      }
-      return {
-        ...current,
-        eventGames: [
-          ...(current.eventGames ?? []),
-          { key: fromList.key, label: fromList.label, roles: fromList.roles },
-        ],
-      };
-    });
-  }, [adminGameKey, eventGames]);
-
-  // Aplica un cambio a los roles del juego que se está editando en el panel.
-  function editAdminGameRoles(
-    updater: (roles: EventRoleOption[]) => EventRoleOption[],
-  ): void {
-    const fromList = eventGames.find((game) => game.key === adminGameKey);
-    setConfig((current) => {
-      const games = current.eventGames ?? [];
-      const base = games.some((game) => game.key === adminGameKey)
-        ? games
-        : fromList
-          ? [
-              ...games,
-              {
-                key: fromList.key,
-                label: fromList.label,
-                roles: fromList.roles,
-              },
-            ]
-          : games;
-      return {
-        ...current,
-        eventGames: base.map((game) =>
-          game.key === adminGameKey
-            ? { ...game, roles: updater(game.roles) }
-            : game,
-        ),
-      };
-    });
-  }
-
-  // Roles y catálogo del juego que se está editando en el panel.
-  const adminRoles = resolveEventRoles(config, adminGameKey);
-  const adminSpecs = eventSpecs.filter((spec) => spec.game === adminGameKey);
 
   // La navegación = Inicio (siempre) + módulos activos + Admin (con permisos).
   const visibleTabs: HubTab[] = [
@@ -11657,405 +11396,7 @@ function App() {
                       </div>
                     </details>
                   ) : null}
-                  {sectionFor("admin") === "eventos" && canAccess("config") ? (
-                    <details
-                      open
-                      className="admin-card admin-card-acc admin-card--admin"
-                      onToggle={(event) =>
-                        setShowSpecEditor(event.currentTarget.open)
-                      }
-                    >
-                      <summary className="admin-card-header admin-acc-header">
-                        <div>
-                          <h3>
-                            Eventos{" "}
-                            <span className="admin-tier-badge tier-admin">
-                              Admin
-                            </span>
-                          </h3>
-                        </div>
-                        <span className="admin-acc-chevron" aria-hidden="true">
-                          ▸
-                        </span>
-                      </summary>
-                      <div className="admin-card-body">
-                        <div className="admin-card-hint-row">
-                          <label className="event-role-field">
-                            <span>Tipo de evento</span>
-                            <select
-                              className="select"
-                              value={adminGameKey}
-                              onChange={(event) => {
-                                const next = event.target.value;
-                                setAdminGameKey(next);
-                                const nextRoles =
-                                  eventGames.find((game) => game.key === next)
-                                    ?.roles ?? [];
-                                setSpecDraft({
-                                  className: "",
-                                  game: next,
-                                  role: nextRoles[0]?.key ?? "",
-                                  specName: "",
-                                });
-                              }}
-                            >
-                              {eventGames.length === 0 ? (
-                                <option value={adminGameKey}>
-                                  {adminGameKey || "Cargando…"}
-                                </option>
-                              ) : (
-                                eventGames.map((game) => (
-                                  <option key={game.key} value={game.key}>
-                                    {game.label}
-                                  </option>
-                                ))
-                              )}
-                            </select>
-                          </label>
-                        </div>
 
-                        {/* Roles del tipo elegido (label + emoji), en acordeones
-                            para que la sección no crezca hacia abajo. */}
-                        <h4 className="karuta-threshold-title">
-                          Roles del tipo de evento
-                        </h4>
-                        <div className="event-role-editor">
-                          {adminRoles.map((entry, index) => (
-                            <details
-                              className="event-role-row"
-                              key={`${entry.key}-${index}`}
-                            >
-                              <summary className="event-role-summary">
-                                <EventRoleEmoji
-                                  role={entry.key}
-                                  roles={adminRoles}
-                                  size={22}
-                                />
-                                <strong>{entry.label}</strong>
-                                <span
-                                  className="admin-acc-chevron"
-                                  aria-hidden="true"
-                                >
-                                  ▸
-                                </span>
-                              </summary>
-                              <div className="event-role-body">
-                                <label className="event-role-field">
-                                  <span>Etiqueta</span>
-                                  <input
-                                    className="input"
-                                    value={entry.label}
-                                    maxLength={24}
-                                    onChange={(event) =>
-                                      editAdminGameRoles((roles) =>
-                                        roles.map((role, position) =>
-                                          position === index
-                                            ? {
-                                                ...role,
-                                                label: event.target.value,
-                                              }
-                                            : role,
-                                        ),
-                                      )
-                                    }
-                                  />
-                                </label>
-                                <div className="spec-emoji-picker">
-                                  <span className="label">
-                                    Emoji (del servidor)
-                                  </span>
-                                  {guildEmojisLoading ? (
-                                    <span className="muted-text">
-                                      Cargando…
-                                    </span>
-                                  ) : guildEmojis.length === 0 ? (
-                                    <span className="muted-text">
-                                      No hay emojis custom en este servidor.
-                                    </span>
-                                  ) : (
-                                    <div className="spec-emoji-grid">
-                                      {guildEmojis.map((emoji) => {
-                                        const selected =
-                                          entry.emojiId === emoji.id;
-                                        return (
-                                          <button
-                                            className={`spec-emoji-option${selected ? " active" : ""}`}
-                                            key={emoji.id}
-                                            onClick={() =>
-                                              editAdminGameRoles((roles) =>
-                                                roles.map((role, position) =>
-                                                  position === index
-                                                    ? selected
-                                                      ? {
-                                                          ...role,
-                                                          animated: false,
-                                                          emojiId: undefined,
-                                                          emojiName: undefined,
-                                                        }
-                                                      : {
-                                                          ...role,
-                                                          animated:
-                                                            emoji.animated,
-                                                          emojiId: emoji.id,
-                                                          emojiName: emoji.name,
-                                                        }
-                                                    : role,
-                                                ),
-                                              )
-                                            }
-                                            title={`:${emoji.name}:`}
-                                            type="button"
-                                          >
-                                            <DiscordEmojiImage
-                                              animated={emoji.animated}
-                                              emojiId={emoji.id}
-                                              name={emoji.name}
-                                              size={22}
-                                            />
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </details>
-                          ))}
-                        </div>
-                        <div className="spec-cat-form-actions">
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSaveEventRoleConfig()}
-                            disabled={savingAction !== null}
-                            type="button"
-                          >
-                            {savingAction === "eventRoles"
-                              ? "Guardando…"
-                              : "Guardar roles"}
-                          </button>
-                        </div>
-
-                        <h4 className="karuta-threshold-title">
-                          Catálogo (Clase · Spec)
-                        </h4>
-                        {eventSpecsLoading ? (
-                          <span className="muted-text">Cargando…</span>
-                        ) : adminSpecs.length === 0 ? (
-                          <div className="event-signup-no-catalog">
-                            Este tipo de evento todavía no tiene clases/specs
-                            cargadas. Se agregan abajo, con su emoji.
-                          </div>
-                        ) : (
-                          adminRoles.map((roleOption) => {
-                            const roleSpecs = adminSpecs.filter(
-                              (entry) => entry.role === roleOption.key,
-                            );
-                            if (roleSpecs.length === 0) {
-                              return null;
-                            }
-                            return (
-                              <div
-                                className="spec-cat-role"
-                                key={roleOption.key}
-                              >
-                                <strong>
-                                  <EventRoleEmoji
-                                    role={roleOption.key}
-                                    roles={adminRoles}
-                                  />{" "}
-                                  {roleOption.label}
-                                </strong>
-                                <div className="spec-cat-list">
-                                  {roleSpecs.map((spec) => (
-                                    <span
-                                      className="spec-cat-chip"
-                                      key={spec.id}
-                                    >
-                                      {spec.emojiId ? (
-                                        <img
-                                          alt=""
-                                          className="signup-spec-emoji"
-                                          src={discordEmojiUrl(
-                                            spec.emojiId,
-                                            spec.animated,
-                                            20,
-                                          )}
-                                        />
-                                      ) : (
-                                        <span aria-hidden="true">❔ </span>
-                                      )}
-                                      {spec.className} · {spec.specName}
-                                      <button
-                                        className="spec-cat-chip-delete"
-                                        onClick={() =>
-                                          handleEditEventSpec(spec)
-                                        }
-                                        title="Editar"
-                                        type="button"
-                                      >
-                                        ✏️
-                                      </button>
-                                      <button
-                                        className="spec-cat-chip-delete"
-                                        onClick={() =>
-                                          handleDeleteEventSpec(spec)
-                                        }
-                                        title="Quitar"
-                                        type="button"
-                                      >
-                                        ✕
-                                      </button>
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                        <div className="spec-cat-form">
-                          <strong>
-                            {specDraft.id
-                              ? "Editar clase/spec"
-                              : "Agregar clase/spec"}
-                          </strong>
-                          <div className="form-grid">
-                            <label>
-                              <span>Rol</span>
-                              <select
-                                className="select"
-                                value={
-                                  adminRoles.some(
-                                    (role) => role.key === specDraft.role,
-                                  )
-                                    ? specDraft.role
-                                    : (adminRoles[0]?.key ?? "")
-                                }
-                                onChange={(event) =>
-                                  setSpecDraft((current) => ({
-                                    ...current,
-                                    role: event.target.value,
-                                  }))
-                                }
-                              >
-                                {adminRoles.map((roleOption) => (
-                                  <option
-                                    key={roleOption.key}
-                                    value={roleOption.key}
-                                  >
-                                    {roleOption.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              <span>Clase</span>
-                              <input
-                                className="input"
-                                value={specDraft.className}
-                                onChange={(event) =>
-                                  setSpecDraft((current) => ({
-                                    ...current,
-                                    className: event.target.value,
-                                  }))
-                                }
-                                maxLength={40}
-                              />
-                            </label>
-                            <label>
-                              <span>Spec</span>
-                              <input
-                                className="input"
-                                value={specDraft.specName}
-                                onChange={(event) =>
-                                  setSpecDraft((current) => ({
-                                    ...current,
-                                    specName: event.target.value,
-                                  }))
-                                }
-                                maxLength={40}
-                              />
-                            </label>
-                          </div>
-                          <div className="spec-emoji-picker">
-                            <span className="label">Emoji custom</span>
-                            {guildEmojisLoading ? (
-                              <span className="muted-text">Cargando…</span>
-                            ) : guildEmojis.length === 0 ? (
-                              <span className="muted-text">
-                                No hay emojis custom en este servidor.
-                              </span>
-                            ) : (
-                              <div className="spec-emoji-grid">
-                                {guildEmojis.map((emoji) => {
-                                  const selected =
-                                    specDraft.emojiId === emoji.id;
-                                  return (
-                                    <button
-                                      className={`spec-emoji-option${selected ? " active" : ""}`}
-                                      key={emoji.id}
-                                      onClick={() =>
-                                        setSpecDraft((current) =>
-                                          current.emojiId === emoji.id
-                                            ? {
-                                                ...current,
-                                                animated: false,
-                                                emojiId: undefined,
-                                                emojiName: undefined,
-                                              }
-                                            : {
-                                                ...current,
-                                                animated: emoji.animated,
-                                                emojiId: emoji.id,
-                                                emojiName: emoji.name,
-                                              },
-                                        )
-                                      }
-                                      title={`:${emoji.name}:`}
-                                      type="button"
-                                    >
-                                      <img
-                                        alt={emoji.name}
-                                        src={discordEmojiUrl(
-                                          emoji.id,
-                                          emoji.animated,
-                                          24,
-                                        )}
-                                      />
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                          <div className="spec-cat-form-actions">
-                            <button
-                              className="primary-button"
-                              onClick={() => void handleSaveEventSpec()}
-                              type="button"
-                            >
-                              {specDraft.id ? "Guardar cambios" : "Agregar"}
-                            </button>
-                            {specDraft.id ? (
-                              <button
-                                className="ghost-button cancel-button"
-                                onClick={() =>
-                                  setSpecDraft({
-                                    className: "",
-                                    game: adminGameKey,
-                                    role: specDraft.role,
-                                    specName: "",
-                                  })
-                                }
-                                type="button"
-                              >
-                                Cancelar
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </details>
-                  ) : null}
                   {sectionFor("admin") === "historial" &&
                   canAccess("eventos") ? (
                     <details

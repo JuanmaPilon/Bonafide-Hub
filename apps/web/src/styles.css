@@ -5079,63 +5079,6 @@ select.list-order {
   font-size: 0.9rem;
 }
 
-/* Catálogo de specs (staff, dentro de la tab Eventos) */
-.spec-cat-role {
-  display: grid;
-  gap: 8px;
-  padding: 6px 0;
-}
-
-.spec-cat-role strong {
-  font-size: 0.85rem;
-}
-
-.spec-cat-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.spec-cat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(134, 158, 214, 0.25);
-  background: rgba(12, 18, 33, 0.5);
-  border-radius: 999px;
-  padding: 5px 8px 5px 10px;
-  font-size: 0.85rem;
-}
-
-.spec-cat-chip-delete {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.8rem;
-  padding: 0 2px;
-}
-
-.spec-cat-chip-delete:hover {
-  color: var(--danger);
-}
-
-.spec-cat-form {
-  display: grid;
-  gap: 12px;
-  margin-top: 10px;
-  padding-top: 14px;
-  border-top: 1px dashed rgba(136, 159, 216, 0.3);
-}
-
-/* Editor de roles de evento (Admin → Configuración de eventos): cada rol es un
-   acordeón (emoji + nombre en el header) para que la sección no crezca. */
-.event-role-editor {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
 /* Selector de plantilla (arriba del editor de roles). */
 .admin-card-hint-row {
   display: flex;
@@ -5143,55 +5086,6 @@ select.list-order {
   align-items: end;
   gap: 12px;
   margin-bottom: 16px;
-}
-
-.event-role-row {
-  border-radius: 14px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.event-role-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.event-role-summary::-webkit-details-marker {
-  display: none;
-}
-
-.event-role-summary .admin-acc-chevron {
-  margin-left: auto;
-  transition: transform 0.15s ease;
-}
-
-.event-role-row[open] .event-role-summary .admin-acc-chevron {
-  transform: rotate(90deg);
-}
-
-.event-role-summary img {
-  width: 22px;
-  height: 22px;
-}
-
-.event-role-body {
-  display: grid;
-  gap: 12px;
-  padding: 0 14px 14px;
-}
-
-.event-role-row .spec-emoji-grid {
-  max-height: 190px;
-  overflow-y: auto;
-}
-
-:root[data-theme="light"] .event-role-row {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(67, 81, 109, 0.18);
 }
 
 /* Plantillas de juego: elegís el preset, ves un resumen y lo aplicás. */
@@ -5246,52 +5140,6 @@ select.list-order {
   border-color: rgba(67, 81, 109, 0.18);
 }
 
-.event-role-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.event-role-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(8, 13, 24, 0.6);
-  border: 1px solid rgba(134, 158, 214, 0.2);
-  font-size: 1.1rem;
-}
-
-.event-role-field {
-  display: grid;
-  gap: 6px;
-}
-
-.event-role-field > span {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.event-role-field .input {
-  width: 150px;
-}
-
-.event-role-row .spec-emoji-picker {
-  flex: 1 1 220px;
-}
-
-.spec-emoji-picker {
-  display: grid;
-  gap: 8px;
-}
-
 .spec-emoji-grid {
   display: flex;
   flex-wrap: wrap;
@@ -5336,13 +5184,6 @@ select.list-order {
   color: var(--muted);
   font-size: 0.85rem;
   margin: 0 0 12px;
-}
-
-.spec-cat-form-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 /* Publicación en Discord (editor del form de evento + estado en tarjeta) */
