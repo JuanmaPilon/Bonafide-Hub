@@ -1634,6 +1634,68 @@ a:hover {
   gap: 6px;
 }
 
+.roster-filter-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roster-filter-group + .roster-filter-group {
+  margin-left: 4px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.roster-filter-label {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* El filtro de estado usa el mismo color que el tag de la tarjeta, así se lee
+   igual en los dos lados. */
+.roster-filter-chips .roster-status-chip--raid,
+.roster-filter-chips .roster-status-chip--raid:hover,
+.roster-filter-chips .roster-status-chip--raid:focus-visible {
+  border-color: rgba(53, 185, 111, 0.5);
+  color: #6ee7a1;
+}
+
+.roster-filter-chips .roster-status-chip--raid.active {
+  border-color: rgba(53, 185, 111, 0.8);
+  background: rgba(53, 185, 111, 0.2);
+  color: #c7ffe0;
+}
+
+.roster-filter-chips .roster-status-chip--trial,
+.roster-filter-chips .roster-status-chip--trial:hover,
+.roster-filter-chips .roster-status-chip--trial:focus-visible {
+  border-color: rgba(245, 181, 64, 0.55);
+  color: #ffd477;
+}
+
+.roster-filter-chips .roster-status-chip--trial.active {
+  border-color: rgba(245, 181, 64, 0.8);
+  background: rgba(245, 181, 64, 0.2);
+  color: #ffe9b8;
+}
+
+.roster-filter-chips .roster-status-chip--inactivo,
+.roster-filter-chips .roster-status-chip--inactivo:hover,
+.roster-filter-chips .roster-status-chip--inactivo:focus-visible {
+  border-color: rgba(229, 72, 77, 0.5);
+  color: #ff9292;
+}
+
+.roster-filter-chips .roster-status-chip--inactivo.active {
+  border-color: rgba(229, 72, 77, 0.8);
+  background: rgba(229, 72, 77, 0.2);
+  color: #ffc9c9;
+}
+
 .roster-total {
   margin-left: auto;
   color: var(--muted);
@@ -4115,21 +4177,25 @@ select.list-order {
 /* Chips sin etiqueta ("Todas", "Sin etiqueta"): en claro el fondo oscuro del
    tema oscuro los dejaba ilegibles. Se excluyen los chips con color de tag,
    que ya tienen su propio ajuste. */
-:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--tag) {
+:root[data-theme="light"]
+  .event-filter-chip:not(.event-filter-chip--tag):not(.roster-status-chip) {
   border-color: rgba(120, 140, 175, 0.4);
   background: rgba(255, 255, 255, 0.85);
   color: #3f4f6b;
 }
 
-:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--tag):hover,
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):focus-visible {
+  .event-filter-chip:not(.event-filter-chip--tag):not(.roster-status-chip):hover,
+:root[data-theme="light"]
+  .event-filter-chip:not(.event-filter-chip--tag):not(
+    .roster-status-chip
+  ):focus-visible {
   border-color: rgba(120, 140, 175, 0.65);
   color: #101a2e;
 }
 
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag).active {
+  .event-filter-chip:not(.event-filter-chip--tag):not(.roster-status-chip).active {
   border-color: #6aa8ff;
   background: rgba(106, 168, 255, 0.2);
   color: #1d3a6b;

@@ -1558,6 +1558,20 @@ function matchesTagFilter(tags: EventTag[], filter: string[]): boolean {
   return tags.some((tag) => filter.includes(tag.label.trim().toLowerCase()));
 }
 
+// Alterna un valor en un filtro de selección múltiple.
+function toggleInList(list: string[], key: string): string[] {
+  return list.includes(key)
+    ? list.filter((entry) => entry !== key)
+    : [...list, key];
+}
+
+// Estados del roster para el filtro: mismas etiquetas que la tarjeta.
+const ROSTER_STATUS_FILTERS: Array<{ key: string; label: string }> = [
+  { key: "raid", label: "Activo" },
+  { key: "trial", label: "Prueba" },
+  { key: "inactivo", label: "Inactivo" },
+];
+
 function sortByOrder<T>(
   items: T[],
   order: ListOrder,
@@ -2226,8 +2240,9 @@ function RosterSection({
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [tagFilter, setTagFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [sheetFor, setSheetFor] = useState<{
     displayName: string;
     userId: string;
@@ -2301,17 +2316,30 @@ function RosterSection({
     );
   }
 
+  // Estado del filtro: los mismos tres que muestra la tarjeta.
+  function memberStatusKey(member: RosterMember): string {
+    return member.rankKey === "raid"
+      ? "raid"
+      : member.rankKey === "trial"
+        ? "trial"
+        : "inactivo";
+  }
+
   const availableTags = tagOptionsFrom(
     members.map((member) => ({ tags: member.profile?.tags ?? [] })),
   ).sort((left, right) => left.label.localeCompare(right.label, "es"));
   const visible = members
-    .filter((member) => !roleFilter || memberRole(member) === roleFilter)
     .filter(
       (member) =>
-        !tagFilter ||
-        (member.profile?.tags ?? []).some(
-          (tag) => tag.label.toLowerCase() === tagFilter,
-        ),
+        roleFilter.length === 0 || roleFilter.includes(memberRole(member)),
+    )
+    .filter(
+      (member) =>
+        statusFilter.length === 0 ||
+        statusFilter.includes(memberStatusKey(member)),
+    )
+    .filter((member) =>
+      matchesTagFilter(member.profile?.tags ?? [], tagFilter),
     )
     .filter((member) => {
       if (!query) {
@@ -2649,41 +2677,68 @@ function RosterSection({
           value={search}
         />
         <div className="roster-filter-chips">
-          <button
-            className={`event-filter-chip${roleFilter ? "" : " active"}`}
-            onClick={() => setRoleFilter("")}
-            type="button"
-          >
-            Todos
-          </button>
-          {(roster?.roles ?? ROLE_META).map((role) => (
+          <div className="roster-filter-group">
+            <span className="roster-filter-label">Estado</span>
             <button
-              className={`event-filter-chip${roleFilter === role.key ? " active" : ""}`}
-              key={role.key}
-              onClick={() => setRoleFilter(role.key)}
+              className={`event-filter-chip${statusFilter.length === 0 ? " active" : ""}`}
+              onClick={() => setStatusFilter([])}
               type="button"
             >
-              {role.label}
+              Todos
             </button>
-          ))}
+            {ROSTER_STATUS_FILTERS.map((status) => (
+              <button
+                className={`event-filter-chip roster-status-chip roster-status-chip--${status.key}${statusFilter.includes(status.key) ? " active" : ""}`}
+                key={status.key}
+                onClick={() =>
+                  setStatusFilter((current) =>
+                    toggleInList(current, status.key),
+                  )
+                }
+                type="button"
+              >
+                {status.label}
+              </button>
+            ))}
+          </div>
+          <div className="roster-filter-group">
+            <span className="roster-filter-label">Rol</span>
+            <button
+              className={`event-filter-chip${roleFilter.length === 0 ? " active" : ""}`}
+              onClick={() => setRoleFilter([])}
+              type="button"
+            >
+              Todos
+            </button>
+            {(roster?.roles ?? ROLE_META).map((role) => (
+              <button
+                className={`event-filter-chip${roleFilter.includes(role.key) ? " active" : ""}`}
+                key={role.key}
+                onClick={() =>
+                  setRoleFilter((current) => toggleInList(current, role.key))
+                }
+                type="button"
+              >
+                {role.label}
+              </button>
+            ))}
+          </div>
           {availableTags.map((tag) => (
             <EventTagFilterChip
-              active={tagFilter === tag.label.toLowerCase()}
+              active={tagFilter.includes(tag.label.toLowerCase())}
               color={tag.color}
               key={tag.label}
               label={tag.label}
               onToggle={() =>
                 setTagFilter((current) =>
-                  current === tag.label.toLowerCase()
-                    ? ""
-                    : tag.label.toLowerCase(),
+                  toggleInList(current, tag.label.toLowerCase()),
                 )
               }
             />
           ))}
         </div>
         <span className="roster-total">
-          {visible.length} jugador{visible.length === 1 ? "" : "es"} activos
+          {visible.length} de {members.length} jugadores
         </span>
       </div>
 
