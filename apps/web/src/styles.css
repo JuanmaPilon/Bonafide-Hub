@@ -5529,6 +5529,112 @@ select.list-order {
   margin: 14px 0;
 }
 
+/* Board de comunicados: tarjetas para escanear de un vistazo; el comunicado
+   completo se lee en el modal, así no hay que recorrer la lista entera. */
+.comunicado-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.comunicado-note {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 140ms ease-out,
+    transform 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.comunicado-note:hover,
+.comunicado-note:focus-visible {
+  border-color: rgba(106, 168, 255, 0.55);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px);
+}
+
+.comunicado-note-title {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--accent, #ffb454);
+}
+
+.comunicado-note-excerpt {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  /* Tres líneas y corta: el resto se lee en el modal. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.comunicado-note-foot {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+/* Modal del comunicado */
+.comunicado-modal {
+  max-width: 760px;
+}
+
+.comunicado-modal-head {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+}
+
+.comunicado-modal-head > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.comunicado-modal-head h3 {
+  margin: 0;
+}
+
+.comunicado-modal-head .icon-button {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.comunicado-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.comunicado-modal-body {
+  max-height: 58vh;
+  overflow-y: auto;
+  margin-top: 16px;
+}
+
+.comunicado-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+}
+
 /* Acordeón de comunicados: título siempre visible, contenido desplegable */
 .comunicado-acc {
   padding: 0;

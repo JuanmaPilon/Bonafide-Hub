@@ -457,6 +457,21 @@ function tabFromHash(): HubTab {
   return parseLocationHash().tab;
 }
 
+// Resumen para la tarjeta del board: saca el marcado más obvio para que el
+// texto se lea como prosa. El comunicado completo se ve en el modal.
+function comunicadoExcerpt(content: string, max = 170): string {
+  const plain = content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^[>\-*+]\s+/gm, "")
+    .replace(/[*_`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return plain.length > max ? `${plain.slice(0, max).trimEnd()}…` : plain;
+}
+
 type ToastKind = "success" | "error";
 
 type ToastItem = {
@@ -6302,9 +6317,6 @@ function App() {
       (comm) => comm.title,
     );
   }, [comunicadoOrder, comunicadoSearch, comunicadoTagFilter, published]);
-  const [expandedPublished, setExpandedPublished] = useState<Set<string>>(
-    new Set(),
-  );
   const [landingPreview, setLandingPreview] = useState<
     PublicLeaderboardEntry[]
   >([]);
@@ -7777,18 +7789,6 @@ function App() {
     setPublished(publishedList);
   }
 
-  function togglePublished(id: string): void {
-    setExpandedPublished((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
-
   // Comunicado seleccionado por URL (#/comunicados/<slug>).
   const currentComunicado = comunicadoSlug
     ? (published.find((comm) => slugifyTitle(comm.title) === comunicadoSlug) ??
@@ -7811,6 +7811,30 @@ function App() {
       pushToast("No se pudo copiar el enlace.", "error");
     }
   }
+
+  // Abre el comunicado en el modal. El slug va a la URL, así el enlace se
+  // puede compartir y al abrirlo vuelve a salir el mismo.
+  function openComunicado(comm: Communication): void {
+    setComunicadoSlug(slugifyTitle(comm.title));
+  }
+
+  function closeComunicado(): void {
+    setComunicadoSlug(null);
+  }
+
+  // Escape cierra el comunicado abierto.
+  useEffect(() => {
+    if (!comunicadoSlug) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setComunicadoSlug(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [comunicadoSlug]);
 
   // Abre el editor del comunicado desde el hub: es el mismo modal que usa el
   // panel Admin, así no hay que ir hasta Admin para corregir un comunicado.
@@ -12063,84 +12087,34 @@ function App() {
                           Ningún comunicado coincide con el filtro.
                         </div>
                       ) : null}
-                      {visiblePublished.map((comm) => {
-                        const expanded = expandedPublished.has(comm.id);
-                        return (
-                          <article
-                            className="comunicado-card comunicado-acc"
+                      <div className="comunicado-board">
+                        {visiblePublished.map((comm) => (
+                          <button
+                            className="comunicado-note"
                             key={comm.id}
+                            onClick={() => openComunicado(comm)}
+                            type="button"
                           >
-                            <button
-                              className="comunicado-acc-header"
-                              onClick={() => togglePublished(comm.id)}
-                              type="button"
-                              aria-expanded={expanded}
-                            >
-                              <span className="comunicado-acc-heading">
-                                <strong>{comm.title}</strong>
-                                <ComunicadoTags tags={comm.tags ?? []} />
-                                {comm.publishedAt ? (
-                                  <span className="comunicado-date">
-                                    {formatDate24(comm.publishedAt)}
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span
-                                className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
-                                aria-hidden="true"
-                              >
-                                ▸
-                              </span>
-                            </button>
-                            {expanded ? (
-                              <div className="comunicado-acc-body">
-                                <div className="comunicado-acc-copy">
-                                  <button
-                                    className="ghost-button"
-                                    onClick={() =>
-                                      void copyComunicadoLink(comm)
-                                    }
-                                    type="button"
-                                  >
-                                    🔗 Copiar enlace
-                                  </button>
-                                </div>
-                                {comm.authorName ? (
-                                  <div className="comunicado-author">
-                                    Por {comm.authorName}
-                                  </div>
-                                ) : null}
-                                <div
-                                  className="comunicado-content comunicado-markdown"
-                                  dangerouslySetInnerHTML={{
-                                    __html: renderMarkdown(comm.content),
-                                  }}
-                                />
-                                {canAccess("comunicados") ? (
-                                  <div className="comunicado-acc-actions">
-                                    <button
-                                      className="ghost-button"
-                                      onClick={() => openComunicadoEditor(comm)}
-                                      type="button"
-                                    >
-                                      ✏️ Editar
-                                    </button>
-                                    <button
-                                      className="ghost-button danger"
-                                      onClick={() =>
-                                        requestDeleteCommunication(comm)
-                                      }
-                                      type="button"
-                                    >
-                                      Eliminar comunicado
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </article>
-                        );
-                      })}
+                            <span className="comunicado-note-title">
+                              {comm.title}
+                            </span>
+                            <ComunicadoTags tags={comm.tags ?? []} />
+                            <span className="comunicado-note-excerpt">
+                              {comunicadoExcerpt(comm.content)}
+                            </span>
+                            <span className="comunicado-note-foot">
+                              {[
+                                comm.publishedAt
+                                  ? formatDate24(comm.publishedAt)
+                                  : null,
+                                comm.authorName,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </>
                   )}
                 </div>
@@ -13255,6 +13229,74 @@ function App() {
           </>
         )}
       </main>
+
+      {currentComunicado ? (
+        <div className="modal-overlay" onClick={closeComunicado}>
+          <div
+            aria-modal="true"
+            className="modal comunicado-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <header className="comunicado-modal-head">
+              <div>
+                <h3>{currentComunicado.title}</h3>
+                <div className="comunicado-modal-meta">
+                  {currentComunicado.publishedAt ? (
+                    <span>{formatDate24(currentComunicado.publishedAt)}</span>
+                  ) : null}
+                  {currentComunicado.authorName ? (
+                    <span>Por {currentComunicado.authorName}</span>
+                  ) : null}
+                </div>
+                <ComunicadoTags tags={currentComunicado.tags ?? []} />
+              </div>
+              <button
+                aria-label="Cerrar"
+                className="icon-button"
+                onClick={closeComunicado}
+                type="button"
+              >
+                ✕
+              </button>
+            </header>
+            <div
+              className="comunicado-content comunicado-markdown comunicado-modal-body"
+              dangerouslySetInnerHTML={{
+                __html: renderMarkdown(currentComunicado.content),
+              }}
+            />
+            <div className="comunicado-modal-actions">
+              <button
+                className="ghost-button"
+                onClick={() => void copyComunicadoLink(currentComunicado)}
+                type="button"
+              >
+                🔗 Copiar enlace
+              </button>
+              {canAccess("comunicados") ? (
+                <>
+                  <button
+                    className="ghost-button"
+                    onClick={() => openComunicadoEditor(currentComunicado)}
+                    type="button"
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    className="ghost-button danger"
+                    onClick={() => requestDeleteCommunication(currentComunicado)}
+                    type="button"
+                  >
+                    Eliminar comunicado
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {roleModal != null ? (
         <div className="modal-overlay" onClick={() => setRoleModal(null)}>
           <div
