@@ -831,12 +831,7 @@ function resolveClassEmojisWithFallback(
   return emojis;
 }
 
-// Filas del Admin de Mapeo: el catálogo completo con lo elegido por la guild.
-function buildMappingGroups(
-  mappings: Map<string, GuildMapping>,
-  classes: string[],
-  classEmojis: Record<string, MappingEmoji>,
-): Array<{
+type MappingGroup = {
   key: string;
   label: string;
   rows: Array<{
@@ -845,37 +840,139 @@ function buildMappingGroups(
     label: string;
     roleId?: string;
   }>;
-}> {
+};
+
+// Slug de juego, con la misma regla que la clave interna de la config, para que
+// la clave del mapeo y la del juego no se desincronicen.
+function gameSlug(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "");
+}
+
+// Clave de un rol de evento en el registro central. El rol se identifica por
+// juego + clave: el "tank" de WoW y el "top" de LoL son entidades distintas
+// aunque las dos sean roles de inscripción.
+function eventRoleMappingKey(game: string, roleKey: string): string {
+  return `role.${gameSlug(game)}.${roleKey}`;
+}
+
+// Los roles de evento traen un emoji unicode fijo en la plantilla del código.
+// Si la guild mapeó uno en Admin → Mapeo, ese manda: es el mismo mecanismo que
+// el emoji de las clases del roster.
+function applyEventRoleEmojis(
+  roles: EventRoleOption[],
+  game: string,
+  mappings: Map<string, GuildMapping>,
+): EventRoleOption[] {
+  const key = gameSlug(game);
+  return roles.map((role) => {
+    const emoji = findMapping(
+      mappings,
+      eventRoleMappingKey(key, role.key),
+    )?.emoji;
+    if (!emoji) {
+      return role;
+    }
+    return {
+      ...role,
+      // El custom manda y el unicode queda como texto alternativo (igual que en
+      // normalizeEventRoles).
+      animated: emoji.emojiId ? Boolean(emoji.animated) : false,
+      emoji: emoji.emojiId ? undefined : emoji.unicode,
+      emojiId: emoji.emojiId,
+      emojiName: emoji.emojiName,
+    };
+  });
+}
+
+// Roles de un juego con el mapeo ya aplicado. Evita que cada llamador tenga que
+// acordarse de leer los mapeos (si se olvida uno, ese sector vuelve a mostrar
+// los emojis viejos y parece que el mapeo no funciona).
+async function resolveEventRolesFor(
+  guildId: string,
+  game: string | null | undefined,
+  config?: GuildConfig,
+): Promise<EventRoleOption[]> {
+  const [guildConfig, mappings] = await Promise.all([
+    config ? Promise.resolve(config) : getGuildConfig(guildId),
+    listGuildMappings(guildId),
+  ]);
+  const key = gameSlug(game) || DEFAULT_EVENT_GAME;
+  return applyEventRoleEmojis(resolveEventRoles(guildConfig, key), key, mappings);
+}
+
+// Grupo de Mapeo con los roles de un juego, tal como los ve la inscripción.
+function eventRoleMappingGroup(
+  mappings: Map<string, GuildMapping>,
+  gameKey: string,
+): MappingGroup | null {
+  const template = EVENT_TEMPLATES.find((entry) => entry.key === gameKey);
+  // La encuesta queda afuera: sus "roles" son respuestas (Sí/No), no roles.
+  if (!template || template.poll || template.roles.length === 0) {
+    return null;
+  }
+  return {
+    key: `role.${template.key}`,
+    label: `Roles de ${template.label}`,
+    rows: template.roles.map((role) => {
+      const key = eventRoleMappingKey(template.key, role.key);
+      const mapping = mappings.get(key);
+      return {
+        emoji: mapping?.emoji,
+        key,
+        label: role.label,
+        roleId: mapping?.roleId,
+      };
+    }),
+  };
+}
+
+// Filas del Admin de Mapeo: el catálogo completo con lo elegido por la guild.
+// El orden es el de uso: el estado del roster, después los roles de cada juego
+// junto a su catálogo de clases.
+function buildMappingGroups(
+  mappings: Map<string, GuildMapping>,
+  classes: string[],
+  classEmojis: Record<string, MappingEmoji>,
+): MappingGroup[] {
+  const roster: MappingGroup = {
+    key: "roster",
+    label: "Raid",
+    rows: ROSTER_RANKS.map((rank) => {
+      const mapping = findMapping(mappings, rosterMappingKey(rank.key));
+      return {
+        emoji: mapping?.emoji,
+        key: rosterMappingKey(rank.key),
+        label: rank.label,
+        roleId: mapping?.roleId,
+      };
+    }),
+  };
+
+  const classesGroup: MappingGroup = {
+    key: "class",
+    label: "Clases de WoW",
+    rows: classes.map((className) => {
+      const mapping = mappings.get(classMappingKey(className));
+      return {
+        // Respaldo de las specs: sin esto el Admin mostraba la clase vacía
+        // aunque el roster estuviera usando un emoji guardado en la spec.
+        emoji: mapping?.emoji ?? classEmojis[className],
+        key: classMappingKey(className),
+        label: className,
+        roleId: mapping?.roleId,
+      };
+    }),
+  };
+
   return [
-    {
-      key: "roster",
-      label: "Raid",
-      rows: ROSTER_RANKS.map((rank) => {
-        const mapping = findMapping(mappings, rosterMappingKey(rank.key));
-        return {
-          emoji: mapping?.emoji,
-          key: rosterMappingKey(rank.key),
-          label: rank.label,
-          roleId: mapping?.roleId,
-        };
-      }),
-    },
-    {
-      key: "class",
-      label: "Clases",
-      rows: classes.map((className) => {
-        const mapping = mappings.get(classMappingKey(className));
-        return {
-          // Respaldo de las specs: sin esto el Admin mostraba la clase vacía
-          // aunque el roster estuviera usando un emoji guardado en la spec.
-          emoji: mapping?.emoji ?? classEmojis[className],
-          key: classMappingKey(className),
-          label: className,
-          roleId: mapping?.roleId,
-        };
-      }),
-    },
-  ];
+    roster,
+    eventRoleMappingGroup(mappings, "wow"),
+    classesGroup,
+    eventRoleMappingGroup(mappings, "lol"),
+  ].filter((group): group is MappingGroup => group !== null);
 }
 
 // Nombre para mostrar de un miembro: nick de servidor, si no global_name,
@@ -2204,7 +2301,7 @@ async function syncAndStoreEventDiscord(input: {
     poll,
     pollHours: event.pollHours,
     requiredRoleId: event.requiredRoleId,
-    roles: resolveEventRoles(eventConfig, event.game),
+    roles: await resolveEventRolesFor(event.guildId, event.game, eventConfig),
     signupDeadline: event.signupDeadline,
     signups: event.signups,
     specLabel: eventConfig.eventSpecLabel,
@@ -2290,7 +2387,7 @@ async function refreshEventAnnouncement(
           ? event.recurrenceEveryDays
           : undefined,
       requiredRoleId: event.requiredRoleId,
-      roles: resolveEventRoles(eventConfig, event.game),
+      roles: await resolveEventRolesFor(guildId, event.game, eventConfig),
       signupDeadline: event.signupDeadline,
       signups: event.signups,
       specLabel: eventConfig.eventSpecLabel,
@@ -5303,7 +5400,13 @@ export function buildApp() {
         label,
         roleId: rankRoles[key],
       })),
-      roles: resolveEventRoles(config, "wow"),
+      // Los mapeos ya están cargados en este handler, así que no hace falta
+      // volver a la base (ver resolveEventRolesFor).
+      roles: applyEventRoleEmojis(
+        resolveEventRoles(config, "wow"),
+        "wow",
+        mappings,
+      ),
       specs,
     };
   });
@@ -6220,10 +6323,14 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
+    const mappings = await listGuildMappings(params.guildId);
     return {
       ok: true,
       guildId: params.guildId,
-      games: resolveEventGames(config),
+      games: resolveEventGames(config).map((game) => ({
+        ...game,
+        roles: applyEventRoleEmojis(game.roles, game.key, mappings),
+      })),
     };
   });
 
@@ -7157,7 +7264,7 @@ export function buildApp() {
       guildId: params.guildId,
       classLabel: config.eventClassLabel ?? "Clase",
       game,
-      roles: resolveEventRoles(config, game),
+      roles: await resolveEventRolesFor(params.guildId, game, config),
       specLabel: config.eventSpecLabel ?? "Spec",
       specs,
     };

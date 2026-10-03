@@ -13434,7 +13434,9 @@ function App() {
                   </button>
                   <button
                     className="ghost-button danger"
-                    onClick={() => requestDeleteCommunication(currentComunicado)}
+                    onClick={() =>
+                      requestDeleteCommunication(currentComunicado)
+                    }
                     type="button"
                   >
                     Eliminar comunicado
