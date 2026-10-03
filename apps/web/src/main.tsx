@@ -2458,12 +2458,14 @@ function AdminMappingsSection({
 function RosterSection({
   canEditOthers,
   guildId,
+  guildRoles,
   meId,
   notify,
   onOpenProfile,
 }: {
   canEditOthers: boolean;
   guildId: string;
+  guildRoles: GuildRole[];
   meId?: string;
   notify: (message: string, kind: "error" | "success") => void;
   onOpenProfile: (userId: string) => void;
@@ -2532,9 +2534,22 @@ function RosterSection({
     (member) =>
       member.rankKey === "raid" ||
       member.rankKey === "trial" ||
-      member.rankKey === "guild" ||
+      member.isRaidLead ||
       (member.rankKey === null && member.profile),
   );
+
+  // Color del rol de Raid Lead (el que se mapeó en Admin → Mapeo), para que la
+  // etiqueta se vea como el rol en Discord.
+  const raidLeadColors = useMemo(() => {
+    const roleId = (roster?.ranks ?? []).find(
+      (rank) => rank.key === "guild",
+    )?.roleId;
+    const role = guildRoles.find((entry) => entry.id === roleId);
+    return {
+      primary: roleColorHex(role?.color) ?? "#c98a1b",
+      secondary: roleColorHex(role?.secondaryColor),
+    };
+  }, [guildRoles, roster]);
 
   function memberRole(member: RosterMember): string {
     const profile = member.profile;
@@ -2712,10 +2727,10 @@ function RosterSection({
     const classEmojiMeta = profile
       ? roster?.classEmojis?.[profile.className]
       : undefined;
-    const isOfficer = member.rankKey === "guild";
-    // Sin ficha no hay estado que mostrar, y officer va aparte (no es estado).
-    const rosterStatus =
-      profile && !isOfficer ? rosterRankLabel(member.rankKey) : null;
+    const isOfficer = member.isRaidLead;
+    // El estado va con la ficha, sin importar si es Raid Lead: son cosas
+    // distintas y se puede ser Raid Lead e inactivo a la vez.
+    const rosterStatus = profile ? rosterRankLabel(member.rankKey) : null;
     const canToggleStatus = canEditOthers && rosterStatus !== null;
     // La tarjeta entera abre la edición: el lápiz flotante quedaba descolgado
     // en el medio cuando la tarjeta era ancha.
@@ -2744,7 +2759,20 @@ function RosterSection({
           } as CSSProperties
         }
       >
-        {isOfficer ? <span className="roster-lead-flag">Raid Lead</span> : null}
+        {isOfficer ? (
+          <span
+            className="roster-lead-flag"
+            style={
+              {
+                "--roster-lead-color": raidLeadColors.primary,
+                "--roster-lead-color-2":
+                  raidLeadColors.secondary ?? raidLeadColors.primary,
+              } as CSSProperties
+            }
+          >
+            Raid Lead
+          </span>
+        ) : null}
         <div className="roster-member-main">
           <button
             className="member-link roster-member-name"
@@ -12130,6 +12158,7 @@ function App() {
                     <RosterSection
                       canEditOthers={canAccess("raids")}
                       guildId={selectedGuildId}
+                      guildRoles={guildRoles}
                       meId={me?.id}
                       notify={pushToast}
                       onOpenProfile={openMemberProfile}

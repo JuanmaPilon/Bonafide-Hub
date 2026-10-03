@@ -802,7 +802,7 @@ function buildMappingGroups(
   return [
     {
       key: "roster",
-      label: "Rangos del roster",
+      label: "Raid",
       rows: ROSTER_RANKS.map((rank) => {
         const mapping = mappings.get(rosterMappingKey(rank.key));
         return {
@@ -5197,13 +5197,17 @@ export function buildApp() {
       listRaidSpecs(params.guildId, "wow"),
     ]);
 
-    const rankByRole = new Map<string, RosterRankKey>();
-    for (const { key } of ROSTER_RANKS) {
+    // El estado (raid/prueba) y ser Raid Lead son cosas distintas: alguien
+    // puede ser Raid Lead y estar inactivo a la vez. Compartir el mismo campo
+    // hacía que el Raid Lead tapara el estado, o que se perdiera.
+    const stateByRole = new Map<string, RosterRankKey>();
+    for (const key of ROSTER_STATE_RANKS) {
       const roleId = rankRoles[key];
       if (roleId) {
-        rankByRole.set(roleId, key);
+        stateByRole.set(roleId, key);
       }
     }
+    const raidLeadRoleId = rankRoles.guild;
 
     const rows = members
       .map((member) => {
@@ -5211,12 +5215,16 @@ export function buildApp() {
         if (!userId || member.user?.bot) {
           return null;
         }
-        const rankKey = (member.roles ?? [])
-          .map((roleId) => rankByRole.get(roleId))
-          .find((key) => Boolean(key));
+        const roles = member.roles ?? [];
+        const rankKey =
+          roles
+            .map((roleId) => stateByRole.get(roleId))
+            .find((key): key is RosterRankKey => Boolean(key)) ?? null;
+        const isRaidLead =
+          Boolean(raidLeadRoleId) && roles.includes(raidLeadRoleId as string);
         const profile = profiles.get(userId) ?? null;
-        // Fuera del roster: no tiene ninguno de los roles ni ficha cargada.
-        if (!rankKey && !profile) {
+        // Fuera del roster: sin rol de estado, sin Raid Lead y sin ficha.
+        if (!rankKey && !isRaidLead && !profile) {
           return null;
         }
         return {
@@ -5225,8 +5233,9 @@ export function buildApp() {
             member.user?.global_name ??
             member.user?.username ??
             userId,
+          isRaidLead,
           profile,
-          rankKey: rankKey ?? null,
+          rankKey,
           userId,
         };
       })

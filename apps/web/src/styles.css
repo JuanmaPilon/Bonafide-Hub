@@ -1813,6 +1813,9 @@ a:hover {
    etiqueta de rareza de Karuta. Va centrada y por encima del borde para no
    pisar el tag de estado ni el lápiz de edición (ambos arriba a la derecha). */
 .roster-lead-flag {
+  /* Color del rol de Raid Lead: el inline lo pisa con el de Discord. */
+  --roster-lead-color: #c98a1b;
+  --roster-lead-color-2: #ffe9a8;
   position: absolute;
   top: -9px;
   left: 50%;
@@ -1820,16 +1823,21 @@ a:hover {
   transform: translateX(-50%);
   padding: 2px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 205, 110, 0.75);
-  background: linear-gradient(135deg, #7a4a06 0%, #c98a1b 55%, #ffe9a8 100%);
-  color: #fff8e2;
+  border: 1px solid color-mix(in srgb, var(--roster-lead-color) 78%, white);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--roster-lead-color) 68%, black) 0%,
+    var(--roster-lead-color) 52%,
+    var(--roster-lead-color-2) 100%
+  );
+  color: #fff;
   font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .roster-status-menu {
