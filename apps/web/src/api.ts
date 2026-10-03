@@ -301,7 +301,17 @@ export async function getMemberProfile(
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+// Sin timeout, una petición que queda colgada (p. ej. la API reiniciándose
+// detrás de Cloudflare) nunca se resuelve: la UI se queda cargando para
+// siempre y no hay forma de reintentar. Las operaciones que de verdad pueden
+// tardar pasan `0` para esperar sin límite.
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
   // Solo mandamos Content-Type: application/json cuando hay body.
   // Fastify 5 responde 400 "Bad Request" a un POST/DELETE sin body pero
   // con ese content-type (FST_ERR_CTP_EMPTY_JSON_BODY).
@@ -311,6 +321,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
     ...init,
+    ...(timeoutMs > 0 && !init?.signal
+      ? { signal: AbortSignal.timeout(timeoutMs) }
+      : {}),
     headers: {
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
@@ -350,6 +363,7 @@ export function loginUrl(): string {
 export async function getMe(): Promise<SessionResponse["user"] | null> {
   const response = await fetch(`${API_BASE_URL}/me`, {
     credentials: "include",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
@@ -363,6 +377,7 @@ export async function getMe(): Promise<SessionResponse["user"] | null> {
 export async function getGuilds(): Promise<ApiGuild[]> {
   const response = await fetch(`${API_BASE_URL}/guilds`, {
     credentials: "include",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
@@ -907,9 +922,11 @@ export async function createRaidLog(
 export async function scanRaidLogs(
   guildId: string,
 ): Promise<{ detected: number; logs: RaidLog[] }> {
+  // Consulta Warcraft Logs report por report: puede tardar minutos.
   return requestJson<{ detected: number; logs: RaidLog[] }>(
     `/guilds/${guildId}/raid-logs/scan`,
     { method: "POST" },
+    0,
   );
 }
 
@@ -929,9 +946,11 @@ export async function updateRaidLogMessage(
   guildId: string,
   logId: string,
 ): Promise<{ logs: RaidLog[]; updated: boolean }> {
+  // Re-escanea la entrada en Warcraft Logs antes de editar: sin límite.
   return requestJson<{ logs: RaidLog[]; updated: boolean }>(
     `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}/refresh`,
     { method: "POST" },
+    0,
   );
 }
 
