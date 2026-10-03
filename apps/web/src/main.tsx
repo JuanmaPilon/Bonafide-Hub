@@ -2356,6 +2356,8 @@ function RosterSection({
     userId: string;
   } | null>(null);
   const [savingSheet, setSavingSheet] = useState(false);
+  // Tarjeta con el menú de estado abierto: solo una a la vez.
+  const [rankMenuFor, setRankMenuFor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -2382,6 +2384,16 @@ function RosterSection({
       cancelled = true;
     };
   }, [guildId]);
+
+  // Cierra el menú de estado al clickear en cualquier otro lado.
+  useEffect(() => {
+    if (!rankMenuFor) {
+      return;
+    }
+    const close = () => setRankMenuFor(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [rankMenuFor]);
 
   const specsByKey = useMemo(() => {
     const map = new Map<string, RaidSpec>();
@@ -2638,24 +2650,48 @@ function RosterSection({
           </div>
         ) : null}
         {canToggleStatus ? (
-          <select
-            className={`select roster-status-select roster-status-select--${rosterStatusClass}`}
-            onChange={(event) =>
-              void changeProfileRank(
-                member,
-                (event.target.value || null) as RosterRankKey | null,
-              )
-            }
-            title="Estado en el roster"
-            value={member.rankKey ?? ""}
-          >
-            <option value="">Fuera del roster</option>
-            {(roster?.ranks ?? []).map((rank) => (
-              <option key={rank.key} value={rank.key}>
-                {rosterRankLabel(rank.key)}
-              </option>
-            ))}
-          </select>
+          <div className="roster-status-menu">
+            <button
+              className={`roster-status-badge roster-status-badge--${rosterStatusClass}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                setRankMenuFor((current) =>
+                  current === member.userId ? null : member.userId,
+                );
+              }}
+              title="Cambiar estado en el roster"
+              type="button"
+            >
+              {rosterStatus}
+            </button>
+            {rankMenuFor === member.userId ? (
+              <div className="roster-status-options">
+                {(roster?.ranks ?? []).map((rank) => (
+                  <button
+                    className={`roster-status-option roster-status-option--${rosterRankLabel(rank.key).toLowerCase().replaceAll(" ", "-")}`}
+                    key={rank.key}
+                    onClick={() => {
+                      setRankMenuFor(null);
+                      void changeProfileRank(member, rank.key);
+                    }}
+                    type="button"
+                  >
+                    {rosterRankLabel(rank.key)}
+                  </button>
+                ))}
+                <button
+                  className="roster-status-option roster-status-option--inactivo"
+                  onClick={() => {
+                    setRankMenuFor(null);
+                    void changeProfileRank(member, null);
+                  }}
+                  type="button"
+                >
+                  Inactivo
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : (
           <span
             className={`roster-status-badge roster-card-toggle roster-status-badge--${rosterStatusClass}`}

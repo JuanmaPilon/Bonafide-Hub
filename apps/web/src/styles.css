@@ -1743,40 +1743,66 @@ a:hover {
   right: 7px;
 }
 
-.roster-status-select {
+.roster-status-menu {
   position: absolute;
   top: 7px;
   right: 7px;
-  max-width: 124px;
-  padding: 3px 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(229, 72, 77, 0.55);
-  background: rgba(229, 72, 77, 0.16);
-  color: #ff9292;
+  z-index: 2;
+}
+
+.roster-status-menu .roster-status-badge {
+  cursor: pointer;
+}
+
+.roster-status-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.roster-status-option {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  padding: 4px 8px;
+  text-align: left;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.roster-status-select--activo {
-  border-color: rgba(53, 185, 111, 0.62);
-  background: rgba(53, 185, 111, 0.18);
+.roster-status-option:hover {
+  background: rgba(134, 158, 214, 0.16);
+}
+
+.roster-status-option--activo {
   color: #6ee7a1;
 }
 
-.roster-status-select--prueba,
-.roster-status-select--bench,
-.roster-status-select--oficial-guild {
-  border-color: rgba(245, 181, 64, 0.65);
-  background: rgba(245, 181, 64, 0.18);
+.roster-status-option--prueba,
+.roster-status-option--bench {
   color: #ffd477;
 }
 
-.roster-status-select--sin-ficha {
-  border-color: rgba(106, 168, 255, 0.62);
-  background: rgba(106, 168, 255, 0.16);
+.roster-status-option--oficial-guild {
   color: #9ec7ff;
+}
+
+.roster-status-option--inactivo {
+  color: #ff9292;
 }
 
 .roster-ranks-grid {
@@ -1811,6 +1837,7 @@ a:hover {
   color: #ffd477;
 }
 
+.roster-status-badge--oficial-guild,
 .roster-status-badge--sin-ficha {
   border-color: rgba(106, 168, 255, 0.62);
   background: rgba(106, 168, 255, 0.14);
