@@ -2236,7 +2236,9 @@ function AdminMappingsSection({
   notify: (message: string, kind: "error" | "success") => void;
 }) {
   const [groups, setGroups] = useState<MappingGroup[]>([]);
-  const [roles, setRoles] = useState<GuildRole[]>([]);
+  const [roles, setRoles] = useState<GuildRoleDetail[]>([]);
+  // Posición del rol más alto del bot: arriba de eso no puede asignar.
+  const [botTopPosition, setBotTopPosition] = useState(0);
   const [emojis, setEmojis] = useState<GuildEmoji[]>([]);
   const [draft, setDraft] = useState<
     Record<string, { emojiId?: string; roleId?: string }>
@@ -2251,15 +2253,16 @@ function AdminMappingsSection({
     setLoading(true);
     Promise.all([
       getGuildMappings(guildId),
-      getGuildRoles(guildId),
+      getGuildRolesDetailed(guildId),
       getGuildEmojis(guildId).catch(() => [] as GuildEmoji[]),
     ])
-      .then(([nextGroups, guildRoles, guildEmojis]) => {
+      .then(([nextGroups, rolesResponse, guildEmojis]) => {
         if (cancelled) {
           return;
         }
         setGroups(nextGroups);
-        setRoles(guildRoles);
+        setRoles(rolesResponse.roles);
+        setBotTopPosition(rolesResponse.botTopPosition);
         setEmojis(guildEmojis);
         setDraft(
           Object.fromEntries(
@@ -2295,6 +2298,25 @@ function AdminMappingsSection({
       ...current,
       [key]: { ...current[key], ...value },
     }));
+  }
+
+  // Por qué el hub no podría mover ese rol en Discord. Sin side effects: mira
+  // la lista real de roles y hasta dónde llega el bot.
+  function roleWarning(roleId: string | undefined): string | null {
+    if (!roleId) {
+      return null;
+    }
+    const role = roles.find((entry) => entry.id === roleId);
+    if (!role) {
+      return "Ese rol ya no existe en el servidor. Volvé a elegirlo.";
+    }
+    if (role.managed) {
+      return "Es un rol de integración: Discord no deja asignarlo a mano.";
+    }
+    if (botTopPosition > 0 && role.position >= botTopPosition) {
+      return "El rol del bot está más abajo: no puede asignarlo. Subí el rol del bot.";
+    }
+    return null;
   }
 
   async function save(): Promise<void> {
@@ -2362,6 +2384,7 @@ function AdminMappingsSection({
               {group.rows.map((row) => {
                 const emojiId = draft[row.key]?.emojiId;
                 const emoji = emojis.find((entry) => entry.id === emojiId);
+                const warning = roleWarning(draft[row.key]?.roleId);
                 return (
                   <div className="mapping-item" key={row.key}>
                     <div className="mapping-row">
@@ -2403,6 +2426,9 @@ function AdminMappingsSection({
                         )}
                       </button>
                     </div>
+                    {warning ? (
+                      <p className="mapping-warning">{warning}</p>
+                    ) : null}
                     {emojiPickerFor === row.key ? (
                       <div className="spec-emoji-grid">
                         {emojis.map((entry) => {
@@ -4728,6 +4754,25 @@ function tabLabel(tab: HubTab): string {
   }
 
   return "Admin";
+}
+
+// Título de la cabecera del módulo: el de la subsección actual, para que
+// coincida con dónde estás parado (Roster, Logs de Raid, Raras, Colecciones…).
+function currentSectionTitle(
+  tab: HubTab,
+  section: string,
+  fallback: string,
+): string {
+  if (tab === "raids") {
+    return section === "roster"
+      ? "Roster"
+      : section === "logs"
+        ? "Logs de Raid"
+        : fallback;
+  }
+  return (
+    TAB_SECTIONS[tab]?.find((entry) => entry.key === section)?.label ?? fallback
+  );
 }
 
 function panelTitle(tab: HubTab): string {
@@ -9627,13 +9672,11 @@ function App() {
                     >
                       {activeTab === "admin"
                         ? (activeAdminSection?.label ?? panelTitle(activeTab))
-                        : activeTab === "raids"
-                          ? sectionFor("raids") === "roster"
-                            ? "Roster"
-                            : sectionFor("raids") === "logs"
-                              ? "Logs de Raid"
-                              : panelTitle(activeTab)
-                          : panelTitle(activeTab)}
+                        : currentSectionTitle(
+                            activeTab,
+                            sectionFor(activeTab),
+                            panelTitle(activeTab),
+                          )}
                     </h2>
                   </div>
                   {activeTab === "admin" && activeAdminSection?.tier ? (

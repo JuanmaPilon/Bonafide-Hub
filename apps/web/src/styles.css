@@ -1938,6 +1938,13 @@ a:hover {
   color: var(--text);
 }
 
+.mapping-warning {
+  margin: 4px 0 0;
+  color: #ffd477;
+  font-size: 0.74rem;
+  line-height: 1.3;
+}
+
 .mapping-item .spec-emoji-grid {
   margin-top: 8px;
 }

@@ -703,11 +703,19 @@ async function syncRosterRankRole(
   rosterRanks: Partial<Record<string, string>> | undefined,
   rank: RosterRankKey | null,
 ): Promise<GuildRoleSyncResult> {
+  // Sin ningún estado mapeado no hay nada que poner ni quitar: devolver ok
+  // dejaría a la UI mostrando un cambio que nunca pasó.
+  if (ROSTER_STATE_RANKS.every((key) => !rosterRanks?.[key])) {
+    return {
+      detail: "No hay roles de estado mapeados (Admin → Mapeo → Raid).",
+      ok: false,
+    };
+  }
   if (rank && !rosterRanks?.[rank]) {
     const label =
       ROSTER_RANKS.find((entry) => entry.key === rank)?.label ?? rank;
     return {
-      detail: `No hay un rol de Discord configurado para «${label}».`,
+      detail: `No hay un rol de Discord configurado para «${label}» (Admin → Mapeo → Raid).`,
       ok: false,
     };
   }
