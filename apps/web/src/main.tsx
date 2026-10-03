@@ -2346,8 +2346,19 @@ function AdminMappingsSection({
       </summary>
       <div className="admin-card-body">
         {groups.map((group) => (
-          <div className="mapping-group" key={group.key}>
-            <h4 className="mapping-group-title">{group.label}</h4>
+          <details
+            className="mapping-group"
+            key={group.key}
+            open={group.rows.length <= 4}
+          >
+            <summary className="mapping-group-header">
+              <span className="mapping-group-title">{group.label}</span>
+              <span className="mapping-group-count">{group.rows.length}</span>
+              <span className="mapping-group-chevron" aria-hidden="true">
+                ▸
+              </span>
+            </summary>
+            <div className="mapping-group-body">
             {group.rows.map((row) => {
               const emojiId = draft[row.key]?.emojiId;
               const emoji = emojis.find((entry) => entry.id === emojiId);
@@ -2424,7 +2435,8 @@ function AdminMappingsSection({
                 </div>
               );
             })}
-          </div>
+            </div>
+          </details>
         ))}
         <div className="admin-card-footer">
           <button

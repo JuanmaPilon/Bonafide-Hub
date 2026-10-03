@@ -1826,17 +1826,56 @@ a:hover {
   position: relative;
 }
 
-.mapping-group + .mapping-group {
-  margin-top: 18px;
+.mapping-group {
+  border-top: 1px solid var(--panel-border);
+}
+
+.mapping-group:first-of-type {
+  border-top: 0;
+}
+
+.mapping-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mapping-group-header::-webkit-details-marker {
+  display: none;
 }
 
 .mapping-group-title {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 0.74rem;
+  color: var(--text);
+  font-size: 0.78rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.mapping-group-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(134, 158, 214, 0.16);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.mapping-group-chevron {
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform 140ms ease;
+}
+
+.mapping-group[open] .mapping-group-chevron {
+  transform: rotate(90deg);
+}
+
+.mapping-group-body {
+  padding-bottom: 12px;
 }
 
 .mapping-item + .mapping-item {
