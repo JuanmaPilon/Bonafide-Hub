@@ -5607,11 +5607,13 @@ select.list-order {
 }
 
 /* Modal del comunicado: el `.modal` base mide 520px de ancho, así que pisar
-   solo `max-width` no lo ensancha. */
+   solo `max-width` no lo ensancha. 780px es el ancho máximo que mantiene el
+texto legible (más ancho y las líneas se hacen incómodas de seguir). */
 .comunicado-modal {
-  width: min(880px, 100%);
+  width: min(780px, 100%);
   max-height: 86vh;
   overflow: hidden;
+  padding: 24px;
   gap: 0;
 }
 
@@ -5619,6 +5621,8 @@ select.list-order {
   display: flex;
   align-items: start;
   gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .comunicado-modal-head > div {
