@@ -1414,6 +1414,19 @@ export async function saveRosterRanks(
   return data.ranks;
 }
 
+// Estado de una ficha en el roster. Es lo que mueve los roles en Discord:
+// `null` lo deja fuera del roster.
+export async function setRosterRank(
+  guildId: string,
+  userId: string,
+  rank: RosterRankKey | null,
+): Promise<{ rank: RosterRankKey | null; roleSyncError?: string }> {
+  return requestJson<{ rank: RosterRankKey | null; roleSyncError?: string }>(
+    `/guilds/${guildId}/roster/${encodeURIComponent(userId)}/rank`,
+    { body: JSON.stringify({ rank }), method: "PUT" },
+  );
+}
+
 export async function createEvent(
   guildId: string,
   input: {

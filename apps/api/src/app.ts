@@ -687,37 +687,49 @@ async function syncGuildMemberRole(
   return { detail, ok: false };
 }
 
-async function syncRosterRaidRole(
+// Rango del roster pedido en un body. `null` = fuera del roster.
+async function syncRosterRankRole(
   guildId: string,
   userId: string,
   rosterRanks: Partial<Record<string, string>> | undefined,
-  active: boolean,
+  rank: RosterRankKey | null,
 ): Promise<GuildRoleSyncResult> {
-  const raidRoleId = rosterRanks?.raid;
-  if (!raidRoleId) {
+  if (rank && !rosterRanks?.[rank]) {
     return {
-      detail: "No hay un rol raid configurado en la guild.",
+      detail: `No hay un rol configurado para el rango «${rank}». Mapealo en Rangos.`,
       ok: false,
     };
   }
-  const raidResult = await syncGuildMemberRole(
-    guildId,
-    userId,
-    raidRoleId,
-    active,
-  );
-  if (!raidResult.ok) {
-    return raidResult;
-  }
-  if (active) {
-    for (const key of ["trial", "bench"]) {
-      const roleId = rosterRanks?.[key];
-      if (roleId && roleId !== raidRoleId) {
-        await syncGuildMemberRole(guildId, userId, roleId, false);
-      }
+  // Pone el rol del rango pedido y quita los otros: el estado de la tarjeta
+  // es exactamente el rol de Discord que tiene el miembro.
+  for (const { key } of ROSTER_RANKS) {
+    const roleId = rosterRanks?.[key];
+    if (!roleId) {
+      continue;
+    }
+    const shouldHave = key === rank;
+    const result = await syncGuildMemberRole(
+      guildId,
+      userId,
+      roleId,
+      shouldHave,
+    );
+    if (shouldHave && !result.ok) {
+      return result;
     }
   }
   return { ok: true };
+}
+
+// Clave de rango válida, `null` para sacarlo del roster o "invalid".
+function parseRosterRank(value: unknown): RosterRankKey | null | "invalid" {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const key = String(value);
+  return ROSTER_RANKS.some((entry) => entry.key === key)
+    ? (key as RosterRankKey)
+    : "invalid";
 }
 
 // Nombre para mostrar de un miembro: nick de servidor, si no global_name,
@@ -5162,26 +5174,14 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: validation.error });
     }
 
-    const config = await getGuildConfig(params.guildId);
-    const roleSync = await syncRosterRaidRole(
-      params.guildId,
-      String(session.user.id),
-      config.rosterRanks,
-      validation.profile.active,
-    );
-
+    // La ficha guarda clase, spec, offs y tags. El rango y su rol de Discord
+    // se cambian aparte, desde el selector de estado de la tarjeta.
     const profile = await upsertRosterProfile(
       params.guildId,
       String(session.user.id),
       validation.profile,
     );
-    // La ficha se guarda aunque Discord falle: el rol se sincroniza
-    // best-effort y el motivo viaja en la respuesta como aviso.
-    return {
-      ok: true,
-      profile,
-      roleSyncError: roleSync.ok ? undefined : roleSync.detail,
-    };
+    return { ok: true, profile };
   });
 
   // Ficha de otro miembro: solo staff del módulo de raids.
@@ -5208,14 +5208,8 @@ export function buildApp() {
       return reply.code(400).send({ ok: false, error: validation.error });
     }
 
-    const config = await getGuildConfig(params.guildId);
-    const roleSync = await syncRosterRaidRole(
-      params.guildId,
-      params.userId,
-      config.rosterRanks,
-      validation.profile.active,
-    );
-
+    // La ficha guarda clase, spec, offs y tags. El rango y su rol de Discord
+    // se cambian aparte, desde el selector de estado de la tarjeta.
     const profile = await upsertRosterProfile(
       params.guildId,
       params.userId,
@@ -5223,15 +5217,11 @@ export function buildApp() {
     );
     const member = await fetchGuildMemberRecord(params.guildId, params.userId);
     await logAdminAction(session, params.guildId, "roster:profile", {
-      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
+      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}`,
       targetId: params.userId,
       targetType: "user",
     });
-    return {
-      ok: true,
-      profile,
-      roleSyncError: roleSync.ok ? undefined : roleSync.detail,
-    };
+    return { ok: true, profile };
   });
 
   app.delete("/guilds/:guildId/roster/:userId", async (request, reply) => {
@@ -5256,6 +5246,50 @@ export function buildApp() {
       targetType: "user",
     });
     return { ok: true, deleted };
+  });
+
+  // Estado de una ficha: Activo, A prueba, Bench, Oficial guild o fuera del
+  // roster. Es lo único que mueve los roles del roster en Discord.
+  app.put("/guilds/:guildId/roster/:userId/rank", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; userId?: string };
+    if (!params.guildId || !params.userId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const raw = (request.body ?? {}) as { rank?: unknown };
+    const rank = parseRosterRank(raw.rank);
+    if (rank === "invalid") {
+      return reply.code(400).send({ ok: false, error: "Rango inválido" });
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    const roleSync = await syncRosterRankRole(
+      params.guildId,
+      params.userId,
+      config.rosterRanks,
+      rank,
+    );
+
+    await logAdminAction(session, params.guildId, "roster:rank", {
+      details: `Rango de ${params.userId}: ${rank ?? "fuera del roster"}${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
+      targetId: params.userId,
+      targetType: "user",
+    });
+
+    return {
+      ok: true,
+      rank,
+      roleSyncError: roleSync.ok ? undefined : roleSync.detail,
+    };
   });
 
   // Rol de Discord que representa cada rango del roster.

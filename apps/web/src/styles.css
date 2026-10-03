@@ -1712,23 +1712,52 @@ a:hover {
   gap: 4px;
 }
 
-.roster-status-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  cursor: pointer;
-}
-
 .roster-card-toggle {
   position: absolute;
   top: 7px;
   right: 7px;
 }
 
-.roster-status-toggle input {
+.roster-status-select {
   position: absolute;
-  opacity: 0;
-  pointer-events: none;
+  top: 7px;
+  right: 7px;
+  max-width: 124px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(229, 72, 77, 0.55);
+  background: rgba(229, 72, 77, 0.16);
+  color: #ff9292;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.roster-status-select--activo {
+  border-color: rgba(53, 185, 111, 0.62);
+  background: rgba(53, 185, 111, 0.18);
+  color: #6ee7a1;
+}
+
+.roster-status-select--prueba,
+.roster-status-select--bench,
+.roster-status-select--oficial-guild {
+  border-color: rgba(245, 181, 64, 0.65);
+  background: rgba(245, 181, 64, 0.18);
+  color: #ffd477;
+}
+
+.roster-status-select--sin-ficha {
+  border-color: rgba(106, 168, 255, 0.62);
+  background: rgba(106, 168, 255, 0.16);
+  color: #9ec7ff;
+}
+
+.roster-ranks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .roster-status-badge {
@@ -1744,7 +1773,7 @@ a:hover {
   text-transform: uppercase;
 }
 
-.roster-status-toggle--active .roster-status-badge {
+.roster-status-badge--activo {
   border-color: rgba(53, 185, 111, 0.62);
   background: rgba(53, 185, 111, 0.16);
   color: #6ee7a1;

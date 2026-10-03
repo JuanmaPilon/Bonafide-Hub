@@ -89,6 +89,8 @@ import {
   resolveEventRoles,
   saveMemberRosterProfile,
   saveMyRosterProfile,
+  saveRosterRanks,
+  setRosterRank,
   scanRaidLogs,
   updateEvent,
   updateGuildRole,
@@ -134,6 +136,8 @@ import {
   type RosterMember,
   type RosterProfile,
   type RosterProfileInput,
+  type RosterRank,
+  type RosterRankKey,
 } from "./api";
 import "./styles.css";
 
@@ -2067,7 +2071,6 @@ function RosterSheet({
   const [offSpecs, setOffSpecs] = useState<string[]>(
     profile?.game === "wow" ? profile.offSpecs : [],
   );
-  const [active, setActive] = useState(profile?.active ?? true);
 
   function pickClass(next: string): void {
     setClassName(next);
@@ -2170,7 +2173,6 @@ function RosterSheet({
             disabled={saving || !className || !specName}
             onClick={() =>
               onSave({
-                active,
                 className,
                 game,
                 offSpecs,
@@ -2184,20 +2186,6 @@ function RosterSheet({
           </button>
         </div>
         {canDelete && profile ? (
-          <label
-            className={`roster-status-toggle${active ? " roster-status-toggle--active" : ""}`}
-          >
-            <input
-              checked={active}
-              onChange={(event) => setActive(event.target.checked)}
-              type="checkbox"
-            />
-            <span className="roster-status-badge">
-              {active ? "Activo" : "Inactivo"}
-            </span>
-          </label>
-        ) : null}
-        {canDelete && profile ? (
           <button
             className="danger-button roster-delete-button"
             onClick={onDelete}
@@ -2207,6 +2195,139 @@ function RosterSheet({
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+// Etiqueta visible del estado de una ficha. `raid` es el roster principal.
+function rosterRankLabel(rank: RosterRankKey | null): string {
+  if (rank === "raid") {
+    return "Activo";
+  }
+  if (rank === "trial") {
+    return "Prueba";
+  }
+  if (rank === "bench") {
+    return "Bench";
+  }
+  if (rank === "guild") {
+    return "Oficial guild";
+  }
+  return "Inactivo";
+}
+
+// Mapeo rango del roster → rol de Discord. Sin esto el roster no puede mover
+// a nadie entre Activo, Prueba y Bench.
+function RosterRanksSection({
+  guildId,
+  notify,
+}: {
+  guildId: string;
+  notify: (message: string, kind: "error" | "success") => void;
+}) {
+  const [ranks, setRanks] = useState<RosterRank[]>([]);
+  const [roles, setRoles] = useState<GuildRole[]>([]);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([getGuildRoster(guildId), getGuildRoles(guildId)])
+      .then(([roster, guildRoles]) => {
+        if (cancelled) {
+          return;
+        }
+        setRanks(roster.ranks);
+        setRoles(guildRoles);
+        setDraft(
+          Object.fromEntries(
+            roster.ranks.map((rank) => [rank.key, rank.roleId ?? ""]),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          notify("No se pudieron cargar los rangos.", "error");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guildId, notify]);
+
+  async function save(): Promise<void> {
+    setSaving(true);
+    try {
+      const saved = await saveRosterRanks(
+        guildId,
+        Object.fromEntries(
+          Object.entries(draft).filter(([, roleId]) => Boolean(roleId)),
+        ),
+      );
+      setRanks(saved);
+      notify("Rangos del roster guardados.", "success");
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron guardar los rangos.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <LoadingState label="Cargando rangos…" />;
+  }
+
+  return (
+    <div className="admin-grid">
+      <section className="admin-card">
+        <h3>Rangos del roster</h3>
+        <div className="roster-ranks-grid">
+          {ranks.map((rank) => (
+            <label className="roster-sheet-field" key={rank.key}>
+              <span>{rosterRankLabel(rank.key)}</span>
+              <select
+                className="select"
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    [rank.key]: event.target.value,
+                  }))
+                }
+                value={draft[rank.key] ?? ""}
+              >
+                <option value="">Sin rol</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+        <div className="form-actions">
+          <button
+            className="primary-button"
+            disabled={saving}
+            onClick={() => void save()}
+            type="button"
+          >
+            {saving ? "Guardando…" : "Guardar rangos"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2276,6 +2397,7 @@ function RosterSection({
       member.rankKey === "raid" ||
       member.rankKey === "trial" ||
       member.rankKey === "bench" ||
+      member.rankKey === "guild" ||
       (member.rankKey === null && member.profile),
   );
 
@@ -2330,11 +2452,7 @@ function RosterSection({
               ...current,
               members: current.members.map((member) =>
                 member.userId === target.userId
-                  ? {
-                      ...member,
-                      profile,
-                      rankKey: profile.active ? "raid" : null,
-                    }
+                  ? { ...member, profile }
                   : member,
               ),
             }
@@ -2357,38 +2475,35 @@ function RosterSection({
     }
   }
 
-  async function toggleProfileActive(member: RosterMember): Promise<void> {
-    if (!member.profile || !canEditOthers) {
+  // Cambia el estado de la ficha. El estado ES el rol de Discord del miembro,
+  // así que la tarjeta se actualiza con el rango que devuelve el API.
+  async function changeProfileRank(
+    member: RosterMember,
+    rank: RosterRankKey | null,
+  ): Promise<void> {
+    if (!canEditOthers) {
       return;
     }
     try {
-      const saved = await saveMemberRosterProfile(guildId, member.userId, {
-        ...member.profile,
-        active: !member.profile.active,
-      });
-      const profile = saved.profile;
+      const result = await setRosterRank(guildId, member.userId, rank);
       setRoster((current) =>
         current
           ? {
               ...current,
               members: current.members.map((row) =>
                 row.userId === member.userId
-                  ? {
-                      ...row,
-                      profile,
-                      rankKey: profile.active ? "raid" : null,
-                    }
+                  ? { ...row, rankKey: result.rank }
                   : row,
               ),
             }
           : current,
       );
-      const label = profile.active ? "Ficha activada." : "Ficha desactivada.";
+      const label = `Estado: ${rosterRankLabel(result.rank)}.`;
       notify(
-        saved.roleSyncError
-          ? `${label} pero Discord: ${saved.roleSyncError}`
+        result.roleSyncError
+          ? `${label} Pero Discord: ${result.roleSyncError}`
           : label,
-        saved.roleSyncError ? "error" : "success",
+        result.roleSyncError ? "error" : "success",
       );
     } catch (error) {
       notify(
@@ -2441,25 +2556,16 @@ function RosterSection({
           rosterSpecKey(profile.game, profile.className, profile.specName),
         )
       : undefined;
+    // Con el rol raid pero sin ficha cargada todavía no está listo para raidear.
     const rosterStatus =
-      member.rankKey === "trial"
-        ? "Prueba"
-        : member.rankKey === "bench"
-          ? "Bench"
-          : member.rankKey === "raid" && !profile
-            ? "Sin ficha"
-            : profile?.active
-              ? "Activo"
-              : "Inactivo";
-    const canToggleStatus =
-      canEditOthers &&
-      Boolean(profile) &&
-      member.rankKey !== "trial" &&
-      member.rankKey !== "bench";
+      member.rankKey === "raid" && !profile
+        ? "Sin ficha"
+        : rosterRankLabel(member.rankKey);
+    const canToggleStatus = canEditOthers;
     const rosterStatusClass = rosterStatus.toLowerCase().replaceAll(" ", "-");
     return (
       <article
-        className={`roster-member${profile && !profile.active ? " roster-member--inactive" : ""}`}
+        className={`roster-member${member.rankKey ? "" : " roster-member--inactive"}`}
         key={member.userId}
         style={
           {
@@ -2531,17 +2637,25 @@ function RosterSection({
             })}
           </div>
         ) : null}
-        {canToggleStatus && profile ? (
-          <label
-            className={`roster-status-toggle roster-card-toggle${profile.active ? " roster-status-toggle--active" : ""}`}
+        {canToggleStatus ? (
+          <select
+            className={`select roster-status-select roster-status-select--${rosterStatusClass}`}
+            onChange={(event) =>
+              void changeProfileRank(
+                member,
+                (event.target.value || null) as RosterRankKey | null,
+              )
+            }
+            title="Estado en el roster"
+            value={member.rankKey ?? ""}
           >
-            <input
-              checked={profile.active}
-              onChange={() => void toggleProfileActive(member)}
-              type="checkbox"
-            />
-            <span className="roster-status-badge">{rosterStatus}</span>
-          </label>
+            <option value="">Fuera del roster</option>
+            {(roster?.ranks ?? []).map((rank) => (
+              <option key={rank.key} value={rank.key}>
+                {rosterRankLabel(rank.key)}
+              </option>
+            ))}
+          </select>
         ) : (
           <span
             className={`roster-status-badge roster-card-toggle roster-status-badge--${rosterStatusClass}`}
@@ -4272,6 +4386,7 @@ const TAB_SECTIONS: Partial<
   raids: [
     { key: "roster", label: "Roster" },
     { key: "logs", label: "Logs" },
+    { key: "rangos", label: "Rangos" },
   ],
   karuta: [
     { key: "raras", label: "Raras" },
@@ -9262,7 +9377,7 @@ function App() {
                             ? "Roster"
                             : sectionFor("raids") === "logs"
                               ? "Logs de Raid"
-                              : panelTitle(activeTab)
+                              : "Rangos del roster"
                           : panelTitle(activeTab)}
                     </h2>
                   </div>
@@ -11782,6 +11897,12 @@ function App() {
                       meId={me?.id}
                       notify={pushToast}
                       onOpenProfile={openMemberProfile}
+                    />
+                  ) : null}
+                  {sectionFor("raids") === "rangos" && selectedGuildId ? (
+                    <RosterRanksSection
+                      guildId={selectedGuildId}
+                      notify={pushToast}
                     />
                   ) : null}
                   {sectionFor("raids") === "logs" ? (
