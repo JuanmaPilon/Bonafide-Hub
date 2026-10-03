@@ -5533,17 +5533,20 @@ select.list-order {
    completo se lee en el modal, así no hay que recorrer la lista entera. */
 .comunicado-board {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 12px;
-  margin-top: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
 }
 
+/* Flex column (no grid) para que el pie empuje abajo y las notas de una misma
+   fila alineen entre ellas. */
 .comunicado-note {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  padding: 14px;
-  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 168px;
+  padding: 18px;
+  border-radius: 16px;
   border: 1px solid var(--panel-border);
   background: var(--panel);
   color: inherit;
@@ -5552,6 +5555,7 @@ select.list-order {
   text-align: left;
   transition:
     border-color 140ms ease-out,
+    background 140ms ease-out,
     transform 140ms ease-out,
     box-shadow 140ms ease-out;
 }
@@ -5559,36 +5563,56 @@ select.list-order {
 .comunicado-note:hover,
 .comunicado-note:focus-visible {
   border-color: rgba(106, 168, 255, 0.55);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  background: rgba(106, 168, 255, 0.06);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38);
   transform: translateY(-2px);
 }
 
 .comunicado-note-title {
-  font-size: 1rem;
+  font-size: 1.08rem;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.3;
   color: var(--accent, #ffb454);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .comunicado-note-excerpt {
+  /* Ocupa el alto libre: el pie queda siempre al ras del borde inferior. */
+  flex: 1 1 auto;
   color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-  /* Tres líneas y corta: el resto se lee en el modal. */
+  font-size: 0.88rem;
+  line-height: 1.5;
+  /* Cuatro líneas y corta: el resto se lee en el modal. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   overflow: hidden;
 }
 
 .comunicado-note-foot {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
 }
 
-/* Modal del comunicado */
+/* Contenedor de las etiquetas: como hijos directos de un grid/flex padre
+   heredaban el ancho disponible y el chip se veía estirado. */
+.comunicado-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Modal del comunicado: el `.modal` base mide 520px de ancho, así que pisar
+   solo `max-width` no lo ensancha. */
 .comunicado-modal {
-  max-width: 760px;
+  width: min(880px, 100%);
+  max-height: 86vh;
+  overflow: hidden;
+  gap: 0;
 }
 
 .comunicado-modal-head {
@@ -5598,13 +5622,19 @@ select.list-order {
 }
 
 .comunicado-modal-head > div {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
   min-width: 0;
 }
 
 .comunicado-modal-head h3 {
   margin: 0;
+  font-size: 1.32rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  color: var(--accent, #ffb454);
 }
 
 .comunicado-modal-head .icon-button {
@@ -5620,18 +5650,24 @@ select.list-order {
   font-size: 0.8rem;
 }
 
+/* Encabezado y acciones quedan fijos: solo scrollea el contenido. */
 .comunicado-modal-body {
-  max-height: 58vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   margin-top: 16px;
+  padding-right: 6px;
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
 .comunicado-modal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 16px;
-  padding-top: 14px;
+  flex-shrink: 0;
+  margin-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid var(--panel-border);
 }
 

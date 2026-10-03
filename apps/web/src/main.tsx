@@ -1780,14 +1780,18 @@ function EventTagFilterChip({
 }
 
 // Etiquetas de un comunicado: puede tener varias, así que se pintan todas con
-// el mismo chip que usan los eventos.
+// el mismo chip que usan los eventos. Van dentro de su propio contenedor para
+// que en un padre grid no hereden el ancho completo (chip estirado).
 function ComunicadoTags({ tags }: { tags: EventTag[] }) {
+  if (tags.length === 0) {
+    return null;
+  }
   return (
-    <>
+    <span className="comunicado-tags">
       {tags.map((tag) => (
         <ComunicadoTag color={tag.color} key={tag.label} label={tag.label} />
       ))}
-    </>
+    </span>
   );
 }
 
