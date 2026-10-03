@@ -141,13 +141,34 @@ type MemberLeaveDetails = {
   reason?: string;
 };
 
+// Identidad para el log de miembros: el nick del servidor y, entre paréntesis,
+// el usuario de Discord ("Azzaio (Juanma)"). El nick solo viaja en el evento si
+// el miembro estaba en el cache del bot; con el intent GuildMembers lo está,
+// pero si nunca se cacheó queda solo el usuario (como se veía antes).
+function formatMemberLogName(member: {
+  id: string;
+  nick?: string | null;
+  user?: { username?: string | null } | null;
+}): string {
+  // Se usa `username` y no `tag`: en un usuario parcial (no cacheado) `tag`
+  // devuelve "undefined#undefined", que ensucia el log más que no poner nada.
+  const username = member.user?.username?.trim() || member.id;
+  const nick = member.nick?.trim();
+  // Un nick igual al usuario no agrega nada y "Juanma (Juanma)" se lee como un
+  // error del bot.
+  if (!nick || nick === username) {
+    return username;
+  }
+  return `${nick} (${username})`;
+}
+
 function formatLeaveMessage(
-  username: string,
+  memberName: string,
   memberId: string,
   details: MemberLeaveDetails,
 ): string {
   if (details.kind === "leave") {
-    return `🚪 **Salida**\n${username} se retiro del servidor.`;
+    return `🚪 **Salida**\n${memberName} se retiro del servidor.`;
   }
 
   const actionText = details.kind === "kick" ? "expulsado" : "baneado";
@@ -158,7 +179,7 @@ function formatLeaveMessage(
     : "desconocido";
   const reasonText = details.reason?.trim() || "sin razon informada";
 
-  return `${actionEmoji} **${actionTitle}**\nUsuario: <@${memberId}> (${username})\nEstado: ${actionText}\nModerador: ${moderatorText}\nRazon: ${reasonText}.`;
+  return `${actionEmoji} **${actionTitle}**\nUsuario: <@${memberId}> · ${memberName}\nEstado: ${actionText}\nModerador: ${moderatorText}\nRazon: ${reasonText}.`;
 }
 
 async function resolveMemberLeaveDetails(
@@ -4492,11 +4513,13 @@ client.on(Events.GuildMemberAdd, async (member) => {
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
-  const username = member.user?.tag ?? member.id;
+  // El nick hay que leerlo acá: cuando termina el evento el miembro ya salió y
+  // el cache lo suelta, así que después no hay de dónde sacarlo.
+  const memberName = formatMemberLogName(member);
   const leaveDetails = await resolveMemberLeaveDetails(member).catch(
     () => ({ kind: "leave" }) as MemberLeaveDetails,
   );
-  const message = formatLeaveMessage(username, member.id, leaveDetails);
+  const message = formatLeaveMessage(memberName, member.id, leaveDetails);
 
   await sendMemberLog(member.guild.id, member.guild.systemChannelId, message);
 });

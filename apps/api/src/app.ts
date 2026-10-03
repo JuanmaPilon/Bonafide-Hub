@@ -900,7 +900,11 @@ async function resolveEventRolesFor(
     listGuildMappings(guildId),
   ]);
   const key = gameSlug(game) || DEFAULT_EVENT_GAME;
-  return applyEventRoleEmojis(resolveEventRoles(guildConfig, key), key, mappings);
+  return applyEventRoleEmojis(
+    resolveEventRoles(guildConfig, key),
+    key,
+    mappings,
+  );
 }
 
 // Grupo de Mapeo con los roles de un juego, tal como los ve la inscripción.
