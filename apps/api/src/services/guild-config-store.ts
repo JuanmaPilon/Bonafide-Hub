@@ -148,15 +148,15 @@ export function normalizeEventGames(value: unknown): EventGameConfig[] | null {
 // el rol de Discord asignado (ver `rosterRanks` en la config).
 export const ROSTER_RANKS: Array<{ key: RosterRankKey; label: string }> = [
   { key: "raid", label: "Raid" },
-  { key: "trial", label: "Prueba" },
+  { key: "bench", label: "Bench" },
   { key: "guild", label: "Raid Lead" },
 ];
 
 // Rangos que el roster administra al cambiar el estado de una tarjeta.
-// `guild` (officer) se mapea aparte: el roster nunca lo toca.
-export const ROSTER_STATE_RANKS: RosterRankKey[] = ["raid", "trial"];
+// `guild` (Raid Lead) se mapea aparte: el roster nunca lo toca.
+export const ROSTER_STATE_RANKS: RosterRankKey[] = ["raid", "bench"];
 
-export type RosterRankKey = "guild" | "raid" | "trial";
+export type RosterRankKey = "bench" | "guild" | "raid";
 
 export type RosterRankRoles = Partial<Record<RosterRankKey, string>>;
 
@@ -172,6 +172,12 @@ export function normalizeRosterRanks(value: unknown): RosterRankRoles | null {
     if (/^\d{5,}$/.test(roleId)) {
       ranks[key] = roleId;
     }
+  }
+  // `trial` era el nombre viejo de `bench`: se sigue leyendo para no perder un
+  // mapeo guardado antes del renombrado.
+  const legacyBench = String(raw.trial ?? "").trim();
+  if (!ranks.bench && /^\d{5,}$/.test(legacyBench)) {
+    ranks.bench = legacyBench;
   }
   return ranks;
 }

@@ -1670,14 +1670,14 @@ a:hover {
   color: #c7ffe0;
 }
 
-.roster-filter-chips .roster-status-chip--trial,
-.roster-filter-chips .roster-status-chip--trial:hover,
-.roster-filter-chips .roster-status-chip--trial:focus-visible {
+.roster-filter-chips .roster-status-chip--bench,
+.roster-filter-chips .roster-status-chip--bench:hover,
+.roster-filter-chips .roster-status-chip--bench:focus-visible {
   border-color: rgba(245, 181, 64, 0.55);
   color: #ffd477;
 }
 
-.roster-filter-chips .roster-status-chip--trial.active {
+.roster-filter-chips .roster-status-chip--bench.active {
   border-color: rgba(245, 181, 64, 0.8);
   background: rgba(245, 181, 64, 0.2);
   color: #ffe9b8;
@@ -1990,7 +1990,7 @@ a:hover {
   color: #6ee7a1;
 }
 
-.roster-status-option--prueba {
+.roster-status-option--bench {
   color: #ffd477;
 }
 
@@ -2017,7 +2017,7 @@ a:hover {
   color: #6ee7a1;
 }
 
-.roster-status-badge--prueba {
+.roster-status-badge--bench {
   border-color: rgba(245, 181, 64, 0.65);
   background: rgba(245, 181, 64, 0.16);
   color: #ffd477;

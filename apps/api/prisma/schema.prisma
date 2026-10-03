@@ -71,7 +71,7 @@ model GuildConfig {
   eventSpecEnabled             Boolean  @default(true)
   eventSpecLabel               String?
   // ── Roster de raids ──
-  // Qué rol de Discord representa cada rango: {raid, bench, trial, guild}.
+  // Qué rol de Discord representa cada rango: {raid, bench, guild}.
   rosterRanks                  Json?
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt

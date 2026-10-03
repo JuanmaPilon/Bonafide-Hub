@@ -752,6 +752,19 @@ function rosterMappingKey(rank: RosterRankKey): string {
   return `roster.${rank}`;
 }
 
+// Clave vieja de una entidad del registro: `trial` era el nombre de `bench`.
+// Se sigue leyendo para no perder un mapeo guardado antes del renombrado.
+const LEGACY_MAPPING_KEYS: Record<string, string> = {
+  "roster.bench": "roster.trial",
+};
+
+function findMapping(
+  mappings: Map<string, GuildMapping>,
+  key: string,
+): GuildMapping | undefined {
+  return mappings.get(key) ?? mappings.get(LEGACY_MAPPING_KEYS[key] ?? "");
+}
+
 function classMappingKey(className: string): string {
   return `class.${className}`;
 }
@@ -764,7 +777,7 @@ function resolveRosterRankRoles(
 ): RosterRankRoles {
   const roles: RosterRankRoles = {};
   for (const { key } of ROSTER_RANKS) {
-    const roleId = mappings.get(rosterMappingKey(key))?.roleId;
+    const roleId = findMapping(mappings, rosterMappingKey(key))?.roleId;
     if (roleId) {
       roles[key] = roleId;
     }
@@ -804,7 +817,7 @@ function buildMappingGroups(
       key: "roster",
       label: "Raid",
       rows: ROSTER_RANKS.map((rank) => {
-        const mapping = mappings.get(rosterMappingKey(rank.key));
+        const mapping = findMapping(mappings, rosterMappingKey(rank.key));
         return {
           emoji: mapping?.emoji,
           key: rosterMappingKey(rank.key),
@@ -5098,10 +5111,10 @@ export function buildApp() {
   });
 
   // ── Roster de raids ────────────────────────────────────────────────
-  // Lista actual: cada rango (Raid/Bench/A prueba/Oficial guild) se llena con
-  // los miembros que tienen el rol de Discord mapeado en la config, y cada uno
-  // carga su ficha (clase, spec actual y las off que domina). Las fichas usan
-  // las claves del catálogo RaidSpec, de donde salen los emojis.
+  // Lista actual: cada rango (Raid/Bench/Raid Lead) se llena con los miembros
+  // que tienen el rol de Discord mapeado, y cada uno carga su ficha (clase,
+  // spec actual y las off que domina). Las fichas usan las claves del catálogo
+  // RaidSpec, de donde salen los emojis.
 
   // Valida la ficha contra el catálogo del juego: la spec principal tiene que
   // existir y las off son specs de la MISMA clase (hasta 6).
@@ -5197,7 +5210,7 @@ export function buildApp() {
       listRaidSpecs(params.guildId, "wow"),
     ]);
 
-    // El estado (raid/prueba) y ser Raid Lead son cosas distintas: alguien
+    // El estado (raid/bench) y ser Raid Lead son cosas distintas: alguien
     // puede ser Raid Lead y estar inactivo a la vez. Compartir el mismo campo
     // hacía que el Raid Lead tapara el estado, o que se perdiera.
     const stateByRole = new Map<string, RosterRankKey>();
@@ -5356,8 +5369,8 @@ export function buildApp() {
     return { ok: true, deleted };
   });
 
-  // Estado de una ficha: Activo, A prueba, Bench, Oficial guild o fuera del
-  // roster. Es lo único que mueve los roles del roster en Discord.
+  // Estado de una ficha: Activo (Raid), Bench o fuera del roster. Es lo único
+  // que mueve los roles del roster en Discord.
   app.put("/guilds/:guildId/roster/:userId/rank", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {

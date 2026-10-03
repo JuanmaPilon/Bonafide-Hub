@@ -1571,7 +1571,7 @@ function toggleInList(list: string[], key: string): string[] {
 // Estados del roster para el filtro: mismas etiquetas que la tarjeta.
 const ROSTER_STATUS_FILTERS: Array<{ key: string; label: string }> = [
   { key: "raid", label: "Activo" },
-  { key: "trial", label: "Prueba" },
+  { key: "bench", label: "Bench" },
   { key: "inactivo", label: "Inactivo" },
 ];
 
@@ -2220,8 +2220,8 @@ function rosterRankLabel(rank: RosterRankKey | null): string {
   if (rank === "raid") {
     return "Activo";
   }
-  if (rank === "trial") {
-    return "Prueba";
+  if (rank === "bench") {
+    return "Bench";
   }
   return "Inactivo";
 }
@@ -2533,7 +2533,7 @@ function RosterSection({
   const members = (roster?.members ?? []).filter(
     (member) =>
       member.rankKey === "raid" ||
-      member.rankKey === "trial" ||
+      member.rankKey === "bench" ||
       member.isRaidLead ||
       (member.rankKey === null && member.profile),
   );
@@ -2571,8 +2571,8 @@ function RosterSection({
     }
     return member.rankKey === "raid"
       ? "raid"
-      : member.rankKey === "trial"
-        ? "trial"
+      : member.rankKey === "bench"
+        ? "bench"
         : "inactivo";
   }
 
@@ -2852,7 +2852,7 @@ function RosterSection({
                   <div className="roster-status-options">
                     {(roster?.ranks ?? [])
                       .filter(
-                        (rank) => rank.key === "raid" || rank.key === "trial",
+                        (rank) => rank.key === "raid" || rank.key === "bench",
                       )
                       .map((rank) => (
                         <button

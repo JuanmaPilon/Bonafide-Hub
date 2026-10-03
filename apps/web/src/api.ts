@@ -1334,7 +1334,7 @@ export async function getEventRoster(
 
 // ── Roster de raids ─────────────────────────────────────────────────
 
-export type RosterRankKey = "guild" | "raid" | "trial";
+export type RosterRankKey = "bench" | "guild" | "raid";
 
 // Ficha del roster: clase + spec actual + las off que domina (claves del
 // catálogo, que es de donde salen los emojis).
