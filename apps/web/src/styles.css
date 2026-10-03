@@ -2589,22 +2589,6 @@ a:hover {
   font-size: 0.8rem;
 }
 
-.xp-color-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.xp-color-row input[type="color"] {
-  width: 46px;
-  height: 34px;
-  padding: 2px;
-  border-radius: 10px;
-  border: 1px solid rgba(133, 156, 212, 0.24);
-  background: rgba(10, 16, 31, 0.88);
-  cursor: pointer;
-}
-
 /* Vista previa del color del rango: el nombre tal como se ve en el ranking
    (con degradado, si el rango tiene segundo color). */
 .xp-color-preview {
@@ -4204,14 +4188,6 @@ input.event-tag-input {
   width: 180px;
   height: 42px;
   flex: 0 0 auto;
-}
-
-input.event-tag-color {
-  width: 46px;
-  height: 42px;
-  flex: 0 0 auto;
-  padding: 3px;
-  cursor: pointer;
 }
 
 /* Filtro por etiquetas arriba de la grilla de eventos. */
@@ -6492,18 +6468,20 @@ select.list-order {
   gap: 10px;
 }
 
-.role-color-control {
+/* Selector de color compartido (roles de Discord, etiquetas): la paleta nativa
+   + el HEX a mano. El cuadrado de color lo dibuja el contenedor y el input
+   nativo va encima transparente, así se ve igual en los dos temas. */
+.color-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 104px;
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
 
-.role-color-custom {
+.color-control-swatch {
   position: relative;
   width: 42px;
   height: 32px;
-  flex: 0 0 auto;
   border: 2px solid rgba(255, 255, 255, 0.75);
   border-radius: 9px;
   cursor: pointer;
@@ -6513,12 +6491,12 @@ select.list-order {
     box-shadow 140ms ease;
 }
 
-.role-color-custom:hover {
+.color-control-swatch:hover {
   border-color: #fff;
   box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.32);
 }
 
-.role-color-native-input {
+.color-control-native {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -6527,11 +6505,22 @@ select.list-order {
   cursor: pointer;
 }
 
-.role-color-hex {
+.color-control-hex {
   width: 100%;
   min-width: 0;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   text-transform: lowercase;
+}
+
+/* Variante chica: la fila de "agregar etiqueta" comparte el ancho con el input
+   del nombre y el botón. */
+.color-control--compact {
+  grid-template-columns: 46px minmax(0, 104px);
+}
+
+.color-control--compact .color-control-swatch {
+  width: 46px;
+  height: 42px;
 }
 
 /* Fila de toggles (degradado / aparte / mencionable). */
@@ -6810,7 +6799,7 @@ select.list-order {
 }
 
 @media (max-width: 680px) {
-  .role-color-control,
+  .color-control:not(.color-control--compact),
   .role-permission-compare-columns {
     grid-template-columns: 1fr;
   }
@@ -7892,13 +7881,18 @@ select.list-order {
 :root[data-theme="light"] .select,
 :root[data-theme="light"] input,
 :root[data-theme="light"] .role-multiselect,
-:root[data-theme="light"] .xp-color-row input[type="color"],
 :root[data-theme="light"] .comm-form input,
 :root[data-theme="light"] .comm-form .select,
 :root[data-theme="light"] .comm-form .textarea,
 :root[data-theme="light"] .suggestions-field .textarea {
   background: var(--surface-input);
   color: var(--text);
+}
+
+/* El borde del cuadrado de color es blanco para que recorte sobre el fondo
+   oscuro; sobre blanco no se vería. */
+:root[data-theme="light"] .color-control-swatch {
+  border-color: rgba(16, 26, 46, 0.4);
 }
 
 /* Botones fantasma e iconos -> claros */

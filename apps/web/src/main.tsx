@@ -1311,7 +1311,7 @@ function EventDateTimeField({
 // ── Tag de comunicados ──────────────────────────────────────────────
 // Un comunicado puede llevar una etiqueta corta con color libre (hex).
 // Normaliza el color a #rrggbb (acepta #rgb, "abc" o "#aabbcc").
-function normalizeTagColor(
+function normalizeHexColor(
   value: string | undefined,
   fallback = "#ff7043",
 ): string {
@@ -1328,7 +1328,7 @@ function normalizeTagColor(
 // Componentes RGB del color del tag (base para el texto de contraste y para
 // los tintes del chip de filtro).
 function tagRgb(hex: string): [number, number, number] {
-  const h = normalizeTagColor(hex).replace("#", "");
+  const h = normalizeHexColor(hex).replace("#", "");
   return [
     Number.parseInt(h.slice(0, 2), 16),
     Number.parseInt(h.slice(2, 4), 16),
@@ -1341,6 +1341,73 @@ function tagTextColor(hex: string): string {
   const [r, g, b] = tagRgb(hex);
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return luminance > 150 ? "#141b2b" : "#ffffff";
+}
+
+// Selector de color COMPARTIDO (roles de Discord, etiquetas de eventos y
+// comunicados): la paleta nativa + el HEX escrito a mano. La paleta sirve para
+// tantear, el HEX para cuando ya se sabe el color exacto o se copia de afuera.
+//
+// El color solo se propaga cuando el HEX está completo. Mientras se escribe
+// "#a1" no hay color válido que mandar: avisar con cada tecla rompería la vista
+// previa y, en el rol, lo que se manda al API.
+function ColorControl({
+  compact,
+  label,
+  onChange,
+  value,
+}: {
+  compact?: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  // El input nativo exige #rrggbb: con un valor a medias el navegador lo pinta
+  // negro, así que el cuadrado siempre recibe un color válido.
+  const safe = normalizeHexColor(value, "#000000");
+  const [draft, setDraft] = useState(value);
+
+  // Si el color cambia desde afuera (la paleta, o el valor que llegó del API)
+  // el texto acompaña. Se compara contra el borrador normalizado: así el
+  // #rrggbb que se acaba de confirmar no pisa lo que la persona sigue
+  // escribiendo (al tipear "#abc" el valor ya es "#aabbcc" y el cursor quedaría
+  // saltando).
+  useEffect(() => {
+    setDraft((current) =>
+      normalizeHexColor(current, "") === value ? current : value,
+    );
+  }, [value]);
+
+  function commit(next: string): void {
+    setDraft(next);
+    const normalized = normalizeHexColor(next, "");
+    if (normalized) {
+      onChange(normalized);
+    }
+  }
+
+  return (
+    <div className={`color-control${compact ? " color-control--compact" : ""}`}>
+      <span className="color-control-swatch" style={{ backgroundColor: safe }}>
+        <input
+          aria-label={`${label}: paleta`}
+          className="color-control-native"
+          onChange={(event) => onChange(event.target.value)}
+          type="color"
+          value={safe}
+        />
+      </span>
+      <input
+        aria-label={`${label}: HEX`}
+        className="input color-control-hex"
+        maxLength={7}
+        onBlur={() => setDraft(value)}
+        onChange={(event) => commit(event.target.value)}
+        placeholder="#rrggbb"
+        spellCheck={false}
+        value={draft}
+      />
+    </div>
+  );
 }
 
 // El mismo color con transparencia: fondo tenido del chip sin seleccionar.
@@ -1453,7 +1520,7 @@ function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
   if (!text) {
     return null;
   }
-  const background = normalizeTagColor(color);
+  const background = normalizeHexColor(color);
   return (
     <span
       className="comunicado-tag"
@@ -1694,7 +1761,7 @@ function TagsField({
       setLabel("");
       return;
     }
-    onChange([...tags, { color: normalizeTagColor(color), label: text }]);
+    onChange([...tags, { color: normalizeHexColor(color), label: text }]);
     setLabel("");
   };
 
@@ -1735,11 +1802,10 @@ function TagsField({
             placeholder="Etiqueta"
             value={label}
           />
-          <input
-            aria-label="Color de la etiqueta"
-            className="event-tag-color"
-            onChange={(event) => setColor(event.target.value)}
-            type="color"
+          <ColorControl
+            compact
+            label="Color de la etiqueta"
+            onChange={setColor}
             value={color}
           />
           <button
@@ -1775,7 +1841,7 @@ function EventTagFilterChip({
   // Mismo criterio de color que la tarjeta del evento/comunicado (ComunicadoTag):
   // si la etiqueta no tiene color guardado, los dos caen al mismo default, así
   // el filtro y la tarjeta nunca muestran colores distintos.
-  const background = normalizeTagColor(color);
+  const background = normalizeHexColor(color);
   return (
     <button
       className={`event-filter-chip event-filter-chip--tag${active ? " active" : ""}`}
@@ -5039,41 +5105,6 @@ const ROLE_PERMISSION_GROUPS: Array<{
   },
 ];
 
-function RoleColorControl({
-  label,
-  onChange,
-  value,
-}: {
-  label: string;
-  onChange: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <div className="role-color-control">
-      <div
-        className="role-color-custom"
-        style={{ backgroundColor: value }}
-        title="Elegir color"
-      >
-        <input
-          aria-label={`${label}: personalizado`}
-          className="role-color-native-input"
-          onChange={(event) => onChange(event.target.value)}
-          type="color"
-          value={value}
-        />
-      </div>
-      <input
-        aria-label={`${label}: HEX`}
-        className="input role-color-hex"
-        maxLength={7}
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      />
-    </div>
-  );
-}
-
 function hexFromRoleColor(color?: number): string {
   return `#${((color ?? 0) & 0xffffff).toString(16).padStart(6, "0")}`;
 }
@@ -5279,7 +5310,7 @@ function RolesCard({
                 </label>
                 <label>
                   <span>Color</span>
-                  <RoleColorControl
+                  <ColorControl
                     label="Color del rol"
                     onChange={(color) =>
                       setForm((current) => ({ ...current, color }))
