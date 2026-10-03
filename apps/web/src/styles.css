@@ -1702,7 +1702,7 @@ a:hover {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding-right: 82px;
+  padding-right: 132px;
 }
 
 .roster-member-name {
@@ -1737,17 +1737,31 @@ a:hover {
   gap: 4px;
 }
 
-.roster-card-toggle {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-}
-
-.roster-status-menu {
+.roster-flags {
   position: absolute;
   top: 7px;
   right: 7px;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-officer-badge {
+  padding: 3px 7px;
+  border: 1px solid rgba(134, 158, 214, 0.5);
+  border-radius: 999px;
+  background: rgba(134, 158, 214, 0.14);
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.roster-status-menu {
+  position: relative;
 }
 
 .roster-status-menu .roster-status-badge {
@@ -1792,23 +1806,12 @@ a:hover {
   color: #6ee7a1;
 }
 
-.roster-status-option--prueba,
-.roster-status-option--bench {
+.roster-status-option--prueba {
   color: #ffd477;
-}
-
-.roster-status-option--oficial-guild {
-  color: #9ec7ff;
 }
 
 .roster-status-option--inactivo {
   color: #ff9292;
-}
-
-.roster-ranks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
 }
 
 .roster-status-badge {
@@ -1830,18 +1833,10 @@ a:hover {
   color: #6ee7a1;
 }
 
-.roster-status-badge--prueba,
-.roster-status-badge--bench {
+.roster-status-badge--prueba {
   border-color: rgba(245, 181, 64, 0.65);
   background: rgba(245, 181, 64, 0.16);
   color: #ffd477;
-}
-
-.roster-status-badge--oficial-guild,
-.roster-status-badge--sin-ficha {
-  border-color: rgba(106, 168, 255, 0.62);
-  background: rgba(106, 168, 255, 0.14);
-  color: #9ec7ff;
 }
 
 .roster-delete-button {

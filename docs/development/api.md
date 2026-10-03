@@ -67,13 +67,15 @@ Roster de raids:
 
 1. `GET /guilds/:guildId/roster` (miembros, fichas y rangos)
 2. `PUT /guilds/:guildId/roster/me` y `PUT /guilds/:guildId/roster/:userId` (ficha: clase, spec, offs, tags)
-3. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `trial` | `bench` | `guild` | `null`)
+3. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `trial` | `null`)
 4. `PUT /guilds/:guildId/roster/ranks` (mapeo rango → rol de Discord)
 5. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha)
 
 El estado del roster **es** el rol de Discord del miembro: solo el endpoint de
-rango mueve roles. Guardar la ficha no los toca. Si Discord rechaza el cambio,
-la respuesta trae `roleSyncError` con el motivo y el guardado no se pierde.
+rango mueve roles. Administra `raid` (Activo) y `trial` (Prueba); `guild`
+(officer) se mapea aparte y el roster nunca lo toca. Guardar la ficha no toca
+los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
+el motivo y el guardado no se pierde.
 
 Logs de raid (Warcraft Logs):
 

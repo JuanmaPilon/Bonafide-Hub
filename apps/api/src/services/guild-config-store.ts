@@ -148,12 +148,15 @@ export function normalizeEventGames(value: unknown): EventGameConfig[] | null {
 // el rol de Discord asignado (ver `rosterRanks` en la config).
 export const ROSTER_RANKS: Array<{ key: RosterRankKey; label: string }> = [
   { key: "raid", label: "Raid" },
-  { key: "bench", label: "Bench" },
   { key: "trial", label: "A prueba" },
-  { key: "guild", label: "Oficial guild" },
+  { key: "guild", label: "Officer" },
 ];
 
-export type RosterRankKey = "raid" | "bench" | "trial" | "guild";
+// Rangos que el roster administra al cambiar el estado de una tarjeta.
+// `guild` (officer) se mapea aparte: el roster nunca lo toca.
+export const ROSTER_STATE_RANKS: RosterRankKey[] = ["raid", "trial"];
+
+export type RosterRankKey = "guild" | "raid" | "trial";
 
 export type RosterRankRoles = Partial<Record<RosterRankKey, string>>;
 

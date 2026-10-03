@@ -155,6 +155,7 @@ import {
   resolveEventRoles,
   resolveGameLabel,
   ROSTER_RANKS,
+  ROSTER_STATE_RANKS,
   type EventGameConfig,
   type EventRoleOption,
   type GuildConfig,
@@ -695,14 +696,17 @@ async function syncRosterRankRole(
   rank: RosterRankKey | null,
 ): Promise<GuildRoleSyncResult> {
   if (rank && !rosterRanks?.[rank]) {
+    const label =
+      ROSTER_RANKS.find((entry) => entry.key === rank)?.label ?? rank;
     return {
-      detail: `No hay un rol configurado para el rango «${rank}». Mapealo en Rangos.`,
+      detail: `No hay un rol de Discord configurado para «${label}».`,
       ok: false,
     };
   }
-  // Pone el rol del rango pedido y quita los otros: el estado de la tarjeta
-  // es exactamente el rol de Discord que tiene el miembro.
-  for (const { key } of ROSTER_RANKS) {
+  // Pone el rol del rango pedido y quita los otros estados: el estado de la
+  // tarjeta es exactamente el rol de Discord que tiene el miembro. `guild`
+  // queda afuera para no quitarle el officer a nadie.
+  for (const key of ROSTER_STATE_RANKS) {
     const roleId = rosterRanks?.[key];
     if (!roleId) {
       continue;
@@ -727,7 +731,7 @@ function parseRosterRank(value: unknown): RosterRankKey | null | "invalid" {
     return null;
   }
   const key = String(value);
-  return ROSTER_RANKS.some((entry) => entry.key === key)
+  return ROSTER_STATE_RANKS.includes(key as RosterRankKey)
     ? (key as RosterRankKey)
     : "invalid";
 }
