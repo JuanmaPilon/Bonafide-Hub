@@ -6,6 +6,9 @@
   --bg-1: #040711;
   --bg-2: #1b0f1e;
   --panel: rgba(15, 15, 28, 0.84);
+  /* Version opaca de --panel, para las cajas donde el texto de atras se
+     transparenta y estorba la lectura (ej. el modal de un comunicado). */
+  --panel-solid: #0f0f1c;
   --panel-border: rgba(124, 152, 216, 0.24);
   --text: #edf2ff;
   --muted: #b2bdd8;
@@ -889,7 +892,10 @@ a:hover {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(4, 8, 16, 0.72);
+  /* El desenfoque es lo que evita que el contenido del fondo compita con el
+     del modal: oscurecer solo lo deja legible de refilón. */
+  background: rgba(4, 8, 16, 0.84);
+  backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5608,13 +5614,17 @@ select.list-order {
 
 /* Modal del comunicado: el `.modal` base mide 520px de ancho, así que pisar
    solo `max-width` no lo ensancha. 780px es el ancho máximo que mantiene el
-texto legible (más ancho y las líneas se hacen incómodas de seguir). */
+texto legible (más ancho y las líneas se hacen incómodas de seguir).
+   Fondo opaco a propósito: con --panel (0.84) el texto del hub se traspapelaba
+   con el del comunicado. */
 .comunicado-modal {
   width: min(780px, 100%);
   max-height: 86vh;
   overflow: hidden;
   padding: 24px;
   gap: 0;
+  background: var(--panel-solid);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.65);
 }
 
 .comunicado-modal-head {
@@ -7587,6 +7597,7 @@ texto legible (más ancho y las líneas se hacen incómodas de seguir). */
   --bg-1: #dbe5f1;
   --bg-2: #c6d5ea;
   --panel: rgba(255, 255, 255, 0.94);
+  --panel-solid: #ffffff;
   --panel-border: rgba(48, 77, 122, 0.32);
   --text: #101a2e;
   --muted: #3f4f6b;
