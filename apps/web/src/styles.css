@@ -705,6 +705,31 @@ a:hover {
   --podium-rgb: var(--podium-5-rgb);
 }
 
+/* Todas las filas responden al hover y abren el perfil: el top 5 ya lo hacía
+   con el color del podio, el resto con un tinte neutro. */
+.leaderboard-table tr.leaderboard-row {
+  cursor: pointer;
+}
+
+/* El borde se reserva siempre (transparente) para que el hover no mueva el
+   contenido 2px. */
+.leaderboard-table tr.leaderboard-row:not(.mvp-row) td:first-child {
+  border-left: 2px solid transparent;
+}
+
+.leaderboard-table tr.leaderboard-row:not(.mvp-row):hover td {
+  background: rgba(134, 158, 214, 0.09);
+}
+
+.leaderboard-table tr.leaderboard-row:not(.mvp-row):hover td:first-child {
+  border-left: 2px solid rgba(134, 158, 214, 0.55);
+  border-radius: 10px 0 0 10px;
+}
+
+.leaderboard-table tr.leaderboard-row:not(.mvp-row):hover td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
 .user-mention {
   color: var(--text);
   font-weight: 600;

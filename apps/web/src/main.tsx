@@ -9452,12 +9452,10 @@ function App() {
                         <tbody>
                           {visibleLeaderboard.map((entry) => (
                             <tr
+                              className={`leaderboard-row${entry.rank <= 5 ? ` mvp-row mvp-row-${entry.rank}` : ""}`}
                               key={entry.userId}
-                              className={
-                                entry.rank <= 5
-                                  ? `mvp-row mvp-row-${entry.rank}`
-                                  : undefined
-                              }
+                              onClick={() => openMemberProfile(entry.userId)}
+                              title="Ver perfil"
                             >
                               <td>
                                 <span
@@ -9490,9 +9488,12 @@ function App() {
                                   >
                                     <button
                                       className="member-link"
-                                      onClick={() =>
-                                        openMemberProfile(entry.userId)
-                                      }
+                                      onClick={(event) => {
+                                        // La fila entera abre el perfil: frenamos
+                                        // la burbuja para no abrirlo dos veces.
+                                        event.stopPropagation();
+                                        openMemberProfile(entry.userId);
+                                      }}
                                       title="Ver perfil"
                                       type="button"
                                     >
