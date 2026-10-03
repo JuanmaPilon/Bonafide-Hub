@@ -1826,6 +1826,31 @@ a:hover {
   position: relative;
 }
 
+.mapping-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.2fr) minmax(
+      110px,
+      1fr
+    );
+  align-items: center;
+  gap: 8px;
+}
+
+.mapping-label {
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .mapping-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .roster-status-menu .roster-status-badge {
   cursor: pointer;
 }
@@ -4185,7 +4210,9 @@ select.list-order {
 }
 
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):not(.roster-status-chip):hover,
+  .event-filter-chip:not(.event-filter-chip--tag):not(
+    .roster-status-chip
+  ):hover,
 :root[data-theme="light"]
   .event-filter-chip:not(.event-filter-chip--tag):not(
     .roster-status-chip
@@ -4195,7 +4222,9 @@ select.list-order {
 }
 
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):not(.roster-status-chip).active {
+  .event-filter-chip:not(.event-filter-chip--tag):not(
+    .roster-status-chip
+  ).active {
   border-color: #6aa8ff;
   background: rgba(106, 168, 255, 0.2);
   color: #1d3a6b;

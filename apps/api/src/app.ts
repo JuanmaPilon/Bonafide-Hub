@@ -128,7 +128,14 @@ import {
   updateEvent,
   updateRaidSpec,
   upsertSignup,
+  WOW_CLASSES,
 } from "./services/events-store.js";
+import {
+  listGuildMappings,
+  saveGuildMappings,
+  type GuildMapping,
+  type MappingEmoji,
+} from "./services/mappings-store.js";
 import {
   EVENT_TEMPLATES,
   findEventTemplate,
@@ -160,6 +167,7 @@ import {
   type EventRoleOption,
   type GuildConfig,
   type RosterRankKey,
+  type RosterRankRoles,
   replaceGuildConfig,
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
@@ -734,6 +742,98 @@ function parseRosterRank(value: unknown): RosterRankKey | null | "invalid" {
   return ROSTER_STATE_RANKS.includes(key as RosterRankKey)
     ? (key as RosterRankKey)
     : "invalid";
+}
+
+// ── Registro central de mapeos ──────────────────────────────────────
+// El catálogo de entidades lo define el código (rangos del roster, clases del
+// catálogo); la guild solo elige el rol y/o el emoji de cada una.
+
+// Etiquetas del roster en el registro: las mismas que muestra la tarjeta.
+const ROSTER_MAPPING_LABELS: Record<RosterRankKey, string> = {
+  guild: "Officer",
+  raid: "Activo",
+  trial: "Prueba",
+};
+
+function rosterMappingKey(rank: RosterRankKey): string {
+  return `roster.${rank}`;
+}
+
+function classMappingKey(className: string): string {
+  return `class.${className}`;
+}
+
+// Rangos del roster desde el registro central. Una guild que todavía no mapeó
+// nada ahí sigue usando el `rosterRanks` viejo, así no se queda sin roles.
+function resolveRosterRankRoles(
+  mappings: Map<string, GuildMapping>,
+  config: GuildConfig,
+): RosterRankRoles {
+  const roles: RosterRankRoles = {};
+  for (const { key } of ROSTER_RANKS) {
+    const roleId = mappings.get(rosterMappingKey(key))?.roleId;
+    if (roleId) {
+      roles[key] = roleId;
+    }
+  }
+  return Object.keys(roles).length > 0 ? roles : (config.rosterRanks ?? {});
+}
+
+// Emoji mapeado por clase, lo que carga el Admin de Mapeo.
+function resolveClassEmojis(
+  mappings: Map<string, GuildMapping>,
+): Record<string, MappingEmoji> {
+  const emojis: Record<string, MappingEmoji> = {};
+  for (const [key, mapping] of mappings) {
+    if (key.startsWith("class.") && mapping.emoji) {
+      emojis[key.slice("class.".length)] = mapping.emoji;
+    }
+  }
+  return emojis;
+}
+
+// Filas del Admin de Mapeo: el catálogo completo con lo elegido por la guild.
+function buildMappingGroups(
+  mappings: Map<string, GuildMapping>,
+  classes: string[],
+): Array<{
+  key: string;
+  label: string;
+  rows: Array<{
+    emoji?: MappingEmoji;
+    key: string;
+    label: string;
+    roleId?: string;
+  }>;
+}> {
+  return [
+    {
+      key: "roster",
+      label: "Rangos del roster",
+      rows: ROSTER_RANKS.map((rank) => {
+        const mapping = mappings.get(rosterMappingKey(rank.key));
+        return {
+          emoji: mapping?.emoji,
+          key: rosterMappingKey(rank.key),
+          label: ROSTER_MAPPING_LABELS[rank.key],
+          roleId: mapping?.roleId,
+        };
+      }),
+    },
+    {
+      key: "class",
+      label: "Clases",
+      rows: classes.map((className) => {
+        const mapping = mappings.get(classMappingKey(className));
+        return {
+          emoji: mapping?.emoji,
+          key: classMappingKey(className),
+          label: className,
+          roleId: mapping?.roleId,
+        };
+      }),
+    },
+  ];
 }
 
 // Nombre para mostrar de un miembro: nick de servidor, si no global_name,
@@ -5096,7 +5196,8 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
-    const rankRoles = config.rosterRanks ?? {};
+    const mappings = await listGuildMappings(params.guildId);
+    const rankRoles = resolveRosterRankRoles(mappings, config);
     const [members, profiles, specs] = await Promise.all([
       fetchAllGuildMembers(params.guildId).catch(() => []),
       listRosterProfiles(params.guildId),
@@ -5141,6 +5242,7 @@ export function buildApp() {
 
     return {
       ok: true,
+      classEmojis: resolveClassEmojis(mappings),
       games: [{ key: "wow", label: "World of Warcraft" }],
       guildId: params.guildId,
       members: rows,
@@ -5276,10 +5378,11 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
+    const mappings = await listGuildMappings(params.guildId);
     const roleSync = await syncRosterRankRole(
       params.guildId,
       params.userId,
-      config.rosterRanks,
+      resolveRosterRankRoles(mappings, config),
       rank,
     );
 
@@ -5327,6 +5430,72 @@ export function buildApp() {
         roleId: config.rosterRanks?.[key],
       })),
     };
+  });
+
+  // Registro central: entidad → rol/emoji de Discord. Lo consume el roster
+  // (rangos) y los módulos que se sumen después.
+  app.get("/guilds/:guildId/mappings", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const [mappings, specs] = await Promise.all([
+      listGuildMappings(params.guildId),
+      listRaidSpecs(params.guildId, "wow"),
+    ]);
+    const allClasses: string[] = [
+      ...WOW_CLASSES,
+      ...specs.map((spec) => spec.className),
+    ];
+    const classes = [...new Set(allClasses)].sort((left, right) =>
+      left.localeCompare(right, "en"),
+    );
+
+    return { ok: true, groups: buildMappingGroups(mappings, classes) };
+  });
+
+  app.put("/guilds/:guildId/mappings", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "config"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const raw = (request.body ?? {}) as { mappings?: unknown };
+    const incoming = Array.isArray(raw.mappings) ? raw.mappings : [];
+    const mappings: GuildMapping[] = incoming
+      .filter((entry): entry is Record<string, unknown> =>
+        Boolean(entry && typeof entry === "object"),
+      )
+      .map((entry) => ({
+        emoji: entry.emoji as MappingEmoji | undefined,
+        key: String(entry.key ?? ""),
+        roleId: entry.roleId == null ? undefined : String(entry.roleId),
+      }));
+
+    await saveGuildMappings(params.guildId, mappings);
+    await logAdminAction(session, params.guildId, "mappings:save", {
+      details: `${mappings.length} vínculo/s guardados.`,
+    });
+    return { ok: true };
   });
 
   app.post("/guilds/:guildId/events", async (request, reply) => {

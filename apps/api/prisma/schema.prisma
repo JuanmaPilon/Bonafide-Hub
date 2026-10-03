@@ -90,6 +90,24 @@ model GuildConfig {
   @@map("guild_configs")
 }
 
+// Registro central de vínculos: una entidad de la app (un rango del roster,
+// una clase, lo que se sume después) contra su rol y/o emoji de Discord. El
+// catálogo de entidades lo define el código; acá solo se guarda la elección de
+// la guild, para que todos los módulos lean el mismo mapeo.
+model GuildMapping {
+  guildId   String
+  // Clave estable de la entidad, con prefijo de grupo: "roster.raid",
+  // "class.Demon Hunter".
+  key       String
+  roleId    String?
+  // Emoji custom de Discord ({emojiId, emojiName, animated}) o unicode.
+  emoji     Json?
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, key])
+  @@map("guild_mappings")
+}
+
 // Plantilla de rol (Admin → Roles): guarda los datos de un rol modelo para
 // crearlo con un click. No guarda emoji/ícono: Discord los pide solo si el
 // servidor tiene el feature ROLE_ICONS (boosts), así que se copian a mano el

@@ -77,6 +77,17 @@ rango mueve roles. Administra `raid` (Activo) y `trial` (Prueba); `guild`
 los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
 el motivo y el guardado no se pierde.
 
+Registro de mapeos (Admin → Mapeo):
+
+1. `GET /guilds/:guildId/mappings` (catálogo de entidades + lo ya elegido)
+2. `PUT /guilds/:guildId/mappings` (guarda los vínculos)
+
+El catálogo de entidades lo define el código (rangos del roster, clases del
+catálogo), así que la guild solo elige el rol y/o el emoji de cada una. Se
+guardan en la tabla `guild_mappings` con la clave de la entidad (`roster.raid`,
+`class.Demon Hunter`). El roster lee sus rangos de acá; si todavía no hay nada
+mapeado, cae al `rosterRanks` viejo de la config.
+
 Logs de raid (Warcraft Logs):
 
 1. `GET/POST /guilds/:guildId/raid-logs`

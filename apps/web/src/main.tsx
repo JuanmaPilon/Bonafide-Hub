@@ -54,6 +54,7 @@ import {
   requestXpSync,
   resetAllXp,
   saveGuildConfig,
+  saveGuildMappings,
   saveXpConfig,
   submitSuggestion,
   updateCommunication,
@@ -81,6 +82,7 @@ import {
   getEventGames,
   getEvents,
   getGuildEmojis,
+  getGuildMappings,
   getGuildRolesDetailed,
   getGuildRoster,
   publishRaidLog,
@@ -109,6 +111,7 @@ import {
   type GuildConfig,
   type GuildEmoji,
   type GuildRole,
+  type MappingGroup,
   type GuildRoleDetail,
   type GuildRoster,
   type GuildWidgetStatus,
@@ -2223,6 +2226,168 @@ function rosterRankLabel(rank: RosterRankKey | null): string {
   return "Inactivo";
 }
 
+// Admin → Mapeo: relaciona una entidad de la app (un rango del roster, una
+// clase) con su rol y/o emoji de Discord. El resto de los módulos lee de acá.
+function AdminMappingsSection({
+  guildId,
+  notify,
+}: {
+  guildId: string;
+  notify: (message: string, kind: "error" | "success") => void;
+}) {
+  const [groups, setGroups] = useState<MappingGroup[]>([]);
+  const [roles, setRoles] = useState<GuildRole[]>([]);
+  const [emojis, setEmojis] = useState<GuildEmoji[]>([]);
+  const [draft, setDraft] = useState<
+    Record<string, { emojiId?: string; roleId?: string }>
+  >({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      getGuildMappings(guildId),
+      getGuildRoles(guildId),
+      getGuildEmojis(guildId).catch(() => [] as GuildEmoji[]),
+    ])
+      .then(([nextGroups, guildRoles, guildEmojis]) => {
+        if (cancelled) {
+          return;
+        }
+        setGroups(nextGroups);
+        setRoles(guildRoles);
+        setEmojis(guildEmojis);
+        setDraft(
+          Object.fromEntries(
+            nextGroups.flatMap((group) =>
+              group.rows.map((row) => [
+                row.key,
+                { emojiId: row.emoji?.emojiId, roleId: row.roleId },
+              ]),
+            ),
+          ),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          notify("No se pudieron cargar los mapeos.", "error");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guildId, notify]);
+
+  function patch(
+    key: string,
+    value: { emojiId?: string; roleId?: string },
+  ): void {
+    setDraft((current) => ({
+      ...current,
+      [key]: { ...current[key], ...value },
+    }));
+  }
+
+  async function save(): Promise<void> {
+    setSaving(true);
+    try {
+      await saveGuildMappings(
+        guildId,
+        Object.entries(draft).map(([key, row]) => ({
+          emoji: row.emojiId
+            ? {
+                emojiId: row.emojiId,
+                emojiName:
+                  emojis.find((emoji) => emoji.id === row.emojiId)?.name ??
+                  "emoji",
+              }
+            : undefined,
+          key,
+          roleId: row.roleId || undefined,
+        })),
+      );
+      notify("Mapeos guardados.", "success");
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron guardar los mapeos.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <LoadingState label="Cargando mapeos…" />;
+  }
+
+  return (
+    <div className="admin-grid">
+      {groups.map((group) => (
+        <section className="admin-card" key={group.key}>
+          <h3>{group.label}</h3>
+          <div className="mapping-rows">
+            {group.rows.map((row) => (
+              <div className="mapping-row" key={row.key}>
+                <span className="mapping-label">{row.label}</span>
+                <select
+                  aria-label={`Rol de ${row.label}`}
+                  className="select"
+                  onChange={(event) =>
+                    patch(row.key, { roleId: event.target.value })
+                  }
+                  value={draft[row.key]?.roleId ?? ""}
+                >
+                  <option value="">Sin rol</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label={`Emoji de ${row.label}`}
+                  className="select"
+                  onChange={(event) =>
+                    patch(row.key, { emojiId: event.target.value })
+                  }
+                  value={draft[row.key]?.emojiId ?? ""}
+                >
+                  <option value="">Sin emoji</option>
+                  {emojis.map((emoji) => (
+                    <option key={emoji.id} value={emoji.id}>
+                      {emoji.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+      <div className="form-actions">
+        <button
+          className="primary-button"
+          disabled={saving}
+          onClick={() => void save()}
+          type="button"
+        >
+          {saving ? "Guardando…" : "Guardar mapeos"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RosterSection({
   canEditOthers,
   guildId,
@@ -2338,9 +2503,7 @@ function RosterSection({
         statusFilter.length === 0 ||
         statusFilter.includes(memberStatusKey(member)),
     )
-    .filter((member) =>
-      matchesTagFilter(member.profile?.tags ?? [], tagFilter),
-    )
+    .filter((member) => matchesTagFilter(member.profile?.tags ?? [], tagFilter))
     .filter((member) => {
       if (!query) {
         return true;
@@ -2472,6 +2635,10 @@ function RosterSection({
           rosterSpecKey(profile.game, profile.className, profile.specName),
         )
       : undefined;
+    // Emoji de la clase desde el registro central (Admin → Mapeo).
+    const classEmojiMeta = profile
+      ? roster?.classEmojis?.[profile.className]
+      : undefined;
     const isOfficer = member.rankKey === "guild";
     // Sin ficha no hay estado que mostrar, y officer va aparte (no es estado).
     const rosterStatus =
@@ -2500,12 +2667,18 @@ function RosterSection({
           </button>
           {profile ? (
             <span className="roster-member-spec">
-              {main ? (
+              {main || classEmojiMeta ? (
                 <DiscordEmojiImage
-                  animated={main.animated}
-                  emojiId={main.emojiId}
-                  fallback={classEmoji(profile.className)}
-                  name={main.specName}
+                  animated={
+                    main?.emojiId
+                      ? main.animated
+                      : Boolean(classEmojiMeta?.animated)
+                  }
+                  emojiId={main?.emojiId ?? classEmojiMeta?.emojiId}
+                  fallback={
+                    classEmojiMeta?.unicode ?? classEmoji(profile.className)
+                  }
+                  name={main?.specName ?? profile.className}
                   size={18}
                 />
               ) : null}
@@ -4378,6 +4551,7 @@ const TAB_SECTIONS: Partial<
       module: "config",
       tier: "admin",
     },
+    { key: "mapeo", label: "Mapeo", module: "config", tier: "admin" },
     { key: "karuta", label: "Karuta", module: "karuta", tier: "officer" },
     { key: "modulos", label: "Módulos", module: "config", tier: "owner" },
     { key: "roles", label: "Roles", module: "config", tier: "admin" },
@@ -9763,6 +9937,14 @@ function App() {
                     </details>
                   ) : null}
 
+                  {sectionFor("admin") === "mapeo" &&
+                  canAccess("config") &&
+                  selectedGuildId ? (
+                    <AdminMappingsSection
+                      guildId={selectedGuildId}
+                      notify={pushToast}
+                    />
+                  ) : null}
                   {sectionFor("admin") === "karuta" && canAccess("karuta") ? (
                     <details
                       open

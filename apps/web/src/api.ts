@@ -1352,6 +1352,7 @@ export type RosterRank = {
 };
 
 export type GuildRoster = {
+  classEmojis?: Record<string, MappingEmoji>;
   games: Array<{ key: string; label: string }>;
   members: RosterMember[];
   ranks: RosterRank[];
@@ -1425,6 +1426,50 @@ export async function setRosterRank(
     `/guilds/${guildId}/roster/${encodeURIComponent(userId)}/rank`,
     { body: JSON.stringify({ rank }), method: "PUT" },
   );
+}
+
+// ── Registro central de mapeos ──────────────────────────────────────
+// Vínculo entre una entidad de la app (un rango del roster, una clase) y su
+// rol/emoji de Discord. El catálogo lo arma el API; la guild solo elige.
+
+export type MappingEmoji = {
+  animated?: boolean;
+  emojiId?: string;
+  emojiName?: string;
+  unicode?: string;
+};
+
+export type MappingRow = {
+  emoji?: MappingEmoji;
+  key: string;
+  label: string;
+  roleId?: string;
+};
+
+export type MappingGroup = {
+  key: string;
+  label: string;
+  rows: MappingRow[];
+};
+
+export async function getGuildMappings(
+  guildId: string,
+): Promise<MappingGroup[]> {
+  const data = await requestJson<{ groups: MappingGroup[] }>(
+    `/guilds/${guildId}/mappings`,
+    { method: "GET" },
+  );
+  return data.groups;
+}
+
+export async function saveGuildMappings(
+  guildId: string,
+  mappings: Array<{ emoji?: MappingEmoji; key: string; roleId?: string }>,
+): Promise<void> {
+  await requestJson<{ ok: boolean }>(`/guilds/${guildId}/mappings`, {
+    body: JSON.stringify({ mappings }),
+    method: "PUT",
+  });
 }
 
 export async function createEvent(
