@@ -1,4 +1,5 @@
 import { Prisma, prisma } from "../db/prisma.js";
+import { listTemplateSpecs } from "./event-templates.js";
 import {
   DEFAULT_TAG_COLOR,
   MAX_TAGS,
@@ -108,8 +109,12 @@ function toRaidSpec(record: RaidSpecRecord): RaidSpec {
   };
 }
 
-// Catálogo de la guild. Sin `game` devuelve TODOS los juegos (la web filtra
-// por el juego del evento en el cliente, así hace una sola consulta).
+// Catálogo de clases/specs de un juego. La BASE sale del CÓDIGO
+// (event-templates): así no depende de que alguien lo cargue a mano en la base.
+// Las filas guardadas se agregan solo si NO están en la plantilla, así una guild
+// que ya tenía sus propias clases/specs no pierde nada.
+// Sin `game` devuelve TODOS los juegos (la web filtra por el juego del evento
+// en el cliente, así hace una sola consulta).
 export async function listRaidSpecs(
   guildId: string,
   game?: string | null,
@@ -119,7 +124,34 @@ export async function listRaidSpecs(
     where: key ? { game: key, guildId } : { guildId },
     orderBy: [{ position: "asc" }, { className: "asc" }, { specName: "asc" }],
   });
-  return records.map(toRaidSpec);
+  const stored = records.map(toRaidSpec);
+
+  // El id de las del código es estable y derivado (juego:clase:spec): no hay
+  // fila en la base, así que no puede ser el id de la tabla. Las fechas no las
+  // usa el catálogo; van solo para completar el tipo.
+  const fromCode: RaidSpec[] = listTemplateSpecs(key).map((spec) => ({
+    animated: false,
+    className: spec.className,
+    createdAt: new Date(),
+    game: spec.game,
+    guildId,
+    id: `${spec.game}:${spec.className}:${spec.specName}`,
+    position: 0,
+    role: spec.role,
+    specName: spec.specName,
+    updatedAt: new Date(),
+  }));
+
+  const inTemplate = new Set(
+    fromCode.map((spec) => `${spec.game}|${spec.className}|${spec.specName}`),
+  );
+  return [
+    ...fromCode,
+    ...stored.filter(
+      (spec) =>
+        !inTemplate.has(`${spec.game}|${spec.className}|${spec.specName}`),
+    ),
+  ];
 }
 
 export async function createRaidSpec(input: {

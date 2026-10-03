@@ -192,6 +192,20 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
   },
 ];
 
+// Catálogo de clases/specs tal como está en el código. Sin `game` devuelve el
+// de todos los juegos, cada fila con su juego.
+export function listTemplateSpecs(
+  game?: string | null,
+): Array<EventTemplateSpec & { game: string }> {
+  const key = game?.trim().toLowerCase();
+  const templates = key
+    ? EVENT_TEMPLATES.filter((template) => template.key === key)
+    : EVENT_TEMPLATES;
+  return templates.flatMap((template) =>
+    template.specs.map((spec) => ({ ...spec, game: template.key })),
+  );
+}
+
 export function findEventTemplate(
   key: string | undefined,
 ): EventTemplate | null {
