@@ -178,15 +178,16 @@ botones de inscripción).
 Cada evento elige un JUEGO y de ahí salen sus roles de inscripción y su catálogo:
 
 ```text
-Evento (game: wow)  ->  roles de WoW      + catálogo RaidSpec.game = "wow"
-Evento (game: lol)  ->  roles de LoL      + catálogo RaidSpec.game = "lol"
+Evento (game: wow)  ->  roles de WoW      + catálogo de WoW
+Evento (game: lol)  ->  roles de LoL      + catálogo de LoL
 ```
 
-Los roles de cada juego salen de `GuildConfig.eventGames`
-(`[{ key, label, roles: [{ key, label, emoji | emojiId+emojiName }] }]`). Si la
-guild no personalizó ese juego, se usan los roles de su plantilla
-(`apps/api/src/services/event-templates.ts`: `wow`, `lol`). El catálogo de
-clases/specs es `RaidSpec` con el mismo `game` como discriminador.
+Los roles de cada juego salen de la **plantilla del código**
+(`apps/api/src/services/event-templates.ts`: `wow`, `lol`, `encuesta`); la guild
+no los personaliza, así el mismo tipo se ve igual en todos lados. El catálogo de
+clases/specs también sale de ahí (`listTemplateSpecs`) y se completa con las
+filas de `RaidSpec` que no estén en la plantilla, para no perder clases/specs
+que la guild haya cargado a mano.
 
 > **Nombre en la UI:** esto se muestra como **"Tipo de evento"** (en el evento y
 > en el Admin), porque no todos los tipos son juegos. Internamente (columna,

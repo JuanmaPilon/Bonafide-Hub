@@ -99,9 +99,8 @@ bot solo dibuja los botones del aviso y manda la inscripción.
 ```text
 Evento            (hub_events.game = "wow" | "lol" | ...)
    |
-   +-- roles     -> GuildConfig.eventGames[game].roles
-   |                 (o los de la plantilla del código si no se personalizó)
-   +-- catálogo  -> raid_specs WHERE game = <juego del evento>
+   +-- roles     -> plantilla del código (event-templates.ts)
+   +-- catálogo  -> plantilla del código + raid_specs (lo que no esté ahí)
    |
    v
 Aviso-embed (botones)  +  Tarjeta en la web
@@ -111,8 +110,8 @@ event_signups (rol, clase, spec, personaje, estado)
 ```
 
 1. La guild puede tener varios juegos configurados a la vez; cada evento elige uno.
-2. Las **plantillas** (`event-templates.ts`: `wow`, `lol`) son data pura: agregan un juego (roles + catálogo precargado) sin borrar los otros.
-3. Un juego que no está en `eventGames` usa los roles de su plantilla, así agregar un juego nuevo no requiere configurar nada.
+2. Las **plantillas** (`event-templates.ts`: `wow`, `lol`, `encuesta`) son data pura y la fuente de verdad de los roles y del catálogo: agregar un juego no requiere configurar nada.
+3. `raid_specs` quedó como complemento: solo aporta las clases/specs que no están en la plantilla.
 4. Los eventos anteriores al cambio tienen `game = "wow"` (default de la columna), así que sus inscripciones siguen cuadrando con los roles clásicos.
 
 ## 6. Registro de auditoría
