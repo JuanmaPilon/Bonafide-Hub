@@ -2036,18 +2036,16 @@ a:hover {
   height: 14px;
 }
 
-.roster-edit {
-  position: absolute;
-  top: 7px;
-  right: 66px;
-  border: 0;
-  background: transparent;
+/* La tarjeta entera abre la edición, así que el hover lo anuncia (mismo
+   criterio que las filas del leaderboard). */
+.roster-member--editable {
   cursor: pointer;
-  opacity: 0.65;
 }
 
-.roster-edit:hover {
-  opacity: 1;
+.roster-member--editable:hover {
+  border-color: color-mix(in srgb, var(--roster-class-color) 88%, transparent);
+  box-shadow: 0 0 24px
+    color-mix(in srgb, var(--roster-class-color) 34%, transparent);
 }
 
 .roster-sheet {

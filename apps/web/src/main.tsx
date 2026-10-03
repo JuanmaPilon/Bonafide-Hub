@@ -2177,13 +2177,6 @@ function RosterSheet({
         ) : null}
         <div className="form-actions">
           <button
-            className="ghost-button cancel-button"
-            onClick={onClose}
-            type="button"
-          >
-            Cancelar
-          </button>
-          <button
             className="primary-button"
             disabled={saving || !className || !specName}
             onClick={() =>
@@ -2198,6 +2191,13 @@ function RosterSheet({
             type="button"
           >
             {saving ? "Guardando…" : "Guardar ficha"}
+          </button>
+          <button
+            className="ghost-button cancel-button"
+            onClick={onClose}
+            type="button"
+          >
+            Cancelar
           </button>
         </div>
         {canDelete && profile ? (
@@ -2717,26 +2717,42 @@ function RosterSection({
     const rosterStatus =
       profile && !isOfficer ? rosterRankLabel(member.rankKey) : null;
     const canToggleStatus = canEditOthers && rosterStatus !== null;
+    // La tarjeta entera abre la edición: el lápiz flotante quedaba descolgado
+    // en el medio cuando la tarjeta era ancha.
+    const canEditCard = canEditOthers || member.userId === meId;
     const rosterStatusClass = rosterStatus
       ? rosterStatus.toLowerCase().replaceAll(" ", "-")
       : "";
     return (
       <article
-        className={`roster-member${member.rankKey ? "" : " roster-member--inactive"}`}
+        className={`roster-member${member.rankKey ? "" : " roster-member--inactive"}${canEditCard ? " roster-member--editable" : ""}`}
         key={member.userId}
+        onClick={
+          canEditCard
+            ? () =>
+                setSheetFor({
+                  displayName:
+                    member.userId === meId ? "Mi ficha" : member.displayName,
+                  userId: member.userId,
+                })
+            : undefined
+        }
+        title={canEditCard ? "Editar ficha" : undefined}
         style={
           {
             "--roster-class-color": classColor(profile?.className) ?? "#6aa8ff",
           } as CSSProperties
         }
       >
-        {isOfficer ? (
-          <span className="roster-lead-flag">Raid Lead</span>
-        ) : null}
+        {isOfficer ? <span className="roster-lead-flag">Raid Lead</span> : null}
         <div className="roster-member-main">
           <button
             className="member-link roster-member-name"
-            onClick={() => onOpenProfile(member.userId)}
+            onClick={(event) => {
+              // La tarjeta entera edita: el nombre sigue abriendo el perfil.
+              event.stopPropagation();
+              onOpenProfile(member.userId);
+            }}
             type="button"
           >
             {member.displayName}
@@ -2764,22 +2780,6 @@ function RosterSection({
             <span className="roster-member-spec">Sin ficha</span>
           )}
         </div>
-        {canEditOthers || member.userId === meId ? (
-          <button
-            className="roster-edit"
-            onClick={() =>
-              setSheetFor({
-                displayName:
-                  member.userId === meId ? "Mi ficha" : member.displayName,
-                userId: member.userId,
-              })
-            }
-            title="Editar ficha"
-            type="button"
-          >
-            ✏️
-          </button>
-        ) : null}
         {profile && profile.offSpecs.length > 0 ? (
           <div className="roster-member-offs">
             {profile.offSpecs.map((off) => {
@@ -2830,7 +2830,8 @@ function RosterSection({
                         <button
                           className={`roster-status-option roster-status-option--${rosterRankLabel(rank.key).toLowerCase()}`}
                           key={rank.key}
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setRankMenuFor(null);
                             void changeProfileRank(member, rank.key);
                           }}
@@ -2841,7 +2842,8 @@ function RosterSection({
                       ))}
                     <button
                       className="roster-status-option roster-status-option--inactivo"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setRankMenuFor(null);
                         void changeProfileRank(member, null);
                       }}
