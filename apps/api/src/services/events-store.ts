@@ -125,31 +125,43 @@ export async function listRaidSpecs(
     orderBy: [{ position: "asc" }, { className: "asc" }, { specName: "asc" }],
   });
   const stored = records.map(toRaidSpec);
-
-  // El id de las del código es estable y derivado (juego:clase:spec): no hay
-  // fila en la base, así que no puede ser el id de la tabla. Las fechas no las
-  // usa el catálogo; van solo para completar el tipo.
-  const fromCode: RaidSpec[] = listTemplateSpecs(key).map((spec) => ({
-    animated: false,
-    className: spec.className,
-    createdAt: new Date(),
-    game: spec.game,
-    guildId,
-    id: `${spec.game}:${spec.className}:${spec.specName}`,
-    position: 0,
-    role: spec.role,
-    specName: spec.specName,
-    updatedAt: new Date(),
-  }));
-
-  const inTemplate = new Set(
-    fromCode.map((spec) => `${spec.game}|${spec.className}|${spec.specName}`),
+  const storedByKey = new Map(
+    stored.map((spec) => [
+      `${spec.game}|${spec.className}|${spec.specName}`,
+      spec,
+    ]),
   );
+
+  // La plantilla define QUÉ clases/specs existen y en qué orden. Si la guild ya
+  // tenía guardada esa fila, se conserva lo suyo (emoji, id, fechas): el emoji
+  // por spec que hayan cargado antes no se pierde.
+  const codeKeys = new Set<string>();
+  const fromCode: RaidSpec[] = listTemplateSpecs(key).map((spec) => {
+    const mappingKey = `${spec.game}|${spec.className}|${spec.specName}`;
+    codeKeys.add(mappingKey);
+    const saved = storedByKey.get(mappingKey);
+    return {
+      animated: saved?.animated ?? false,
+      className: spec.className,
+      createdAt: saved?.createdAt ?? new Date(),
+      emojiId: saved?.emojiId,
+      emojiName: saved?.emojiName,
+      game: spec.game,
+      guildId,
+      // El id de las del código es derivado y estable: no son filas de la tabla.
+      id: saved?.id ?? mappingKey,
+      position: saved?.position ?? 0,
+      role: spec.role,
+      specName: spec.specName,
+      updatedAt: saved?.updatedAt ?? new Date(),
+    };
+  });
+
+  // Lo que la guild tenga cargado y NO esté en la plantilla se agrega al final.
   return [
     ...fromCode,
     ...stored.filter(
-      (spec) =>
-        !inTemplate.has(`${spec.game}|${spec.className}|${spec.specName}`),
+      (spec) => !codeKeys.has(`${spec.game}|${spec.className}|${spec.specName}`),
     ),
   ];
 }
