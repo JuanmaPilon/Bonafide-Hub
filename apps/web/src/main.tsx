@@ -2359,95 +2359,97 @@ function AdminMappingsSection({
               </span>
             </summary>
             <div className="mapping-group-body">
-            {group.rows.map((row) => {
-              const emojiId = draft[row.key]?.emojiId;
-              const emoji = emojis.find((entry) => entry.id === emojiId);
-              return (
-                <div className="mapping-item" key={row.key}>
-                  <div className="mapping-row">
-                    <span className="mapping-label">{row.label}</span>
-                    <select
-                      aria-label={`Rol de ${row.label}`}
-                      className="select"
-                      onChange={(event) =>
-                        patch(row.key, { roleId: event.target.value })
-                      }
-                      value={draft[row.key]?.roleId ?? ""}
-                    >
-                      <option value="">Sin rol</option>
-                      {roles.map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className={`mapping-emoji-button${emoji ? " active" : ""}`}
-                      onClick={() =>
-                        setEmojiPickerFor((current) =>
-                          current === row.key ? null : row.key,
-                        )
-                      }
-                      title={emoji ? `:${emoji.name}:` : "Elegir emoji"}
-                      type="button"
-                    >
-                      {emoji ? (
-                        <DiscordEmojiImage
-                          animated={emoji.animated}
-                          emojiId={emoji.id}
-                          name={emoji.name}
-                          size={20}
-                        />
-                      ) : (
-                        "＋"
-                      )}
-                    </button>
-                  </div>
-                  {emojiPickerFor === row.key ? (
-                    <div className="spec-emoji-grid">
-                      {emojis.map((entry) => {
-                        const selected = emojiId === entry.id;
-                        return (
-                          <button
-                            className={`spec-emoji-option${selected ? " active" : ""}`}
-                            key={entry.id}
-                            onClick={() =>
-                              patch(row.key, {
-                                emojiId: selected ? undefined : entry.id,
-                              })
-                            }
-                            title={
-                              selected ? `Quitar :${entry.name}:` : `:${entry.name}:`
-                            }
-                            type="button"
-                          >
-                            <DiscordEmojiImage
-                              animated={entry.animated}
-                              emojiId={entry.id}
-                              name={entry.name}
-                              size={22}
-                            />
-                          </button>
-                        );
-                      })}
+              {group.rows.map((row) => {
+                const emojiId = draft[row.key]?.emojiId;
+                const emoji = emojis.find((entry) => entry.id === emojiId);
+                return (
+                  <div className="mapping-item" key={row.key}>
+                    <div className="mapping-row">
+                      <span className="mapping-label">{row.label}</span>
+                      <select
+                        aria-label={`Rol de ${row.label}`}
+                        className="select"
+                        onChange={(event) =>
+                          patch(row.key, { roleId: event.target.value })
+                        }
+                        value={draft[row.key]?.roleId ?? ""}
+                      >
+                        <option value="">Sin rol</option>
+                        {roles.map((role) => (
+                          <option key={role.id} value={role.id}>
+                            {role.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className={`mapping-emoji-button${emoji ? " active" : ""}`}
+                        onClick={() =>
+                          setEmojiPickerFor((current) =>
+                            current === row.key ? null : row.key,
+                          )
+                        }
+                        title={emoji ? `:${emoji.name}:` : "Elegir emoji"}
+                        type="button"
+                      >
+                        {emoji ? (
+                          <DiscordEmojiImage
+                            animated={emoji.animated}
+                            emojiId={emoji.id}
+                            name={emoji.name}
+                            size={20}
+                          />
+                        ) : (
+                          "＋"
+                        )}
+                      </button>
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
+                    {emojiPickerFor === row.key ? (
+                      <div className="spec-emoji-grid">
+                        {emojis.map((entry) => {
+                          const selected = emojiId === entry.id;
+                          return (
+                            <button
+                              className={`spec-emoji-option${selected ? " active" : ""}`}
+                              key={entry.id}
+                              onClick={() =>
+                                patch(row.key, {
+                                  emojiId: selected ? undefined : entry.id,
+                                })
+                              }
+                              title={
+                                selected
+                                  ? `Quitar :${entry.name}:`
+                                  : `:${entry.name}:`
+                              }
+                              type="button"
+                            >
+                              <DiscordEmojiImage
+                                animated={entry.animated}
+                                emojiId={entry.id}
+                                name={entry.name}
+                                size={22}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </details>
         ))}
-        <div className="admin-card-footer">
-          <button
-            className="primary-button"
-            disabled={saving}
-            onClick={() => void save()}
-            type="button"
-          >
-            {saving ? "Guardando…" : "Guardar mapeos"}
-          </button>
-        </div>
+      </div>
+      <div className="admin-card-footer">
+        <button
+          className="primary-button"
+          disabled={saving}
+          onClick={() => void save()}
+          type="button"
+        >
+          {saving ? "Guardando…" : "Guardar mapeos"}
+        </button>
       </div>
     </details>
   );
