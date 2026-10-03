@@ -318,11 +318,25 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const errorBody = await response.json().catch(() => null);
+    const raw = await response.text().catch(() => "");
+    let errorBody: unknown = null;
+    try {
+      errorBody = raw ? JSON.parse(raw) : null;
+    } catch {
+      errorBody = null;
+    }
+    // Sin JSON (p. ej. la página 502 de un proxy) el status solo no dice
+    // nada: mostramos qué devolvió realmente la petición.
+    const contentType = response.headers.get("content-type") ?? "";
+    const fallback = contentType.includes("text/html")
+      ? `Request failed (${response.status}): el proxy devolvió HTML, no JSON del API.`
+      : raw.trim()
+        ? `Request failed (${response.status}): ${raw.trim().slice(0, 180)}`
+        : `Request failed (${response.status})`;
     throw new Error(
       typeof errorBody === "object" && errorBody && "error" in errorBody
         ? String((errorBody as { error?: unknown }).error)
-        : `Request failed (${response.status})`,
+        : fallback,
     );
   }
 
@@ -1351,27 +1365,32 @@ export async function getGuildRoster(guildId: string): Promise<GuildRoster> {
   });
 }
 
+// El guardado puede completarse con la ficha persistida y el rol de raid sin
+// sincronizar: `roleSyncError` trae el motivo para avisar sin perder el guardado.
+export type RosterProfileSave = {
+  profile: RosterProfile;
+  roleSyncError?: string;
+};
+
 export async function saveMyRosterProfile(
   guildId: string,
   input: RosterProfileInput,
-): Promise<RosterProfile> {
-  const data = await requestJson<{ profile: RosterProfile }>(
-    `/guilds/${guildId}/roster/me`,
-    { body: JSON.stringify(input), method: "PUT" },
-  );
-  return data.profile;
+): Promise<RosterProfileSave> {
+  return requestJson<RosterProfileSave>(`/guilds/${guildId}/roster/me`, {
+    body: JSON.stringify(input),
+    method: "PUT",
+  });
 }
 
 export async function saveMemberRosterProfile(
   guildId: string,
   userId: string,
   input: RosterProfileInput,
-): Promise<RosterProfile> {
-  const data = await requestJson<{ profile: RosterProfile }>(
+): Promise<RosterProfileSave> {
+  return requestJson<RosterProfileSave>(
     `/guilds/${guildId}/roster/${encodeURIComponent(userId)}`,
     { body: JSON.stringify(input), method: "PUT" },
   );
-  return data.profile;
 }
 
 export async function deleteMemberRosterProfile(

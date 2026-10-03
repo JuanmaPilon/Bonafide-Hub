@@ -267,11 +267,17 @@ async function fetchWithDiscordRetry(
   url: string,
   init: RequestInit,
   maxRetries = 2,
+  timeoutMs = 10_000,
 ): Promise<Response> {
   let response: Response | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    response = await fetch(url, init);
+    // Timeout por intento: sin esto una conexión colgada con Discord deja la
+    // petición abierta hasta que el borde (Cloudflare/Railway) corta con 502.
+    response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     if (response.status !== 429) {
       return response;
     }
@@ -649,21 +655,32 @@ async function syncGuildMemberRole(
   if (!env.DISCORD_BOT_TOKEN) {
     return { detail: "Falta DISCORD_BOT_TOKEN en el API.", ok: false };
   }
-  const response = await fetchWithDiscordRetry(
-    `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
-    {
-      headers: {
-        Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-        "User-Agent": "DiscordBot (https://bonafide-cum.com, 1.0)",
+  let response: Response;
+  try {
+    response = await fetchWithDiscordRetry(
+      `https://discord.com/api/v10/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
+      {
+        headers: {
+          Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+          "User-Agent": "DiscordBot (https://bonafide-cum.com, 1.0)",
+        },
+        method: active ? "PUT" : "DELETE",
       },
-      method: active ? "PUT" : "DELETE",
-    },
-  );
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[api] roster role sync failed guild=${guildId} user=${userId} role=${roleId} active=${active}: ${detail}`,
+    );
+    return { detail: `No se pudo contactar a Discord: ${detail}`, ok: false };
+  }
   if (response.ok) {
     return { ok: true };
   }
   const body = await response.text().catch(() => "");
-  const detail = body ? `Discord ${response.status}: ${body}` : `Discord ${response.status}`;
+  const detail = body
+    ? `Discord ${response.status}: ${body}`
+    : `Discord ${response.status}`;
   console.warn(
     `[api] roster role sync failed guild=${guildId} user=${userId} role=${roleId} active=${active}: ${detail}`,
   );
@@ -5152,20 +5169,19 @@ export function buildApp() {
       config.rosterRanks,
       validation.profile.active,
     );
-    if (!roleSync.ok) {
-      return reply.code(502).send({
-        ok: false,
-        error:
-          roleSync.detail ?? "No se pudo actualizar el rol de raid en Discord.",
-      });
-    }
 
     const profile = await upsertRosterProfile(
       params.guildId,
       String(session.user.id),
       validation.profile,
     );
-    return { ok: true, profile };
+    // La ficha se guarda aunque Discord falle: el rol se sincroniza
+    // best-effort y el motivo viaja en la respuesta como aviso.
+    return {
+      ok: true,
+      profile,
+      roleSyncError: roleSync.ok ? undefined : roleSync.detail,
+    };
   });
 
   // Ficha de otro miembro: solo staff del módulo de raids.
@@ -5199,13 +5215,6 @@ export function buildApp() {
       config.rosterRanks,
       validation.profile.active,
     );
-    if (!roleSync.ok) {
-      return reply.code(502).send({
-        ok: false,
-        error:
-          roleSync.detail ?? "No se pudo actualizar el rol de raid en Discord.",
-      });
-    }
 
     const profile = await upsertRosterProfile(
       params.guildId,
@@ -5214,11 +5223,15 @@ export function buildApp() {
     );
     const member = await fetchGuildMemberRecord(params.guildId, params.userId);
     await logAdminAction(session, params.guildId, "roster:profile", {
-      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}`,
+      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
       targetId: params.userId,
       targetType: "user",
     });
-    return { ok: true, profile };
+    return {
+      ok: true,
+      profile,
+      roleSyncError: roleSync.ok ? undefined : roleSync.detail,
+    };
   });
 
   app.delete("/guilds/:guildId/roster/:userId", async (request, reply) => {

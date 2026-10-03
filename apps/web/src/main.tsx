@@ -2319,10 +2319,11 @@ function RosterSection({
     }
     setSavingSheet(true);
     try {
-      const profile =
+      const saved =
         target.userId === meId
           ? await saveMyRosterProfile(guildId, input)
           : await saveMemberRosterProfile(guildId, target.userId, input);
+      const profile = saved.profile;
       setRoster((current) =>
         current
           ? {
@@ -2340,7 +2341,12 @@ function RosterSection({
           : current,
       );
       setSheetFor(null);
-      notify("Ficha guardada.", "success");
+      notify(
+        saved.roleSyncError
+          ? `Ficha guardada, pero Discord: ${saved.roleSyncError}`
+          : "Ficha guardada.",
+        saved.roleSyncError ? "error" : "success",
+      );
     } catch (error) {
       notify(
         error instanceof Error ? error.message : "No se pudo guardar la ficha.",
@@ -2356,10 +2362,11 @@ function RosterSection({
       return;
     }
     try {
-      const profile = await saveMemberRosterProfile(guildId, member.userId, {
+      const saved = await saveMemberRosterProfile(guildId, member.userId, {
         ...member.profile,
         active: !member.profile.active,
       });
+      const profile = saved.profile;
       setRoster((current) =>
         current
           ? {
@@ -2376,9 +2383,12 @@ function RosterSection({
             }
           : current,
       );
+      const label = profile.active ? "Ficha activada." : "Ficha desactivada.";
       notify(
-        profile.active ? "Ficha activada." : "Ficha desactivada.",
-        "success",
+        saved.roleSyncError
+          ? `${label} pero Discord: ${saved.roleSyncError}`
+          : label,
+        saved.roleSyncError ? "error" : "success",
       );
     } catch (error) {
       notify(
