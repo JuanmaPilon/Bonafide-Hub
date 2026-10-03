@@ -2548,8 +2548,12 @@ function RosterSection({
     );
   }
 
-  // Estado del filtro: los mismos tres que muestra la tarjeta.
-  function memberStatusKey(member: RosterMember): string {
+  // Estado del filtro: los mismos tres que muestra la tarjeta. Sin ficha la
+  // tarjeta está incompleta y no entra en el filtro de estado.
+  function memberStatusKey(member: RosterMember): string | null {
+    if (!member.profile) {
+      return null;
+    }
     return member.rankKey === "raid"
       ? "raid"
       : member.rankKey === "trial"
@@ -2565,11 +2569,13 @@ function RosterSection({
       (member) =>
         roleFilter.length === 0 || roleFilter.includes(memberRole(member)),
     )
-    .filter(
-      (member) =>
-        statusFilter.length === 0 ||
-        statusFilter.includes(memberStatusKey(member)),
-    )
+    .filter((member) => {
+      if (statusFilter.length === 0) {
+        return true;
+      }
+      const status = memberStatusKey(member);
+      return status !== null && statusFilter.includes(status);
+    })
     .filter((member) => matchesTagFilter(member.profile?.tags ?? [], tagFilter))
     .filter((member) => {
       if (!query) {
@@ -2724,6 +2730,9 @@ function RosterSection({
           } as CSSProperties
         }
       >
+        {isOfficer ? (
+          <span className="roster-lead-flag">Raid Lead</span>
+        ) : null}
         <div className="roster-member-main">
           <button
             className="member-link roster-member-name"
@@ -2795,9 +2804,6 @@ function RosterSection({
           </div>
         ) : null}
         <div className="roster-flags">
-          {isOfficer ? (
-            <span className="roster-lead-badge">Raid Lead</span>
-          ) : null}
           {rosterStatus ? (
             canToggleStatus ? (
               <div className="roster-status-menu">
