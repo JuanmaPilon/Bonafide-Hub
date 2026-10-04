@@ -1456,6 +1456,96 @@ a:hover {
   background: rgba(12, 19, 37, 0.55);
 }
 
+.raid-log-card {
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: linear-gradient(130deg, rgba(21, 31, 49, 0.92), rgba(12, 17, 30, 0.92));
+}
+
+.raid-log-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 68px;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.raid-log-card-header:hover,
+.raid-log-card-header[aria-expanded="true"] {
+  background: rgba(106, 168, 255, 0.07);
+}
+
+.raid-log-card-heading {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.raid-log-card-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raid-log-card-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.raid-log-card-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.raid-log-card-chevron {
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.raid-log-card-chevron.open {
+  transform: rotate(90deg);
+}
+
+.raid-log-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.raid-log-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.raid-log-card-actions .primary-button,
+.raid-log-card-actions .ghost-button {
+  min-height: 38px;
+}
+
+:root[data-theme="light"] .raid-log-card {
+  background: linear-gradient(130deg, #ffffff, #f4f7fb);
+}
+
 /* Lado derecho del header del acordeón: badge + chevron juntos */
 .comunicado-acc-heading-right {
   display: inline-flex;
@@ -1627,7 +1717,9 @@ a:hover {
 }
 
 .raid-logs-overlay {
-  z-index: 250;
+  z-index: 1000;
+  overflow-y: auto;
+  align-items: center;
 }
 
 .raid-logs-modal {
@@ -1743,6 +1835,21 @@ a:hover {
 
   .raid-logs-modal {
     max-height: 94vh;
+  }
+
+  .raid-log-card-header {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .raid-log-card-status {
+    flex-wrap: wrap;
+    max-width: 48%;
+  }
+
+  .raid-log-card-title {
+    white-space: normal;
   }
 
   .raid-logs-modal-body {

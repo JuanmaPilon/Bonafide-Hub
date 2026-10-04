@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -787,28 +788,26 @@ function RaidLogsList({
         };
 
         return (
-          <article className="comunicado-card comunicado-acc" key={group.key}>
+          <article className="raid-log-card" key={group.key}>
             <button
-              className="comunicado-acc-header"
+              className="raid-log-card-header"
               onClick={() => toggleGroup(group.key)}
               type="button"
               aria-expanded={expanded}
             >
-              <span className="comunicado-acc-heading">
-                <strong>{group.title || "Log de Raid"}</strong>
-                {group.startedAt ? (
-                  <span className="comunicado-date">
-                    {formatDate24(group.startedAt)}
-                  </span>
-                ) : null}
-                <span className="raid-log-meta-inline">
+              <span className="raid-log-card-heading">
+                <strong className="raid-log-card-title">
+                  {group.title || "Log de Raid"}
+                </strong>
+                <span className="raid-log-card-meta">
+                  {group.startedAt ? `${formatDate24(group.startedAt)} · ` : ""}
                   ⚔️ {group.fights} · 💀 {group.kills}
                   {group.parts.length > 1
                     ? ` · ${group.parts.length} reports`
                     : ""}
                 </span>
               </span>
-              <span className="comunicado-acc-heading-right">
+              <span className="raid-log-card-status">
                 {group.status === "live" ? (
                   <span
                     className="raid-log-badge raid-log-live"
@@ -829,7 +828,7 @@ function RaidLogsList({
                         : "Sin publicar"}
                 </span>
                 <span
-                  className={`comunicado-acc-chevron${expanded ? " open" : ""}`}
+                  className={`raid-log-card-chevron${expanded ? " open" : ""}`}
                   aria-hidden="true"
                 >
                   ▸
@@ -837,7 +836,7 @@ function RaidLogsList({
               </span>
             </button>
             {expanded ? (
-              <div className="comunicado-acc-body">
+              <div className="raid-log-card-body">
                 <div className="raid-log-meta">
                   ⚔️ {group.fights} fight/s · 💀 {group.kills} kill/s
                 </div>
@@ -889,7 +888,7 @@ function RaidLogsList({
                     Ver en Warcraft Logs ↗
                   </a>
                 ) : null}
-                <div className="comunicado-acc-actions">
+                <div className="raid-log-card-actions">
                   {group.posted ? (
                     onUpdate ? (
                       <button
@@ -11570,7 +11569,7 @@ function App() {
                           {canManageRaidLogs ? "Administrar logs" : "Ver logs"}
                         </button>
                       </div>
-                      {showRaidLogsModal ? (
+                      {showRaidLogsModal ? createPortal(
                         <div
                           className="modal-overlay raid-logs-overlay"
                           onClick={() => setShowRaidLogsModal(false)}
@@ -11842,7 +11841,8 @@ function App() {
                               ) : null}
                             </div>
                           </section>
-                        </div>
+                        </div>,
+                        document.body,
                       ) : null}
                     </div>
                   ) : null}
