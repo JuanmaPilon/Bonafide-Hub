@@ -32,6 +32,14 @@ const STATE_BADGE: Record<NightState, string> = {
   posted: "raid-log-synced",
 };
 
+const SIGNUP_STATUS_LABEL: Record<string, string> = {
+  bench: "Bench",
+  late: "Tarde",
+  no: "No va",
+  tentative: "Tentativo",
+  yes: "Voy",
+};
+
 function toNights(logs: RaidLog[]): Night[] {
   const byKey = new Map<string, RaidLog[]>();
   for (const log of logs) {
@@ -268,15 +276,22 @@ export function RaidLogsBoard({
   );
   const manageOpen = Boolean(manage) && (showManage || nights.length === 0);
   const selectedAnalysis = selected ? analysisByNight[selected.key] : undefined;
-  const lowestDpsPlayer = selectedAnalysis?.averageDps[
-    (selectedAnalysis.averageDps.length || 1) - 1
-  ];
+  // Con los roles de WCL, healers y tanks quedan afuera de la tabla de DPS: su
+  // daño no compite con el de un DPS. Si WCL no devolvió roles, se muestran todos.
+  const dpsRows = (() => {
+    const rows = selectedAnalysis?.averageDps ?? [];
+    const onlyDps = rows.filter((player) => player.role === "dps");
+    return onlyDps.length > 0 ? onlyDps : rows;
+  })();
+  const lowestDpsPlayer = dpsRows[dpsRows.length - 1];
   const fewestDeaths = selectedAnalysis?.deathsByPlayer.reduce<{
     deaths: number;
     name: string;
-  } | null>((lowest, player) =>
-    !lowest || player.deaths < lowest.deaths ? player : lowest,
-  null);
+  } | null>(
+    (lowest, player) =>
+      !lowest || player.deaths < lowest.deaths ? player : lowest,
+    null,
+  );
   const leastDeathsCount = selectedAnalysis?.deathsByPlayer.reduce(
     (minimum, player) => Math.min(minimum, player.deaths),
     Number.POSITIVE_INFINITY,
@@ -287,9 +302,18 @@ export function RaidLogsBoard({
   const knownDeathCauses = selectedAnalysis?.deathsByAbility.filter(
     (cause) => !/^unknown(?: ability)?$/i.test(cause.ability),
   );
-  const selectedDpsColor = classColor(
-    selectedAnalysis?.averageDps[0]?.class,
-  );
+  const attendance = selectedAnalysis?.attendance;
+  const attendanceNoShows = attendance
+    ? [
+        ...attendance.signedAbsent,
+        ...attendance.unmatchedSignups.map((signup) => ({
+          name: signup.name,
+          status: `${SIGNUP_STATUS_LABEL[signup.status] ?? signup.status} · sin PJ`,
+        })),
+      ]
+    : [];
+  const attendanceUnsigned = attendance?.unsignedPresent ?? [];
+  const selectedDpsColor = classColor(dpsRows[0]?.class);
   const lowestDpsColor = classColor(lowestDpsPlayer?.class);
   const selectedAnalysisError =
     selected && analysisError && analysisError.key === selected.key
@@ -642,11 +666,11 @@ export function RaidLogsBoard({
                               >
                                 <span>Mayor DPS promedio</span>
                                 <strong>
-                                  {selectedAnalysis.averageDps[0]?.name ?? "—"}
+                                  {dpsRows[0]?.name ?? "—"}
                                 </strong>
                                 <span>
-                                  {selectedAnalysis.averageDps[0]
-                                    ? `${compactNumber(selectedAnalysis.averageDps[0].averageDps)} DPS`
+                                  {dpsRows[0]
+                                    ? `${compactNumber(dpsRows[0].averageDps)} DPS`
                                     : "Sin datos de daño"}
                                 </span>
                               </div>
@@ -692,14 +716,11 @@ export function RaidLogsBoard({
                             <div className="rlb-analysis-grid">
                               <div className="rlb-analysis-section">
                                 <h5>DPS promedio por encuentro</h5>
-                                {selectedAnalysis.averageDps.length > 0 ? (
-                                  selectedAnalysis.averageDps
-                                    .slice(0, 8)
-                                    .map((player, index) => {
+                                {dpsRows.length > 0 ? (
+                                  <div className="rlb-analysis-dps">
+                                    {dpsRows.map((player, index) => {
                                       const color = classColor(player.class);
-                                      const maxDps =
-                                        selectedAnalysis.averageDps[0]
-                                          ?.averageDps ?? 1;
+                                      const maxDps = dpsRows[0]?.averageDps ?? 1;
                                       return (
                                         <div
                                           className="rlb-analysis-row"
@@ -740,7 +761,8 @@ export function RaidLogsBoard({
                                           </strong>
                                         </div>
                                       );
-                                    })
+                                    })}
+                                  </div>
                                 ) : (
                                   <p className="rlb-analysis-empty">
                                     Warcraft Logs no devolvió datos de daño.
@@ -752,8 +774,8 @@ export function RaidLogsBoard({
                                 <h5>Muertes</h5>
                                 {selectedAnalysis.deathsByPlayer.length > 0 ? (
                                   <div className="rlb-analysis-list">
-                                    {selectedAnalysis.deathsByPlayer
-                                      .map((player) => (
+                                    {selectedAnalysis.deathsByPlayer.map(
+                                      (player) => (
                                         <div
                                           className="rlb-analysis-list-row"
                                           key={player.name}
@@ -761,7 +783,8 @@ export function RaidLogsBoard({
                                           <span>{player.name}</span>
                                           <strong>{player.deaths}</strong>
                                         </div>
-                                      ))}
+                                      ),
+                                    )}
                                   </div>
                                 ) : (
                                   <p className="rlb-analysis-empty">
@@ -789,6 +812,180 @@ export function RaidLogsBoard({
                               </div>
                             </div>
 
+                            {selectedAnalysis.consumables ? (
+                              <div className="rlb-analysis-grid">
+                                <div className="rlb-analysis-section">
+                                  <h5>Consumibles por jugador</h5>
+                                  <div className="rlb-consumables">
+                                    {selectedAnalysis.consumables.players.map(
+                                      (player) => (
+                                        <div
+                                          className="rlb-consumable-row"
+                                          key={player.name}
+                                        >
+                                          <span className="rlb-analysis-player-name">
+                                            {classColor(player.class) ? (
+                                              <i
+                                                aria-label={player.class}
+                                                className="rlb-class-dot"
+                                                style={{
+                                                  backgroundColor: classColor(
+                                                    player.class,
+                                                  ),
+                                                }}
+                                              />
+                                            ) : null}
+                                            {player.name}
+                                          </span>
+                                          <span className="rlb-consumable-counts">
+                                            {(
+                                              [
+                                                ["Pota", player.potions],
+                                                ["Piedra", player.healthstones],
+                                                ["Vida", player.healthPotions],
+                                              ] as Array<[string, number]>
+                                            ).map(([label, used]) => (
+                                              <span
+                                                className={`rlb-consumable-count${
+                                                  used >= player.pulls &&
+                                                  player.pulls > 0
+                                                    ? " full"
+                                                    : used === 0
+                                                      ? " empty"
+                                                      : ""
+                                                }`}
+                                                key={label}
+                                              >
+                                                {label} {used}/{player.pulls}
+                                              </span>
+                                            ))}
+                                          </span>
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="rlb-analysis-section">
+                                  <h5>Por pull</h5>
+                                  <div className="rlb-consumable-pulls">
+                                    {selectedAnalysis.consumables.pulls.map(
+                                      (pull, index) => (
+                                        <details
+                                          className="rlb-consumable-pull"
+                                          key={`${pull.name}:${index}`}
+                                        >
+                                          <summary>
+                                            <span className="rlb-consumable-pull-head">
+                                              <strong>{pull.name}</strong>
+                                              <span>
+                                                {pull.potionsUsed}/
+                                                {pull.participants} potas
+                                              </span>
+                                            </span>
+                                          </summary>
+                                          {(
+                                            [
+                                              ["Pota", pull.missingPotions],
+                                              [
+                                                "Piedra",
+                                                pull.missingHealthstones,
+                                              ],
+                                              [
+                                                "Vida",
+                                                pull.missingHealthPotions,
+                                              ],
+                                            ] as Array<[string, string[]]>
+                                          ).map(([label, names]) => (
+                                            <p key={label}>
+                                              <span className="rlb-label">
+                                                Sin {label.toLowerCase()} (
+                                                {names.length})
+                                              </span>
+                                              {names.length > 0
+                                                ? names.join(", ")
+                                                : "Todos usaron."}
+                                            </p>
+                                          ))}
+                                        </details>
+                                      ),
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {attendance ? (
+                              <div className="rlb-analysis-section">
+                                <h5>Asistencia</h5>
+                                <div className="rlb-attendance-stats">
+                                  <div>
+                                    <span>Anotados que vinieron</span>
+                                    <strong>
+                                      {attendance.signedPresent}/
+                                      {attendance.signedTotal}
+                                    </strong>
+                                  </div>
+                                  <div>
+                                    <span>Jugadores en el log</span>
+                                    <strong>{attendance.players.length}</strong>
+                                  </div>
+                                  {attendance.event ? (
+                                    <div>
+                                      <span>Evento</span>
+                                      <strong>
+                                        {attendance.event.title} ·{" "}
+                                        {new Date(
+                                          attendance.event.startsAt,
+                                        ).toLocaleDateString("es-AR")}
+                                      </strong>
+                                    </div>
+                                  ) : null}
+                                </div>
+                                {attendanceNoShows.length > 0 ? (
+                                  <div className="rlb-analysis-list">
+                                    <span className="rlb-label">
+                                      Anotados que no aparecieron
+                                    </span>
+                                    {attendanceNoShows.map((signup) => (
+                                      <div
+                                        className="rlb-analysis-list-row"
+                                        key={`${signup.name}:${signup.status}`}
+                                      >
+                                        <span>{signup.name}</span>
+                                        <strong>
+                                          {SIGNUP_STATUS_LABEL[signup.status] ??
+                                            signup.status}
+                                        </strong>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                {attendanceUnsigned.length > 0 ? (
+                                  <div className="rlb-analysis-list">
+                                    <span className="rlb-label">
+                                      Vinieron sin anotarse
+                                    </span>
+                                    {attendanceUnsigned.map((player) => (
+                                      <div
+                                        className="rlb-analysis-list-row"
+                                        key={player.name}
+                                      >
+                                        <span>{player.name}</span>
+                                        <strong>
+                                          {player.status
+                                            ? (SIGNUP_STATUS_LABEL[
+                                                player.status
+                                              ] ?? player.status)
+                                            : `${player.pulls} pulls`}
+                                        </strong>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+
                             {selectedAnalysis.encounters.length > 0 ? (
                               <div className="rlb-analysis-section">
                                 <h5>Por boss</h5>
@@ -805,9 +1002,7 @@ export function RaidLogsBoard({
                                           {encounter.kill ? "Kill" : "Wipe"}
                                         </span>
                                         <strong>{encounter.name}</strong>
-                                        <span>
-                                          {encounter.deaths} muertes
-                                        </span>
+                                        <span>{encounter.deaths} muertes</span>
                                         <span>
                                           {encounter.topDps
                                             ? `Top DPS: ${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`

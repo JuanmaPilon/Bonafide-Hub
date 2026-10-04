@@ -93,14 +93,59 @@ export type RaidLog = {
   zone?: number | null;
 };
 
+export type RaidRole = "dps" | "healer" | "tank";
+
+export type RaidLogAttendancePlayer = {
+  class?: string;
+  name: string;
+  pulls: number;
+  role?: RaidRole;
+};
+
+export type RaidLogAttendance = {
+  event?: { id: string; startsAt: string; title: string };
+  players: RaidLogAttendancePlayer[];
+  signedAbsent: Array<{ name: string; status: string }>;
+  signedPresent: number;
+  signedTotal: number;
+  totalPulls: number;
+  unmatchedSignups: Array<{ name: string; status: string }>;
+  unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
+};
+
+export type RaidLogConsumables = {
+  players: Array<{
+    class?: string;
+    healthPotions: number;
+    healthstones: number;
+    name: string;
+    potions: number;
+    pulls: number;
+    role?: RaidRole;
+  }>;
+  pulls: Array<{
+    healthPotionsUsed: number;
+    healthstonesUsed: number;
+    missingHealthPotions: string[];
+    missingHealthstones: string[];
+    missingPotions: string[];
+    name: string;
+    participants: number;
+    potionsUsed: number;
+  }>;
+};
+
 export type RaidLogAnalysis = {
+  attendance?: RaidLogAttendance;
   averageDps: Array<{
     averageDps: number;
     class?: string;
     encounters: number;
     name: string;
+    role?: RaidRole;
     totalDamage: number;
   }>;
+  consumables?: RaidLogConsumables;
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
   encounters: Array<{
