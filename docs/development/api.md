@@ -92,7 +92,8 @@ Logs de raid (Warcraft Logs):
 
 1. `GET/POST /guilds/:guildId/raid-logs`
 2. `DELETE /guilds/:guildId/raid-logs/:logId`
-3. `GET /public/leaderboard` (top 30 público para la landing)
+3. `GET /guilds/:guildId/raid-logs/:logId/analysis`
+4. `GET /public/leaderboard` (top 30 público para la landing)
 
 La API consulta Warcraft Logs v1 con `WARCRAFT_LOGS_API_KEY`. No hay un
 watcher periódico: los reports nuevos y sus fights se consultan al solicitar
@@ -123,6 +124,28 @@ sigue creciendo, `synced` = terminado, `failed` = no se pudo consultar. La web
 además marca **"Actualizando…"** cuando la entrada está publicada pero el
 mensaje quedó viejo (`needsUpdate`, que calcula el API comparando el texto
 guardado con el que generaría ahora).
+
+Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
+Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
+minutos por entrada y se apoya en tres consultas a la API v1 de Warcraft Logs:
+`tables/summary` (roles), `tables/casts` + `events/casts` (consumibles) y
+`events` con `filter=type in ('combatantinfo')` (quién estaba en cada pull).
+
+Devuelve:
+
+1. `averageDps` — DPS promedio por jugador con `role` (`dps | healer | tank`).
+   La web usa el rol para dejar healers y tanks fuera de la tabla de DPS y del
+   "top DPS" por pull. Si WCL no devuelve roles, se muestran todos.
+2. `deathsByPlayer` / `deathsByAbility` / `encounters` — muertes y detalle por
+   pull (todos los roles cuentan acá).
+3. `consumables` — quién usó poción, piedra de brujo y poción de vida: agregado
+   por jugador (`potions | healthstones | healthPotions` sobre `pulls`) y por
+   pull (`missing*` con los nombres que no usaron cada uno). Los consumibles se
+   identifican por nombre en la tabla de casts, así que no dependen de ids de
+   una expansión puntual. Si WCL no expone la tabla de casts, el campo no viene.
+4. `attendance` — cruce entre los que aparecen en el log y los anotados al
+   evento de raid más cercano (±14 h, `type: raid`). Cuenta "voy" y "tarde"
+   como compromiso; bench y tentativo, si vienen, caen en `unsignedPresent`.
 
 XP:
 
