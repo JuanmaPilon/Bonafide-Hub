@@ -1460,7 +1460,11 @@ a:hover {
   overflow: hidden;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  background: linear-gradient(130deg, rgba(21, 31, 49, 0.92), rgba(12, 17, 30, 0.92));
+  background: linear-gradient(
+    130deg,
+    rgba(21, 31, 49, 0.92),
+    rgba(12, 17, 30, 0.92)
+  );
 }
 
 .raid-log-card-header {
@@ -1749,12 +1753,16 @@ a:hover {
 }
 
 .raid-logs-modal-body {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   min-height: 0;
   overflow-y: auto;
   padding: 20px;
+}
+
+.raid-logs-modal-body > * {
+  flex: 0 0 auto;
 }
 
 .raid-logs-settings {
