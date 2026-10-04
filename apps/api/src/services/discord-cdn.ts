@@ -6,7 +6,7 @@ import { env } from "../config/env.js";
 // (~24 h). Acá centralizamos cómo saber si una URL sigue vigente y cómo
 // renovarla, para que las colecciones (y cartas) no se vean rotas.
 
-export const DISCORD_API_BASE = "https://discord.com/api/v10";
+const DISCORD_API_BASE = "https://discord.com/api/v10";
 // Tratamos la URL como vencida un rato antes de su vencimiento real, así no
 // guardamos una que está por morir.
 const FRESH_MARGIN_MS = 5 * 60 * 1000;

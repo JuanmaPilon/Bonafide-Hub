@@ -1,6 +1,4 @@
-import { env } from "../config/env.js";
 import { prisma } from "../db/prisma.js";
-import { DISCORD_API_BASE } from "./discord-cdn.js";
 
 // ── Juegos que se juegan en el server ──────────────────────────────
 // Discord NO expone por API los "Server Insights" (ese panel donde se ven los
@@ -11,8 +9,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // El lote del bot no debería ser grande; el techo es por las dudas.
 const MAX_ENTRIES_PER_REPORT = 500;
 const MAX_GAMES = 12;
-const ICON_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const ICON_FAIL_TTL_MS = 10 * 60 * 1000;
 
 export type GameActivityEntry = {
   applicationId: string;
@@ -24,9 +20,8 @@ export type GuildGameActivity = {
   applicationId?: string;
   // Días distintos con actividad registrada.
   days: number;
-  iconUrl?: string;
   name: string;
-  // Jugadores distintos que aparecieron jugándolo.
+  // Jugadores distintos que aparecieron jugándolo. Ordena la lista.
   players: number;
 };
 
@@ -36,8 +31,6 @@ type ActivityRow = {
   day: string;
   userId: string;
 };
-
-const iconCache = new Map<string, { expiresAt: number; iconUrl?: string }>();
 
 // Día UTC (YYYY-MM-DD): el bot manda cambios de presencia, no fechas.
 export function activityDay(now = new Date()): string {
@@ -93,45 +86,6 @@ export async function recordGameActivity(
   return operations.length;
 }
 
-// Icono del juego: la actividad trae el applicationId de Discord, y con eso se
-// llega al icono de la aplicación en su CDN. Se cachea: un juego nuevo = 1
-// request, el resto sale de memoria.
-async function resolveApplicationIcon(
-  applicationId: string,
-): Promise<string | undefined> {
-  const cached = iconCache.get(applicationId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.iconUrl;
-  }
-
-  const token = env.DISCORD_BOT_TOKEN?.trim();
-  let iconUrl: string | undefined;
-  try {
-    const response = await fetch(
-      `${DISCORD_API_BASE}/applications/${encodeURIComponent(applicationId)}`,
-      {
-        headers: token
-          ? { accept: "application/json", authorization: `Bot ${token}` }
-          : { accept: "application/json" },
-      },
-    );
-    if (response.ok) {
-      const application = (await response.json()) as { icon?: string | null };
-      if (application.icon) {
-        iconUrl = `https://cdn.discordapp.com/app-icons/${applicationId}/${application.icon}.png?size=128`;
-      }
-    }
-  } catch {
-    // Sin icono la web cae a la tarjeta con el nombre.
-  }
-
-  iconCache.set(applicationId, {
-    expiresAt: Date.now() + (iconUrl ? ICON_CACHE_TTL_MS : ICON_FAIL_TTL_MS),
-    iconUrl,
-  });
-  return iconUrl;
-}
-
 export async function listGuildGameActivity(input: {
   days: number;
   guildId: string;
@@ -185,8 +139,5 @@ export async function listGuildGameActivity(input: {
     )
     .slice(0, MAX_GAMES);
 
-  const icons = await Promise.all(
-    games.map((game) => resolveApplicationIcon(game.applicationId ?? "")),
-  );
-  return games.map((game, index) => ({ ...game, iconUrl: icons[index] }));
+  return games;
 }

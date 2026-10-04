@@ -294,7 +294,6 @@ export async function getGuildBoosters(
 export type GuildGameActivity = {
   applicationId?: string;
   days: number;
-  iconUrl?: string;
   name: string;
   players: number;
 };

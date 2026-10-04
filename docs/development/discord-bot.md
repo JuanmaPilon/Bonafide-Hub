@@ -93,8 +93,8 @@ PresenceUpdate (intent GuildPresences, ya habilitado)
    queremos una request por cada uno.
 2. Solo aparece quien **comparte su actividad** y está online mientras el bot
    corre. Discord no da historial: el panel arranca vacío y se va llenando.
-3. El icono de cada juego sale del `applicationId` (`GET /applications/{id}` de
-   Discord) y se cachea 12 h.
+3. El API ordena la lista por cantidad de jugadores distintos; la web muestra
+   las portadas (hoy sin arte, con el nombre) en el dashboard.
 
 ### Inscripciones a eventos (Módulo X)
 

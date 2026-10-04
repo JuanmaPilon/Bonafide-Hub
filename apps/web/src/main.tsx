@@ -5579,7 +5579,6 @@ function HomeView({
   boostCount,
   boosters,
   colorFor,
-  gameActivity,
   leaderboard,
   loading,
   onOpenProfile,
@@ -5588,11 +5587,6 @@ function HomeView({
   boostCount: number | null;
   boosters: GuildBooster[];
   colorFor: (level: number) => CSSProperties | undefined;
-  gameActivity: {
-    days: number;
-    games: GuildGameActivity[];
-    source: "activity" | "configured";
-  } | null;
   leaderboard: LeaderboardEntry[];
   loading: boolean;
   // Abre el perfil del miembro clickeado (podio y boosters).
@@ -5600,61 +5594,16 @@ function HomeView({
   username: string | null;
 }) {
   const top5 = leaderboard.slice(0, 5);
-  const games = gameActivity?.games ?? [];
 
   return (
     <div className="home-view">
-      <section className="home-hero home-hero-games">
+      <section className="home-hero">
         <div className="home-hero-art" aria-hidden="true" />
-        <div className="home-hero-copy">
-          <h1 className="brand-gradient">Bienvenido a Bonafide</h1>
-          <p>
-            Hola <strong className="user-name">{username}</strong>, este es el
-            hub de la comunidad.
-          </p>
-        </div>
-        {games.length > 0 ? (
-          <div className="home-games">
-            <span className="home-games-title">
-              {gameActivity?.source === "activity"
-                ? `Lo que se juega en el server · últimos ${gameActivity.days} días`
-                : "Lo que se juega en el server"}
-            </span>
-            <div className="home-games-grid">
-              {games.map((game) => (
-                <article
-                  className="home-game-tile"
-                  key={game.applicationId ?? game.name}
-                  title={game.name}
-                >
-                  <span className="home-game-art">
-                    {game.iconUrl ? (
-                      <img alt="" loading="lazy" src={game.iconUrl} />
-                    ) : (
-                      <span className="home-game-initial">
-                        {game.name.slice(0, 2)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="home-game-name">{game.name}</span>
-                  {gameActivity?.source === "activity" ? (
-                    <span className="home-game-meta">
-                      {game.players}{" "}
-                      {game.players === 1 ? "jugador" : "jugadores"}
-                      {game.days > 1 ? ` · ${game.days} días` : ""}
-                    </span>
-                  ) : null}
-                </article>
-              ))}
-            </div>
-            {gameActivity?.source === "configured" ? (
-              <span className="home-games-note">
-                Todavía no hay actividad registrada: el bot la va sumando desde
-                que esté corriendo.
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        <h1 className="brand-gradient">Bienvenido a Bonafide</h1>
+        <p>
+          Hola <strong className="user-name">{username}</strong>, este es el hub
+          de la comunidad.
+        </p>
       </section>
 
       <section className="panel content-panel home-panel">
@@ -9229,7 +9178,6 @@ function App() {
   useEffect(() => {
     if (activeTab !== "home" || !selectedGuildId) {
       setBoosters([]);
-      setGameActivity(null);
       return;
     }
 
@@ -9246,8 +9194,20 @@ function App() {
         }
       });
 
-    // Juegos del server: los mide el bot con las presencias. Un fallo acá
-    // deja el dashboard sin la grilla, nada más.
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
+  // Juegos del server: los mide el bot con las presencias. Un fallo acá deja
+  // el dashboard sin las portadas, nada más.
+  useEffect(() => {
+    if (activeTab !== "dashboard" || !selectedGuildId) {
+      setGameActivity(null);
+      return;
+    }
+
+    let cancelled = false;
     getGuildGameActivity(selectedGuildId)
       .then((activity) => {
         if (!cancelled) {
@@ -9532,7 +9492,6 @@ function App() {
             boostCount={widgetStatus?.boostCount ?? null}
             boosters={boosters}
             colorFor={levelStyleFor}
-            gameActivity={gameActivity}
             leaderboard={leaderboard}
             loading={loadingGuildData}
             onOpenProfile={openMemberProfile}
@@ -9609,6 +9568,21 @@ function App() {
                     status={widgetStatus}
                     loading={loadingGuildData}
                   />
+
+                  {gameActivity && gameActivity.games.length > 0 ? (
+                    <div className="game-covers">
+                      {gameActivity.games.map((game) => (
+                        <article
+                          className="game-cover"
+                          key={game.applicationId ?? game.name}
+                          title={game.name}
+                        >
+                          <span className="game-cover-art" />
+                          <span className="game-cover-name">{game.name}</span>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
 
                   <div className="leaderboard-panel">
                     <h3>Leaderboard de XP</h3>
