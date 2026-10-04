@@ -8623,7 +8623,9 @@ select.list-order {
 :root[data-theme="light"] .xp-remove-roles,
 :root[data-theme="light"] .rr-rule,
 :root[data-theme="light"] .rr-preview,
-:root[data-theme="light"] .admin-card-footer,
+:root[data-theme="light"] .admin-card-footer {
+  background: var(--surface-card);
+}
 
 /* En claro el halo naranja tiene que ser más suave para no ensuciar. */
 :root[data-theme="light"] .admin-card--owner {
@@ -8644,6 +8646,7 @@ select.list-order {
   border-color: rgba(54, 89, 185, 0.18);
   box-shadow: 0 10px 24px rgba(54, 89, 185, 0.08);
 }
+
 :root[data-theme="light"] .module-toggle,
 :root[data-theme="light"] .suggestion-tier-chip,
 :root[data-theme="light"] .staff-hierarchy-tier {
