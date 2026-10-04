@@ -11,8 +11,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_ENTRIES_PER_REPORT = 500;
 const MAX_GAMES = 12;
 const DISCORD_API_BASE = "https://discord.com/api/v10";
-const COVER_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-const COVER_FAIL_TTL_MS = 10 * 60 * 1000;
+const COVERS_TTL_MS = 24 * 60 * 60 * 1000;
+const COVERS_RETRY_MS = 10 * 60 * 1000;
 
 export type GameActivityEntry = {
   applicationId: string;
@@ -22,7 +22,7 @@ export type GameActivityEntry = {
 
 export type GuildGameActivity = {
   applicationId?: string;
-  // Portada del juego (cover_image de la aplicación, servida por Discord).
+  // Portada del juego (cover_image_hash de la aplicación, servida por Discord).
   coverUrl?: string;
   // Días distintos con actividad registrada.
   days: number;
@@ -38,7 +38,10 @@ type ActivityRow = {
   userId: string;
 };
 
-const coverCache = new Map<string, { coverUrl?: string; expiresAt: number }>();
+type CoverHashes = {
+  hashes: Map<string, string>;
+  expiresAt: number;
+};
 
 // Día UTC (YYYY-MM-DD): el bot manda cambios de presencia, no fechas.
 export function activityDay(now = new Date()): string {
@@ -94,47 +97,73 @@ export async function recordGameActivity(
   return operations.length;
 }
 
-// Portada del juego. `GET /applications/{id}` es público y devuelve
-// `cover_image` (el hash de la portada que Discord muestra en su panel de
-// "Juegos jugados"); el CDN la sirve en app-icons. Se cachea por app —también
-// los fallos— para que el dashboard no dependa de Discord en cada request.
+// Portadas. `GET /applications/{id}` no sirve: Discord lo cerró (401 sin auth,
+// 403 con token de bot). La única vía abierta es `GET /applications/detectable`,
+// la lista de apps que Discord reconoce, que trae `cover_image_hash` por app;
+// el CDN la sirve en app-icons. Es UN request de ~13 MB cada 24 h y se arma un
+// índice id -> hash, así que el dashboard no depende de Discord por request.
+let covers: CoverHashes | null = null;
+let coversInFlight: Promise<Map<string, string>> | null = null;
+
+async function fetchCoverHashes(): Promise<Map<string, string>> {
+  const token = env.DISCORD_BOT_TOKEN?.trim();
+  const hashes = new Map<string, string>();
+  try {
+    const response = await fetch(`${DISCORD_API_BASE}/applications/detectable`, {
+      headers: token ? { authorization: `Bot ${token}` } : {},
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      throw new Error(`detectable respondió ${response.status}`);
+    }
+    const applications = (await response.json()) as {
+      cover_image_hash?: string | null;
+      id?: string;
+    }[];
+    for (const application of applications) {
+      if (application.id && application.cover_image_hash) {
+        hashes.set(application.id, application.cover_image_hash);
+      }
+    }
+    covers = { expiresAt: Date.now() + COVERS_TTL_MS, hashes };
+  } catch {
+    // Sin lista no hay portadas, pero los juegos se muestran igual. Si había
+    // una lista vieja, se conserva y se reintenta dentro de un rato.
+    covers = {
+      expiresAt: Date.now() + COVERS_RETRY_MS,
+      hashes: covers?.hashes ?? hashes,
+    };
+  }
+  return covers.hashes;
+}
+
+function refreshCoverHashes(): Promise<Map<string, string>> {
+  coversInFlight ??= fetchCoverHashes().finally(() => {
+    coversInFlight = null;
+  });
+  return coversInFlight;
+}
+
+function loadCoverHashes(): Promise<Map<string, string>> {
+  if (covers && covers.expiresAt > Date.now()) {
+    return Promise.resolve(covers.hashes);
+  }
+  if (covers) {
+    // Vencida: se devuelve la que hay y se refresca en segundo plano, para no
+    // clavar el request del dashboard esperando un JSON de 13 MB.
+    void refreshCoverHashes();
+    return Promise.resolve(covers.hashes);
+  }
+  return refreshCoverHashes();
+}
+
 async function resolveApplicationCover(
   applicationId: string,
 ): Promise<string | undefined> {
-  const cached = coverCache.get(applicationId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.coverUrl;
-  }
-
-  const token = env.DISCORD_BOT_TOKEN?.trim();
-  let coverUrl: string | undefined;
-  try {
-    const response = await fetch(
-      `${DISCORD_API_BASE}/applications/${encodeURIComponent(applicationId)}`,
-      {
-        headers: token
-          ? { accept: "application/json", authorization: `Bot ${token}` }
-          : { accept: "application/json" },
-        signal: AbortSignal.timeout(5_000),
-      },
-    );
-    if (response.ok) {
-      const application = (await response.json()) as {
-        cover_image?: string | null;
-      };
-      if (application.cover_image) {
-        coverUrl = `https://cdn.discordapp.com/app-icons/${applicationId}/${application.cover_image}.png?size=256`;
-      }
-    }
-  } catch {
-    // Sin portada la tarjeta queda con el nombre.
-  }
-
-  coverCache.set(applicationId, {
-    coverUrl,
-    expiresAt: Date.now() + (coverUrl ? COVER_CACHE_TTL_MS : COVER_FAIL_TTL_MS),
-  });
-  return coverUrl;
+  const hash = (await loadCoverHashes()).get(applicationId);
+  return hash
+    ? `https://cdn.discordapp.com/app-icons/${applicationId}/${hash}.png?size=256`
+    : undefined;
 }
 
 export async function listGuildGameActivity(input: {

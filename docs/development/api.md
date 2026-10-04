@@ -165,16 +165,22 @@ Discord no expone los Server Insights por API, así que la agregación la hace e
 bot con `PresenceUpdate` (intent `GuildPresences`) y el API guarda una fila por
 persona + aplicación + **día** en `member_game_activity`. El endpoint devuelve
 `{ days, games: [{ applicationId, days, name, players, coverUrl }], source }`,
-ordenado por jugadores distintos (la web solo muestra el nombre; el orden es la
-señal de qué se juega más). `source: "configured"` significa que todavía no hay
+ordenado por jugadores distintos: la grilla del dashboard muestra la portada y
+el nombre, y el orden es la señal de qué se juega más. `source: "configured"`
+significa que todavía no hay
 actividad registrada y se están mostrando los juegos configurados del módulo de
 eventos.
 
-La portada (`coverUrl`) sale de `GET /applications/{applicationId}`
-(`cover_image`, la que Discord usa en su panel de "Juegos jugados") y se sirve
-por el CDN de Discord en `app-icons/{applicationId}/{cover_image}.png`. No es
-dato de la guild: se cachea por aplicación 12 h (y 10 min los fallos) y, si la
-aplicación no tiene portada, el juego va sin `coverUrl`.
+La portada (`coverUrl`) es la que Discord muestra en su panel de "Juegos
+jugados". No se puede pedir por app: `GET /applications/{id}` está cerrado (401
+sin auth, 403 con token de bot). La única vía abierta es
+`GET /applications/detectable` — la lista de apps que Discord reconoce, sin auth
+— que trae `cover_image_hash` por app y se sirve por el CDN en
+`app-icons/{applicationId}/{cover_image_hash}.png`. Es un request de ~13 MB, así
+que el API arma un índice `applicationId -> hash` en memoria con TTL de 24 h (y
+lo refresca en segundo plano cuando vence, para no clavar el request del
+dashboard). Si la app no está en la lista o no tiene portada, el juego va sin
+`coverUrl` y la grilla muestra el nombre.
 
 XP:
 

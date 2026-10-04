@@ -4462,9 +4462,8 @@ a:hover {
   display: grid;
   width: 100%;
   place-items: center;
-  /* Proporción de las portadas de Discord (medida en su panel de "Juegos
-     jugados"): casi cuadrada, un poco más alta que ancha. */
-  aspect-ratio: 9 / 10;
+  /* Las portadas de Discord son cuadradas (1:1). */
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 12px;
   background: rgba(134, 158, 214, 0.08);
