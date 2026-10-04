@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { RaidLog } from "./api";
+import type { RaidLog, RaidLogAnalysis } from "./api";
 
 type Fight = { kill: boolean; name: string; percent?: number };
 type NightState = "draft" | "failed" | "pending" | "posted";
@@ -77,12 +77,12 @@ function toNights(logs: RaidLog[]): Night[] {
       live,
       parts,
       state: posted
-          ? stale && !live
-            ? "pending"
-            : "posted"
-          : failed
-            ? "failed"
-            : "draft",
+        ? stale && !live
+          ? "pending"
+          : "posted"
+        : failed
+          ? "failed"
+          : "draft",
       title: parts[0]?.title || "Log de raid",
     };
   });
@@ -104,6 +104,10 @@ function monthOf(date: Date | null): { key: string; label: string } {
 
 function percentLabel(value: number): string {
   return `${Math.round(value * 10) / 10}%`;
+}
+
+function compactNumber(value: number): string {
+  return Math.round(value).toLocaleString("es-AR");
 }
 
 function bossBreakdown(fights: Fight[]): Array<{
@@ -162,6 +166,7 @@ function FightStrip({
 export function RaidLogsBoard({
   logs,
   manage,
+  onAnalyze,
   onHide,
   onPublish,
   onScan,
@@ -171,6 +176,7 @@ export function RaidLogsBoard({
 }: {
   logs: RaidLog[];
   manage?: ReactNode;
+  onAnalyze?: (log: RaidLog) => Promise<RaidLogAnalysis>;
   onHide?: (parts: RaidLog[]) => void;
   onPublish?: (log: RaidLog) => Promise<void>;
   onScan?: () => void;
@@ -183,6 +189,17 @@ export function RaidLogsBoard({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [showManage, setShowManage] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [analysisByNight, setAnalysisByNight] = useState<
+    Record<string, RaidLogAnalysis>
+  >({});
+  const [analysisOpenKey, setAnalysisOpenKey] = useState<string | null>(null);
+  const [analysisLoadingKey, setAnalysisLoadingKey] = useState<string | null>(
+    null,
+  );
+  const [analysisError, setAnalysisError] = useState<{
+    key: string;
+    message: string;
+  } | null>(null);
 
   const nights = useMemo(
     () =>
@@ -250,6 +267,9 @@ export function RaidLogsBoard({
     [selected],
   );
   const manageOpen = Boolean(manage) && (showManage || nights.length === 0);
+  const selectedAnalysis = selected ? analysisByNight[selected.key] : undefined;
+  const selectedAnalysisError =
+    selected?.key === analysisError?.key ? analysisError.message : undefined;
 
   const runAction = (
     night: Night,
@@ -257,6 +277,34 @@ export function RaidLogsBoard({
   ): void => {
     setBusyKey(night.key);
     void action(night.parts[0]).finally(() => setBusyKey(null));
+  };
+
+  const toggleAnalysis = async (night: Night): Promise<void> => {
+    if (analysisOpenKey === night.key) {
+      setAnalysisOpenKey(null);
+      return;
+    }
+    setAnalysisOpenKey(night.key);
+    setAnalysisError(null);
+    if (analysisByNight[night.key] || !onAnalyze) {
+      return;
+    }
+
+    setAnalysisLoadingKey(night.key);
+    try {
+      const analysis = await onAnalyze(night.parts[0]);
+      setAnalysisByNight((current) => ({ ...current, [night.key]: analysis }));
+    } catch (error) {
+      setAnalysisError({
+        key: night.key,
+        message:
+          error instanceof Error
+            ? error.message
+            : "No se pudo analizar la raid.",
+      });
+    } finally {
+      setAnalysisLoadingKey(null);
+    }
   };
 
   const chips: Array<{ count: number; key: Filter; label: string }> = [
@@ -512,6 +560,189 @@ export function RaidLogsBoard({
                     ))}
                   </div>
                 </div>
+
+                {onAnalyze ? (
+                  <div className="rlb-analysis-control">
+                    <button
+                      aria-expanded={analysisOpenKey === selected.key}
+                      className="ghost-button"
+                      disabled={analysisLoadingKey === selected.key}
+                      onClick={() => void toggleAnalysis(selected)}
+                      type="button"
+                    >
+                      {analysisLoadingKey === selected.key
+                        ? "Analizando…"
+                        : analysisOpenKey === selected.key
+                          ? "Ocultar análisis"
+                          : "Ver análisis"}
+                    </button>
+                    {analysisOpenKey === selected.key ? (
+                      <section aria-live="polite" className="rlb-analysis">
+                        {analysisLoadingKey === selected.key ? (
+                          <div className="rlb-analysis-loading">
+                            Consultando Warcraft Logs…
+                          </div>
+                        ) : selectedAnalysisError ? (
+                          <div className="rlb-error">⚠️ {selectedAnalysisError}</div>
+                        ) : selectedAnalysis ? (
+                          <>
+                            <div className="rlb-analysis-head">
+                              <div>
+                                <h4>Análisis de la raid</h4>
+                                <span>
+                                  Actualizado {new Date(selectedAnalysis.generatedAt).toLocaleTimeString("es-AR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                              <span>{selectedAnalysis.encounters.length} bosses</span>
+                            </div>
+
+                            <div className="rlb-analysis-spotlights">
+                              <div className="rlb-spotlight damage">
+                                <span>Mayor DPS promedio</span>
+                                <strong>
+                                  {selectedAnalysis.averageDps[0]?.name ?? "—"}
+                                </strong>
+                                <span>
+                                  {selectedAnalysis.averageDps[0]
+                                    ? `${compactNumber(selectedAnalysis.averageDps[0].averageDps)} DPS`
+                                    : "Sin datos de daño"}
+                                </span>
+                              </div>
+                              <div className="rlb-spotlight deaths">
+                                <span>Más muertes</span>
+                                <strong>
+                                  {selectedAnalysis.deathsByPlayer[0]?.name ?? "—"}
+                                </strong>
+                                <span>
+                                  {selectedAnalysis.deathsByPlayer[0]
+                                    ? `${selectedAnalysis.deathsByPlayer[0].deaths} muertes`
+                                    : "Sin muertes registradas"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="rlb-analysis-grid">
+                              <div className="rlb-analysis-section">
+                                <h5>DPS promedio por encuentro</h5>
+                                {selectedAnalysis.averageDps.length > 0 ? (
+                                  selectedAnalysis.averageDps
+                                    .slice(0, 8)
+                                    .map((player, index) => {
+                                      const maxDps =
+                                        selectedAnalysis.averageDps[0]
+                                          ?.averageDps ?? 1;
+                                      return (
+                                        <div
+                                          className="rlb-analysis-row"
+                                          key={player.name}
+                                        >
+                                          <span className="rlb-rank">
+                                            {index + 1}
+                                          </span>
+                                          <span className="rlb-analysis-player">
+                                            <span>{player.name}</span>
+                                            <span className="rlb-bar-track">
+                                              <span
+                                                className="rlb-bar damage"
+                                                style={{
+                                                  width: `${Math.max(3, (player.averageDps / maxDps) * 100)}%`,
+                                                }}
+                                              />
+                                            </span>
+                                          </span>
+                                          <strong>
+                                            {compactNumber(player.averageDps)}
+                                          </strong>
+                                        </div>
+                                      );
+                                    })
+                                ) : (
+                                  <p className="rlb-analysis-empty">
+                                    Warcraft Logs no devolvió datos de daño.
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="rlb-analysis-section">
+                                <h5>Muertes</h5>
+                                <div className="rlb-analysis-total">
+                                  <strong>{selectedAnalysis.totalDeaths}</strong>
+                                  <span>en toda la raid</span>
+                                </div>
+                                {selectedAnalysis.deathsByPlayer.length > 0 ? (
+                                  <div className="rlb-analysis-list">
+                                    {selectedAnalysis.deathsByPlayer
+                                      .slice(0, 6)
+                                      .map((player) => (
+                                        <div
+                                          className="rlb-analysis-list-row"
+                                          key={player.name}
+                                        >
+                                          <span>{player.name}</span>
+                                          <strong>{player.deaths}</strong>
+                                        </div>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  <p className="rlb-analysis-empty">
+                                    No se registraron muertes.
+                                  </p>
+                                )}
+                                {selectedAnalysis.deathsByAbility.length > 0 ? (
+                                  <div className="rlb-death-causes">
+                                    <span className="rlb-label">
+                                      Causas principales
+                                    </span>
+                                    {selectedAnalysis.deathsByAbility
+                                      .slice(0, 5)
+                                      .map((cause) => (
+                                        <span
+                                          className="rlb-cause-chip"
+                                          key={cause.ability}
+                                        >
+                                          {cause.ability} · {cause.deaths}
+                                        </span>
+                                      ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {selectedAnalysis.encounters.length > 0 ? (
+                              <div className="rlb-analysis-section">
+                                <h5>Por boss</h5>
+                                <div className="rlb-encounters">
+                                  {selectedAnalysis.encounters.map((encounter) => (
+                                    <div
+                                      className="rlb-encounter"
+                                      key={`${encounter.name}:${encounter.durationSeconds}`}
+                                    >
+                                      <span
+                                        className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
+                                      >
+                                        {encounter.kill ? "Kill" : "Wipe"}
+                                      </span>
+                                      <strong>{encounter.name}</strong>
+                                      <span>{encounter.deaths} muertes</span>
+                                      <span>
+                                        {encounter.topDps
+                                          ? `${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
+                                          : "Sin datos de daño"}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </section>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {onPublish || onUpdate || onHide ? (
                   <div className="rlb-detail-actions">

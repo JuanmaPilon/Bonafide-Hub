@@ -93,6 +93,26 @@ export type RaidLog = {
   zone?: number | null;
 };
 
+export type RaidLogAnalysis = {
+  averageDps: Array<{
+    averageDps: number;
+    encounters: number;
+    name: string;
+    totalDamage: number;
+  }>;
+  deathsByAbility: Array<{ ability: string; deaths: number }>;
+  deathsByPlayer: Array<{ deaths: number; name: string }>;
+  encounters: Array<{
+    deaths: number;
+    durationSeconds: number;
+    kill: boolean;
+    name: string;
+    topDps?: { dps: number; name: string };
+  }>;
+  generatedAt: string;
+  totalDeaths: number;
+};
+
 export type KarutaCard = {
   cardName?: string;
   code: string;
@@ -904,6 +924,18 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
     { method: "GET" },
   );
   return data.logs;
+}
+
+export async function getRaidLogAnalysis(
+  guildId: string,
+  logId: string,
+): Promise<RaidLogAnalysis> {
+  const data = await requestJson<{ analysis: RaidLogAnalysis }>(
+    `/guilds/${guildId}/raid-logs/${encodeURIComponent(logId)}/analysis`,
+    { method: "GET" },
+    90_000,
+  );
+  return data.analysis;
 }
 
 export async function createRaidLog(

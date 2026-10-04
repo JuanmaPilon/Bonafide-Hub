@@ -59,6 +59,7 @@ import {
   publishRaidLogEntry,
   updateRaidLogEntry,
 } from "./services/raid-logs-publisher.js";
+import { analyzeRaidLogNight } from "./services/raid-logs-analysis.js";
 import {
   burnKarutaCard,
   deleteKarutaAlbum,
@@ -4901,6 +4902,39 @@ export function buildApp() {
       logs,
     };
   });
+
+  app.get(
+    "/guilds/:guildId/raid-logs/:logId/analysis",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; logId?: string };
+      if (!params.guildId || !params.logId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!isGuildMember(session, params.guildId)) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      try {
+        const analysis = await analyzeRaidLogNight(
+          params.guildId,
+          params.logId,
+        );
+        return { ok: true, guildId: params.guildId, analysis };
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "No se pudo analizar el log.";
+        return reply.code(502).send({ ok: false, error: message });
+      }
+    },
+  );
 
   // Logs ocultos: para restaurarlos o borrarlos definitivamente (staff).
   app.get("/guilds/:guildId/raid-logs/hidden", async (request, reply) => {

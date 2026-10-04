@@ -32,6 +32,7 @@ import {
   getGuildTextChannels,
   getGuildVoiceChannels,
   getGuildWidgetStatus,
+  getRaidLogAnalysis,
   getLeaderboard,
   getMe,
   getMemberProfile,
@@ -119,6 +120,7 @@ import {
   type MemberProfile,
   type PublicLeaderboardEntry,
   type RaidLog,
+  type RaidLogAnalysis,
   type KarutaCard,
   type KarutaAlbum,
   type XpConfig,
@@ -11301,6 +11303,12 @@ function App() {
                       ) : (
                         <RaidLogsBoard
                           logs={raidLogs}
+                          onAnalyze={
+                            selectedGuildId
+                              ? (log) =>
+                                  getRaidLogAnalysis(selectedGuildId, log.id)
+                              : undefined
+                          }
                           onHide={
                             canManageRaidLogs ? requestHideRaidLog : undefined
                           }

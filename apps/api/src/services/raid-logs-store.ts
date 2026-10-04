@@ -179,7 +179,7 @@ export function extractReportCode(input: string): string | null {
 // anti-bot de Cloudflare, que bloquea las requests desde IPs de datacenter
 // (Railway) con 404 aunque el report sea público.
 async function fetchWclReport(code: string): Promise<WclReport> {
-  const data = (await fetchV1Json(
+  const data = (await fetchWarcraftLogsV1Json(
     `/report/fights/${encodeURIComponent(code)}`,
   )) as WclReport;
 
@@ -492,7 +492,7 @@ export function buildRaidLogMessage(logs: RaidLog[]): string {
 
 const WCL_V1_BASE = "https://www.warcraftlogs.com/v1";
 
-async function fetchV1Json(path: string): Promise<unknown> {
+export async function fetchWarcraftLogsV1Json(path: string): Promise<unknown> {
   const apiKey = env.WARCRAFT_LOGS_API_KEY;
   if (!apiKey) {
     throw new Error("WARCRAFT_LOGS_API_KEY no está configurado");
@@ -526,7 +526,7 @@ async function getZones(): Promise<Map<number, WclZone>> {
   if (zonesCache) {
     return zonesCache;
   }
-  const data = (await fetchV1Json("/zones")) as WclZone[];
+  const data = (await fetchWarcraftLogsV1Json("/zones")) as WclZone[];
   zonesCache = new Map((data ?? []).map((zone) => [Number(zone.id), zone]));
   return zonesCache;
 }
@@ -547,7 +547,7 @@ async function fetchGuildReports(
 ): Promise<WclCharacterReport[]> {
   // La API v1 NO tiene /reports/character (devuelve 404). El endpoint real
   // para listar reports es /reports/guild/{guild}/{server}/{region}.
-  const data = (await fetchV1Json(
+  const data = (await fetchWarcraftLogsV1Json(
     `/reports/guild/${encodeURIComponent(guild)}/${encodeURIComponent(server)}/${encodeURIComponent(region)}`,
   )) as WclCharacterReport[];
   return Array.isArray(data) ? data : [];
