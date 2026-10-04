@@ -1820,6 +1820,7 @@ export type EventTemplateSummary = {
   label: string;
   // Plantilla de encuesta: además del aviso se publica una encuesta de Discord.
   poll: boolean;
+  roles: EventRoleOption[];
 };
 
 export async function getEventTemplates(

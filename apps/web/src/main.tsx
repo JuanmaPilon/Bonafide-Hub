@@ -11548,12 +11548,35 @@ function App() {
                           </p>
                         ) : (
                           eventTemplates.map((template) => (
-                            <div
+                            <details
                               className="event-template-picker"
                               key={template.key}
                             >
-                              <strong>{template.label}</strong>
-                            </div>
+                              <summary>
+                                <strong>{template.label}</strong>
+                                <span
+                                  className="admin-acc-chevron"
+                                  aria-hidden="true"
+                                >
+                                  ▸
+                                </span>
+                              </summary>
+                              <div className="event-template-roles">
+                                {template.roles.map((role) => (
+                                  <span
+                                    className="event-template-role"
+                                    key={role.key}
+                                  >
+                                    <EventRoleEmoji
+                                      role={role.key}
+                                      roles={template.roles}
+                                      size={18}
+                                    />
+                                    {role.label}
+                                  </span>
+                                ))}
+                              </div>
+                            </details>
                           ))
                         )}
                       </div>

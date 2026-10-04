@@ -217,10 +217,12 @@ export function summarizeEventTemplate(template: EventTemplate): {
   key: string;
   label: string;
   poll: boolean;
+  roles: EventRoleOption[];
 } {
   return {
     key: template.key,
     label: template.label,
     poll: template.poll === true,
+    roles: template.roles,
   };
 }

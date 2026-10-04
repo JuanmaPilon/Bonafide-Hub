@@ -5078,9 +5078,55 @@ select.list-order {
 
 /* Tipos de evento disponibles. */
 .event-template-picker {
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(134, 158, 214, 0.18);
-  font-size: 0.92rem;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(12, 19, 37, 0.35);
+  border: 1px solid rgba(134, 158, 214, 0.18);
+}
+
+.event-template-picker > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.event-template-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-template-picker > summary .admin-acc-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.event-template-picker[open] > summary .admin-acc-chevron {
+  transform: rotate(90deg);
+}
+
+.event-template-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.event-template-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.3);
+  font-size: 0.85rem;
+}
+
+:root[data-theme="light"] .event-template-picker {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(67, 81, 109, 0.18);
 }
 
 .spec-emoji-grid {
