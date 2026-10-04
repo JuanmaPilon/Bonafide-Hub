@@ -2491,11 +2491,9 @@ function AdminMappingsSection({
       </summary>
       <div className="admin-card-body">
         {groups.map((group) => (
-          <details
-            className="mapping-group"
-            key={group.key}
-            open={group.rows.length <= 4}
-          >
+          // Todos los grupos arrancan colapsados: son 4 catálogos y abrirlos
+          // todos deja el panel larguísimo.
+          <details className="mapping-group" key={group.key}>
             <summary className="mapping-group-header">
               <span className="mapping-group-title">{group.label}</span>
               <span className="mapping-group-count">
@@ -4823,12 +4821,6 @@ const TAB_SECTIONS: Partial<
       tier: "owner",
     },
     {
-      key: "comunicados",
-      label: "Comunicados",
-      module: "comunicados",
-      tier: "subofficer",
-    },
-    {
       key: "karpindomo",
       label: "Karpindomo",
       module: "daily",
@@ -6022,11 +6014,7 @@ function App() {
   const [karutaSearch, setKarutaSearch] = useState("");
   const [karutaCommandSearch, setKarutaCommandSearch] = useState("");
   const [karutaRarity, setKarutaRarity] = useState<KarutaRarityFilter>("all");
-  // Listas del panel: mismas dos piezas que las tabs (buscador + orden) y, en
-  // los comunicados, los chips de etiqueta.
-  const [commAdminSearch, setCommAdminSearch] = useState("");
-  const [commAdminOrder, setCommAdminOrder] = useState<ListOrder>("newest");
-  const [commAdminTagFilter, setCommAdminTagFilter] = useState<string[]>([]);
+  // Listas del panel: mismas dos piezas que las tabs (buscador + orden).
   const [dailySearch, setDailySearch] = useState("");
   const [dailyOrder, setDailyOrder] = useState<ListOrder>("newest");
   const [auditSearch, setAuditSearch] = useState("");
@@ -6327,28 +6315,23 @@ function App() {
   // ── Listas del panel Admin, ranking y colecciones ─────────────────
   // Mismo mecanismo que las tabs, pero acá abajo porque dependen de estados
   // que se declaran en este bloque (leaderboard, auditoría, comunicados).
-  // Comunicados del panel Admin: chips por etiqueta (con su color) + buscador.
-  const commAdminTagOptions = useMemo(
-    () => tagOptionsFrom(communications),
+
+  // Borradores: solo los ve quien puede gestionar comunicados, porque
+  // `communications` se pide únicamente con ese permiso (si no, queda vacía).
+  // Se muestran arriba del tablero (son lo que falta publicar) y quedan fuera
+  // del orden del tablero y del arrastre.
+  const draftComunicados = useMemo(
+    () => communications.filter((comm) => !comm.publishedAt),
     [communications],
   );
-  const visibleAdminCommunications = useMemo(() => {
-    const byTag =
-      commAdminTagFilter.length === 0
-        ? communications
-        : communications.filter((comm) =>
-            matchesTagFilter(comm.tags ?? [], commAdminTagFilter),
-          );
-    const searched = byTag.filter((comm) =>
-      matchesSearch(`${comm.title} ${comm.content}`, commAdminSearch),
-    );
-    return sortByOrder(
-      searched,
-      commAdminOrder,
-      (comm) => comm.updatedAt,
-      (comm) => comm.title,
-    );
-  }, [commAdminOrder, commAdminSearch, commAdminTagFilter, communications]);
+
+  // Busca por slug en todo lo que la persona puede ver: si no incluyera los
+  // borradores, abrir uno desde el tablero no encontraría nada y el slug se
+  // limpiaría solo.
+  const slugComunicados = useMemo(
+    () => [...draftComunicados, ...published],
+    [draftComunicados, published],
+  );
 
   // Registro de auditoría: buscador por autor/acción/detalle (la acción se
   // busca también por su etiqueta legible, que es lo que se ve).
@@ -6380,27 +6363,42 @@ function App() {
     [leaderboard, leaderboardSearch],
   );
 
-  // Etiquetas usadas en los comunicados publicados (alimentan el filtro).
-  const publishedTagOptions = useMemo(
-    () => tagOptionsFrom(published),
-    [published],
+  // Etiquetas usadas en los comunicados del tablero (alimentan el filtro).
+  const boardTagOptions = useMemo(
+    () => tagOptionsFrom([...published, ...draftComunicados]),
+    [draftComunicados, published],
   );
 
-  // Comunicados visibles: filtro por etiqueta + buscador + orden.
+  // Comunicados del tablero que pasan el filtro de etiqueta y el buscador.
+  const matchesComunicadoFilters = useMemo(() => {
+    return (comm: Communication): boolean =>
+      matchesTagFilter(comm.tags ?? [], comunicadoTagFilter) &&
+      matchesSearch(`${comm.title} ${comm.content}`, comunicadoSearch);
+  }, [comunicadoSearch, comunicadoTagFilter]);
+
+  // Orden del tablero: el que el staff armó arrastrando (ya viene del API).
   const visiblePublished = useMemo(() => {
-    const filtered = published.filter((comm) => {
-      if (!matchesTagFilter(comm.tags ?? [], comunicadoTagFilter)) {
-        return false;
-      }
-      return matchesSearch(`${comm.title} ${comm.content}`, comunicadoSearch);
-    });
+    const filtered = published.filter(matchesComunicadoFilters);
     return sortByOrder(
       filtered,
       comunicadoOrder,
       (comm) => comm.publishedAt,
       (comm) => comm.title,
     );
-  }, [comunicadoOrder, comunicadoSearch, comunicadoTagFilter, published]);
+  }, [comunicadoOrder, matchesComunicadoFilters, published]);
+
+  // Borradores con el mismo filtro. El orden propio del tablero (`position`) no
+  // los toca: se listan por fecha, del más nuevo al más viejo.
+  const visibleDrafts = useMemo(
+    () =>
+      sortByOrder(
+        draftComunicados.filter(matchesComunicadoFilters),
+        "newest",
+        (comm) => comm.updatedAt,
+        (comm) => comm.title,
+      ),
+    [draftComunicados, matchesComunicadoFilters],
+  );
   const [landingPreview, setLandingPreview] = useState<
     PublicLeaderboardEntry[]
   >([]);
@@ -6753,8 +6751,12 @@ function App() {
     };
   }, [selectedGuildId]);
 
+  const canManageComunicados = canAccess("comunicados");
+
   useEffect(() => {
-    if (!selectedGuildId || !adminEnabled) {
+    // La lista completa (con borradores) la pide quien puede gestionarlos: es
+    // la que alimenta los borradores del tablero del hub.
+    if (!selectedGuildId || !canManageComunicados) {
       setCommunications([]);
       return;
     }
@@ -6769,7 +6771,8 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [selectedGuildId, adminEnabled]);
+    // `canAccess` se recrea en cada render: la dependencia es el booleano.
+  }, [selectedGuildId, canManageComunicados]);
 
   useEffect(() => {
     if (!selectedGuildId) {
@@ -7875,8 +7878,9 @@ function App() {
 
   // Comunicado seleccionado por URL (#/comunicados/<slug>).
   const currentComunicado = comunicadoSlug
-    ? (published.find((comm) => slugifyTitle(comm.title) === comunicadoSlug) ??
-      null)
+    ? (slugComunicados.find(
+        (comm) => slugifyTitle(comm.title) === comunicadoSlug,
+      ) ?? null)
     : null;
 
   // Si el editor está abierto sobre un comunicado ya publicado, el modal avisa
@@ -7908,25 +7912,25 @@ function App() {
 
   // Un slug de la URL que no corresponde a ningún comunicado (enlace viejo, o
   // el comunicado que se acaba de borrar) vuelve a la lista en vez de dejar la
-  // pestaña vacía. Se espera a que termine la carga: mientras `published` está
-  // vacío ningún slug resuelve.
+  // pestaña vacía. Se espera a que termine la carga: mientras la lista está
+  // vacía ningún slug resuelve.
   useEffect(() => {
     if (!comunicadoSlug || publishedLoading) {
       return;
     }
-    const exists = published.some(
+    const exists = slugComunicados.some(
       (comm) => slugifyTitle(comm.title) === comunicadoSlug,
     );
     if (!exists) {
       setComunicadoSlug(null);
     }
-  }, [comunicadoSlug, published, publishedLoading]);
+  }, [comunicadoSlug, publishedLoading, slugComunicados]);
 
   // Arrastre de las tarjetas del tablero. Solo el staff reordena: el orden es
   // uno solo para toda la guild, no el de cada uno. Y solo con el orden del
   // tablero activo: con otro orden la tarjeta no queda donde se suelta.
   const canReorderCommunications =
-    canAccess("comunicados") && comunicadoOrder === "board";
+    canManageComunicados && comunicadoOrder === "board";
   const [draggedComunicadoId, setDraggedComunicadoId] = useState<string | null>(
     null,
   );
@@ -7976,6 +7980,88 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [comunicadoSlug]);
+
+  // Tarjeta del tablero. Los borradores van sin arrastre: el orden del tablero
+  // es el de lo publicado, y mover uno lo dejaría en un lugar que el resto no
+  // ve.
+  function renderComunicadoNote(comm: Communication, isDraft: boolean) {
+    const draggable = canReorderCommunications && !isDraft;
+    return (
+      <button
+        className={[
+          "comunicado-note",
+          draggable ? "comunicado-note--draggable" : "",
+          isDraft ? "comunicado-note--draft" : "",
+          draggedComunicadoId === comm.id ? "comunicado-note--dragging" : "",
+          dragOverComunicadoId === comm.id && draggedComunicadoId !== comm.id
+            ? "comunicado-note--over"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        draggable={draggable}
+        key={comm.id}
+        onClick={() => openComunicado(comm)}
+        onDragEnd={() => {
+          setDraggedComunicadoId(null);
+          setDragOverComunicadoId(null);
+        }}
+        onDragOver={(event) => {
+          if (!draggable) {
+            return;
+          }
+          // Sin esto el navegador no permite soltar acá.
+          event.preventDefault();
+          setDragOverComunicadoId(comm.id);
+        }}
+        onDragStart={() => setDraggedComunicadoId(comm.id)}
+        onDrop={(event) => {
+          event.preventDefault();
+          void dropComunicado(comm.id);
+        }}
+        type="button"
+      >
+        <span className="comunicado-note-title">{comm.title}</span>
+        <ComunicadoTags tags={comm.tags ?? []} />
+        <span className="comunicado-note-excerpt">
+          {comunicadoExcerpt(comm.content)}
+        </span>
+        <span className="comunicado-note-foot">
+          {isDraft ? (
+            <>
+              <span className="comunicado-note-draft">Borrador</span> ·{" "}
+            </>
+          ) : null}
+          {[
+            comm.publishedAt ? formatDate24(comm.publishedAt) : null,
+            comm.authorName,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      </button>
+    );
+  }
+
+  const newComunicadoButton = canManageComunicados ? (
+    <div className="comunicado-toolbar">
+      <button
+        className="primary-button"
+        onClick={() =>
+          setCommEditor({
+            id: null,
+            title: "",
+            content: "",
+            channelId: "",
+            tags: [],
+          })
+        }
+        type="button"
+      >
+        Nuevo comunicado
+      </button>
+    </div>
+  ) : null;
 
   // Abre el editor del comunicado desde el hub: es el mismo modal que usa el
   // panel Admin, así no hay que ir hasta Admin para corregir un comunicado.
@@ -8080,7 +8166,7 @@ function App() {
     if (!selectedGuildId) {
       return;
     }
-    const target = published.find((comm) => comm.id === id);
+    const target = slugComunicados.find((comm) => comm.id === id);
     try {
       await deleteCommunication(selectedGuildId, id);
       pushToast("Comunicado eliminado.", "success");
@@ -10508,178 +10594,6 @@ function App() {
                     </details>
                   ) : null}
 
-                  {sectionFor("admin") === "comunicados" &&
-                  canAccess("comunicados") ? (
-                    <details
-                      open
-                      className="admin-card admin-card-acc admin-card--subofficer"
-                    >
-                      <summary className="admin-card-header admin-acc-header">
-                        <div>
-                          <h3>
-                            Comunicados{" "}
-                            <span className="admin-tier-badge tier-subofficer">
-                              Sub Officer
-                            </span>
-                          </h3>
-                        </div>
-                        <span className="admin-acc-chevron" aria-hidden="true">
-                          ▸
-                        </span>
-                      </summary>
-                      <div className="admin-card-body">
-                        <div className="plantillas-actions">
-                          <button
-                            className="primary-button"
-                            onClick={() =>
-                              setCommEditor({
-                                id: null,
-                                title: "",
-                                content: "",
-                                channelId: "",
-                                tags: [],
-                              })
-                            }
-                            type="button"
-                          >
-                            Nuevo comunicado
-                          </button>
-                        </div>
-                        {communications.length > 0 ? (
-                          <ListFilterBar
-                            onOrderChange={setCommAdminOrder}
-                            onSearchChange={setCommAdminSearch}
-                            order={commAdminOrder}
-                            placeholder="Buscar comunicado…"
-                            search={commAdminSearch}
-                          >
-                            <button
-                              className={`event-filter-chip${commAdminTagFilter.length === 0 ? " active" : ""}`}
-                              onClick={() => setCommAdminTagFilter([])}
-                              type="button"
-                            >
-                              Todos
-                            </button>
-                            {commAdminTagOptions.map((tag) => {
-                              const key = tag.label.toLowerCase();
-                              return (
-                                <EventTagFilterChip
-                                  active={commAdminTagFilter.includes(key)}
-                                  color={tag.color}
-                                  key={tag.label}
-                                  label={tag.label}
-                                  onToggle={() =>
-                                    setCommAdminTagFilter((current) =>
-                                      current.includes(key)
-                                        ? current.filter(
-                                            (entry) => entry !== key,
-                                          )
-                                        : [...current, key],
-                                    )
-                                  }
-                                />
-                              );
-                            })}
-                            {communications.some(
-                              (comm) => (comm.tags ?? []).length === 0,
-                            ) ? (
-                              <button
-                                className={`event-filter-chip${commAdminTagFilter.includes(EVENT_TAG_NONE) ? " active" : ""}`}
-                                onClick={() =>
-                                  setCommAdminTagFilter((current) =>
-                                    current.includes(EVENT_TAG_NONE)
-                                      ? current.filter(
-                                          (entry) => entry !== EVENT_TAG_NONE,
-                                        )
-                                      : [...current, EVENT_TAG_NONE],
-                                  )
-                                }
-                                type="button"
-                              >
-                                Sin etiqueta
-                              </button>
-                            ) : null}
-                          </ListFilterBar>
-                        ) : null}
-                        {communications.length === 0 ? (
-                          <div className="empty-state comunicados-empty">
-                            <p>No hay comunicados todavía.</p>
-                          </div>
-                        ) : visibleAdminCommunications.length === 0 ? (
-                          <div className="empty-state comunicados-empty">
-                            <p>Ningún comunicado coincide con el filtro.</p>
-                          </div>
-                        ) : (
-                          visibleAdminCommunications.map((comm) => (
-                            <div
-                              className="comunicado-admin-block"
-                              key={comm.id}
-                            >
-                              <div className="comunicado-admin-row">
-                                <div className="comunicado-admin-info">
-                                  <strong>{comm.title}</strong>
-                                  <ComunicadoTags tags={comm.tags ?? []} />
-                                  <span
-                                    className={`comunicado-status comunicado-status-${comm.publishedAt ? "published" : "draft"}`}
-                                  >
-                                    {comm.publishedAt
-                                      ? `Publicado · ${formatDate24(comm.publishedAt)}`
-                                      : "Borrador"}
-                                  </span>
-                                </div>
-                                <div className="comunicado-admin-actions">
-                                  <button
-                                    className="ghost-button"
-                                    onClick={() => openComunicadoEditor(comm)}
-                                    type="button"
-                                  >
-                                    Editar
-                                  </button>
-                                  {comm.publishedAt ? null : (
-                                    <button
-                                      className="primary-button"
-                                      onClick={() =>
-                                        void handlePublishCommunication(comm.id)
-                                      }
-                                      type="button"
-                                    >
-                                      Publicar
-                                    </button>
-                                  )}
-                                  <button
-                                    className="ghost-button"
-                                    onClick={() =>
-                                      setCommEditor({
-                                        id: null,
-                                        title: comm.title,
-                                        content: comm.content,
-                                        channelId: comm.channelId ?? "",
-                                        tags: comm.tags ?? [],
-                                      })
-                                    }
-                                    title="Crea un comunicado nuevo con este mismo texto"
-                                    type="button"
-                                  >
-                                    Duplicar
-                                  </button>
-                                  <button
-                                    className="danger-button"
-                                    onClick={() =>
-                                      requestDeleteCommunication(comm)
-                                    }
-                                    type="button"
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </details>
-                  ) : null}
-
                   {sectionFor("admin") === "karpindomo" &&
                   canAccess("daily") ? (
                     <details
@@ -12089,94 +12003,18 @@ function App() {
                 <div className="comunicados-stack">
                   {publishedLoading ? (
                     <LoadingState label="Cargando comunicados…" />
-                  ) : currentComunicado ? (
-                    <div className="comunicado-detail">
-                      <button
-                        className="comunicado-back"
-                        onClick={() => setComunicadoSlug(null)}
-                        type="button"
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="comunicado-back-arrow"
-                        >
-                          ←
-                        </span>
-                        Todos los comunicados
-                      </button>
-                      <article className="comunicado-card">
-                        <div className="comunicado-detail-head">
-                          <h3>{currentComunicado.title}</h3>
-                          <ComunicadoTags tags={currentComunicado.tags ?? []} />
-                          {currentComunicado.publishedAt ? (
-                            <span className="comunicado-date">
-                              {formatDate24(currentComunicado.publishedAt)}
-                            </span>
-                          ) : null}
-                        </div>
-                        {currentComunicado.authorName ? (
-                          <div className="comunicado-author">
-                            Por {currentComunicado.authorName}
-                          </div>
-                        ) : null}
-                        <div
-                          className="comunicado-content comunicado-markdown"
-                          dangerouslySetInnerHTML={{
-                            __html: renderMarkdown(currentComunicado.content),
-                          }}
-                        />
-                        <div className="comunicado-detail-actions">
-                          <button
-                            className="primary-button"
-                            onClick={() =>
-                              void copyComunicadoLink(currentComunicado)
-                            }
-                            type="button"
-                          >
-                            🔗 Copiar enlace
-                          </button>
-                          {canAccess("comunicados") ? (
-                            <>
-                              <button
-                                className="ghost-button"
-                                onClick={() =>
-                                  openComunicadoEditor(currentComunicado)
-                                }
-                                type="button"
-                              >
-                                ✏️ Editar
-                              </button>
-                              <button
-                                className="ghost-button danger"
-                                onClick={() =>
-                                  requestDeleteCommunication(currentComunicado)
-                                }
-                                type="button"
-                              >
-                                Eliminar comunicado
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </article>
-                    </div>
-                  ) : comunicadoSlug ? (
-                    <div className="empty-state">
-                      <p>No se encontró ese comunicado.</p>
-                      <button
-                        className="primary-button"
-                        onClick={() => setComunicadoSlug(null)}
-                        type="button"
-                      >
-                        Ver todos los comunicados
-                      </button>
-                    </div>
-                  ) : published.length === 0 ? (
-                    <div className="empty-state">
-                      Todavía no hay comunicados publicados.
-                    </div>
+                  ) : published.length === 0 && draftComunicados.length === 0 ? (
+                    <>
+                      {newComunicadoButton}
+                      <div className="empty-state">
+                        {canManageComunicados
+                          ? "No hay comunicados todavía."
+                          : "Todavía no hay comunicados publicados."}
+                      </div>
+                    </>
                   ) : (
                     <>
+                      {newComunicadoButton}
                       <ListFilterBar
                         onOrderChange={setComunicadoOrder}
                         onSearchChange={setComunicadoSearch}
@@ -12192,7 +12030,7 @@ function App() {
                         >
                           Todos
                         </button>
-                        {publishedTagOptions.map((tag) => {
+                        {boardTagOptions.map((tag) => {
                           const key = tag.label.toLowerCase();
                           return (
                             <EventTagFilterChip
@@ -12210,7 +12048,7 @@ function App() {
                             />
                           );
                         })}
-                        {published.some(
+                        {[...published, ...draftComunicados].some(
                           (comm) => (comm.tags ?? []).length === 0,
                         ) ? (
                           <button
@@ -12230,70 +12068,19 @@ function App() {
                           </button>
                         ) : null}
                       </ListFilterBar>
-                      {visiblePublished.length === 0 ? (
+                      {visiblePublished.length === 0 &&
+                      visibleDrafts.length === 0 ? (
                         <div className="empty-state">
                           Ningún comunicado coincide con el filtro.
                         </div>
                       ) : null}
                       <div className="comunicado-board">
-                        {visiblePublished.map((comm) => (
-                          <button
-                            className={[
-                              "comunicado-note",
-                              canReorderCommunications
-                                ? "comunicado-note--draggable"
-                                : "",
-                              draggedComunicadoId === comm.id
-                                ? "comunicado-note--dragging"
-                                : "",
-                              dragOverComunicadoId === comm.id &&
-                              draggedComunicadoId !== comm.id
-                                ? "comunicado-note--over"
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                            draggable={canReorderCommunications}
-                            key={comm.id}
-                            onClick={() => openComunicado(comm)}
-                            onDragEnd={() => {
-                              setDraggedComunicadoId(null);
-                              setDragOverComunicadoId(null);
-                            }}
-                            onDragOver={(event) => {
-                              if (!canReorderCommunications) {
-                                return;
-                              }
-                              // Sin esto el navegador no permite soltar acá.
-                              event.preventDefault();
-                              setDragOverComunicadoId(comm.id);
-                            }}
-                            onDragStart={() => setDraggedComunicadoId(comm.id)}
-                            onDrop={(event) => {
-                              event.preventDefault();
-                              void dropComunicado(comm.id);
-                            }}
-                            type="button"
-                          >
-                            <span className="comunicado-note-title">
-                              {comm.title}
-                            </span>
-                            <ComunicadoTags tags={comm.tags ?? []} />
-                            <span className="comunicado-note-excerpt">
-                              {comunicadoExcerpt(comm.content)}
-                            </span>
-                            <span className="comunicado-note-foot">
-                              {[
-                                comm.publishedAt
-                                  ? formatDate24(comm.publishedAt)
-                                  : null,
-                                comm.authorName,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </span>
-                          </button>
-                        ))}
+                        {visibleDrafts.map((comm) =>
+                          renderComunicadoNote(comm, true),
+                        )}
+                        {visiblePublished.map((comm) =>
+                          renderComunicadoNote(comm, false),
+                        )}
                       </div>
                     </>
                   )}
@@ -13424,7 +13211,9 @@ function App() {
                 <div className="comunicado-modal-meta">
                   {currentComunicado.publishedAt ? (
                     <span>{formatDate24(currentComunicado.publishedAt)}</span>
-                  ) : null}
+                  ) : (
+                    <span className="comunicado-note-draft">Borrador</span>
+                  )}
                   {currentComunicado.authorName ? (
                     <span>Por {currentComunicado.authorName}</span>
                   ) : null}
@@ -13454,14 +13243,41 @@ function App() {
               >
                 🔗 Copiar enlace
               </button>
-              {canAccess("comunicados") ? (
+              {canManageComunicados ? (
                 <>
+                  {currentComunicado.publishedAt ? null : (
+                    <button
+                      className="primary-button"
+                      onClick={() =>
+                        void handlePublishCommunication(currentComunicado.id)
+                      }
+                      type="button"
+                    >
+                      Publicar
+                    </button>
+                  )}
                   <button
                     className="ghost-button"
                     onClick={() => openComunicadoEditor(currentComunicado)}
                     type="button"
                   >
                     ✏️ Editar
+                  </button>
+                  <button
+                    className="ghost-button"
+                    onClick={() =>
+                      setCommEditor({
+                        id: null,
+                        title: currentComunicado.title,
+                        content: currentComunicado.content,
+                        channelId: currentComunicado.channelId ?? "",
+                        tags: currentComunicado.tags ?? [],
+                      })
+                    }
+                    title="Crea un comunicado nuevo con este mismo texto"
+                    type="button"
+                  >
+                    Duplicar
                   </button>
                   <button
                     className="ghost-button danger"
@@ -13614,7 +13430,7 @@ function App() {
                       current ? { ...current, tags } : current,
                     )
                   }
-                  suggestions={commAdminTagOptions.map((tag) => tag.label)}
+                  suggestions={boardTagOptions.map((tag) => tag.label)}
                   tags={commEditor.tags ?? []}
                 />
               </div>
