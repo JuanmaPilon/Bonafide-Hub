@@ -165,8 +165,8 @@ Discord no expone los Server Insights por API, así que la agregación la hace e
 bot con `PresenceUpdate` (intent `GuildPresences`) y el API guarda una fila por
 persona + aplicación + **día** en `member_game_activity`. El endpoint devuelve
 `{ days, games: [{ applicationId, days, name, players, coverUrl }], source }`,
-ordenado por jugadores distintos: la grilla del dashboard muestra la portada y
-el nombre, y el orden es la señal de qué se juega más. `source: "configured"`
+ordenado por jugadores distintos: el dashboard muestra los juegos en un carrusel
+de portadas y el orden es la señal de qué se juega más. `source: "configured"`
 significa que todavía no hay
 actividad registrada y se están mostrando los juegos configurados del módulo de
 eventos.
@@ -181,6 +181,13 @@ que el API arma un índice `applicationId -> hash` en memoria con TTL de 24 h (y
 lo refresca en segundo plano cuando vence, para no clavar el request del
 dashboard). Si la app no está en la lista o no tiene portada, el juego va sin
 `coverUrl` y la grilla muestra el nombre.
+
+El API descarta las apps que Discord detecta como "está jugando" pero no son
+juegos (CurseForge, Steam, OBS, VS Code…): viven en `NON_GAME_APPLICATIONS`
+(`apps/api/src/services/games-activity-store.ts`) y se comparan contra el nombre
+normalizado, porque esas apps no aparecen en `/applications/detectable`. El
+filtro se aplica al mostrar, no al guardar: si sacás un nombre de la lista, su
+actividad histórica vuelve a la grilla.
 
 XP:
 

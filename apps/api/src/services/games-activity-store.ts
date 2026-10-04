@@ -9,10 +9,33 @@ import { prisma } from "../db/prisma.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 // El lote del bot no debería ser grande; el techo es por las dudas.
 const MAX_ENTRIES_PER_REPORT = 500;
-const MAX_GAMES = 12;
+const MAX_GAMES = 24;
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 const COVERS_TTL_MS = 24 * 60 * 60 * 1000;
 const COVERS_RETRY_MS = 10 * 60 * 1000;
+
+// Herramientas que Discord detecta como "está jugando" y no son juegos (mod
+// managers, launchers, editores). Se filtran al mostrar, no al guardar: la
+// actividad queda en la base y sacarlas de acá las devuelve a la grilla.
+const NON_GAME_APPLICATIONS = new Set([
+  "adobe after effects",
+  "adobe photoshop",
+  "adobe premiere pro",
+  "blender",
+  "curseforge",
+  "davinci resolve",
+  "discord",
+  "epic games launcher",
+  "godot engine",
+  "medal",
+  "obs studio",
+  "overwolf",
+  "steam",
+  "unity",
+  "unreal engine",
+  "visual studio code",
+  "wallpaper engine",
+]);
 
 export type GameActivityEntry = {
   applicationId: string;
@@ -46,6 +69,12 @@ type CoverHashes = {
 // Día UTC (YYYY-MM-DD): el bot manda cambios de presencia, no fechas.
 export function activityDay(now = new Date()): string {
   return now.toISOString().slice(0, 10);
+}
+
+// El nombre es lo único que tenemos de la app que no está en la lista de
+// Discord, así que la blacklist compara normalizado (espacios dobles, mayúsculas).
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 // Guarda el lote que manda el bot. El upsert por (guild, persona, app, día) es
@@ -205,6 +234,7 @@ export async function listGuildGameActivity(input: {
   }
 
   const games: GuildGameActivity[] = [...byApplication.entries()]
+    .filter(([, entry]) => !NON_GAME_APPLICATIONS.has(normalizeName(entry.name)))
     .map(([applicationId, entry]) => ({
       applicationId,
       days: entry.activeDays.size,
