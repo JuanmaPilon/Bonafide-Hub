@@ -24,8 +24,9 @@ Ejemplos:
 
 ## Reglas de push
 
-- No hacer push directo a `main`.
-- Todo cambio entra por Pull Request.
+- Se puede hacer push directo a `main`, siempre que el typecheck y el build
+  pasen antes del push.
+- Si el cambio necesita revision, va por branch + Pull Request.
 - Hacer push frecuente a la branch de trabajo para no perder progreso.
 - Commits pequenos con mensaje claro.
 - No subir secretos (`.env`, tokens, keys, credenciales).
@@ -95,7 +96,8 @@ Cuando se definan stacks concretos, extender con:
 
 Configurar en `main`:
 
-- Require a pull request before merging.
+- Require a pull request before merging: solo si se quiere bloquear el push
+  directo; **dejarlo desactivado** si se permite (ver Reglas de push).
 - Require approvals: 1.
 - Dismiss stale approvals when new commits are pushed.
 - Require status checks to pass.
