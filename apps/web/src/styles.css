@@ -5591,11 +5591,11 @@ select.list-order {
   font-weight: 800;
 }
 
-/* Barra del tablero: por ahora solo el botón de crear. */
-.comunicado-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
+/* Botón de crear: comparte la fila del buscador y se va al extremo derecho, así
+   el título de la página no queda separado del resto por un renglón vacío. */
+.comunicado-new {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 /* Arrastre del tablero (solo staff: el orden es uno solo para toda la guild).

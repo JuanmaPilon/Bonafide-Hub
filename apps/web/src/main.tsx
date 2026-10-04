@@ -8044,23 +8044,21 @@ function App() {
   }
 
   const newComunicadoButton = canManageComunicados ? (
-    <div className="comunicado-toolbar">
-      <button
-        className="primary-button"
-        onClick={() =>
-          setCommEditor({
-            id: null,
-            title: "",
-            content: "",
-            channelId: "",
-            tags: [],
-          })
-        }
-        type="button"
-      >
-        Nuevo comunicado
-      </button>
-    </div>
+    <button
+      className="primary-button comunicado-new"
+      onClick={() =>
+        setCommEditor({
+          id: null,
+          title: "",
+          content: "",
+          channelId: "",
+          tags: [],
+        })
+      }
+      type="button"
+    >
+      Nuevo comunicado
+    </button>
   ) : null;
 
   // Abre el editor del comunicado desde el hub: es el mismo modal que usa el
@@ -12004,17 +12002,16 @@ function App() {
                   {publishedLoading ? (
                     <LoadingState label="Cargando comunicados…" />
                   ) : published.length === 0 && draftComunicados.length === 0 ? (
-                    <>
-                      {newComunicadoButton}
-                      <div className="empty-state">
+                    <div className="empty-state">
+                      <p>
                         {canManageComunicados
                           ? "No hay comunicados todavía."
                           : "Todavía no hay comunicados publicados."}
-                      </div>
-                    </>
+                      </p>
+                      {newComunicadoButton}
+                    </div>
                   ) : (
                     <>
-                      {newComunicadoButton}
                       <ListFilterBar
                         onOrderChange={setComunicadoOrder}
                         onSearchChange={setComunicadoSearch}
@@ -12067,6 +12064,7 @@ function App() {
                             Sin etiqueta
                           </button>
                         ) : null}
+                        {newComunicadoButton}
                       </ListFilterBar>
                       {visiblePublished.length === 0 &&
                       visibleDrafts.length === 0 ? (
