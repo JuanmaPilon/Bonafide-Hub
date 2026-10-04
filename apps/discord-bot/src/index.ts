@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   AuditLogEvent,
   AttachmentBuilder,
   ChannelType,
@@ -12,6 +13,7 @@ import {
   PermissionFlagsBits,
   type Guild,
   type GuildMember,
+  type Presence,
   type Role,
   type Snowflake,
 } from "discord.js";
@@ -23,6 +25,12 @@ import {
 } from "@napi-rs/canvas";
 import { commandHandlers } from "./commands.js";
 import { env } from "./config/env.js";
+import {
+  flushGameActivity,
+  isGameTrackingEnabled,
+  startGameActivityReporter,
+  trackGamePresence,
+} from "./services/games-activity-service.js";
 import {
   checkMusicChannelEmpty,
   handleMusicButton,
@@ -910,6 +918,8 @@ client.once(Events.ClientReady, (readyClient) => {
   startDailyMessagesProcessor(readyClient);
   startEventControlScheduler(readyClient);
   startKarutaWishlistBackfill();
+  startGameActivityReporter();
+  trackGuildPresencesAtStartup(readyClient);
 });
 
 async function handleXpLevelCommand(
@@ -4573,6 +4583,60 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     checkMusicChannelEmpty(involvedChannel);
   }
 });
+
+// ── Juegos que se juegan en el server ──────────────────────────────
+// "Playing" (type 0) con applicationId es el juego que Discord detectó. Solo
+// se ve para quien comparte su actividad.
+function playingActivity(
+  presence: Presence,
+): { applicationId: string; applicationName: string } | null {
+  for (const activity of presence.activities) {
+    if (activity.type === ActivityType.Playing && activity.applicationId) {
+      return {
+        applicationId: activity.applicationId,
+        applicationName: activity.name,
+      };
+    }
+  }
+  return null;
+}
+
+function reportPresence(presence: Presence): boolean {
+  const guildId = presence.guild?.id;
+  const userId = presence.userId;
+  if (!guildId || !userId || presence.user?.bot) {
+    return false;
+  }
+  const activity = playingActivity(presence);
+  trackGamePresence({
+    applicationId: activity?.applicationId ?? null,
+    applicationName: activity?.applicationName ?? null,
+    guildId,
+    userId,
+  });
+  return true;
+}
+
+client.on(Events.PresenceUpdate, (_oldPresence, newPresence) => {
+  reportPresence(newPresence);
+});
+
+// Arrancar no pierde lo que ya está pasando: se relee la caché de presencias.
+function trackGuildPresencesAtStartup(readyClient: Client<true>): void {
+  if (!isGameTrackingEnabled()) {
+    return;
+  }
+  let tracked = 0;
+  for (const guild of readyClient.guilds.cache.values()) {
+    for (const presence of guild.presences.cache.values()) {
+      if (reportPresence(presence)) {
+        tracked += 1;
+      }
+    }
+  }
+  console.log(`[discord-bot] Game activity: ${tracked} presences tracked`);
+  void flushGameActivity();
+}
 
 if (env.BOT_DISABLED) {
   console.log("[discord-bot] BOT_DISABLED is enabled. Skipping Discord login.");

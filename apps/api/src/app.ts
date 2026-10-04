@@ -61,6 +61,10 @@ import {
 } from "./services/raid-logs-publisher.js";
 import { analyzeRaidLogNight } from "./services/raid-logs-analysis.js";
 import {
+  listGuildGameActivity,
+  recordGameActivity,
+} from "./services/games-activity-store.js";
+import {
   burnKarutaCard,
   deleteKarutaAlbum,
   deleteKarutaCard,
@@ -2721,7 +2725,9 @@ export function buildApp() {
       "/guilds/:guildId/config",
       "/guilds/:guildId/reminders",
       "/guilds/:guildId/reminders/:reminderId",
+      "/guilds/:guildId/games/activity",
       "/internal/guilds/:guildId/config",
+      "/internal/guilds/:guildId/games/presence",
     ],
   }));
 
@@ -2815,6 +2821,58 @@ export function buildApp() {
       config,
     };
   });
+
+  // Actividad de juego que ve el bot (presenceUpdate): lote de "esta persona
+  // está jugando esta aplicación". El día lo pone el API, no el bot.
+  app.post(
+    "/internal/guilds/:guildId/games/presence",
+    async (request, reply) => {
+      if (!env.BOT_API_TOKEN) {
+        return reply.code(503).send({
+          ok: false,
+          error: "BOT_API_TOKEN is not configured",
+        });
+      }
+
+      if (!isAuthorizedBotRequest(request)) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string };
+      if (!params.guildId) {
+        return reply.code(400).send({ ok: false, error: "Missing guildId" });
+      }
+
+      const body = (request.body ?? {}) as {
+        entries?: Array<{
+          applicationId?: string;
+          applicationName?: string;
+          userId?: string;
+        }>;
+      };
+      if (!Array.isArray(body.entries)) {
+        return reply.code(400).send({ ok: false, error: "Missing entries" });
+      }
+
+      try {
+        const stored = await recordGameActivity(
+          params.guildId,
+          body.entries.map((entry) => ({
+            applicationId: entry.applicationId ?? "",
+            applicationName: entry.applicationName ?? "",
+            userId: entry.userId ?? "",
+          })),
+        );
+        return { ok: true, guildId: params.guildId, stored };
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar la actividad de juego.";
+        return reply.code(500).send({ ok: false, error: message });
+      }
+    },
+  );
 
   app.get(
     "/internal/guilds/:guildId/daily-messages",
@@ -6248,6 +6306,56 @@ export function buildApp() {
         ...game,
         roles: applyEventRoleEmojis(game.roles, game.key, mappings),
       })),
+    };
+  });
+
+  // Juegos que se juegan en el server: los acumula el bot con presenceUpdate.
+  // Si todavía no hay actividad registrada, cae a los juegos configurados del
+  // módulo de eventos (sin las plantillas de encuesta) para que el panel no
+  // arranque vacío.
+  app.get("/guilds/:guildId/games/activity", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const rawDays = Number((request.query as { days?: string })?.days);
+    const days = Number.isFinite(rawDays)
+      ? Math.min(90, Math.max(1, Math.trunc(rawDays)))
+      : 30;
+
+    const games = await listGuildGameActivity({
+      days,
+      guildId: params.guildId,
+    });
+    if (games.length > 0) {
+      return {
+        days,
+        games,
+        ok: true,
+        guildId: params.guildId,
+        source: "activity",
+      };
+    }
+
+    const config = await getGuildConfig(params.guildId);
+    return {
+      days,
+      games: resolveEventGames(config)
+        .filter((game) => !game.poll)
+        .map((game) => ({ days: 0, name: game.label, players: 0 })),
+      ok: true,
+      guildId: params.guildId,
+      source: "configured",
     };
   });
 

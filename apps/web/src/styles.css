@@ -3715,6 +3715,104 @@ a:hover {
   z-index: 1;
 }
 
+/* Con la grilla de juegos el bloque deja de estar alineado abajo: el saludo
+   queda arriba y las portadas ocupan el resto. */
+.home-hero-games {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.home-hero-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+}
+
+/* Grilla de juegos: ocupa el lugar del banner y muestra la portada de cada
+   juego (icono de la aplicación de Discord) sobre el degradado. */
+.home-games {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.home-games-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+}
+
+.home-game-tile {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 14px 12px;
+  border: 1px solid rgba(134, 158, 214, 0.22);
+  border-radius: 14px;
+  background: rgba(9, 15, 29, 0.55);
+  text-align: center;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+
+.home-game-tile:hover {
+  border-color: rgba(134, 158, 214, 0.42);
+  transform: translateY(-2px);
+}
+
+.home-game-art {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(134, 158, 214, 0.12);
+}
+
+.home-game-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.home-game-initial {
+  color: var(--muted);
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.home-game-name {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-game-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.home-games-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .home-hero h1 {
   margin: 0;
   font-size: clamp(2rem, 5vw, 3.6rem);
@@ -8554,25 +8652,11 @@ select.list-order {
 /* Tarjetas y filas con fondo oscuro -> claro */
 :root[data-theme="light"] .user-pill,
 :root[data-theme="light"] .xp-role-row,
-:root[data-theme="light"] .daily-message-row,
-:root[data-theme="light"] .role-chip,
-:root[data-theme="light"] .raid-log-badge,
-:root[data-theme="light"] .raid-log-fight,
-:root[data-theme="light"] .raid-log-watcher,
-:root[data-theme="light"] .raid-logs-admin,
-:root[data-theme="light"] .karuta-drop-card,
-:root[data-theme="light"] .profile-badge,
-:root[data-theme="light"] .profile-stat,
-:root[data-theme="light"] .rr-panel-card,
-:root[data-theme="light"] .rr-job,
-:root[data-theme="light"] .audit-row,
-:root[data-theme="light"] .home-hero,
-:root[data-theme="light"] .podium-item,
-:root[data-theme="light"] .stat-tile,
-:root[data-theme="light"] .xp-remove-roles,
-:root[data-theme="light"] .rr-rule,
-:root[data-theme="light"] .rr-preview,
-:root[data-theme="light"] .admin-card-footer,
+/* Ojo: acá había una lista de selectores (hero, podio, stat-tile, audit-row,
+   karuta-drop-card, etc.) sin bloque de declaraciones. El parser la pegaba a la
+   regla de .admin-card--owner, así que todas esas superficies tomaban el halo
+   naranja del owner en tema claro. Si se quiere un fondo claro para ellas, hay
+   que escribir la regla con su body. */
 
 /* En claro el halo naranja tiene que ser más suave para no ensuciar. */
 :root[data-theme="light"] .admin-card--owner {
@@ -8585,6 +8669,16 @@ select.list-order {
   box-shadow:
     0 0 0 1px rgba(var(--tier-owner-rgb), 0.18),
     0 8px 26px rgba(var(--tier-owner-rgb), 0.16);
+}
+
+/* Portadas de juego sobre fondo claro: la tarjeta oscura no se lee. */
+:root[data-theme="light"] .home-game-tile {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(54, 89, 185, 0.18);
+}
+
+:root[data-theme="light"] .home-game-art {
+  background: rgba(54, 89, 185, 0.08);
 }
 :root[data-theme="light"] .module-toggle,
 :root[data-theme="light"] .suggestion-tier-chip,

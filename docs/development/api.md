@@ -156,6 +156,20 @@ Devuelve:
    y los participantes salieron de la tabla de daño: ahí un "no vino" puede ser
    un heal que no hizo daño.
 
+Juegos que se juegan en el server:
+
+1. `GET /guilds/:guildId/games/activity?days=30` — grilla del dashboard.
+2. `POST /internal/guilds/:guildId/games/presence` — lote que manda el bot.
+
+Discord no expone los Server Insights por API, así que la agregación la hace el
+bot con `PresenceUpdate` (intent `GuildPresences`) y el API guarda una fila por
+persona + aplicación + **día** en `member_game_activity`. El endpoint devuelve
+`{ days, games: [{ applicationId, days, iconUrl, name, players }], source }`,
+ordenado por jugadores distintos. El icono sale del `applicationId`
+(`GET /applications/{id}` de Discord, cacheado 12 h). `source: "configured"`
+significa que todavía no hay actividad registrada y se están mostrando los
+juegos configurados del módulo de eventos.
+
 XP:
 
 1. `GET /guilds/:guildId/xp-config`

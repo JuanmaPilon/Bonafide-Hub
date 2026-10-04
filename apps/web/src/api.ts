@@ -291,6 +291,32 @@ export async function getGuildBoosters(
   return data.boosters;
 }
 
+export type GuildGameActivity = {
+  applicationId?: string;
+  days: number;
+  iconUrl?: string;
+  name: string;
+  players: number;
+};
+
+export type GuildGameActivityResponse = {
+  days: number;
+  games: GuildGameActivity[];
+  // "activity" = medido por el bot; "configured" = juegos configurados del
+  // módulo de eventos, para cuando todavía no hay actividad registrada.
+  source: "activity" | "configured";
+};
+
+export async function getGuildGameActivity(
+  guildId: string,
+  days = 30,
+): Promise<GuildGameActivityResponse> {
+  return requestJson<GuildGameActivityResponse>(
+    `/guilds/${guildId}/games/activity?days=${days}`,
+    { method: "GET" },
+  );
+}
+
 export type GuildRole = {
   color: number;
   id: string;

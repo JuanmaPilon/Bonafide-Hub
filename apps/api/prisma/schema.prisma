@@ -638,3 +638,22 @@ model RosterProfile {
   @@id([guildId, userId])
   @@map("roster_profiles")
 }
+
+// Actividad de juego que el bot detecta con presenceUpdate (intent
+// GuildPresences). Una fila por guild + persona + aplicación + DÍA: el bot
+// solo reporta cuando cambia el juego, así que la tabla no crece con cada
+// update de presencia. `day` es la fecha UTC en formato YYYY-MM-DD.
+model MemberGameActivity {
+  id              String   @id @default(cuid())
+  guildId         String
+  userId          String
+  applicationId   String
+  applicationName String
+  day             String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([guildId, userId, applicationId, day])
+  @@index([guildId, day])
+  @@map("member_game_activity")
+}

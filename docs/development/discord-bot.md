@@ -73,6 +73,28 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 6. Scheduler de timers → avisa por DM al vencer (con opción de repetir)
 7. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
 8. `MessageCreate`/`MessageUpdate` (Karuta) → detecta cartas raras (`kv`), su colección (`ka`) y transferencias (`kg`/grab) en el canal vigilado y las guarda en la API
+9. `PresenceUpdate` → juegos que se juegan en el server (ver abajo)
+
+### Juegos que se juegan en el server
+
+Discord **no expone por API** los Server Insights (el panel donde el cliente
+muestra los juegos del servidor), así que la agregación la hace el bot:
+
+```text
+PresenceUpdate (intent GuildPresences, ya habilitado)
+   -> actividad tipo "Playing" con applicationId
+   -> POST /internal/guilds/:g/games/presence (x-bot-token)
+   -> tabla member_game_activity: 1 fila por persona + juego + DÍA
+   -> GET /guilds/:g/games/activity -> grilla del dashboard
+```
+
+1. Solo se reporta cuando el juego **cambia** (o aparece uno nuevo), y el flush
+   agrupa cada 2 minutos: el Gateway dispara muchísimos `PresenceUpdate` y no
+   queremos una request por cada uno.
+2. Solo aparece quien **comparte su actividad** y está online mientras el bot
+   corre. Discord no da historial: el panel arranca vacío y se va llenando.
+3. El icono de cada juego sale del `applicationId` (`GET /applications/{id}` de
+   Discord) y se cachea 12 h.
 
 ### Inscripciones a eventos (Módulo X)
 
