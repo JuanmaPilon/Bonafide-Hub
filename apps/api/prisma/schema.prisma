@@ -639,6 +639,24 @@ model RosterProfile {
   @@map("roster_profiles")
 }
 
+// Clase secundaria de un miembro del roster ("alter"): el shaman de alguien que
+// raidea con DK. Vive fuera de RosterProfile para que una persona siga siendo
+// una sola fila y una sola carta en los totales: la principal es RosterProfile.
+// Clave (guild, persona, clase) porque un alter por clase es suficiente.
+model RosterAltProfile {
+  guildId   String
+  userId    String
+  game      String
+  className String
+  specName  String
+  offSpecs  String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, userId, className])
+  @@map("roster_alt_profiles")
+}
+
 // Actividad de juego que el bot detecta con presenceUpdate (intent
 // GuildPresences). Una fila por guild + persona + aplicación + DÍA: el bot
 // solo reporta cuando cambia el juego, así que la tabla no crece con cada

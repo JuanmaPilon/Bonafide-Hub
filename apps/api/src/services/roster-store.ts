@@ -12,6 +12,15 @@ export type RosterProfile = {
   tags: RosterTag[];
 };
 
+// Clase secundaria de un miembro. No cuenta como jugador extra en ningún
+// total: es la carta de atrás de la misma persona.
+export type RosterAlt = {
+  className: string;
+  game: string;
+  offSpecs: string[];
+  specName: string;
+};
+
 export type RosterTag = {
   color: string;
   label: string;
@@ -82,4 +91,61 @@ export async function deleteRosterProfile(
     where: { guildId, userId },
   });
   return result.count > 0;
+}
+
+// Alters agrupados por persona: el roster pide todos los de la guild de una.
+export async function listRosterAlts(
+  guildId: string,
+): Promise<Map<string, RosterAlt[]>> {
+  const records = await prisma.rosterAltProfile.findMany({
+    orderBy: [{ className: "asc" }],
+    where: { guildId },
+  });
+  const byUser = new Map<string, RosterAlt[]>();
+  for (const record of records) {
+    const entry: RosterAlt = {
+      className: record.className,
+      game: record.game,
+      offSpecs: record.offSpecs,
+      specName: record.specName,
+    };
+    byUser.set(record.userId, [...(byUser.get(record.userId) ?? []), entry]);
+  }
+  return byUser;
+}
+
+// La lista que manda la web es la verdad: se borra lo que ya no está y se
+// actualiza el resto en una transacción (si falla, no queda media lista).
+export async function replaceRosterAlts(
+  guildId: string,
+  userId: string,
+  alts: RosterAlt[],
+): Promise<RosterAlt[]> {
+  const kept = alts.map((alt) => alt.className);
+  await prisma.$transaction([
+    prisma.rosterAltProfile.deleteMany({
+      where: { className: { notIn: kept }, guildId, userId },
+    }),
+    ...alts.map((alt) =>
+      prisma.rosterAltProfile.upsert({
+        create: { guildId, userId, ...alt },
+        update: alt,
+        where: {
+          guildId_userId_className: {
+            className: alt.className,
+            guildId,
+            userId,
+          },
+        },
+      }),
+    ),
+  ]);
+  return alts;
+}
+
+export async function deleteRosterAlts(
+  guildId: string,
+  userId: string,
+): Promise<void> {
+  await prisma.rosterAltProfile.deleteMany({ where: { guildId, userId } });
 }

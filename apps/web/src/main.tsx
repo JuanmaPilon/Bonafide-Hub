@@ -139,6 +139,7 @@ import {
   type EventImage,
   type EventTag,
   type HubEvent,
+  type RosterAlt,
   type RosterMember,
   type RosterProfile,
   type RosterProfileInput,
@@ -1898,6 +1899,7 @@ function rosterSpecKey(
 // Panel de la ficha: clase + spec actual + las off que domina (solo specs de
 // esa clase).
 function RosterSheet({
+  alts: initialAlts,
   canDelete,
   games,
   memberName,
@@ -1908,6 +1910,7 @@ function RosterSheet({
   saving,
   specs,
 }: {
+  alts: RosterAlt[];
   canDelete: boolean;
   games: Array<{ key: string; label: string }>;
   memberName: string;
@@ -1946,6 +1949,74 @@ function RosterSheet({
   );
   const [offSpecs, setOffSpecs] = useState<string[]>(
     profile?.game === "wow" ? profile.offSpecs : [],
+  );
+  // Clases secundarias del mazo: la que se elija como main sale de acá y la
+  // principal entra en su lugar. Nunca se repite la clase principal.
+  const [alts, setAlts] = useState<RosterAlt[]>(() =>
+    initialAlts.filter((alt) => alt.game === undefined || alt.game === "wow"),
+  );
+
+  function altSpecsFor(target: string): RaidSpec[] {
+    return specs.filter(
+      (spec) => spec.game === game && spec.className === target,
+    );
+  }
+
+  function addAlt(): void {
+    const used = new Set([className, ...alts.map((alt) => alt.className)]);
+    const next = classes.find((entry) => !used.has(entry));
+    if (!next) {
+      return;
+    }
+    setAlts((current) => [
+      ...current,
+      {
+        className: next,
+        specName: altSpecsFor(next)[0]?.specName ?? "",
+      },
+    ]);
+  }
+
+  function updateAltClass(index: number, next: string): void {
+    setAlts((current) =>
+      current.map((alt, position) =>
+        position === index
+          ? { className: next, specName: altSpecsFor(next)[0]?.specName ?? "" }
+          : alt,
+      ),
+    );
+  }
+
+  function updateAltSpec(index: number, next: string): void {
+    setAlts((current) =>
+      current.map((alt, position) =>
+        position === index ? { ...alt, specName: next } : alt,
+      ),
+    );
+  }
+
+  function removeAlt(index: number): void {
+    setAlts((current) => current.filter((_, position) => position !== index));
+  }
+
+  function makeMain(index: number): void {
+    const alt = alts[index];
+    if (!alt) {
+      return;
+    }
+    const previous: RosterAlt = { className, specName };
+    setAlts((current) => [
+      ...current.filter((_, position) => position !== index),
+      previous,
+    ]);
+    setClassName(alt.className);
+    setSpecName(alt.specName);
+    setOffSpecs([]);
+  }
+
+  const unusedClasses = classes.filter(
+    (entry) =>
+      entry !== className && !alts.some((alt) => alt.className === entry),
   );
 
   function pickClass(next: string): void {
@@ -2036,12 +2107,74 @@ function RosterSheet({
             </div>
           </div>
         ) : null}
+        <div className="roster-sheet-alts">
+          <span>Clases secundarias</span>
+          {alts.map((alt, index) => (
+            <div className="roster-alt-row" key={index}>
+              <select
+                className="select"
+                onChange={(event) => updateAltClass(index, event.target.value)}
+                value={alt.className}
+              >
+                {classes
+                  .filter((entry) => entry !== className)
+                  .filter(
+                    (entry) =>
+                      entry === alt.className ||
+                      !alts.some((other) => other.className === entry),
+                  )
+                  .map((entry) => (
+                    <option key={entry} value={entry}>
+                      {entry}
+                    </option>
+                  ))}
+              </select>
+              <select
+                className="select"
+                onChange={(event) => updateAltSpec(index, event.target.value)}
+                value={alt.specName}
+              >
+                {altSpecsFor(alt.className).map((spec) => (
+                  <option key={spec.specName} value={spec.specName}>
+                    {spec.specName}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="ghost-button roster-alt-action"
+                onClick={() => makeMain(index)}
+                title="Pasar esta clase a principal"
+                type="button"
+              >
+                Hacer main
+              </button>
+              <button
+                aria-label={`Quitar ${alt.className}`}
+                className="ghost-button roster-alt-action"
+                onClick={() => removeAlt(index)}
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {unusedClasses.length > 0 && alts.length < 4 ? (
+            <button
+              className="ghost-button roster-alt-add"
+              onClick={addAlt}
+              type="button"
+            >
+              + Agregar clase
+            </button>
+          ) : null}
+        </div>
         <div className="form-actions">
           <button
             className="primary-button"
             disabled={saving || !className || !specName}
             onClick={() =>
               onSave({
+                alts,
                 className,
                 game,
                 offSpecs,
@@ -2401,6 +2534,11 @@ function RosterSection({
   const [savingSheet, setSavingSheet] = useState(false);
   // Tarjeta con el menú de estado abierto: solo una a la vez.
   const [rankMenuFor, setRankMenuFor] = useState<string | null>(null);
+  // Clase que está al frente en el mazo de cada persona (id -> className).
+  // Ausente = la principal.
+  const [frontSetByUser, setFrontSetByUser] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -2513,7 +2651,7 @@ function RosterSection({
       if (!query) {
         return true;
       }
-      return `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")} ${(member.profile?.tags ?? []).map((tag) => tag.label).join(" ")}`
+      return `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")} ${(member.alts ?? []).map((alt) => `${alt.className} ${alt.specName}`).join(" ")} ${(member.profile?.tags ?? []).map((tag) => tag.label).join(" ")}`
         .toLowerCase()
         .includes(query);
     });
@@ -2536,12 +2674,19 @@ function RosterSection({
               ...current,
               members: current.members.map((member) =>
                 member.userId === target.userId
-                  ? { ...member, profile }
+                  ? { ...member, alts: saved.alts ?? [], profile }
                   : member,
               ),
             }
           : current,
       );
+      // La carta que estaba al frente puede haber dejado de existir (o pasar a
+      // ser la principal): se vuelve a la principal.
+      setFrontSetByUser((current) => {
+        const next = { ...current };
+        delete next[target.userId];
+        return next;
+      });
       setSheetFor(null);
       notify(
         saved.roleSyncError
@@ -2635,14 +2780,39 @@ function RosterSection({
 
   function renderMember(member: RosterMember) {
     const profile = member.profile;
-    const main = profile
+    // Mazo de cartas: la principal (RosterProfile) y sus clases secundarias.
+    // Los alters son la misma persona, así que no suman a ningún total.
+    const sets = profile
+      ? [
+          {
+            className: profile.className,
+            game: profile.game,
+            isMain: true,
+            offSpecs: profile.offSpecs,
+            specName: profile.specName,
+          },
+          ...(member.alts ?? []).map((alt) => ({
+            className: alt.className,
+            game: alt.game ?? profile.game,
+            isMain: false,
+            offSpecs: alt.offSpecs ?? [],
+            specName: alt.specName,
+          })),
+        ]
+      : [];
+    const frontSet =
+      sets.find((set) => set.className === frontSetByUser[member.userId]) ??
+      sets[0] ??
+      null;
+    const backSets = sets.filter((set) => set !== frontSet);
+    const main = frontSet
       ? specsByKey.get(
-          rosterSpecKey(profile.game, profile.className, profile.specName),
+          rosterSpecKey(frontSet.game, frontSet.className, frontSet.specName),
         )
       : undefined;
     // Emoji de la clase desde el registro central (Admin → Mapeo).
-    const classEmojiMeta = profile
-      ? roster?.classEmojis?.[profile.className]
+    const classEmojiMeta = frontSet
+      ? roster?.classEmojis?.[frontSet.className]
       : undefined;
     const isRaidOfficer = member.isRaidOfficer;
     // El estado va con la ficha, sin importar si es Raid Officer: son cosas
@@ -2656,26 +2826,47 @@ function RosterSection({
       ? rosterStatus.toLowerCase().replaceAll(" ", "-")
       : "";
     return (
-      <article
-        className={`roster-member${member.rankKey ? "" : " roster-member--inactive"}${canEditCard ? " roster-member--editable" : ""}`}
-        key={member.userId}
-        onClick={
-          canEditCard
-            ? () =>
-                setSheetFor({
-                  displayName:
-                    member.userId === meId ? "Mi ficha" : member.displayName,
-                  userId: member.userId,
-                })
-            : undefined
-        }
-        title={canEditCard ? "Editar ficha" : undefined}
-        style={
-          {
-            "--roster-class-color": classColor(profile?.className) ?? "#6aa8ff",
-          } as CSSProperties
-        }
-      >
+      <div className="roster-stack" key={member.userId}>
+        {backSets.map((set, index) => (
+          <button
+            aria-label={`Traer al frente: ${set.className} ${set.specName}`}
+            className={`roster-member roster-member--back roster-member--back-${index + 1}`}
+            key={set.className}
+            onClick={(event) => {
+              event.stopPropagation();
+              setFrontSetByUser((current) => ({
+                ...current,
+                [member.userId]: set.className,
+              }));
+            }}
+            style={
+              {
+                "--roster-class-color": classColor(set.className) ?? "#6aa8ff",
+              } as CSSProperties
+            }
+            type="button"
+          />
+        ))}
+        <article
+          className={`roster-member roster-member--front${member.rankKey ? "" : " roster-member--inactive"}${canEditCard ? " roster-member--editable" : ""}`}
+          onClick={
+            canEditCard
+              ? () =>
+                  setSheetFor({
+                    displayName:
+                      member.userId === meId ? "Mi ficha" : member.displayName,
+                    userId: member.userId,
+                  })
+              : undefined
+          }
+          title={canEditCard ? "Editar ficha" : undefined}
+          style={
+            {
+              "--roster-class-color":
+                classColor(frontSet?.className) ?? "#6aa8ff",
+            } as CSSProperties
+          }
+        >
         {isRaidOfficer ? (
           <span
             className="roster-officer-flag"
@@ -2702,7 +2893,7 @@ function RosterSection({
           >
             {member.displayName}
           </button>
-          {profile ? (
+          {frontSet ? (
             <span className="roster-member-spec">
               {main || classEmojiMeta ? (
                 <DiscordEmojiImage
@@ -2713,23 +2904,26 @@ function RosterSection({
                   }
                   emojiId={main?.emojiId ?? classEmojiMeta?.emojiId}
                   fallback={
-                    classEmojiMeta?.unicode ?? classEmoji(profile.className)
+                    classEmojiMeta?.unicode ?? classEmoji(frontSet.className)
                   }
-                  name={main?.specName ?? profile.className}
+                  name={main?.specName ?? frontSet.className}
                   size={18}
                 />
               ) : null}
-              {profile.specName}
+              {frontSet.specName}
+              {frontSet.isMain ? null : (
+                <span className="roster-alt-badge">Alter</span>
+              )}
             </span>
           ) : (
             <span className="roster-member-spec">Sin ficha</span>
           )}
         </div>
-        {profile && profile.offSpecs.length > 0 ? (
+        {frontSet && frontSet.offSpecs.length > 0 ? (
           <div className="roster-member-offs">
-            {profile.offSpecs.map((off) => {
+            {frontSet.offSpecs.map((off) => {
               const spec = specsByKey.get(
-                rosterSpecKey(profile.game, profile.className, off),
+                rosterSpecKey(frontSet.game, frontSet.className, off),
               );
               return (
                 <span className="roster-off" key={off}>
@@ -2737,13 +2931,53 @@ function RosterSection({
                     <DiscordEmojiImage
                       animated={spec.animated}
                       emojiId={spec.emojiId}
-                      fallback={classEmoji(profile.className)}
+                      fallback={classEmoji(frontSet.className)}
                       name={off}
                       size={14}
                     />
                   ) : null}
                   {off}
                 </span>
+              );
+            })}
+          </div>
+        ) : null}
+        {sets.length > 1 ? (
+          <div className="roster-set-tabs">
+            {sets.map((set) => {
+              const spec = specsByKey.get(
+                rosterSpecKey(set.game, set.className, set.specName),
+              );
+              const meta = roster?.classEmojis?.[set.className];
+              return (
+                <button
+                  className={`roster-set-tab${set === frontSet ? " roster-set-tab--on" : ""}${set.isMain ? "" : " roster-set-tab--alter"}`}
+                  key={set.className}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setFrontSetByUser((current) => ({
+                      ...current,
+                      [member.userId]: set.className,
+                    }));
+                  }}
+                  style={
+                    {
+                      "--roster-class-color":
+                        classColor(set.className) ?? "#6aa8ff",
+                    } as CSSProperties
+                  }
+                  title={`${set.className} ${set.specName}${set.isMain ? " (principal)" : " (alter)"}`}
+                  type="button"
+                >
+                  <DiscordEmojiImage
+                    animated={spec?.emojiId ? spec.animated : Boolean(meta?.animated)}
+                    emojiId={spec?.emojiId ?? meta?.emojiId}
+                    fallback={meta?.unicode ?? classEmoji(set.className)}
+                    name={set.specName}
+                    size={14}
+                  />
+                  {set.specName}
+                </button>
               );
             })}
           </div>
@@ -2808,7 +3042,8 @@ function RosterSection({
             )
           ) : null}
         </div>
-      </article>
+        </article>
+      </div>
     );
   }
 
@@ -2955,6 +3190,10 @@ function RosterSection({
 
       {sheetFor ? (
         <RosterSheet
+          alts={
+            members.find((member) => member.userId === sheetFor.userId)?.alts ??
+            []
+          }
           canDelete={canEditOthers}
           games={roster?.games ?? []}
           memberName={sheetFor.displayName}

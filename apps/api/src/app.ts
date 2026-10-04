@@ -175,9 +175,13 @@ import {
   upsertGuildConfig,
 } from "./services/guild-config-store.js";
 import {
+  deleteRosterAlts,
   deleteRosterProfile,
+  listRosterAlts,
   listRosterProfiles,
+  replaceRosterAlts,
   upsertRosterProfile,
+  type RosterAlt,
   type RosterProfile,
   type RosterTag,
 } from "./services/roster-store.js";
@@ -5229,7 +5233,7 @@ export function buildApp() {
   async function validateRosterProfile(
     guildId: string,
     body: unknown,
-  ): Promise<{ error: string } | { profile: RosterProfile }> {
+  ): Promise<{ error: string } | { alts: RosterAlt[]; profile: RosterProfile }> {
     const raw = (body ?? {}) as Record<string, unknown>;
     const className = String(raw.className ?? "").trim();
     const specName = String(raw.specName ?? "").trim();
@@ -5282,7 +5286,39 @@ export function buildApp() {
           .slice(0, 8)
       : [];
 
+    // Clases secundarias: misma validación que la principal y tope de 4. Se
+    // descartan las que repiten la clase principal o vienen dos veces.
+    const alts: RosterAlt[] = [];
+    const requestedAlts = Array.isArray(raw.alts) ? raw.alts : [];
+    for (const entry of requestedAlts) {
+      const alt = (entry ?? {}) as Record<string, unknown>;
+      const altClass = String(alt.className ?? "").trim();
+      const altSpec = String(alt.specName ?? "").trim();
+      if (
+        !altClass ||
+        !altSpec ||
+        altClass === className ||
+        alts.some((alt) => alt.className === altClass) ||
+        !specs.some(
+          (spec) => spec.className === altClass && spec.specName === altSpec,
+        )
+      ) {
+        continue;
+      }
+      alts.push({
+        className: altClass,
+        game: main.game,
+        // Las off del alter se cargan más adelante; el modelo ya las tiene.
+        offSpecs: [],
+        specName: altSpec,
+      });
+      if (alts.length >= 4) {
+        break;
+      }
+    }
+
     return {
+      alts,
       profile: {
         active,
         className,
@@ -5312,9 +5348,10 @@ export function buildApp() {
     const config = await getGuildConfig(params.guildId);
     const mappings = await listGuildMappings(params.guildId);
     const rankRoles = resolveRosterRankRoles(mappings, config);
-    const [members, profiles, specs] = await Promise.all([
+    const [members, profiles, altsByUser, specs] = await Promise.all([
       fetchAllGuildMembers(params.guildId).catch(() => []),
       listRosterProfiles(params.guildId),
+      listRosterAlts(params.guildId),
       listRaidSpecs(params.guildId, "wow"),
     ]);
 
@@ -5350,6 +5387,7 @@ export function buildApp() {
           return null;
         }
         return {
+          alts: altsByUser.get(userId) ?? [],
           displayName:
             member.nick ??
             member.user?.global_name ??
@@ -5417,7 +5455,12 @@ export function buildApp() {
       String(session.user.id),
       validation.profile,
     );
-    return { ok: true, profile };
+    const alts = await replaceRosterAlts(
+      params.guildId,
+      String(session.user.id),
+      validation.alts,
+    );
+    return { alts, ok: true, profile };
   });
 
   // Ficha de otro miembro: solo staff del módulo de raids.
@@ -5451,13 +5494,18 @@ export function buildApp() {
       params.userId,
       validation.profile,
     );
+    const alts = await replaceRosterAlts(
+      params.guildId,
+      params.userId,
+      validation.alts,
+    );
     const member = await fetchGuildMemberRecord(params.guildId, params.userId);
     await logAdminAction(session, params.guildId, "roster:profile", {
-      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}`,
+      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}${alts.length > 0 ? ` (+${alts.length} alter)` : ""}`,
       targetId: params.userId,
       targetType: "user",
     });
-    return { ok: true, profile };
+    return { alts, ok: true, profile };
   });
 
   app.delete("/guilds/:guildId/roster/:userId", async (request, reply) => {
@@ -5476,6 +5524,7 @@ export function buildApp() {
     }
 
     const deleted = await deleteRosterProfile(params.guildId, params.userId);
+    await deleteRosterAlts(params.guildId, params.userId);
     await logAdminAction(session, params.guildId, "roster:delete", {
       details: `Ficha de ${params.userId} eliminada.`,
       targetId: params.userId,

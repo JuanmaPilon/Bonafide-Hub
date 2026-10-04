@@ -2733,6 +2733,93 @@ a:hover {
     color-mix(in srgb, var(--roster-class-color) 20%, transparent);
 }
 
+/* Mazo: la carta principal adelante y las clases secundarias apiladas detrás,
+   asomando 6px abajo a la derecha (el gap de la grilla es de 6px). Todas
+   comparten la celda para que el mazo mida lo que la carta de adelante. */
+.roster-stack {
+  display: grid;
+  position: relative;
+  min-width: 0;
+}
+
+.roster-stack .roster-member {
+  grid-area: 1 / 1;
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.roster-member--front {
+  z-index: 2;
+}
+
+/* La carta de atrás es un botón: se clickea para traerla al frente. */
+.roster-member--back {
+  z-index: 1;
+  appearance: none;
+  transform: translate(6px, 6px);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.roster-member--back:hover {
+  box-shadow: 0 0 24px
+    color-mix(in srgb, var(--roster-class-color) 34%, transparent);
+}
+
+/* Pestañas del mazo: qué clases tiene la persona y cuál está al frente. */
+.roster-set-tabs {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.roster-set-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid
+    color-mix(in srgb, var(--roster-class-color) 40%, transparent);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+/* El alter se marca punteado: es la carta que no cuenta para los totales. */
+.roster-set-tab--alter {
+  border-style: dashed;
+}
+
+.roster-set-tab:hover,
+.roster-set-tab--on {
+  color: var(--text);
+}
+
+.roster-set-tab--on {
+  border-color: color-mix(in srgb, var(--roster-class-color) 78%, transparent);
+  background: color-mix(in srgb, var(--roster-class-color) 16%, transparent);
+}
+
+.roster-alt-badge {
+  padding: 2px 6px;
+  border: 1px solid rgba(178, 132, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(178, 132, 255, 0.16);
+  color: #d9c2ff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .roster-member--inactive {
   opacity: 1;
   border-color: rgba(229, 72, 77, 0.48);
@@ -2959,7 +3046,8 @@ a:hover {
   padding: 5px;
   border-radius: 10px;
   border: 1px solid var(--panel-border);
-  background: var(--panel);
+  /* Opaco: `--panel` es translúcido y el menú flota sobre la tarjeta. */
+  background: var(--panel-solid);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
@@ -3118,6 +3206,39 @@ a:hover {
 :root[data-theme="light"] .roster-off-chip--on {
   border-color: #35b96f;
   background: rgba(53, 185, 111, 0.18);
+}
+
+:root[data-theme="light"] .roster-alt-badge {
+  border-color: rgba(124, 58, 237, 0.45);
+  background: rgba(124, 58, 237, 0.12);
+  color: #5b21b6;
+}
+
+/* Ficha del roster: clases secundarias (una fila por alter) */
+.roster-sheet-alts {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.roster-sheet-alts > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.roster-alt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.roster-alt-action {
+  white-space: nowrap;
+}
+
+.roster-alt-add {
+  justify-self: start;
 }
 
 /* Gestión de logs (solo owner) dentro de la card de Raids */

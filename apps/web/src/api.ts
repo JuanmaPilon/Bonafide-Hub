@@ -1448,8 +1448,16 @@ export type RosterRankKey = "bench" | "guild" | "raid";
 
 // Ficha del roster: clase + spec actual + las off que domina (claves del
 // catálogo, que es de donde salen los emojis).
+export type RosterAlt = {
+  className: string;
+  game?: string;
+  offSpecs?: string[];
+  specName: string;
+};
+
 export type RosterProfileInput = {
   active?: boolean;
+  alts?: RosterAlt[];
   className: string;
   game?: string;
   offSpecs?: string[];
@@ -1467,6 +1475,9 @@ export type RosterProfile = {
 };
 
 export type RosterMember = {
+  // Clases secundarias ("alter"): carta de atrás de la misma persona. Nunca
+  // suman a los totales del roster.
+  alts?: RosterAlt[];
   displayName: string;
   // Ser Raid Officer va aparte del estado: se puede ser Raid Officer e inactivo.
   isRaidOfficer: boolean;
@@ -1500,6 +1511,7 @@ export async function getGuildRoster(guildId: string): Promise<GuildRoster> {
 // El guardado puede completarse con la ficha persistida y el rol de raid sin
 // sincronizar: `roleSyncError` trae el motivo para avisar sin perder el guardado.
 export type RosterProfileSave = {
+  alts?: RosterAlt[];
   profile: RosterProfile;
   roleSyncError?: string;
 };

@@ -65,17 +65,24 @@ Mensajes diarios (loro de Karpindomo):
 
 Roster de raids:
 
-1. `GET /guilds/:guildId/roster` (miembros, fichas y rangos)
-2. `PUT /guilds/:guildId/roster/me` y `PUT /guilds/:guildId/roster/:userId` (ficha: clase, spec, offs, tags)
+1. `GET /guilds/:guildId/roster` (miembros, fichas, clases secundarias y rangos)
+2. `PUT /guilds/:guildId/roster/me` y `PUT /guilds/:guildId/roster/:userId` (ficha: clase, spec, offs, tags y `alts`)
 3. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `trial` | `null`)
 4. `PUT /guilds/:guildId/roster/ranks` (mapeo rango → rol de Discord)
-5. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha)
+5. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha y sus clases secundarias)
 
 El estado del roster **es** el rol de Discord del miembro: solo el endpoint de
 rango mueve roles. Administra `raid` (Activo) y `trial` (Prueba); `guild`
 (Raid Officer) se mapea aparte y el roster nunca lo toca. Guardar la ficha no toca
 los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
 el motivo y el guardado no se pierde.
+
+Clases secundarias ("alter"): `alts: [{ className, specName }]` (tope 4) viajan
+en el mismo PUT que la ficha y reemplazan la lista completa. Se guardan en
+`roster_alt_profiles` con clave (guild, persona, clase) y en la web salen como
+cartas apiladas detrás de la principal. **Nunca cuentan como jugador extra**: la
+carta principal es siempre `roster_profiles`, así que los totales y los filtros
+de rol/estado siguen mirando una sola ficha por persona.
 
 Registro de mapeos (Admin → Mapeo):
 
@@ -301,6 +308,8 @@ Tablas:
 15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild
 16. `raid_specs` — catálogo de clases/specs por guild y JUEGO (`game`, `role`, `className`, `specName`, emoji custom)
 17. `event_images` — biblioteca de imágenes del módulo (data URL)
+18. `roster_profiles` — ficha principal del roster (clase, spec, offs, tags)
+19. `roster_alt_profiles` — clases secundarias ("alter") de una persona: clave (guild, persona, clase). No cuentan para ningún total.
 
 Campos relevantes de `guild_configs`:
 
