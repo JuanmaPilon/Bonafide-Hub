@@ -6966,7 +6966,32 @@ function App() {
         if (cancelled) {
           return;
         }
-        setEventTemplates(templates);
+        setEventTemplates(
+          templates.map((template) => {
+            const roleGroup = groups.find(
+              (group) => group.key === `role.${template.key}`,
+            );
+            return {
+              ...template,
+              roles: template.roles.map((role) => {
+                const emoji = roleGroup?.rows.find(
+                  (row) => row.key === `role.${template.key}.${role.key}`,
+                )?.emoji;
+                if (!emoji || (!emoji.emojiId && !emoji.unicode)) {
+                  return role;
+                }
+                const hasCustomEmoji = Boolean(emoji.emojiId);
+                return {
+                  ...role,
+                  animated: hasCustomEmoji && Boolean(emoji.animated),
+                  emoji: hasCustomEmoji ? undefined : emoji.unicode,
+                  emojiId: emoji.emojiId,
+                  emojiName: emoji.emojiName,
+                };
+              }),
+            };
+          }),
+        );
         const classRows =
           groups.find((group) => group.key === "class")?.rows ?? [];
         setClassEmojis(
