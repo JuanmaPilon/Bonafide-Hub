@@ -5076,111 +5076,11 @@ select.list-order {
   margin-bottom: 16px;
 }
 
-/* Plantillas de juego: elegís el preset, ves un resumen y lo aplicás. */
-.event-template-picker > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.event-template-picker > summary::-webkit-details-marker {
-  display: none;
-}
-
-.event-template-picker > summary .admin-acc-chevron {
-  margin-left: auto;
-  transition: transform 0.15s ease;
-}
-
-.event-template-picker[open] > summary .admin-acc-chevron {
-  transform: rotate(90deg);
-}
-
+/* Tipos de evento disponibles. */
 .event-template-picker {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.event-template-picker .event-role-field .select {
-  min-width: 220px;
-  max-width: 320px;
-}
-
-.event-template-preview {
-  display: grid;
-  gap: 8px;
-}
-
-.event-template-preview p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
-.event-template-roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.event-template-role {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.3);
-  font-size: 0.85rem;
-}
-
-.event-template-note {
-  font-size: 0.8rem;
-}
-
-/* Clases y specs del catálogo, dentro del tipo de evento. */
-.event-template-classes {
-  display: grid;
-  gap: 8px;
-}
-
-.event-template-class {
-  display: grid;
-  gap: 4px;
-}
-
-.event-template-class-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.event-template-specs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-left: 26px;
-}
-
-.event-template-spec {
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-:root[data-theme="light"] .event-template-picker {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(67, 81, 109, 0.18);
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(134, 158, 214, 0.18);
+  font-size: 0.92rem;
 }
 
 .spec-emoji-grid {

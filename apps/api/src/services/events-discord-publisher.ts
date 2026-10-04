@@ -1105,7 +1105,14 @@ export async function postEventPoll(input: {
           answers: roles.slice(0, 10).map((option) => ({
             poll_media: {
               emoji: emojiFor(option),
-              text: option.label.trim().slice(0, 55),
+              text: (option.key === "si"
+                ? "SI"
+                : option.key === "no"
+                  ? "NO"
+                  : option.label
+              )
+                .trim()
+                .slice(0, 55),
             },
           })),
           duration: hours > 0 ? hours : undefined,

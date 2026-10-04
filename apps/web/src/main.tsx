@@ -4114,8 +4114,8 @@ function EventCard({
 
           {isPoll ? (
             <div className="event-form-note">
-              📊 La votación se hace en la encuesta publicada en Discord (✅ Sí
-              · ❌ No).
+              📊 La votación se hace en la encuesta publicada en Discord (✅ SI
+              · ❌ NO).
             </div>
           ) : null}
           {meId && !isPoll ? (
@@ -6278,9 +6278,6 @@ function App() {
   const [eventTemplates, setEventTemplates] = useState<EventTemplateSummary[]>(
     [],
   );
-  // Catálogo real (código + lo cargado en la base) y los emojis de clase que
-  // mapeó la guild, para poder ver cada clase y sus specs.
-  const [eventCatalog, setEventCatalog] = useState<RaidSpec[]>([]);
   const [classEmojis, setClassEmojis] = useState<Record<string, MappingEmoji>>(
     {},
   );
@@ -6955,8 +6952,7 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
-  // Tipos de evento para el panel (solo lectura), con su catálogo real y los
-  // emojis de clase mapeados en Admin → Mapeo.
+  // Tipos de evento disponibles en el módulo.
   useEffect(() => {
     if (!selectedGuildId || activeTab !== "admin" || !canAccess("config")) {
       return;
@@ -6964,15 +6960,13 @@ function App() {
     let cancelled = false;
     Promise.all([
       getEventTemplates(selectedGuildId),
-      getEventSpecs(selectedGuildId).catch(() => [] as RaidSpec[]),
       getGuildMappings(selectedGuildId).catch(() => [] as MappingGroup[]),
     ])
-      .then(([templates, specs, groups]) => {
+      .then(([templates, groups]) => {
         if (cancelled) {
           return;
         }
         setEventTemplates(templates);
-        setEventCatalog(specs);
         const classRows =
           groups.find((group) => group.key === "class")?.rows ?? [];
         setClassEmojis(
@@ -11542,10 +11536,6 @@ function App() {
                               Admin
                             </span>
                           </h3>
-                          <p>
-                            Tipos de evento disponibles y qué selecciones ofrece
-                            cada uno.
-                          </p>
                         </div>
                         <span className="admin-acc-chevron" aria-hidden="true">
                           ▸
@@ -11557,107 +11547,14 @@ function App() {
                             Cargando tipos de evento…
                           </p>
                         ) : (
-                          eventTemplates.map((template) => {
-                            const gameSpecs = eventCatalog.filter(
-                              (spec) => spec.game === template.key,
-                            );
-                            // Agrupadas por clase, en el orden del catálogo.
-                            const byClass = new Map<string, RaidSpec[]>();
-                            for (const spec of gameSpecs) {
-                              byClass.set(spec.className, [
-                                ...(byClass.get(spec.className) ?? []),
-                                spec,
-                              ]);
-                            }
-                            const gameClasses = [...byClass].map(
-                              ([className, specs]) => ({ className, specs }),
-                            );
-                            return (
-                              <details
-                                className="event-template-picker"
-                                key={template.key}
-                              >
-                                <summary>
-                                  <strong>{template.label}</strong>
-                                  {template.poll ? (
-                                    <span className="admin-tier-badge tier-officer">
-                                      Encuesta
-                                    </span>
-                                  ) : null}
-                                  <span
-                                    className="admin-acc-chevron"
-                                    aria-hidden="true"
-                                  >
-                                    ▸
-                                  </span>
-                                </summary>
-                                <div className="event-template-preview">
-                                  <p>{template.description}</p>
-                                  <div className="event-template-roles">
-                                    {template.roles.map((role) => (
-                                      <span
-                                        className="event-template-role"
-                                        key={role.key}
-                                      >
-                                        <EventRoleEmoji
-                                          role={role.key}
-                                          roles={template.roles}
-                                          size={18}
-                                        />
-                                        {role.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                  <span className="event-template-note muted-text">
-                                    {gameClasses.length > 0
-                                      ? `${gameClasses.length} clases · ${gameSpecs.length} specs · ${template.roles.length} roles`
-                                      : `${template.roles.length} roles · sin catálogo de clases`}
-                                  </span>
-                                  {gameClasses.length > 0 ? (
-                                    <div className="event-template-classes">
-                                      {gameClasses.map((entry) => (
-                                        <div
-                                          className="event-template-class"
-                                          key={entry.className}
-                                        >
-                                          <span className="event-template-class-name">
-                                            <DiscordEmojiImage
-                                              animated={
-                                                classEmojis[entry.className]
-                                                  ?.animated
-                                              }
-                                              emojiId={
-                                                classEmojis[entry.className]
-                                                  ?.emojiId
-                                              }
-                                              fallback={
-                                                classEmojis[entry.className]
-                                                  ?.unicode ??
-                                                classEmoji(entry.className)
-                                              }
-                                              name={entry.className}
-                                              size={18}
-                                            />
-                                            {entry.className}
-                                          </span>
-                                          <div className="event-template-specs">
-                                            {entry.specs.map((spec) => (
-                                              <span
-                                                className="event-template-spec"
-                                                key={spec.specName}
-                                              >
-                                                {spec.specName}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </details>
-                            );
-                          })
+                          eventTemplates.map((template) => (
+                            <div
+                              className="event-template-picker"
+                              key={template.key}
+                            >
+                              <strong>{template.label}</strong>
+                            </div>
+                          ))
                         )}
                       </div>
                     </details>
@@ -12001,7 +11898,8 @@ function App() {
                 <div className="comunicados-stack">
                   {publishedLoading ? (
                     <LoadingState label="Cargando comunicados…" />
-                  ) : published.length === 0 && draftComunicados.length === 0 ? (
+                  ) : published.length === 0 &&
+                    draftComunicados.length === 0 ? (
                     <div className="empty-state">
                       <p>
                         {canManageComunicados
@@ -12445,7 +12343,7 @@ function App() {
                             <div className="event-form-wide">
                               <span className="event-form-note">
                                 📊 Este tipo de evento publica también una
-                                encuesta nativa de Discord (✅ Sí · ❌ No) en el
+                                encuesta nativa de Discord (✅ SI · ❌ NO) en el
                                 canal del aviso.
                               </span>
                             </div>

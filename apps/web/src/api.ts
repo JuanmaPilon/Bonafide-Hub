@@ -1816,13 +1816,10 @@ export async function updateEventSpec(
 // nombres de los ejes y el catálogo de clases/specs precargado.
 
 export type EventTemplateSummary = {
-  description: string;
   key: string;
   label: string;
   // Plantilla de encuesta: además del aviso se publica una encuesta de Discord.
   poll: boolean;
-  roles: EventRoleOption[];
-  specCount: number;
 };
 
 export async function getEventTemplates(

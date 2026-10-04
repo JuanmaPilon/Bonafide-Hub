@@ -15,7 +15,6 @@ export type EventTemplateSpec = {
 };
 
 export type EventTemplate = {
-  description: string;
   key: string;
   label: string;
   // Plantilla de ENCUESTA: además del aviso, el evento se publica como
@@ -155,8 +154,6 @@ function role(key: string, label: string, emoji: string): EventRoleOption {
 
 export const EVENT_TEMPLATES: EventTemplate[] = [
   {
-    description:
-      "Tank, Healer, Melee y Range + el catálogo de las 13 clases con sus specs.",
     key: "wow",
     label: "World of Warcraft",
     roles: [
@@ -168,8 +165,6 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     specs: buildSpecs(WOW_CLASSES),
   },
   {
-    description:
-      "Top, Jungle, Mid, ADC y Support. Placeholder: se ajustan los roles y se cargan los campeones a mano.",
     key: "lol",
     label: "League of Legends",
     roles: [
@@ -182,12 +177,10 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     specs: [],
   },
   {
-    description:
-      "Pregunta de sí/no: además del aviso, el evento se publica como encuesta de Discord (✅ Sí · ❌ No) para votar. Sin clases ni personaje.",
     key: "encuesta",
-    label: "Encuesta (sí / no)",
+    label: "Encuesta (SI / NO)",
     poll: true,
-    roles: [role("si", "Sí", "✅"), role("no", "No", "❌")],
+    roles: [role("si", "SI", "✅"), role("no", "NO", "❌")],
     specs: [],
   },
 ];
@@ -221,19 +214,13 @@ export function findEventTemplate(
 
 // Resumen para el listado (sin mandar todo el catálogo de specs al front).
 export function summarizeEventTemplate(template: EventTemplate): {
-  description: string;
   key: string;
   label: string;
   poll: boolean;
-  roles: EventRoleOption[];
-  specCount: number;
 } {
   return {
-    description: template.description,
     key: template.key,
     label: template.label,
     poll: template.poll === true,
-    roles: template.roles,
-    specCount: template.specs.length,
   };
 }
