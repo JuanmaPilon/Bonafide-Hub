@@ -1,14 +1,18 @@
+import { env } from "../config/env.js";
 import { prisma } from "../db/prisma.js";
 
 // ── Juegos que se juegan en el server ──────────────────────────────
-// Discord NO expone por API los "Server Insights" (ese panel donde se ven los
-// juegos del servidor). Lo que sí da el Gateway es `presenceUpdate`, así que el
-// bot acumula acá lo que ve: quién está jugando qué, por día.
+// Discord NO expone por API los "Server Insights" ni el panel de "Juegos
+// jugados" del servidor. Lo que sí da el Gateway es `presenceUpdate`, así que
+// el bot acumula acá lo que ve: quién está jugando qué, por día.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // El lote del bot no debería ser grande; el techo es por las dudas.
 const MAX_ENTRIES_PER_REPORT = 500;
 const MAX_GAMES = 12;
+const DISCORD_API_BASE = "https://discord.com/api/v10";
+const COVER_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const COVER_FAIL_TTL_MS = 10 * 60 * 1000;
 
 export type GameActivityEntry = {
   applicationId: string;
@@ -18,6 +22,8 @@ export type GameActivityEntry = {
 
 export type GuildGameActivity = {
   applicationId?: string;
+  // Portada del juego (cover_image de la aplicación, servida por Discord).
+  coverUrl?: string;
   // Días distintos con actividad registrada.
   days: number;
   name: string;
@@ -31,6 +37,8 @@ type ActivityRow = {
   day: string;
   userId: string;
 };
+
+const coverCache = new Map<string, { coverUrl?: string; expiresAt: number }>();
 
 // Día UTC (YYYY-MM-DD): el bot manda cambios de presencia, no fechas.
 export function activityDay(now = new Date()): string {
@@ -86,6 +94,49 @@ export async function recordGameActivity(
   return operations.length;
 }
 
+// Portada del juego. `GET /applications/{id}` es público y devuelve
+// `cover_image` (el hash de la portada que Discord muestra en su panel de
+// "Juegos jugados"); el CDN la sirve en app-icons. Se cachea por app —también
+// los fallos— para que el dashboard no dependa de Discord en cada request.
+async function resolveApplicationCover(
+  applicationId: string,
+): Promise<string | undefined> {
+  const cached = coverCache.get(applicationId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.coverUrl;
+  }
+
+  const token = env.DISCORD_BOT_TOKEN?.trim();
+  let coverUrl: string | undefined;
+  try {
+    const response = await fetch(
+      `${DISCORD_API_BASE}/applications/${encodeURIComponent(applicationId)}`,
+      {
+        headers: token
+          ? { accept: "application/json", authorization: `Bot ${token}` }
+          : { accept: "application/json" },
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
+    if (response.ok) {
+      const application = (await response.json()) as {
+        cover_image?: string | null;
+      };
+      if (application.cover_image) {
+        coverUrl = `https://cdn.discordapp.com/app-icons/${applicationId}/${application.cover_image}.png?size=256`;
+      }
+    }
+  } catch {
+    // Sin portada la tarjeta queda con el nombre.
+  }
+
+  coverCache.set(applicationId, {
+    coverUrl,
+    expiresAt: Date.now() + (coverUrl ? COVER_CACHE_TTL_MS : COVER_FAIL_TTL_MS),
+  });
+  return coverUrl;
+}
+
 export async function listGuildGameActivity(input: {
   days: number;
   guildId: string;
@@ -139,5 +190,12 @@ export async function listGuildGameActivity(input: {
     )
     .slice(0, MAX_GAMES);
 
-  return games;
+  const covers = await Promise.all(
+    games.map((game) =>
+      game.applicationId
+        ? resolveApplicationCover(game.applicationId)
+        : Promise.resolve(undefined),
+    ),
+  );
+  return games.map((game, index) => ({ ...game, coverUrl: covers[index] }));
 }

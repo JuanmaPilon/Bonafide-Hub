@@ -164,10 +164,17 @@ Juegos que se juegan en el server:
 Discord no expone los Server Insights por API, así que la agregación la hace el
 bot con `PresenceUpdate` (intent `GuildPresences`) y el API guarda una fila por
 persona + aplicación + **día** en `member_game_activity`. El endpoint devuelve
-`{ days, games: [{ applicationId, days, name, players }], source }`, ordenado
-por jugadores distintos (la web solo muestra el nombre; el orden es la señal de
-qué se juega más). `source: "configured"` significa que todavía no hay actividad
-registrada y se están mostrando los juegos configurados del módulo de eventos.
+`{ days, games: [{ applicationId, days, name, players, coverUrl }], source }`,
+ordenado por jugadores distintos (la web solo muestra el nombre; el orden es la
+señal de qué se juega más). `source: "configured"` significa que todavía no hay
+actividad registrada y se están mostrando los juegos configurados del módulo de
+eventos.
+
+La portada (`coverUrl`) sale de `GET /applications/{applicationId}`
+(`cover_image`, la que Discord usa en su panel de "Juegos jugados") y se sirve
+por el CDN de Discord en `app-icons/{applicationId}/{cover_image}.png`. No es
+dato de la guild: se cachea por aplicación 12 h (y 10 min los fallos) y, si la
+aplicación no tiene portada, el juego va sin `coverUrl`.
 
 XP:
 

@@ -9577,7 +9577,11 @@ function App() {
                           key={game.applicationId ?? game.name}
                           title={game.name}
                         >
-                          <span className="game-cover-art" />
+                          <span className="game-cover-art">
+                            {game.coverUrl ? (
+                              <img alt="" loading="lazy" src={game.coverUrl} />
+                            ) : null}
+                          </span>
                           <span className="game-cover-name">{game.name}</span>
                         </article>
                       ))}

@@ -4436,8 +4436,7 @@ a:hover {
 }
 
 /* Portadas de los juegos del server: mismo lenguaje visual que .stat-tile
-   (radio, borde, degradado y sombra) para que no desentone en el dashboard.
-   El arte es una caja 3:4: hoy no hay portadas, así que queda el nombre. */
+   (radio, borde, degradado y sombra) para que no desentone en el dashboard. */
 .game-covers {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
@@ -4463,7 +4462,9 @@ a:hover {
   display: grid;
   width: 100%;
   place-items: center;
-  aspect-ratio: 3 / 4;
+  /* Proporción de las portadas de Discord (medida en su panel de "Juegos
+     jugados"): casi cuadrada, un poco más alta que ancha. */
+  aspect-ratio: 9 / 10;
   overflow: hidden;
   border-radius: 12px;
   background: rgba(134, 158, 214, 0.08);
