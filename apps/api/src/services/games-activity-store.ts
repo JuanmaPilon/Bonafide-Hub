@@ -62,8 +62,12 @@ type ActivityRow = {
 };
 
 type CoverHashes = {
-  hashes: Map<string, string>;
+  byId: Map<string, string>;
+  // La portada por nombre guarda también el id de Discord: el CDN arma la URL
+  // con el id de la app, así que el id reportado por la presencia no sirve.
+  byName: Map<string, { hash: string; id: string }>;
   expiresAt: number;
+  iconsById: Map<string, string>;
 };
 
 // Día UTC (YYYY-MM-DD): el bot manda cambios de presencia, no fechas.
@@ -130,13 +134,23 @@ export async function recordGameActivity(
 // 403 con token de bot). La única vía abierta es `GET /applications/detectable`,
 // la lista de apps que Discord reconoce, que trae `cover_image_hash` por app;
 // el CDN la sirve en app-icons. Es UN request de ~13 MB cada 24 h y se arma un
-// índice id -> hash, así que el dashboard no depende de Discord por request.
+// índice en memoria, así que el dashboard no depende de Discord por request.
+//
+// Se buscan tres cosas en orden, porque no todas las apps están cargadas igual:
+// la portada por id, la portada por nombre (Discord tiene ids viejos y nuevos
+// para el mismo juego) y, si no hay portada, el icono de la app.
 let covers: CoverHashes | null = null;
-let coversInFlight: Promise<Map<string, string>> | null = null;
+let coversInFlight: Promise<CoverHashes> | null = null;
 
-async function fetchCoverHashes(): Promise<Map<string, string>> {
+async function fetchCoverHashes(): Promise<CoverHashes> {
   const token = env.DISCORD_BOT_TOKEN?.trim();
-  const hashes = new Map<string, string>();
+  const empty: CoverHashes = {
+    byId: new Map<string, string>(),
+    byName: new Map<string, { hash: string; id: string }>(),
+    expiresAt: 0,
+    iconsById: new Map<string, string>(),
+  };
+  let next = empty;
   try {
     const response = await fetch(`${DISCORD_API_BASE}/applications/detectable`, {
       headers: token ? { authorization: `Bot ${token}` } : {},
@@ -146,53 +160,90 @@ async function fetchCoverHashes(): Promise<Map<string, string>> {
       throw new Error(`detectable respondió ${response.status}`);
     }
     const applications = (await response.json()) as {
+      aliases?: string[] | null;
       cover_image_hash?: string | null;
+      icon_hash?: string | null;
       id?: string;
+      name?: string;
     }[];
+    next = { ...empty, expiresAt: Date.now() + COVERS_TTL_MS };
     for (const application of applications) {
-      if (application.id && application.cover_image_hash) {
-        hashes.set(application.id, application.cover_image_hash);
+      if (!application.id) {
+        continue;
+      }
+      // El nombre puede repetirse (ids viejos y nuevos del mismo juego): gana
+      // la primera app que tenga portada.
+      if (application.cover_image_hash) {
+        next.byId.set(application.id, application.cover_image_hash);
+        for (const alias of [application.name, ...(application.aliases ?? [])]) {
+          const key = normalizeName(String(alias ?? ""));
+          if (key && !next.byName.has(key)) {
+            next.byName.set(key, {
+              hash: application.cover_image_hash,
+              id: application.id,
+            });
+          }
+        }
+      }
+      if (application.icon_hash) {
+        next.iconsById.set(application.id, application.icon_hash);
       }
     }
-    covers = { expiresAt: Date.now() + COVERS_TTL_MS, hashes };
+    covers = next;
   } catch {
     // Sin lista no hay portadas, pero los juegos se muestran igual. Si había
     // una lista vieja, se conserva y se reintenta dentro de un rato.
     covers = {
+      ...(covers ?? empty),
       expiresAt: Date.now() + COVERS_RETRY_MS,
-      hashes: covers?.hashes ?? hashes,
     };
+    return covers;
   }
-  return covers.hashes;
+  return next;
 }
 
-function refreshCoverHashes(): Promise<Map<string, string>> {
+function refreshCoverHashes(): Promise<CoverHashes> {
   coversInFlight ??= fetchCoverHashes().finally(() => {
     coversInFlight = null;
   });
   return coversInFlight;
 }
 
-function loadCoverHashes(): Promise<Map<string, string>> {
+function loadCoverHashes(): Promise<CoverHashes> {
   if (covers && covers.expiresAt > Date.now()) {
-    return Promise.resolve(covers.hashes);
+    return Promise.resolve(covers);
   }
   if (covers) {
     // Vencida: se devuelve la que hay y se refresca en segundo plano, para no
     // clavar el request del dashboard esperando un JSON de 13 MB.
     void refreshCoverHashes();
-    return Promise.resolve(covers.hashes);
+    return Promise.resolve(covers);
   }
   return refreshCoverHashes();
 }
 
-async function resolveApplicationCover(
+// Portada de la app; si Discord no le cargó ninguna, cae al icono (antes que
+// dejar la tarjeta vacía). Devuelve undefined si la app no está en la lista.
+function resolveApplicationImage(
   applicationId: string,
-): Promise<string | undefined> {
-  const hash = (await loadCoverHashes()).get(applicationId);
-  return hash
-    ? `https://cdn.discordapp.com/app-icons/${applicationId}/${hash}.png?size=256`
-    : undefined;
+  applicationName: string,
+  index: CoverHashes,
+): string | undefined {
+  const imageUrl = (id: string, hash: string): string =>
+    `https://cdn.discordapp.com/app-icons/${id}/${hash}.png?size=256`;
+
+  const cover = index.byId.get(applicationId);
+  if (cover) {
+    return imageUrl(applicationId, cover);
+  }
+  // La app de la presencia no está en la lista (Discord tiene ids viejos y
+  // nuevos del mismo juego): sirve la portada de la que sí está.
+  const byName = index.byName.get(normalizeName(applicationName));
+  if (byName) {
+    return imageUrl(byName.id, byName.hash);
+  }
+  const icon = index.iconsById.get(applicationId);
+  return icon ? imageUrl(applicationId, icon) : undefined;
 }
 
 export async function listGuildGameActivity(input: {
@@ -249,12 +300,11 @@ export async function listGuildGameActivity(input: {
     )
     .slice(0, MAX_GAMES);
 
-  const covers = await Promise.all(
-    games.map((game) =>
-      game.applicationId
-        ? resolveApplicationCover(game.applicationId)
-        : Promise.resolve(undefined),
-    ),
-  );
-  return games.map((game, index) => ({ ...game, coverUrl: covers[index] }));
+  const index = await loadCoverHashes();
+  return games.map((game) => ({
+    ...game,
+    coverUrl: game.applicationId
+      ? resolveApplicationImage(game.applicationId, game.name, index)
+      : undefined,
+  }));
 }

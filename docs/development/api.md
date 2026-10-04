@@ -177,10 +177,14 @@ sin auth, 403 con token de bot). La única vía abierta es
 `GET /applications/detectable` — la lista de apps que Discord reconoce, sin auth
 — que trae `cover_image_hash` por app y se sirve por el CDN en
 `app-icons/{applicationId}/{cover_image_hash}.png`. Es un request de ~13 MB, así
-que el API arma un índice `applicationId -> hash` en memoria con TTL de 24 h (y
-lo refresca en segundo plano cuando vence, para no clavar el request del
-dashboard). Si la app no está en la lista o no tiene portada, el juego va sin
-`coverUrl` y la grilla muestra el nombre.
+que el API arma un índice en memoria con TTL de 24 h (y lo refresca en segundo
+plano cuando vence, para no clavar el request del dashboard). El índice guarda
+la portada por id, la portada por nombre/alias (Discord tiene ids viejos y
+nuevos del mismo juego, y la presencia puede reportar el viejo) y el icono por
+id. La resolución prueba en ese orden: portada por id, portada por nombre —acá
+la URL usa el id **canónico** de Discord, porque el CDN arma la ruta con el id—
+y, si la app no tiene portada cargada, su icono. Si la app no está en la lista
+(CurseForge, editores, launchers), el juego va sin `coverUrl`.
 
 El API descarta las apps que Discord detecta como "está jugando" pero no son
 juegos (CurseForge, Steam, OBS, VS Code…): viven en `NON_GAME_APPLICATIONS`
