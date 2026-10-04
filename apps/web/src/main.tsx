@@ -5442,6 +5442,10 @@ function MoonIcon() {
 // (`.podium-place-N`).
 const PODIUM_LABELS = ["1ro", "2do", "3ro", "4to", "5to"];
 
+// Cada cuánto se refresca solo el dashboard. El endpoint de conectados pega
+// tres veces contra Discord, así que el intervalo no puede ser corto.
+const DASHBOARD_REFRESH_MS = 60_000;
+
 // Guía de comandos de Karuta con el prefijo del server ("k" + comando).
 // Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
 // renombra comandos, esta lista se actualiza acá.
@@ -6054,6 +6058,8 @@ function App() {
     games: GuildGameActivity[];
     source: "activity" | "configured";
   } | null>(null);
+  const gameCoversRef = useRef<HTMLDivElement | null>(null);
+  const [gamesOverflow, setGamesOverflow] = useState(false);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<Communication[]>([]);
   const [publishedLoading, setPublishedLoading] = useState(true);
@@ -9201,6 +9207,11 @@ function App() {
 
   // Juegos del server: los mide el bot con las presencias. Un fallo acá deja
   // el dashboard sin las portadas, nada más.
+  //
+  // El dashboard es la primera sección que se refresca sola: conectados y
+  // juegos cambian sin que el usuario haga nada. Se pausa con la pestaña del
+  // navegador en segundo plano y se adelanta al volver a ella. El intervalo es
+  // largo a propósito: /widget pega contra Discord (preview + guild + widget).
   useEffect(() => {
     if (activeTab !== "dashboard" || !selectedGuildId) {
       setGameActivity(null);
@@ -9208,22 +9219,71 @@ function App() {
     }
 
     let cancelled = false;
-    getGuildGameActivity(selectedGuildId)
-      .then((activity) => {
-        if (!cancelled) {
-          setGameActivity(activity);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGameActivity(null);
-        }
-      });
+    const refresh = async (): Promise<void> => {
+      const [status, activity] = await Promise.allSettled([
+        getGuildWidgetStatus(selectedGuildId),
+        getGuildGameActivity(selectedGuildId),
+      ]);
+      if (cancelled) {
+        return;
+      }
+      if (status.status === "fulfilled") {
+        setWidgetStatus(status.value);
+      }
+      if (activity.status === "fulfilled") {
+        setGameActivity(activity.value);
+      } else {
+        setGameActivity(null);
+      }
+    };
+
+    void refresh();
+
+    const runIfVisible = (): void => {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    };
+    const timer = window.setInterval(runIfVisible, DASHBOARD_REFRESH_MS);
+    document.addEventListener("visibilitychange", runIfVisible);
+    window.addEventListener("focus", runIfVisible);
 
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", runIfVisible);
+      window.removeEventListener("focus", runIfVisible);
     };
   }, [activeTab, selectedGuildId]);
+
+  // Las flechas del carrusel solo tienen sentido si hay algo cortado.
+  useEffect(() => {
+    const element = gameCoversRef.current;
+    if (!element) {
+      setGamesOverflow(false);
+      return;
+    }
+    const measure = (): void => {
+      setGamesOverflow(element.scrollWidth > element.clientWidth + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [gameActivity, activeTab]);
+
+  function scrollGameCovers(direction: 1 | -1): void {
+    const element = gameCoversRef.current;
+    if (!element) {
+      return;
+    }
+    element.scrollBy({
+      behavior: "smooth",
+      left: direction * Math.max(200, element.clientWidth * 0.9),
+    });
+  }
 
   // Carrusel de la landing: nombres reales del leaderboard público.
   useEffect(() => {
@@ -9542,49 +9602,49 @@ function App() {
 
               {activeTab === "dashboard" ? (
                 <div className="dashboard-stack">
-                  <div className="dashboard-toolbar">
-                    <button
-                      className="icon-button"
-                      onClick={refreshSession}
-                      disabled={loading}
-                      title="Refrescar datos"
-                      aria-label="Refrescar datos"
-                    >
-                      <svg
-                        className="icon-button-icon"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                        <polyline points="21 3 21 9 15 9" />
-                      </svg>
-                    </button>
-                  </div>
                   <ServerStats
                     status={widgetStatus}
                     loading={loadingGuildData}
                   />
 
                   {gameActivity && gameActivity.games.length > 0 ? (
-                    <div className="game-covers">
-                      {gameActivity.games.map((game) => (
-                        <article
-                          className="game-cover"
-                          key={game.applicationId ?? game.name}
-                          title={game.name}
-                        >
-                          <span className="game-cover-art">
-                            {game.coverUrl ? (
-                              <img alt="" loading="lazy" src={game.coverUrl} />
-                            ) : null}
-                          </span>
-                          <span className="game-cover-name">{game.name}</span>
-                        </article>
-                      ))}
+                    <div className="game-carousel">
+                      <div className="game-covers" ref={gameCoversRef}>
+                        {gameActivity.games.map((game) => (
+                          <article
+                            className="game-cover"
+                            key={game.applicationId ?? game.name}
+                            title={game.name}
+                          >
+                            <span className="game-cover-art">
+                              {game.coverUrl ? (
+                                <img alt="" loading="lazy" src={game.coverUrl} />
+                              ) : null}
+                            </span>
+                            <span className="game-cover-name">{game.name}</span>
+                          </article>
+                        ))}
+                      </div>
+                      {gamesOverflow ? (
+                        <>
+                          <button
+                            className="game-carousel-arrow game-carousel-arrow-left"
+                            type="button"
+                            onClick={() => scrollGameCovers(-1)}
+                            aria-label="Juegos anteriores"
+                          >
+                            ‹
+                          </button>
+                          <button
+                            className="game-carousel-arrow game-carousel-arrow-right"
+                            type="button"
+                            onClick={() => scrollGameCovers(1)}
+                            aria-label="Juegos siguientes"
+                          >
+                            ›
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   ) : null}
 

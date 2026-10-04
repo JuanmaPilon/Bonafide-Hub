@@ -4436,16 +4436,41 @@ a:hover {
 }
 
 /* Portadas de los juegos del server: mismo lenguaje visual que .stat-tile
-   (radio, borde, degradado y sombra) para que no desentone en el dashboard. */
+   (radio, borde, degradado y sombra) para que no desentone en el dashboard.
+   Van en carrusel para que entren todos los juegos sin estirar el dashboard. */
+.game-carousel {
+  position: relative;
+  /* Sin esto el hijo flex estira el grid y nunca hay scroll horizontal. */
+  min-width: 0;
+}
+
 .game-covers {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  display: flex;
   gap: 14px;
+  /* overflow-x: auto recorta el alto también: el padding evita que el scroll
+     se coma la sombra de las tarjetas. */
+  padding: 6px 2px;
+  margin: -6px -2px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.game-covers::-webkit-scrollbar {
+  height: 8px;
+}
+
+.game-covers::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(134, 158, 214, 0.3);
 }
 
 .game-cover {
   display: grid;
   gap: 10px;
+  flex: 0 0 124px;
+  scroll-snap-align: start;
   justify-items: center;
   padding: 12px;
   border-radius: 18px;
@@ -4456,6 +4481,37 @@ a:hover {
     rgba(12, 19, 37, 0.7)
   );
   box-shadow: 0 10px 24px rgba(2, 8, 13, 0.2);
+}
+
+.game-carousel-arrow {
+  display: grid;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(134, 158, 214, 0.3);
+  background: rgba(10, 16, 31, 0.86);
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.game-carousel-arrow-left {
+  left: 4px;
+}
+
+.game-carousel-arrow-right {
+  right: 4px;
+}
+
+.game-carousel-arrow:hover {
+  border-color: rgba(134, 158, 214, 0.6);
+  color: var(--accent);
 }
 
 .game-cover-art {
@@ -4483,11 +4539,6 @@ a:hover {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.dashboard-toolbar {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .icon-button {
@@ -8644,6 +8695,11 @@ select.list-order {
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(54, 89, 185, 0.18);
   box-shadow: 0 10px 24px rgba(54, 89, 185, 0.08);
+}
+
+:root[data-theme="light"] .game-carousel-arrow {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(54, 89, 185, 0.24);
 }
 
 :root[data-theme="light"] .module-toggle,
