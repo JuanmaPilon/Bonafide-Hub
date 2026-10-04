@@ -9,8 +9,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { RaidLogsBoard } from "./RaidLogsBoard";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
@@ -690,242 +690,6 @@ function KarpindomoWidget({
         <img className="karpindomo-fab-icon" src="/karpindomo.png" alt="" />
       </button>
     </div>
-  );
-}
-
-// Lista reutilizable de logs de raid. Una entrada por NOCHE: los reports con
-// el mismo título y fecha (una subida en dos partes) salen juntos y se publican
-// en un solo mensaje. Cada entrada es un acordeón y se publica a mano.
-function RaidLogsList({
-  logs,
-  onHide,
-  onPublish,
-  onUpdate,
-}: {
-  logs: RaidLog[];
-  onHide?: (group: RaidLog[]) => void;
-  onPublish?: (log: RaidLog) => Promise<void>;
-  onUpdate?: (log: RaidLog) => Promise<void>;
-}) {
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-
-  const groups = useMemo(() => {
-    const byKey = new Map<string, RaidLog[]>();
-    for (const log of logs) {
-      const key = log.groupKey || log.id;
-      const bucket = byKey.get(key);
-      if (bucket) {
-        bucket.push(log);
-      } else {
-        byKey.set(key, [log]);
-      }
-    }
-    return [...byKey.entries()].map(([key, parts]) => ({
-      fights: parts.reduce((total, part) => total + part.fightCount, 0),
-      key,
-      kills: parts.reduce((total, part) => total + part.kills, 0),
-      needsUpdate: parts.some((part) => part.needsUpdate),
-      parts: [...parts].sort((a, b) =>
-        (a.firstFightAt ?? a.createdAt).localeCompare(
-          b.firstFightAt ?? b.createdAt,
-        ),
-      ),
-      posted: parts.some((part) => part.discordPosted),
-      startedAt: parts
-        .map((part) => part.firstFightAt)
-        .filter((date): date is string => Boolean(date))
-        .sort()[0],
-      status: parts.some((part) => part.status === "failed")
-        ? "failed"
-        : parts.some((part) => part.status === "live")
-          ? "live"
-          : "synced",
-      title: parts[0]?.title,
-    }));
-  }, [logs]);
-
-  const toggleGroup = (key: string): void => {
-    setExpandedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
-  if (groups.length === 0) {
-    return <div className="empty-state">Todavía no hay logs de raid.</div>;
-  }
-
-  return (
-    <>
-      {groups.map((group) => {
-        const expanded = expandedKeys.has(group.key);
-        const lead = group.parts[0];
-        const busy = busyKey === group.key;
-        // Publicado con datos nuevos disponibles: requiere actualización manual.
-        const pending =
-          group.posted && group.needsUpdate === true && group.status !== "live";
-        // Color del badge de PUBLICACIÓN: no depende de si la noche sigue en
-        // curso (eso se muestra aparte como "En vivo"), así que un log ya
-        // publicado se ve verde aunque Warcraft Logs siga subiendo fights.
-        const publishBadgeClass =
-          group.status === "failed"
-            ? "raid-log-failed"
-            : group.posted
-              ? "raid-log-synced"
-              : "";
-        const runAction = (action?: (log: RaidLog) => Promise<void>) => {
-          if (!action) {
-            return;
-          }
-          setBusyKey(group.key);
-          void action(lead).finally(() => setBusyKey(null));
-        };
-
-        return (
-          <article className="raid-log-card" key={group.key}>
-            <button
-              className="raid-log-card-header"
-              onClick={() => toggleGroup(group.key)}
-              type="button"
-              aria-expanded={expanded}
-            >
-              <span className="raid-log-card-heading">
-                <strong className="raid-log-card-title">
-                  {group.title || "Log de Raid"}
-                </strong>
-                <span className="raid-log-card-meta">
-                  {group.startedAt ? `${formatDate24(group.startedAt)} · ` : ""}
-                  ⚔️ {group.fights} · 💀 {group.kills}
-                  {group.parts.length > 1
-                    ? ` · ${group.parts.length} reports`
-                    : ""}
-                </span>
-              </span>
-              <span className="raid-log-card-status">
-                {group.status === "live" ? (
-                  <span
-                    className="raid-log-badge raid-log-live"
-                    title="Todavía se están subiendo fights a Warcraft Logs"
-                  >
-                    ● En vivo
-                  </span>
-                ) : null}
-                <span
-                  className={`raid-log-badge ${publishBadgeClass}${pending ? " raid-log-pending" : ""}`}
-                >
-                  {group.status === "failed"
-                    ? "Sin datos"
-                    : pending
-                      ? "Actualizando…"
-                      : group.posted
-                        ? "Publicado"
-                        : "Sin publicar"}
-                </span>
-                <span
-                  className={`raid-log-card-chevron${expanded ? " open" : ""}`}
-                  aria-hidden="true"
-                >
-                  ▸
-                </span>
-              </span>
-            </button>
-            {expanded ? (
-              <div className="raid-log-card-body">
-                <div className="raid-log-meta">
-                  ⚔️ {group.fights} fight/s · 💀 {group.kills} kill/s
-                </div>
-                {group.parts.length > 1 ? (
-                  <div className="raid-log-parts">
-                    {group.parts.map((part) => (
-                      <div className="raid-log-part" key={part.id}>
-                        <span className="raid-log-part-code">
-                          {part.reportCode}
-                        </span>
-                        <span className="muted-text">
-                          ⚔️ {part.fightCount} · 💀 {part.kills}
-                        </span>
-                        <a
-                          className="raid-log-link"
-                          href={part.reportUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Ver ↗
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {lead?.summary && lead.summary.fights.length > 0 ? (
-                  <div className="raid-log-fights">
-                    {group.parts
-                      .flatMap((part) => part.summary?.fights ?? [])
-                      .map((fight, index) => (
-                        <span
-                          className={`raid-log-fight${fight.kill ? " kill" : " wipe"}`}
-                          key={index}
-                        >
-                          {fight.name ?? "Fight"} {fight.kill ? "✅" : "❌"}
-                        </span>
-                      ))}
-                  </div>
-                ) : lead?.error ? (
-                  <div className="meta-text">⚠️ {lead.error}</div>
-                ) : null}
-                {group.parts.length === 1 ? (
-                  <a
-                    className="raid-log-link"
-                    href={lead.reportUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Ver en Warcraft Logs ↗
-                  </a>
-                ) : null}
-                <div className="raid-log-card-actions">
-                  {group.posted ? (
-                    onUpdate ? (
-                      <button
-                        className="ghost-button"
-                        disabled={busy}
-                        onClick={() => runAction(onUpdate)}
-                        type="button"
-                      >
-                        {busy ? "Actualizando…" : "Actualizar"}
-                      </button>
-                    ) : null
-                  ) : onPublish ? (
-                    <button
-                      className="primary-button"
-                      disabled={busy}
-                      onClick={() => runAction(onPublish)}
-                      type="button"
-                    >
-                      {busy ? "Publicando…" : "Publicar"}
-                    </button>
-                  ) : null}
-                  {onHide ? (
-                    <button
-                      className="ghost-button danger"
-                      onClick={() => onHide(group.parts)}
-                      type="button"
-                    >
-                      Eliminar
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </article>
-        );
-      })}
-    </>
   );
 }
 
@@ -5977,7 +5741,6 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [scanningRaidLogs, setScanningRaidLogs] = useState(false);
   const [raidLogsLoading, setRaidLogsLoading] = useState(false);
-  const [showRaidLogsModal, setShowRaidLogsModal] = useState(false);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [hiddenRaidLogs, setHiddenRaidLogs] = useState<RaidLog[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
@@ -6002,8 +5765,6 @@ function App() {
   const [comunicadoSearch, setComunicadoSearch] = useState("");
   const [comunicadoOrder, setComunicadoOrder] = useState<ListOrder>("board");
   const [comunicadoTagFilter, setComunicadoTagFilter] = useState<string[]>([]);
-  const [raidLogSearch, setRaidLogSearch] = useState("");
-  const [raidLogOrder, setRaidLogOrder] = useState<ListOrder>("newest");
   const [karutaSearch, setKarutaSearch] = useState("");
   const [karutaCommandSearch, setKarutaCommandSearch] = useState("");
   const [karutaRarity, setKarutaRarity] = useState<KarutaRarityFilter>("all");
@@ -6061,20 +5822,6 @@ function App() {
       ),
     })).filter((group) => group.commands.length > 0);
   }, [karutaCommandSearch]);
-
-  // Logs de raid visibles: buscador (título o código) + orden. Se filtra antes
-  // de agrupar, así las partes de una misma noche siguen viajando juntas.
-  const visibleRaidLogs = useMemo(() => {
-    const filtered = raidLogs.filter((log) =>
-      matchesSearch(`${log.title ?? ""} ${log.reportCode}`, raidLogSearch),
-    );
-    return sortByOrder(
-      filtered,
-      raidLogOrder,
-      (log) => log.firstFightAt ?? log.createdAt,
-      (log) => log.title ?? log.reportCode,
-    );
-  }, [raidLogOrder, raidLogSearch, raidLogs]);
 
   // Frases del loro: buscador por texto + orden (alfabético o por fecha).
   const visibleDailyMessages = useMemo(
@@ -6823,39 +6570,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, selectedGuildId, showRaidLogsModal]);
-
-  useEffect(() => {
-    if (!showRaidLogsModal || !selectedGuildId || !canManageRaidLogs) {
-      return;
-    }
-    let cancelled = false;
-    void getGuildTextChannels(selectedGuildId)
-      .then((channels) => {
-        if (!cancelled) {
-          setTextChannels(channels);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTextChannels([]);
-        }
-      });
-    void listHiddenRaidLogs(selectedGuildId)
-      .then((logs) => {
-        if (!cancelled) {
-          setHiddenRaidLogs(logs);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setHiddenRaidLogs([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canManageRaidLogs, showRaidLogsModal, selectedGuildId]);
+  }, [activeTab, selectedGuildId]);
 
   useEffect(() => {
     if (!selectedGuildId || activeTab !== "karuta") {
@@ -9358,7 +9073,6 @@ function App() {
       // guildRoles NO se limpia: los colores de los roles se usan fuera del
       // panel (el ranking pinta los nombres con ellos).
       setDailyMessages([]);
-      setHiddenRaidLogs([]);
       setAuditLogs([]);
       return;
     }
@@ -9415,6 +9129,42 @@ function App() {
       cancelled = true;
     };
   }, [activeTab, selectedGuildId]);
+
+  // Declarado después del efecto de Admin: ese limpia los canales al salir de
+  // su pestaña y este tiene que pisarlos al entrar a Raids → Logs.
+  const inRaidLogs = activeTab === "raids" && sectionFor("raids") === "logs";
+  useEffect(() => {
+    if (!inRaidLogs || !selectedGuildId || !canManageRaidLogs) {
+      setHiddenRaidLogs([]);
+      return;
+    }
+    let cancelled = false;
+    void getGuildTextChannels(selectedGuildId)
+      .then((channels) => {
+        if (!cancelled) {
+          setTextChannels(channels);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTextChannels([]);
+        }
+      });
+    void listHiddenRaidLogs(selectedGuildId)
+      .then((logs) => {
+        if (!cancelled) {
+          setHiddenRaidLogs(logs);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHiddenRaidLogs([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageRaidLogs, inRaidLogs, selectedGuildId]);
 
   useEffect(() => {
     if (activeTab !== "home" || !selectedGuildId) {
@@ -11546,54 +11296,35 @@ function App() {
                   ) : null}
                   {sectionFor("raids") === "logs" ? (
                     <div className="raid-logs-view">
-                      <div className="raid-logs-launcher">
-                        <div className="raid-logs-launcher-info">
-                          <span className="raid-log-watcher-label">
-                            Warcraft Logs
-                          </span>
-                          <strong>
-                            {raidLogs.length}{" "}
-                            {raidLogs.length === 1 ? "log" : "logs"}
-                          </strong>
-                          <span className="muted-text">
-                            {config.logsWatchGuild && config.logsWatchServer
-                              ? `${config.logsWatchGuild} · ${config.logsWatchServer} · ${config.logsWatchRegion ?? "EU"}`
-                              : "Fuente sin configurar"}
-                          </span>
-                        </div>
-                        <button
-                          className="primary-button"
-                          onClick={() => setShowRaidLogsModal(true)}
-                          type="button"
-                        >
-                          {canManageRaidLogs ? "Administrar logs" : "Ver logs"}
-                        </button>
-                      </div>
-                      {showRaidLogsModal ? createPortal(
-                        <div
-                          className="modal-overlay raid-logs-overlay"
-                          onClick={() => setShowRaidLogsModal(false)}
-                        >
-                          <section
-                            aria-labelledby="raid-logs-modal-title"
-                            aria-modal="true"
-                            className="modal raid-logs-modal"
-                            onClick={(event) => event.stopPropagation()}
-                            role="dialog"
-                          >
-                            <header className="raid-logs-modal-header">
-                              <h2 id="raid-logs-modal-title">Warcraft Logs</h2>
-                              <button
-                                aria-label="Cerrar"
-                                className="ghost-button small"
-                                onClick={() => setShowRaidLogsModal(false)}
-                                type="button"
-                              >
-                                ✕
-                              </button>
-                            </header>
-                            <div className="raid-logs-modal-body">
-                              {canManageRaidLogs ? (
+                      {raidLogsLoading && raidLogs.length === 0 ? (
+                        <LoadingState label="Cargando logs…" />
+                      ) : (
+                        <RaidLogsBoard
+                          logs={raidLogs}
+                          onHide={
+                            canManageRaidLogs ? requestHideRaidLog : undefined
+                          }
+                          onPublish={
+                            canManageRaidLogs ? handlePublishRaidLog : undefined
+                          }
+                          onScan={
+                            canManageRaidLogs
+                              ? () => void handleScanRaidLogs()
+                              : undefined
+                          }
+                          onUpdate={
+                            canManageRaidLogs ? handleUpdateRaidLog : undefined
+                          }
+                          scanDisabled={
+                            isDirty("logsWatch") ||
+                            savingAction !== null ||
+                            !config.logsWatchGuild?.trim() ||
+                            !config.logsWatchServer?.trim()
+                          }
+                          scanning={scanningRaidLogs}
+                          manage={
+                            canManageRaidLogs ? (
+                              <>
                                 <section className="raid-logs-settings">
                                   <h3>
                                     Configuración{" "}
@@ -11713,40 +11444,6 @@ function App() {
                                     ) : null}
                                   </div>
                                 </section>
-                              ) : null}
-                              <h3 className="raid-logs-section-title">
-                                Reports
-                              </h3>
-                              <div className="raid-log-toolbar">
-                                {raidLogs.length > 0 ? (
-                                  <ListFilterBar
-                                    onOrderChange={setRaidLogOrder}
-                                    onSearchChange={setRaidLogSearch}
-                                    order={raidLogOrder}
-                                    placeholder="Buscar log…"
-                                    search={raidLogSearch}
-                                  />
-                                ) : null}
-                                {canManageRaidLogs ? (
-                                  <button
-                                    className="primary-button"
-                                    disabled={
-                                      scanningRaidLogs ||
-                                      isDirty("logsWatch") ||
-                                      savingAction !== null ||
-                                      !config.logsWatchGuild?.trim() ||
-                                      !config.logsWatchServer?.trim()
-                                    }
-                                    onClick={() => void handleScanRaidLogs()}
-                                    type="button"
-                                  >
-                                    {scanningRaidLogs
-                                      ? "Escaneando…"
-                                      : "Escanear ahora"}
-                                  </button>
-                                ) : null}
-                              </div>
-                              {canManageRaidLogs ? (
                                 <div className="raid-logs-add">
                                   <label>
                                     <span>Agregar por URL</span>
@@ -11768,82 +11465,53 @@ function App() {
                                     Agregar
                                   </button>
                                 </div>
-                              ) : null}
-                              {raidLogsLoading ? (
-                                <LoadingState label="Cargando logs…" />
-                              ) : raidLogs.length > 0 &&
-                                visibleRaidLogs.length === 0 ? (
-                                <div className="empty-state">
-                                  Ningún log coincide con el filtro.
-                                </div>
-                              ) : (
-                                <RaidLogsList
-                                  logs={visibleRaidLogs}
-                                  onHide={
-                                    canManageRaidLogs
-                                      ? requestHideRaidLog
-                                      : undefined
-                                  }
-                                  onPublish={
-                                    canManageRaidLogs
-                                      ? handlePublishRaidLog
-                                      : undefined
-                                  }
-                                  onUpdate={
-                                    canManageRaidLogs
-                                      ? handleUpdateRaidLog
-                                      : undefined
-                                  }
-                                />
-                              )}
-                              {canManageRaidLogs &&
-                              hiddenRaidLogs.length > 0 ? (
-                                <details className="hidden-raid-logs">
-                                  <summary>
-                                    Ocultos ({hiddenRaidLogs.length})
-                                  </summary>
-                                  {hiddenRaidLogs.map((log) => (
-                                    <div
-                                      className="daily-message-row"
-                                      key={log.id}
-                                    >
-                                      <div className="daily-message-content">
-                                        <strong>
-                                          {log.title || log.reportCode}
-                                        </strong>
-                                        <div className="muted-text">
-                                          ⚔️ {log.fightCount} · 💀 {log.kills}
+                                {hiddenRaidLogs.length > 0 ? (
+                                  <details className="hidden-raid-logs">
+                                    <summary>
+                                      Ocultos ({hiddenRaidLogs.length})
+                                    </summary>
+                                    {hiddenRaidLogs.map((log) => (
+                                      <div
+                                        className="daily-message-row"
+                                        key={log.id}
+                                      >
+                                        <div className="daily-message-content">
+                                          <strong>
+                                            {log.title || log.reportCode}
+                                          </strong>
+                                          <div className="muted-text">
+                                            ⚔️ {log.fightCount} · 💀 {log.kills}
+                                          </div>
+                                        </div>
+                                        <div className="daily-message-actions">
+                                          <button
+                                            className="ghost-button"
+                                            onClick={() =>
+                                              requestShowRaidLog(log)
+                                            }
+                                            type="button"
+                                          >
+                                            Restaurar
+                                          </button>
+                                          <button
+                                            className="ghost-button danger"
+                                            onClick={() =>
+                                              requestPermanentDeleteRaidLog(log)
+                                            }
+                                            type="button"
+                                          >
+                                            Borrar definitivamente
+                                          </button>
                                         </div>
                                       </div>
-                                      <div className="daily-message-actions">
-                                        <button
-                                          className="ghost-button"
-                                          onClick={() =>
-                                            requestShowRaidLog(log)
-                                          }
-                                          type="button"
-                                        >
-                                          Restaurar
-                                        </button>
-                                        <button
-                                          className="ghost-button danger"
-                                          onClick={() =>
-                                            requestPermanentDeleteRaidLog(log)
-                                          }
-                                          type="button"
-                                        >
-                                          Borrar definitivamente
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </details>
-                              ) : null}
-                            </div>
-                          </section>
-                        </div>,
-                        document.body,
-                      ) : null}
+                                    ))}
+                                  </details>
+                                ) : null}
+                              </>
+                            ) : undefined
+                          }
+                        />
+                      )}
                     </div>
                   ) : null}
                 </div>
