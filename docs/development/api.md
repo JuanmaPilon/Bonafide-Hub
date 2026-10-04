@@ -138,11 +138,17 @@ Devuelve:
    "top DPS" por pull. Si WCL no devuelve roles, se muestran todos.
 2. `deathsByPlayer` / `deathsByAbility` / `encounters` — muertes y detalle por
    pull (todos los roles cuentan acá).
-3. `consumables` — quién usó poción, piedra de brujo y poción de vida: agregado
-   por jugador (`potions | healthstones | healthPotions` sobre `pulls`) y por
-   pull (`missing*` con los nombres que no usaron cada uno). Los consumibles se
-   identifican por nombre en la tabla de casts, así que no dependen de ids de
-   una expansión puntual. Si WCL no expone la tabla de casts, el campo no viene.
+3. `consumables` — poción, prepot, piedra de brujo, poción de vida, flask,
+   comida y runa. `categories` lista lo que se pudo medir en la noche (y su
+   orden es el que usa la web); `players[].counts` y `pulls[].used/missing`
+   usan esas mismas claves, así que una categoría que no se pudo medir no
+   aparece y la web no inventa faltantes. Pociones y piedras se identifican por
+   NOMBRE en `tables/casts` (sin ids por expansión) y su uso real sale de
+   `events/casts` filtrado por esos ids; la **prepot** es la poción usada en los
+   30 s previos al pull, contada aparte de las de la pelea. Flask, comida y runa
+   salen de las auras de CombatantInfo (activas al empezar el pull): en la v1
+   cada aura trae el id, así que cuando no viene el nombre se resuelve con
+   `tables/buffs`.
 4. `attendance` — cruce entre los que aparecen en el log y los anotados al
    evento de raid más cercano (±14 h, `type: raid`). Cuenta "voy" y "tarde"
    como compromiso; bench y tentativo, si vienen, caen en `unsignedPresent`.

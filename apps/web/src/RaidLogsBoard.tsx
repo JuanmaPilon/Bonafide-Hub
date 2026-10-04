@@ -1,5 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { classColor, type RaidLog, type RaidLogAnalysis } from "./api";
+import {
+  classColor,
+  type RaidConsumableKey,
+  type RaidLog,
+  type RaidLogAnalysis,
+} from "./api";
 
 type Fight = { kill: boolean; name: string; percent?: number };
 type NightState = "draft" | "failed" | "pending" | "posted";
@@ -38,6 +43,17 @@ const SIGNUP_STATUS_LABEL: Record<string, string> = {
   no: "No va",
   tentative: "Tentativo",
   yes: "Voy",
+};
+
+// Solo etiquetas: el orden de las categorías lo define el API.
+const CONSUMABLE_LABEL: Record<RaidConsumableKey, string> = {
+  flask: "Flask",
+  food: "Comida",
+  healthPotions: "Vida",
+  healthstones: "Piedra",
+  potions: "Pota",
+  prepot: "Prepot",
+  runes: "Runa",
 };
 
 function toNights(logs: RaidLog[]): Night[] {
@@ -303,6 +319,7 @@ export function RaidLogsBoard({
     (cause) => !/^unknown(?: ability)?$/i.test(cause.ability),
   );
   const attendance = selectedAnalysis?.attendance;
+  const consumables = selectedAnalysis?.consumables;
   const attendanceNoShows = attendance
     ? [
         ...attendance.signedAbsent,
@@ -812,12 +829,12 @@ export function RaidLogsBoard({
                               </div>
                             </div>
 
-                            {selectedAnalysis.consumables ? (
+                            {consumables ? (
                               <div className="rlb-analysis-grid">
                                 <div className="rlb-analysis-section">
                                   <h5>Consumibles por jugador</h5>
                                   <div className="rlb-consumables">
-                                    {selectedAnalysis.consumables.players.map(
+                                    {consumables.players.map(
                                       (player) => (
                                         <div
                                           className="rlb-consumable-row"
@@ -838,27 +855,32 @@ export function RaidLogsBoard({
                                             {player.name}
                                           </span>
                                           <span className="rlb-consumable-counts">
-                                            {(
-                                              [
-                                                ["Pota", player.potions],
-                                                ["Piedra", player.healthstones],
-                                                ["Vida", player.healthPotions],
-                                              ] as Array<[string, number]>
-                                            ).map(([label, used]) => (
-                                              <span
-                                                className={`rlb-consumable-count${
-                                                  used >= player.pulls &&
-                                                  player.pulls > 0
-                                                    ? " full"
-                                                    : used === 0
-                                                      ? " empty"
-                                                      : ""
-                                                }`}
-                                                key={label}
-                                              >
-                                                {label} {used}/{player.pulls}
-                                              </span>
-                                            ))}
+                                            {consumables.categories.map(
+                                              (category) => {
+                                                const used =
+                                                  player.counts[category] ?? 0;
+                                                return (
+                                                  <span
+                                                    className={`rlb-consumable-count${
+                                                      used >= player.pulls &&
+                                                      player.pulls > 0
+                                                        ? " full"
+                                                        : used === 0
+                                                          ? " empty"
+                                                          : ""
+                                                    }`}
+                                                    key={category}
+                                                  >
+                                                    {
+                                                      CONSUMABLE_LABEL[
+                                                        category
+                                                      ]
+                                                    }{" "}
+                                                    {used}/{player.pulls}
+                                                  </span>
+                                                );
+                                              },
+                                            )}
                                           </span>
                                         </div>
                                       ),
@@ -869,7 +891,7 @@ export function RaidLogsBoard({
                                 <div className="rlb-analysis-section">
                                   <h5>Por pull</h5>
                                   <div className="rlb-consumable-pulls">
-                                    {selectedAnalysis.consumables.pulls.map(
+                                    {consumables.pulls.map(
                                       (pull, index) => (
                                         <details
                                           className="rlb-consumable-pull"
@@ -879,34 +901,30 @@ export function RaidLogsBoard({
                                             <span className="rlb-consumable-pull-head">
                                               <strong>{pull.name}</strong>
                                               <span>
-                                                {pull.potionsUsed}/
-                                                {pull.participants} potas
+                                                {pull.participants} jugadores
                                               </span>
                                             </span>
                                           </summary>
-                                          {(
-                                            [
-                                              ["Pota", pull.missingPotions],
-                                              [
-                                                "Piedra",
-                                                pull.missingHealthstones,
-                                              ],
-                                              [
-                                                "Vida",
-                                                pull.missingHealthPotions,
-                                              ],
-                                            ] as Array<[string, string[]]>
-                                          ).map(([label, names]) => (
-                                            <p key={label}>
-                                              <span className="rlb-label">
-                                                Sin {label.toLowerCase()} (
-                                                {names.length})
-                                              </span>
-                                              {names.length > 0
-                                                ? names.join(", ")
-                                                : "Todos usaron."}
-                                            </p>
-                                          ))}
+                                          {consumables.categories.map(
+                                            (category) => {
+                                              const names =
+                                                pull.missing[category] ?? [];
+                                              return (
+                                                <p key={category}>
+                                                  <span className="rlb-label">
+                                                    Sin{" "}
+                                                    {CONSUMABLE_LABEL[
+                                                      category
+                                                    ].toLowerCase()}{" "}
+                                                    ({names.length})
+                                                  </span>
+                                                  {names.length > 0
+                                                    ? names.join(", ")
+                                                    : "Todos usaron."}
+                                                </p>
+                                              );
+                                            },
+                                          )}
                                         </details>
                                       ),
                                     )}

@@ -114,25 +114,29 @@ export type RaidLogAttendance = {
   unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
 };
 
+export type RaidConsumableKey =
+  | "flask"
+  | "food"
+  | "healthPotions"
+  | "healthstones"
+  | "potions"
+  | "prepot"
+  | "runes";
+
 export type RaidLogConsumables = {
+  categories: RaidConsumableKey[];
   players: Array<{
     class?: string;
-    healthPotions: number;
-    healthstones: number;
+    counts: Partial<Record<RaidConsumableKey, number>>;
     name: string;
-    potions: number;
     pulls: number;
     role?: RaidRole;
   }>;
   pulls: Array<{
-    healthPotionsUsed: number;
-    healthstonesUsed: number;
-    missingHealthPotions: string[];
-    missingHealthstones: string[];
-    missingPotions: string[];
+    missing: Partial<Record<RaidConsumableKey, string[]>>;
     name: string;
     participants: number;
-    potionsUsed: number;
+    used: Partial<Record<RaidConsumableKey, number>>;
   }>;
 };
 

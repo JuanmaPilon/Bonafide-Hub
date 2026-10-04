@@ -9,29 +9,36 @@ import {
 
 export type RaidRole = "dps" | "healer" | "tank";
 
-export type RaidConsumableCategory = "healthPotion" | "healthstone" | "potion";
+// prepot = la misma poción, usada en los segundos previos al pull: se mide
+// aparte para distinguirla de la que se usa durante la pelea.
+export type RaidConsumableKey =
+  | "flask"
+  | "food"
+  | "runes"
+  | "potions"
+  | "prepot"
+  | "healthstones"
+  | "healthPotions";
 
 export type RaidLogConsumables = {
+  // Solo las categorías que se pudieron medir en esta noche: si WCL no expone
+  // la tabla de casts o no se pueden resolver los nombres de las auras, esas
+  // categorías no aparecen y la web no inventa faltantes.
+  categories: RaidConsumableKey[];
   // Consumo agregado por jugador: en cuántos pulls participó y en cuántos usó
   // cada consumible (un pull cuenta una vez, aunque use dos pociones).
   players: Array<{
     class?: string;
-    healthPotions: number;
-    healthstones: number;
+    counts: Partial<Record<RaidConsumableKey, number>>;
     name: string;
-    potions: number;
     pulls: number;
     role?: RaidRole;
   }>;
   pulls: Array<{
-    healthPotionsUsed: number;
-    healthstonesUsed: number;
-    missingHealthPotions: string[];
-    missingHealthstones: string[];
-    missingPotions: string[];
+    missing: Partial<Record<RaidConsumableKey, string[]>>;
     name: string;
     participants: number;
-    potionsUsed: number;
+    used: Partial<Record<RaidConsumableKey, number>>;
   }>;
 };
 
@@ -151,15 +158,32 @@ type WclCastsTable = {
 
 type WclRawEvent = {
   ability?: { guid?: number | string; name?: string } | string;
+  auras?: unknown[];
   sourceID?: number;
   timestamp?: number;
+};
+
+type WclBuffTable = {
+  entries?: Array<{
+    auras?: WclAbilityRow[];
+    entries?: WclAbilityRow[];
+    sources?: WclAbilityRow[];
+  }>;
 };
 
 // Consumo de un pull: quiénes estaban y qué usó cada uno. Se arma aparte del
 // análisis de daño porque necesita los eventos de CombatantInfo.
 type FightExtras = {
   participants: string[];
-  used: Map<string, Set<RaidConsumableCategory>>;
+  used: Map<string, Set<RaidConsumableKey>>;
+};
+
+// Resultado por report: el consumo de cada pull más qué categorías se pudieron
+// medir (si algo no se pudo, la categoría no se reporta).
+type PartConsumables = {
+  auraReadable: boolean;
+  castCategories: Set<RaidConsumableKey>;
+  fights: FightExtras[];
 };
 
 type FightJob = {
@@ -172,7 +196,7 @@ type FightJob = {
 type RaidReportPart = {
   actors: Map<number, WclActor>;
   code: string;
-  extras?: FightExtras[];
+  consumables?: PartConsumables;
   fights: WclAnalysisFight[];
   friendlies: WclActor[];
   roles?: Map<string, RaidRole>;
@@ -377,44 +401,97 @@ async function fetchReportRoles(
 }
 
 const CONSUMABLE_PREPULL_MS = 30 * 1000;
+// Una poción usada hasta este límite antes del pull es la prepot.
+const PREPOT_WINDOW_MS = CONSUMABLE_PREPULL_MS;
 
 // Los nombres de pociones y piedras cambian en cada parche, así que se
 // identifican por nombre (en la tabla de casts) en vez de por id fijo.
-function consumableCategory(name: string): RaidConsumableCategory | undefined {
+function castConsumableCategory(
+  name: string,
+): RaidConsumableKey | undefined {
   const normalized = name.trim().toLowerCase();
   // "Create Healthstone" es crear la piedra, no usarla.
   if (normalized.startsWith("create")) {
     return undefined;
   }
   if (normalized.includes("healthstone")) {
-    return "healthstone";
+    return "healthstones";
   }
   if (
     normalized.includes("health potion") ||
     normalized.includes("healing potion")
   ) {
-    return "healthPotion";
+    return "healthPotions";
   }
   if (normalized.includes("mana potion")) {
     return undefined;
   }
-  return normalized.includes("potion") ? "potion" : undefined;
+  return normalized.includes("potion") ? "potions" : undefined;
+}
+
+// Flask/comida/runa se leen de las auras activas al empezar el pull, así que
+// no hace falta castear nada: alcanza con el nombre del aura.
+function auraConsumableCategory(
+  name: string,
+): RaidConsumableKey | undefined {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes("well fed")) {
+    return "food";
+  }
+  if (
+    normalized.includes("augment rune") ||
+    normalized.includes("vantus rune")
+  ) {
+    return "runes";
+  }
+  return normalized.includes("flask") || normalized.includes("phial")
+    ? "flask"
+    : undefined;
 }
 
 function collectConsumableAbilityIds(
   table: WclCastsTable,
-): Map<number, RaidConsumableCategory> {
-  const categories = new Map<number, RaidConsumableCategory>();
+): Map<number, RaidConsumableKey> {
+  const categories = new Map<number, RaidConsumableKey>();
   for (const entry of table.entries ?? []) {
     for (const row of entry.abilities ?? entry.entries ?? entry.sources ?? []) {
       const guid = Number(row?.guid);
-      const category = row?.name ? consumableCategory(row.name) : undefined;
+      const category = row?.name ? castConsumableCategory(row.name) : undefined;
       if (Number.isFinite(guid) && guid > 0 && category) {
         categories.set(guid, category);
       }
     }
   }
   return categories;
+}
+
+// En la v1 cada aura viene como { ability } (a veces con nombre); si solo hay
+// id, el nombre sale de la tabla de buffs.
+function parseAura(aura: unknown): { id?: number; name?: string } | undefined {
+  if (typeof aura === "number" && Number.isFinite(aura)) {
+    return { id: aura };
+  }
+  if (!aura || typeof aura !== "object") {
+    return undefined;
+  }
+  const record = aura as { ability?: unknown; guid?: unknown; name?: unknown };
+  const id = Number(record.ability ?? record.guid);
+  const name = typeof record.name === "string" ? record.name : undefined;
+  if (!Number.isFinite(id) && !name) {
+    return undefined;
+  }
+  return { id: Number.isFinite(id) ? id : undefined, name };
+}
+
+function buffAuraRows(table: WclBuffTable): WclAbilityRow[] {
+  const rows: WclAbilityRow[] = [];
+  for (const entry of table.entries ?? []) {
+    rows.push(...(entry.auras ?? entry.entries ?? entry.sources ?? []));
+  }
+  return rows;
 }
 
 function fightIndexAt(
@@ -430,18 +507,44 @@ function fightIndexAt(
   );
 }
 
+// Pull al que corresponde una prepot: el próximo que arranca después del cast.
+function prepullFightIndex(
+  fights: WclAnalysisFight[],
+  timestamp: number,
+): number {
+  return fights.findIndex(
+    (fight) =>
+      typeof fight.start_time === "number" &&
+      fight.start_time >= timestamp &&
+      fight.start_time - timestamp <= PREPOT_WINDOW_MS,
+  );
+}
+
 // Consumo y participantes por pull. Los ids de consumible salen de la tabla de
-// casts, el uso real de los eventos de cast filtrados, y quiénes estaban en el
-// pull de los eventos de CombatantInfo (uno por jugador al arrancar).
-async function collectFightExtras(input: {
+// casts, el uso real de los eventos de cast filtrados, quiénes estaban en el
+// pull de CombatantInfo, y flask/comida/runa de las auras de esos eventos.
+async function collectFightConsumables(input: {
   actors: Map<number, WclActor>;
   code: string;
   fights: WclAnalysisFight[];
-}): Promise<FightExtras[] | undefined> {
+}): Promise<PartConsumables | undefined> {
   const starts = input.fights.map((fight) => fight.start_time ?? 0);
   const ends = input.fights.map((fight) => fight.end_time ?? 0);
   const start = Math.max(0, Math.min(...starts) - CONSUMABLE_PREPULL_MS);
   const end = Math.max(...ends);
+  const used = input.fights.map(
+    () => new Map<string, Set<RaidConsumableKey>>(),
+  );
+  const participants = input.fights.map(() => new Set<string>());
+  const addUse = (
+    index: number,
+    name: string,
+    category: RaidConsumableKey,
+  ): void => {
+    const categories = used[index].get(name) ?? new Set<RaidConsumableKey>();
+    categories.add(category);
+    used[index].set(name, categories);
+  };
 
   const table = (await fetchWarcraftLogsV1Json(
     `/report/tables/casts/${encodeURIComponent(input.code)}?${new URLSearchParams(
@@ -449,36 +552,48 @@ async function collectFightExtras(input: {
     ).toString()}`,
   )) as WclCastsTable;
   const abilityCategories = collectConsumableAbilityIds(table);
-  if (abilityCategories.size === 0) {
-    return undefined;
-  }
+  const castCategories = new Set(abilityCategories.values());
 
-  const casts = await fetchEventPages<WclRawEvent>(input.code, "casts", {
-    end,
-    filter: `ability.id IN (${[...abilityCategories.keys()].join(",")})`,
-    start,
-  });
-  const used = input.fights.map(() => new Map<string, Set<RaidConsumableCategory>>());
-  for (const event of casts) {
-    const ability = typeof event.ability === "object" ? event.ability : undefined;
-    const category = abilityCategories.get(Number(ability?.guid));
-    const timestamp = event.timestamp;
-    if (!category || typeof timestamp !== "number") {
-      continue;
+  if (castCategories.size > 0) {
+    const casts = await fetchEventPages<WclRawEvent>(input.code, "casts", {
+      end,
+      filter: `ability.id IN (${[...abilityCategories.keys()].join(",")})`,
+      start,
+    });
+    for (const event of casts) {
+      const ability =
+        typeof event.ability === "object" ? event.ability : undefined;
+      const category = abilityCategories.get(Number(ability?.guid));
+      const timestamp = event.timestamp;
+      if (!category || typeof timestamp !== "number") {
+        continue;
+      }
+      const name = actorName(event.sourceID, input.actors);
+      if (!name) {
+        continue;
+      }
+      const inside = fightIndexAt(input.fights, timestamp);
+      if (inside !== -1) {
+        addUse(inside, name, category);
+        continue;
+      }
+      if (category === "potions") {
+        const before = prepullFightIndex(input.fights, timestamp);
+        if (before !== -1) {
+          addUse(before, name, "prepot");
+        }
+      }
     }
-    const index = fightIndexAt(input.fights, timestamp);
-    const name = index === -1 ? undefined : actorName(event.sourceID, input.actors);
-    if (index === -1 || !name) {
-      continue;
-    }
-    const categories = used[index].get(name) ?? new Set();
-    categories.add(category);
-    used[index].set(name, categories);
   }
 
   // Si CombatantInfo falla, el pull queda sin participantes y el armado del
   // análisis cae a los que aparecen en la tabla de daño.
-  const participants = input.fights.map(() => new Set<string>());
+  const pendingAuras: Array<{
+    fight: number;
+    id?: number;
+    name?: string;
+    player: string;
+  }> = [];
   try {
     const info = await fetchEventPages<WclRawEvent>(input.code, "", {
       end,
@@ -494,23 +609,88 @@ async function collectFightExtras(input: {
         continue;
       }
       const actor =
-        event.sourceID === undefined ? undefined : input.actors.get(event.sourceID);
+        event.sourceID === undefined
+          ? undefined
+          : input.actors.get(event.sourceID);
       if (actor?.type?.toLowerCase() === "pet" && !actor.petOwner) {
         continue;
       }
       const name = actorName(event.sourceID, input.actors);
-      if (name) {
-        participants[index].add(name);
+      if (!name) {
+        continue;
+      }
+      participants[index].add(name);
+      for (const aura of event.auras ?? []) {
+        const parsed = parseAura(aura);
+        if (parsed) {
+          pendingAuras.push({ ...parsed, fight: index, player: name });
+        }
       }
     }
   } catch {
     // Sin CombatantInfo seguimos con lo que se pudo leer de consumibles.
   }
 
-  return input.fights.map((_, index) => ({
-    participants: [...participants[index]].sort((a, b) => a.localeCompare(b)),
-    used: used[index],
-  }));
+  const categoryByAuraId = new Map<number, RaidConsumableKey | null>();
+  const unnamedIds = new Set(
+    pendingAuras
+      .filter((aura) => aura.name === undefined && aura.id !== undefined)
+      .map((aura) => aura.id as number),
+  );
+  // Solo hace falta la tabla de buffs si las auras vinieron sin nombre.
+  if (unnamedIds.size > 0) {
+    try {
+      const buffs = (await fetchWarcraftLogsV1Json(
+        `/report/tables/buffs/${encodeURIComponent(input.code)}?${new URLSearchParams(
+          { by: "target", end: String(end), start: String(start) },
+        ).toString()}`,
+      )) as WclBuffTable;
+      for (const row of buffAuraRows(buffs)) {
+        const id = Number(row?.guid);
+        if (!Number.isFinite(id) || !unnamedIds.has(id)) {
+          continue;
+        }
+        categoryByAuraId.set(
+          id,
+          row?.name ? (auraConsumableCategory(row.name) ?? null) : null,
+        );
+      }
+    } catch {
+      // Sin nombres de aura flask/comida/runa quedan sin medir.
+    }
+  }
+  let resolvedAura = false;
+  for (const aura of pendingAuras) {
+    let category: RaidConsumableKey | null | undefined;
+    if (aura.name !== undefined) {
+      category = auraConsumableCategory(aura.name) ?? null;
+      if (aura.id !== undefined) {
+        categoryByAuraId.set(aura.id, category);
+      }
+    } else if (aura.id !== undefined) {
+      category = categoryByAuraId.get(aura.id) ?? null;
+    }
+    // Alcanza con poder identificar un aura (por nombre o por id resuelto)
+    // para dar por medibles flask/comida/runa de toda la noche.
+    if (
+      aura.name !== undefined ||
+      (aura.id !== undefined && categoryByAuraId.has(aura.id))
+    ) {
+      resolvedAura = true;
+    }
+    if (category) {
+      addUse(aura.fight, aura.player, category);
+    }
+  }
+
+  return {
+    auraReadable: resolvedAura,
+    castCategories,
+    fights: input.fights.map((_, index) => ({
+      participants: [...participants[index]].sort((a, b) => a.localeCompare(b)),
+      used: used[index],
+    })),
+  };
 }
 
 async function analyzeFight(job: FightJob): Promise<FightResult> {
@@ -602,22 +782,31 @@ async function buildRaidLogNightAnalysis(
       );
       const start = Math.min(...fights.map((fight) => fight.start_time ?? 0));
       const end = Math.max(...fights.map((fight) => fight.end_time ?? 0));
-      const [roles, extras] = await Promise.all([
+      const [roles, consumables] = await Promise.all([
         fights.length > 0
           ? fetchReportRoles(code, start, end).catch(() => undefined)
           : undefined,
         fights.length > 0
-          ? collectFightExtras({ actors, code, fights }).catch(() => undefined)
+          ? collectFightConsumables({ actors, code, fights }).catch(
+              () => undefined,
+            )
           : undefined,
       ]);
-      return { actors, code, extras, fights, friendlies: report.friendlies ?? [], roles };
+      return {
+        actors,
+        code,
+        consumables,
+        fights,
+        friendlies: report.friendlies ?? [],
+        roles,
+      };
     }),
   );
   const jobs = reports.flatMap((report) =>
     report.fights.map((fight, index) => ({
       actors: report.actors,
       code: report.code,
-      extras: report.extras?.[index],
+      extras: report.consumables?.fights[index],
       fight,
     })),
   );
@@ -635,6 +824,29 @@ async function buildRaidLogNightAnalysis(
   }
   const roleOf = (name: string): RaidRole | undefined => roles.get(playerKey(name));
 
+  // Categorías que se pudieron medir: el orden es el de la UI.
+  const castCategories = new Set<RaidConsumableKey>();
+  let auraReadable = false;
+  for (const report of reports) {
+    for (const category of report.consumables?.castCategories ?? []) {
+      castCategories.add(category);
+    }
+    auraReadable ||= Boolean(report.consumables?.auraReadable);
+  }
+  const consumableCategories: RaidConsumableKey[] = [];
+  if (auraReadable) {
+    consumableCategories.push("flask", "food", "runes");
+  }
+  if (castCategories.has("potions")) {
+    consumableCategories.push("potions", "prepot");
+  }
+  if (castCategories.has("healthstones")) {
+    consumableCategories.push("healthstones");
+  }
+  if (castCategories.has("healthPotions")) {
+    consumableCategories.push("healthPotions");
+  }
+
   const playerDeaths = new Map<string, number>();
   const abilityDeaths = new Map<string, number>();
   const playerDps = new Map<
@@ -648,15 +860,9 @@ async function buildRaidLogNightAnalysis(
   >();
   const consumablePlayers = new Map<
     string,
-    {
-      healthPotions: number;
-      healthstones: number;
-      potions: number;
-      pulls: number;
-    }
+    { counts: Map<RaidConsumableKey, number>; pulls: number }
   >();
   const consumablePulls: RaidLogConsumables["pulls"] = [];
-  let consumablesAvailable = false;
   const encounters: RaidLogAnalysis["encounters"] = [];
   const playerClasses = new Map<string, string>();
   for (const report of reports) {
@@ -700,49 +906,42 @@ async function buildRaidLogNightAnalysis(
     }
 
     if (extras) {
-      consumablesAvailable = true;
       // Si CombatantInfo no trajo el pull, los participantes se aproximan con
       // los que figuran en la tabla de daño.
       const participants =
         extras.participants.length > 0
           ? extras.participants
           : result.damage.map((player) => player.name);
-      const missing = (
-        category: RaidConsumableCategory,
-      ): string[] =>
-        participants.filter((name) => !extras.used.get(name)?.has(category));
-      const usedCount = (category: RaidConsumableCategory): number =>
-        participants.filter((name) => extras.used.get(name)?.has(category))
-          .length;
       for (const name of participants) {
         const aggregate = consumablePlayers.get(name) ?? {
-          healthPotions: 0,
-          healthstones: 0,
-          potions: 0,
+          counts: new Map<RaidConsumableKey, number>(),
           pulls: 0,
         };
         aggregate.pulls += 1;
-        const categories = extras.used.get(name);
-        if (categories?.has("potion")) {
-          aggregate.potions += 1;
-        }
-        if (categories?.has("healthstone")) {
-          aggregate.healthstones += 1;
-        }
-        if (categories?.has("healthPotion")) {
-          aggregate.healthPotions += 1;
+        for (const category of extras.used.get(name) ?? []) {
+          aggregate.counts.set(
+            category,
+            (aggregate.counts.get(category) ?? 0) + 1,
+          );
         }
         consumablePlayers.set(name, aggregate);
       }
+      const usedByPull: Partial<Record<RaidConsumableKey, number>> = {};
+      const missingByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
+      for (const category of consumableCategories) {
+        const users = participants.filter((name) =>
+          extras.used.get(name)?.has(category),
+        );
+        usedByPull[category] = users.length;
+        missingByPull[category] = participants.filter(
+          (name) => !extras.used.get(name)?.has(category),
+        );
+      }
       consumablePulls.push({
-        healthPotionsUsed: usedCount("healthPotion"),
-        healthstonesUsed: usedCount("healthstone"),
-        missingHealthPotions: missing("healthPotion"),
-        missingHealthstones: missing("healthstone"),
-        missingPotions: missing("potion"),
+        missing: missingByPull,
         name: result.fight.name ?? "Boss",
         participants: participants.length,
-        potionsUsed: usedCount("potion"),
+        used: usedByPull,
       });
     }
 
@@ -778,27 +977,41 @@ async function buildRaidLogNightAnalysis(
 
   const analysis: RaidLogAnalysis = {
     averageDps,
-    consumables: consumablesAvailable
-      ? {
-          players: [...consumablePlayers.entries()]
-            .map(([name, totals]) => ({
-              class: playerDps.get(name)?.className ?? playerClasses.get(name),
-              healthPotions: totals.healthPotions,
-              healthstones: totals.healthstones,
-              name,
-              potions: totals.potions,
-              pulls: totals.pulls,
-              role: roleOf(name),
-            }))
-            // Primero los que más pulls hicieron sin usar poción.
-            .sort(
-              (a, b) =>
-                b.pulls - b.potions - (a.pulls - a.potions) ||
-                a.name.localeCompare(b.name),
-            ),
-          pulls: consumablePulls,
-        }
-      : undefined,
+    consumables:
+      consumableCategories.length > 0
+        ? {
+            categories: consumableCategories,
+            players: [...consumablePlayers.entries()]
+              .map(([name, totals]) => ({
+                class: playerDps.get(name)?.className ?? playerClasses.get(name),
+                counts: Object.fromEntries(
+                  consumableCategories.map((category) => [
+                    category,
+                    totals.counts.get(category) ?? 0,
+                  ]),
+                ),
+                name,
+                pulls: totals.pulls,
+                role: roleOf(name),
+              }))
+              // Primero los que menos cumplieron, en proporción a sus pulls.
+              .sort((a, b) => {
+                const score = (player: (typeof a)): number => {
+                  const total = consumableCategories.length * player.pulls;
+                  if (total === 0) {
+                    return 0;
+                  }
+                  const hits = consumableCategories.reduce(
+                    (sum, category) => sum + (player.counts[category] ?? 0),
+                    0,
+                  );
+                  return hits / total;
+                };
+                return score(a) - score(b) || a.name.localeCompare(b.name);
+              }),
+            pulls: consumablePulls,
+          }
+        : undefined,
     deathsByAbility: [...abilityDeaths.entries()]
       .map(([ability, deaths]) => ({ ability, deaths }))
       .sort((a, b) => b.deaths - a.deaths),
