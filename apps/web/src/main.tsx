@@ -11567,7 +11567,7 @@ function App() {
                           onClick={() => setShowRaidLogsModal(true)}
                           type="button"
                         >
-                          Administrar logs
+                          {canManageRaidLogs ? "Administrar logs" : "Ver logs"}
                         </button>
                       </div>
                       {showRaidLogsModal ? (
@@ -11594,9 +11594,14 @@ function App() {
                               </button>
                             </header>
                             <div className="raid-logs-modal-body">
-                              {canAccess("raids") ? (
+                              {canManageRaidLogs ? (
                                 <section className="raid-logs-settings">
-                                  <h3>Configuración</h3>
+                                  <h3>
+                                    Configuración{" "}
+                                    <span className="admin-tier-badge tier-subofficer">
+                                      Sub Officer
+                                    </span>
+                                  </h3>
                                   <div className="form-grid">
                                     <label>
                                       <span>Canal de publicación</span>
@@ -11630,6 +11635,7 @@ function App() {
                                     <label>
                                       <span>Guild de Warcraft Logs</span>
                                       <input
+                                        autoComplete="off"
                                         value={config.logsWatchGuild ?? ""}
                                         onChange={(event) =>
                                           editConfig(
@@ -11646,6 +11652,7 @@ function App() {
                                     <label>
                                       <span>Realm</span>
                                       <input
+                                        autoComplete="off"
                                         value={config.logsWatchServer ?? ""}
                                         onChange={(event) =>
                                           editConfig(
@@ -11708,6 +11715,9 @@ function App() {
                                   </div>
                                 </section>
                               ) : null}
+                              <h3 className="raid-logs-section-title">
+                                Reports
+                              </h3>
                               <div className="raid-log-toolbar">
                                 {raidLogs.length > 0 ? (
                                   <ListFilterBar
@@ -11718,7 +11728,7 @@ function App() {
                                     search={raidLogSearch}
                                   />
                                 ) : null}
-                                {canAccess("raids") ? (
+                                {canManageRaidLogs ? (
                                   <button
                                     className="primary-button"
                                     disabled={
@@ -11737,11 +11747,12 @@ function App() {
                                   </button>
                                 ) : null}
                               </div>
-                              {canAccess("raids") ? (
+                              {canManageRaidLogs ? (
                                 <div className="raid-logs-add">
                                   <label>
                                     <span>Agregar por URL</span>
                                     <input
+                                      autoComplete="off"
                                       value={raidLogUrl}
                                       onChange={(event) =>
                                         setRaidLogUrl(event.target.value)
@@ -11770,23 +11781,23 @@ function App() {
                                 <RaidLogsList
                                   logs={visibleRaidLogs}
                                   onHide={
-                                    canAccess("raids")
+                                    canManageRaidLogs
                                       ? requestHideRaidLog
                                       : undefined
                                   }
                                   onPublish={
-                                    canAccess("raids")
+                                    canManageRaidLogs
                                       ? handlePublishRaidLog
                                       : undefined
                                   }
                                   onUpdate={
-                                    canAccess("raids")
+                                    canManageRaidLogs
                                       ? handleUpdateRaidLog
                                       : undefined
                                   }
                                 />
                               )}
-                              {canAccess("raids") &&
+                              {canManageRaidLogs &&
                               hiddenRaidLogs.length > 0 ? (
                                 <details className="hidden-raid-logs">
                                   <summary>

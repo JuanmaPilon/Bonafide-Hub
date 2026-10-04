@@ -1636,6 +1636,10 @@ a:hover {
   overflow: hidden;
   padding: 0;
   gap: 0;
+  /* Fondo sólido a propósito: con --panel (0.84) el hero de fondo se
+     traspapelaba con el contenido del modal (mismo caso que .comunicado-modal). */
+  background: var(--panel-solid);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.65);
 }
 
 .raid-logs-modal-header {
@@ -1664,8 +1668,30 @@ a:hover {
 .raid-logs-settings {
   display: grid;
   gap: 12px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--panel-border);
+  padding: 16px;
+  border: 1px solid rgba(var(--tier-subofficer-rgb), 0.35);
+  border-radius: 14px;
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-subofficer-rgb), 0.12),
+    rgba(13, 20, 38, 0.3)
+  );
+}
+
+.raid-logs-settings h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.raid-logs-section-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
 }
 
 .raid-logs-settings .form-grid {
@@ -1699,6 +1725,14 @@ a:hover {
 .raid-logs-modal .hidden-raid-logs {
   border-top: 1px solid var(--panel-border);
   padding-top: 12px;
+}
+
+:root[data-theme="light"] .raid-logs-settings {
+  background: linear-gradient(
+    160deg,
+    rgba(var(--tier-subofficer-rgb), 0.1),
+    rgba(255, 255, 255, 0.4)
+  );
 }
 
 @media (max-width: 640px) {
