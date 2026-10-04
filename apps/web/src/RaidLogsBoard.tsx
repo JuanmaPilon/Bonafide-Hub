@@ -269,7 +269,9 @@ export function RaidLogsBoard({
   const manageOpen = Boolean(manage) && (showManage || nights.length === 0);
   const selectedAnalysis = selected ? analysisByNight[selected.key] : undefined;
   const selectedAnalysisError =
-    selected?.key === analysisError?.key ? analysisError.message : undefined;
+    selected && analysisError && analysisError.key === selected.key
+      ? analysisError.message
+      : undefined;
 
   const runAction = (
     night: Night,
