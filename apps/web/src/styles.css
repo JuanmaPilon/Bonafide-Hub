@@ -2177,6 +2177,19 @@ a:hover {
   white-space: nowrap;
 }
 
+.rlb-analysis-player-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rlb-class-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
 .rlb-bar-track {
   display: block;
   height: 4px;

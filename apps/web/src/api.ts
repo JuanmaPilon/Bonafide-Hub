@@ -96,6 +96,7 @@ export type RaidLog = {
 export type RaidLogAnalysis = {
   averageDps: Array<{
     averageDps: number;
+    class?: string;
     encounters: number;
     name: string;
     totalDamage: number;

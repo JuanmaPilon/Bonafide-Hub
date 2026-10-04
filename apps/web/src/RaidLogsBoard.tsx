@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { RaidLog, RaidLogAnalysis } from "./api";
+import { classColor, type RaidLog, type RaidLogAnalysis } from "./api";
 
 type Fight = { kill: boolean; name: string; percent?: number };
 type NightState = "draft" | "failed" | "pending" | "posted";
@@ -268,6 +268,9 @@ export function RaidLogsBoard({
   );
   const manageOpen = Boolean(manage) && (showManage || nights.length === 0);
   const selectedAnalysis = selected ? analysisByNight[selected.key] : undefined;
+  const selectedDpsColor = classColor(
+    selectedAnalysis?.averageDps[0]?.class,
+  );
   const selectedAnalysisError =
     selected && analysisError && analysisError.key === selected.key
       ? analysisError.message
@@ -585,24 +588,38 @@ export function RaidLogsBoard({
                             Consultando Warcraft Logs…
                           </div>
                         ) : selectedAnalysisError ? (
-                          <div className="rlb-error">⚠️ {selectedAnalysisError}</div>
+                          <div className="rlb-error">
+                            ⚠️ {selectedAnalysisError}
+                          </div>
                         ) : selectedAnalysis ? (
                           <>
                             <div className="rlb-analysis-head">
                               <div>
                                 <h4>Análisis de la raid</h4>
                                 <span>
-                                  Actualizado {new Date(selectedAnalysis.generatedAt).toLocaleTimeString("es-AR", {
+                                  Actualizado{" "}
+                                  {new Date(
+                                    selectedAnalysis.generatedAt,
+                                  ).toLocaleTimeString("es-AR", {
                                     hour: "2-digit",
                                     minute: "2-digit",
                                   })}
                                 </span>
                               </div>
-                              <span>{selectedAnalysis.encounters.length} bosses</span>
+                              <span>
+                                {selectedAnalysis.encounters.length} bosses
+                              </span>
                             </div>
 
                             <div className="rlb-analysis-spotlights">
-                              <div className="rlb-spotlight damage">
+                              <div
+                                className="rlb-spotlight damage"
+                                style={
+                                  selectedDpsColor
+                                    ? { borderLeftColor: selectedDpsColor }
+                                    : undefined
+                                }
+                              >
                                 <span>Mayor DPS promedio</span>
                                 <strong>
                                   {selectedAnalysis.averageDps[0]?.name ?? "—"}
@@ -616,7 +633,8 @@ export function RaidLogsBoard({
                               <div className="rlb-spotlight deaths">
                                 <span>Más muertes</span>
                                 <strong>
-                                  {selectedAnalysis.deathsByPlayer[0]?.name ?? "—"}
+                                  {selectedAnalysis.deathsByPlayer[0]?.name ??
+                                    "—"}
                                 </strong>
                                 <span>
                                   {selectedAnalysis.deathsByPlayer[0]
@@ -633,6 +651,7 @@ export function RaidLogsBoard({
                                   selectedAnalysis.averageDps
                                     .slice(0, 8)
                                     .map((player, index) => {
+                                      const color = classColor(player.class);
                                       const maxDps =
                                         selectedAnalysis.averageDps[0]
                                           ?.averageDps ?? 1;
@@ -645,11 +664,27 @@ export function RaidLogsBoard({
                                             {index + 1}
                                           </span>
                                           <span className="rlb-analysis-player">
-                                            <span>{player.name}</span>
+                                            <span className="rlb-analysis-player-name">
+                                              {color ? (
+                                                <i
+                                                  aria-label={player.class}
+                                                  className="rlb-class-dot"
+                                                  style={{
+                                                    backgroundColor: color,
+                                                  }}
+                                                />
+                                              ) : null}
+                                              {player.name}
+                                            </span>
                                             <span className="rlb-bar-track">
                                               <span
                                                 className="rlb-bar damage"
                                                 style={{
+                                                  ...(color
+                                                    ? {
+                                                        backgroundColor: color,
+                                                      }
+                                                    : {}),
                                                   width: `${Math.max(3, (player.averageDps / maxDps) * 100)}%`,
                                                 }}
                                               />
@@ -671,7 +706,9 @@ export function RaidLogsBoard({
                               <div className="rlb-analysis-section">
                                 <h5>Muertes</h5>
                                 <div className="rlb-analysis-total">
-                                  <strong>{selectedAnalysis.totalDeaths}</strong>
+                                  <strong>
+                                    {selectedAnalysis.totalDeaths}
+                                  </strong>
                                   <span>en toda la raid</span>
                                 </div>
                                 {selectedAnalysis.deathsByPlayer.length > 0 ? (
@@ -717,25 +754,27 @@ export function RaidLogsBoard({
                               <div className="rlb-analysis-section">
                                 <h5>Por boss</h5>
                                 <div className="rlb-encounters">
-                                  {selectedAnalysis.encounters.map((encounter) => (
-                                    <div
-                                      className="rlb-encounter"
-                                      key={`${encounter.name}:${encounter.durationSeconds}`}
-                                    >
-                                      <span
-                                        className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
+                                  {selectedAnalysis.encounters.map(
+                                    (encounter) => (
+                                      <div
+                                        className="rlb-encounter"
+                                        key={`${encounter.name}:${encounter.durationSeconds}`}
                                       >
-                                        {encounter.kill ? "Kill" : "Wipe"}
-                                      </span>
-                                      <strong>{encounter.name}</strong>
-                                      <span>{encounter.deaths} muertes</span>
-                                      <span>
-                                        {encounter.topDps
-                                          ? `${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
-                                          : "Sin datos de daño"}
-                                      </span>
-                                    </div>
-                                  ))}
+                                        <span
+                                          className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
+                                        >
+                                          {encounter.kill ? "Kill" : "Wipe"}
+                                        </span>
+                                        <strong>{encounter.name}</strong>
+                                        <span>{encounter.deaths} muertes</span>
+                                        <span>
+                                          {encounter.topDps
+                                            ? `${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
+                                            : "Sin datos de daño"}
+                                        </span>
+                                      </div>
+                                    ),
+                                  )}
                                 </div>
                               </div>
                             ) : null}

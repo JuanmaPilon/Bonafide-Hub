@@ -7,6 +7,7 @@ import {
 export type RaidLogAnalysis = {
   averageDps: Array<{
     averageDps: number;
+    class?: string;
     encounters: number;
     name: string;
     totalDamage: number;
@@ -60,9 +61,11 @@ type WclEventsPage = {
 };
 
 type WclDamageEntry = {
+  class?: string;
   id?: number;
   name?: string;
   total?: number;
+  type?: string;
 };
 
 type WclDamageTable = {
@@ -79,7 +82,12 @@ type FightResult = {
   deaths: Array<{ ability: string; player: string }>;
   durationSeconds: number;
   fight: WclAnalysisFight;
-  damage: Array<{ dps: number; name: string; totalDamage: number }>;
+  damage: Array<{
+    class?: string;
+    dps: number;
+    name: string;
+    totalDamage: number;
+  }>;
 };
 
 const ANALYSIS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -171,25 +179,33 @@ function deathPlayer(
 }
 
 function deathAbility(event: WclDeathEvent): string {
-  if (typeof event.ability === "string") {
-    return event.ability;
-  }
-  return event.ability?.name ?? event.abilityName ?? "Causa no identificada";
+  const rawAbility =
+    typeof event.ability === "string"
+      ? event.ability
+      : (event.ability?.name ?? event.abilityName ?? "");
+  const ability = rawAbility.trim();
+  return !ability || /^unknown(?: ability)?$/i.test(ability)
+    ? "Causa no identificada por Warcraft Logs"
+    : ability;
 }
 
-function damageName(
+function damagePlayer(
   entry: WclDamageEntry,
   actors: Map<number, WclActor>,
-): string | undefined {
+): { className?: string; name: string } | undefined {
   const actor = entry.id === undefined ? undefined : actors.get(entry.id);
   if (actor?.type?.toLowerCase() === "pet" && !actor.petOwner) {
     return undefined;
   }
-  return (
-    (actor?.petOwner ? actors.get(actor.petOwner)?.name : undefined) ??
-    actor?.name ??
-    entry.name
-  );
+  const owner = actor?.petOwner ? actors.get(actor.petOwner) : undefined;
+  const name = owner?.name ?? actor?.name ?? entry.name;
+  if (!name) {
+    return undefined;
+  }
+  return {
+    className: owner?.type ?? actor?.type ?? entry.class ?? entry.type,
+    name,
+  };
 }
 
 async function analyzeFight(job: FightJob): Promise<FightResult> {
@@ -212,22 +228,30 @@ async function analyzeFight(job: FightJob): Promise<FightResult> {
   ]);
   const table = rawTable as WclDamageTable;
   const durationSeconds = (end - start) / 1000;
-  const damageByPlayer = new Map<string, number>();
+  const damageByPlayer = new Map<
+    string,
+    { className?: string; totalDamage: number }
+  >();
 
   for (const entry of table.entries ?? []) {
-    const name = damageName(entry, job.actors);
+    const player = damagePlayer(entry, job.actors);
     const total = Number(entry.total ?? 0);
-    if (!name || !Number.isFinite(total) || total <= 0) {
+    if (!player || !Number.isFinite(total) || total <= 0) {
       continue;
     }
-    damageByPlayer.set(name, (damageByPlayer.get(name) ?? 0) + total);
+    const previous = damageByPlayer.get(player.name);
+    damageByPlayer.set(player.name, {
+      className: previous?.className ?? player.className,
+      totalDamage: (previous?.totalDamage ?? 0) + total,
+    });
   }
 
   return {
-    damage: [...damageByPlayer.entries()].map(([name, totalDamage]) => ({
-      dps: totalDamage / durationSeconds,
+    damage: [...damageByPlayer.entries()].map(([name, player]) => ({
+      class: player.className,
+      dps: player.totalDamage / durationSeconds,
       name,
-      totalDamage,
+      totalDamage: player.totalDamage,
     })),
     deaths: events.map((event) => ({
       ability: deathAbility(event),
@@ -287,7 +311,7 @@ async function buildRaidLogNightAnalysis(
   const abilityDeaths = new Map<string, number>();
   const playerDps = new Map<
     string,
-    { fights: number; totalDamage: number; totalDps: number }
+    { className?: string; fights: number; totalDamage: number; totalDps: number }
   >();
   const encounters: RaidLogAnalysis["encounters"] = [];
   let totalDeaths = 0;
@@ -304,10 +328,12 @@ async function buildRaidLogNightAnalysis(
 
     for (const player of result.damage) {
       const aggregate = playerDps.get(player.name) ?? {
+        className: player.class,
         fights: 0,
         totalDamage: 0,
         totalDps: 0,
       };
+      aggregate.className ??= player.class;
       aggregate.fights += 1;
       aggregate.totalDamage += player.totalDamage;
       aggregate.totalDps += player.dps;
@@ -330,6 +356,7 @@ async function buildRaidLogNightAnalysis(
     averageDps: [...playerDps.entries()]
       .map(([name, totals]) => ({
         averageDps: Math.round(totals.totalDps / totals.fights),
+        class: totals.className,
         encounters: totals.fights,
         name,
         totalDamage: Math.round(totals.totalDamage),
