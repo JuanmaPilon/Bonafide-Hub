@@ -530,7 +530,7 @@ export function RaidLogsBoard({
                             {boss.kills > 0
                               ? "Kill"
                               : boss.best !== undefined
-                                ? `Mejor ${percentLabel(boss.best)}`
+                                ? `Mejor avance ${percentLabel(boss.best)}`
                                 : "Wipe"}
                           </span>
                         </div>
