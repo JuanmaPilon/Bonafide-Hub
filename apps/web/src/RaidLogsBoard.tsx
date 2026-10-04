@@ -942,6 +942,12 @@ export function RaidLogsBoard({
                                     </div>
                                   ) : null}
                                 </div>
+                                {attendance.partial ? (
+                                  <span className="rlb-label">
+                                    Presencia parcial: se contó solo a quien
+                                    hizo daño, así que puede faltar algún heal.
+                                  </span>
+                                ) : null}
                                 {attendanceNoShows.length > 0 ? (
                                   <div className="rlb-analysis-list">
                                     <span className="rlb-label">

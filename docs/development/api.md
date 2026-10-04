@@ -146,6 +146,9 @@ Devuelve:
 4. `attendance` — cruce entre los que aparecen en el log y los anotados al
    evento de raid más cercano (±14 h, `type: raid`). Cuenta "voy" y "tarde"
    como compromiso; bench y tentativo, si vienen, caen en `unsignedPresent`.
+   `partial` avisa cuando no se pudo leer la presencia por pull (CombatantInfo)
+   y los participantes salieron de la tabla de daño: ahí un "no vino" puede ser
+   un heal que no hizo daño.
 
 XP:
 

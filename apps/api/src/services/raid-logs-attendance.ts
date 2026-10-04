@@ -4,6 +4,10 @@ export type PlayerRole = "dps" | "healer" | "tank";
 
 export type RaidLogAttendance = {
   event?: { id: string; startsAt: string; title: string };
+  // true cuando no se pudo leer la presencia por pull (CombatantInfo) y los
+  // participantes salieron de la tabla de daño: los healers sin daño pueden
+  // faltar, así que un "no vino" puede ser un falso negativo.
+  partial: boolean;
   players: Array<{
     class?: string;
     name: string;
@@ -37,6 +41,7 @@ function normalizeName(value: string | null | undefined, stripRealm: boolean) {
 export async function crossRaidAttendance(input: {
   guildId: string;
   nightStart?: Date;
+  partialParticipants?: boolean;
   players: RaidLogAttendance["players"];
   totalPulls: number;
 }): Promise<RaidLogAttendance> {
@@ -44,6 +49,7 @@ export async function crossRaidAttendance(input: {
     (a, b) => b.pulls - a.pulls || a.name.localeCompare(b.name),
   );
   const result: RaidLogAttendance = {
+    partial: Boolean(input.partialParticipants),
     players,
     signedAbsent: [],
     signedPresent: 0,

@@ -813,6 +813,7 @@ async function buildRaidLogNightAnalysis(
     string,
     { class?: string; name: string; pulls: number; role?: RaidRole }
   >();
+  let pullsWithPresence = 0;
   for (const [index, job] of jobs.entries()) {
     const extras = job.extras;
     if (!extras) {
@@ -823,6 +824,9 @@ async function buildRaidLogNightAnalysis(
       extras.participants.length > 0
         ? extras.participants
         : result.damage.map((player) => player.name);
+    if (extras.participants.length > 0) {
+      pullsWithPresence += 1;
+    }
     for (const name of participants) {
       const player = attendancePlayers.get(name) ?? {
         class: playerDps.get(name)?.className ?? playerClasses.get(name),
@@ -849,6 +853,8 @@ async function buildRaidLogNightAnalysis(
     analysis.attendance = await crossRaidAttendance({
       guildId,
       nightStart: selected.firstFightAt,
+      partialParticipants:
+        attendancePlayers.size > 0 && pullsWithPresence === 0,
       players: [...attendancePlayers.values()],
       totalPulls: encounters.length,
     });

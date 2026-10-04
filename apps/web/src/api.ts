@@ -104,6 +104,7 @@ export type RaidLogAttendancePlayer = {
 
 export type RaidLogAttendance = {
   event?: { id: string; startsAt: string; title: string };
+  partial: boolean;
   players: RaidLogAttendancePlayer[];
   signedAbsent: Array<{ name: string; status: string }>;
   signedPresent: number;
