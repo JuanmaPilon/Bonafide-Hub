@@ -2136,8 +2136,16 @@ a:hover {
   border-left: 3px solid var(--accent);
 }
 
+.rlb-spotlight.damage-low {
+  border-left: 3px solid var(--muted);
+}
+
 .rlb-spotlight.deaths {
   border-left: 3px solid #ff8a8a;
+}
+
+.rlb-spotlight.deaths-low {
+  border-left: 3px solid #35e06b;
 }
 
 .rlb-analysis-section {
@@ -2308,6 +2316,10 @@ a:hover {
 
 :root[data-theme="light"] .rlb-spotlight.deaths {
   border-left-color: #b3261e;
+}
+
+:root[data-theme="light"] .rlb-spotlight.deaths-low {
+  border-left-color: #1f7a35;
 }
 
 :root[data-theme="light"] .rlb-analysis-total strong,

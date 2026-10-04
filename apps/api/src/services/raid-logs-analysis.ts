@@ -22,8 +22,23 @@ export type RaidLogAnalysis = {
     topDps?: { dps: number; name: string };
   }>;
   generatedAt: string;
-  totalDeaths: number;
 };
+
+const WOW_CLASSES = [
+  "Death Knight",
+  "Demon Hunter",
+  "Druid",
+  "Evoker",
+  "Hunter",
+  "Mage",
+  "Monk",
+  "Paladin",
+  "Priest",
+  "Rogue",
+  "Shaman",
+  "Warlock",
+  "Warrior",
+];
 
 type WclAnalysisFight = {
   boss?: number;
@@ -34,6 +49,7 @@ type WclAnalysisFight = {
 };
 
 type WclActor = {
+  class?: string;
   id: number;
   name: string;
   petOwner?: number;
@@ -79,7 +95,7 @@ type FightJob = {
 };
 
 type FightResult = {
-  deaths: Array<{ ability: string; player: string }>;
+  deaths: Array<{ ability?: string; player: string }>;
   durationSeconds: number;
   fight: WclAnalysisFight;
   damage: Array<{
@@ -178,14 +194,21 @@ function deathPlayer(
   );
 }
 
-function deathAbility(event: WclDeathEvent): string {
+function normalizeClass(value?: string): string | undefined {
+  const normalized = (value ?? "").replace(/[^a-z]/gi, "").toLowerCase();
+  return WOW_CLASSES.find(
+    (wowClass) => wowClass.replace(/\s/g, "").toLowerCase() === normalized,
+  );
+}
+
+function deathAbility(event: WclDeathEvent): string | undefined {
   const rawAbility =
     typeof event.ability === "string"
       ? event.ability
       : (event.ability?.name ?? event.abilityName ?? "");
   const ability = rawAbility.trim();
   return !ability || /^unknown(?: ability)?$/i.test(ability)
-    ? "Causa no identificada por Warcraft Logs"
+    ? undefined
     : ability;
 }
 
@@ -203,7 +226,9 @@ function damagePlayer(
     return undefined;
   }
   return {
-    className: owner?.type ?? actor?.type ?? entry.class ?? entry.type,
+    className: normalizeClass(
+      owner?.class ?? owner?.type ?? actor?.class ?? actor?.type ?? entry.class ?? entry.type,
+    ),
     name,
   };
 }
@@ -314,16 +339,27 @@ async function buildRaidLogNightAnalysis(
     { className?: string; fights: number; totalDamage: number; totalDps: number }
   >();
   const encounters: RaidLogAnalysis["encounters"] = [];
-  let totalDeaths = 0;
+  for (const { report } of reports) {
+    for (const actor of report.friendlies ?? []) {
+      if (actor.petOwner || actor.type?.toLowerCase() === "pet") {
+        continue;
+      }
+      const playerClass = normalizeClass(actor.class ?? actor.type);
+      if (actor.name && playerClass) {
+        playerDeaths.set(actor.name, playerDeaths.get(actor.name) ?? 0);
+      }
+    }
+  }
 
   for (const result of fightResults) {
     for (const death of result.deaths) {
-      totalDeaths += 1;
       playerDeaths.set(death.player, (playerDeaths.get(death.player) ?? 0) + 1);
-      abilityDeaths.set(
-        death.ability,
-        (abilityDeaths.get(death.ability) ?? 0) + 1,
-      );
+      if (death.ability) {
+        abilityDeaths.set(
+          death.ability,
+          (abilityDeaths.get(death.ability) ?? 0) + 1,
+        );
+      }
     }
 
     for (const player of result.damage) {
@@ -370,7 +406,6 @@ async function buildRaidLogNightAnalysis(
       .sort((a, b) => b.deaths - a.deaths),
     encounters,
     generatedAt: new Date().toISOString(),
-    totalDeaths,
   };
 
   analysisCache.set(cacheKey, {

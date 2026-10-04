@@ -111,7 +111,6 @@ export type RaidLogAnalysis = {
     topDps?: { dps: number; name: string };
   }>;
   generatedAt: string;
-  totalDeaths: number;
 };
 
 export type KarutaCard = {

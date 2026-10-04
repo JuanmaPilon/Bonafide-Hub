@@ -268,9 +268,29 @@ export function RaidLogsBoard({
   );
   const manageOpen = Boolean(manage) && (showManage || nights.length === 0);
   const selectedAnalysis = selected ? analysisByNight[selected.key] : undefined;
+  const lowestDpsPlayer = selectedAnalysis?.averageDps[
+    (selectedAnalysis.averageDps.length || 1) - 1
+  ];
+  const fewestDeaths = selectedAnalysis?.deathsByPlayer.reduce<{
+    deaths: number;
+    name: string;
+  } | null>((lowest, player) =>
+    !lowest || player.deaths < lowest.deaths ? player : lowest,
+  null);
+  const leastDeathsCount = selectedAnalysis?.deathsByPlayer.reduce(
+    (minimum, player) => Math.min(minimum, player.deaths),
+    Number.POSITIVE_INFINITY,
+  );
+  const leastDeathTies = selectedAnalysis?.deathsByPlayer.filter(
+    (player) => player.deaths === leastDeathsCount,
+  ).length;
+  const knownDeathCauses = selectedAnalysis?.deathsByAbility.filter(
+    (cause) => !/^unknown(?: ability)?$/i.test(cause.ability),
+  );
   const selectedDpsColor = classColor(
     selectedAnalysis?.averageDps[0]?.class,
   );
+  const lowestDpsColor = classColor(lowestDpsPlayer?.class);
   const selectedAnalysisError =
     selected && analysisError && analysisError.key === selected.key
       ? analysisError.message
@@ -607,7 +627,7 @@ export function RaidLogsBoard({
                                 </span>
                               </div>
                               <span>
-                                {selectedAnalysis.encounters.length} bosses
+                                {selectedAnalysis.encounters.length} pulls
                               </span>
                             </div>
 
@@ -630,6 +650,22 @@ export function RaidLogsBoard({
                                     : "Sin datos de daño"}
                                 </span>
                               </div>
+                              <div
+                                className="rlb-spotlight damage-low"
+                                style={
+                                  lowestDpsColor
+                                    ? { borderLeftColor: lowestDpsColor }
+                                    : undefined
+                                }
+                              >
+                                <span>Menor DPS promedio</span>
+                                <strong>{lowestDpsPlayer?.name ?? "—"}</strong>
+                                <span>
+                                  {lowestDpsPlayer
+                                    ? `${compactNumber(lowestDpsPlayer.averageDps)} DPS`
+                                    : "Sin datos de daño"}
+                                </span>
+                              </div>
                               <div className="rlb-spotlight deaths">
                                 <span>Más muertes</span>
                                 <strong>
@@ -640,6 +676,15 @@ export function RaidLogsBoard({
                                   {selectedAnalysis.deathsByPlayer[0]
                                     ? `${selectedAnalysis.deathsByPlayer[0].deaths} muertes`
                                     : "Sin muertes registradas"}
+                                </span>
+                              </div>
+                              <div className="rlb-spotlight deaths-low">
+                                <span>Menos muertes</span>
+                                <strong>{fewestDeaths?.name ?? "—"}</strong>
+                                <span>
+                                  {fewestDeaths
+                                    ? `${fewestDeaths.deaths} muertes${(leastDeathTies ?? 0) > 1 ? ` · ${leastDeathTies} empatados` : ""}`
+                                    : "Sin jugadores registrados"}
                                 </span>
                               </div>
                             </div>
@@ -705,16 +750,9 @@ export function RaidLogsBoard({
 
                               <div className="rlb-analysis-section">
                                 <h5>Muertes</h5>
-                                <div className="rlb-analysis-total">
-                                  <strong>
-                                    {selectedAnalysis.totalDeaths}
-                                  </strong>
-                                  <span>en toda la raid</span>
-                                </div>
                                 {selectedAnalysis.deathsByPlayer.length > 0 ? (
                                   <div className="rlb-analysis-list">
                                     {selectedAnalysis.deathsByPlayer
-                                      .slice(0, 6)
                                       .map((player) => (
                                         <div
                                           className="rlb-analysis-list-row"
@@ -730,12 +768,13 @@ export function RaidLogsBoard({
                                     No se registraron muertes.
                                   </p>
                                 )}
-                                {selectedAnalysis.deathsByAbility.length > 0 ? (
+                                {knownDeathCauses &&
+                                knownDeathCauses.length > 0 ? (
                                   <div className="rlb-death-causes">
                                     <span className="rlb-label">
                                       Causas principales
                                     </span>
-                                    {selectedAnalysis.deathsByAbility
+                                    {knownDeathCauses
                                       .slice(0, 5)
                                       .map((cause) => (
                                         <span
@@ -766,11 +805,13 @@ export function RaidLogsBoard({
                                           {encounter.kill ? "Kill" : "Wipe"}
                                         </span>
                                         <strong>{encounter.name}</strong>
-                                        <span>{encounter.deaths} muertes</span>
+                                        <span>
+                                          {encounter.deaths} muertes
+                                        </span>
                                         <span>
                                           {encounter.topDps
-                                            ? `${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
-                                            : "Sin datos de daño"}
+                                            ? `Top DPS: ${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
+                                            : "Top DPS: sin datos"}
                                         </span>
                                       </div>
                                     ),
