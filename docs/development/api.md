@@ -94,51 +94,25 @@ Logs de raid (Warcraft Logs):
 2. `DELETE /guilds/:guildId/raid-logs/:logId`
 3. `GET /public/leaderboard` (top 30 público para la landing)
 
-El watcher automático de raids corre en el scheduler de la API cada 5 minutos.
-Usa la API v1 de Warcraft Logs con `WARCRAFT_LOGS_API_KEY`, guarda los reports
-nuevos en `raid_logs` y consulta sus fights. Los reports se filtran por zona
-`Raid` o por título que contenga `raid`.
+La API consulta Warcraft Logs v1 con `WARCRAFT_LOGS_API_KEY`. No hay un
+watcher periódico: los reports nuevos y sus fights se consultan al solicitar
+un escaneo manual. Los reports se filtran por zona `Raid` o por título que
+contenga `raid`.
 
-**El watcher NO publica solo**: crea el **borrador** y el scheduler lo cierra
-cuando la entrada terminó. Un report de Warcraft Logs se sube por partes, así
-que "terminado" no se puede detectar en el momento; se deduce de que no crezca:
-
-1. Cada 5 min (`syncRaidLogGroups`) se refrescan todas las partes de las
-   entradas activas (las creadas en las últimas 48 h y las que quedaron en
-   `live`).
-2. Una parte está **terminada** cuando su `fightCount`/`kills` no cambió
-   durante `FINISHED_STABLE_MS` (30 min). La cuenta arranca en la consulta
-   anterior, no en la actual: un log que ya llevaba horas quieto se reconoce
-   terminado en la primera comprobación. **Red de seguridad**: si pasaron más
-   de `MAX_NIGHT_MS` (6 h) desde el primer fight, la parte se considera
-   terminada igual. Sin ese tope, un report viejo que Warcraft Logs sigue
-   ajustando cada tanto queda "en vivo" para siempre, porque cada ajuste
-   reinicia la cuenta de estabilidad.
-3. Cuando **ninguna parte con fights** sigue creciendo y la entrada tiene al
-   menos 1 fight, la entrada se **publica sola** (un mensaje por noche, con
-   todas las partes y sus links) contra `logsChannelId`.
-4. Si el log crece **después** de publicado (o aparece otra parte de la misma
-   noche), el mensaje se **edita solo** cuando la entrada vuelve a estar
-   terminada. Nunca se publica dos veces la misma noche: una parte nueva se
-   engancha al mensaje existente (`discordMessageId`) y el texto se corrige.
-   El texto publicado se guarda en `postedMessageText` para comparar y editar
-   solo si cambió.
-
-Publicar temprano ya no "corta" el log: cualquier número que falte entra por la
-edición automática. Eso es lo que hizo posible volver a automatizar el cierre
-después de haberlo pasado a manual.
-
-Rutas manuales (siguen existiendo, para forzarlo sin esperar el ciclo):
+El flujo mantiene los reports como borradores hasta que alguien decide
+publicarlos. Así, el escaneo puede repetirse mientras Warcraft Logs termina de
+subir partes del report sin publicar datos incompletos. Las acciones manuales
+son:
 
 1. `POST /guilds/:g/raid-logs/scan` — escaneo manual: busca reports nuevos y
-   refresca los borradores (para cuando ya se subió todo).
+   refresca los reports nuevos y todos los borradores de la guild. No publica.
 2. `POST /guilds/:g/raid-logs/:logId/publish` — refresca y publica la entrada
    completa en `logsChannelId`; guarda `discordChannelId`/`discordMessageId`.
 3. `POST /guilds/:g/raid-logs/:logId/refresh` — re-escanea y **edita** el
    mensaje publicado si los números cambiaron.
 
-Las tres usan el mismo servicio que el ciclo automático
-(`services/raid-logs-publisher.ts`), así que se comportan igual.
+El escaneo se inicia desde Raids → Logs. Publicar, actualizar, ocultar o
+restaurar una entrada también requiere una acción explícita.
 
 Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
 una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
@@ -263,7 +237,7 @@ Campos relevantes de `guild_configs`:
 
 - `enabledModules` — módulos visibles del hub (vacío = todos visibles). Lo escribe solo el owner.
 - `suggestionsDmTiers` — rangos que reciben sugerencias por DM. El antiguo `suggestionsDmUserId` queda como columna legacy y ya no se usa.
-- `logsWatchGuild` / `logsWatchServer` / `logsWatchRegion` — vigilado de raid de Warcraft Logs (el viejo `logsWatchCharacter` quedó como legacy sin uso).
+- `logsWatchGuild` / `logsWatchServer` / `logsWatchRegion` — origen consultado al escanear Warcraft Logs manualmente (`logsWatchCharacter` y `logsWatchEnabled` quedan como legacy sin uso).
 - `eventGames` — juegos del módulo de eventos con sus roles (`[{ key, label, roles }]`). Un juego sin entrada acá usa los roles de su plantilla.
 - `eventRoles` — **legacy**: era la lista única de roles de la guild. Al pasar a "juego por evento" se migra a `eventGames` al arrancar el API (`apps/api/src/services/event-games-migration.ts`) y ya no se lee.
 

@@ -26,8 +26,7 @@ export type RaidLog = {
   id: string;
   kills: number;
   lastSyncedAt?: Date;
-  // La entrada está publicada pero el mensaje quedó viejo: el log creció
-  // después de publicarse y todavía no se corrigió (lo hace el scheduler).
+  // La entrada está publicada pero el mensaje quedó viejo; requiere actualizarla.
   needsUpdate?: boolean;
   // Texto que se publicó en Discord: se compara con el recién generado para
   // editar el mensaje SOLO si cambió.
@@ -222,9 +221,8 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
   });
   const logs = records.map(toRaidLog);
 
-  // Marca las entradas publicadas cuyo mensaje quedó desactualizado: el log
-  // creció después de publicarse. El scheduler las corrige solo, pero la web
-  // necesita saberlo para no mostrar "Publicado" como si estuviera al día.
+  // Marca las entradas publicadas cuyo mensaje quedó desactualizado para que
+  // la web pueda ofrecer una actualización explícita.
   const groups = new Map<string, RaidLog[]>();
   for (const log of logs) {
     const bucket = groups.get(log.groupKey);
@@ -252,36 +250,11 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
   return logs;
 }
 
-// Logs que el scheduler todavía tiene que mirar: los recientes (una noche de
-// raid puede seguir subiendo en partes) más cualquier entrada que haya quedado
-// en estado "en vivo", aunque sea vieja, para que no quede colgada para
-// siempre mostrando un estado que ya no es real.
-export async function listActiveRaidLogs(sinceHours = 48): Promise<RaidLog[]> {
-  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
-  const records = await prisma.raidLog.findMany({
-    where: {
-      hidden: false,
-      OR: [{ createdAt: { gte: since } }, { status: "live" }],
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  return records.map(toRaidLog);
-}
-
 // Logs que el usuario ocultó (para poder restaurarlos o borrarlos de verdad).
 export async function listHiddenRaidLogs(guildId: string): Promise<RaidLog[]> {
   const records = await prisma.raidLog.findMany({
     where: { guildId, hidden: true },
     orderBy: { createdAt: "desc" },
-  });
-  return records.map(toRaidLog);
-}
-
-// Logs que todavía no se publicaron en Discord (para el scheduler del API).
-export async function listUnpostedRaidLogs(): Promise<RaidLog[]> {
-  const records = await prisma.raidLog.findMany({
-    where: { discordPosted: false, hidden: false },
-    orderBy: { createdAt: "asc" },
   });
   return records.map(toRaidLog);
 }
@@ -318,8 +291,7 @@ export async function deleteRaidLog(
   }
 }
 
-// Ocultar (soft-delete): saca el log de la lista pero conserva la fila para
-// que el watcher no lo vuelva a crear.
+// Ocultar conserva la fila; solo un escaneo manual puede volver a detectar el report.
 export async function hideRaidLog(
   guildId: string,
   id: string,
@@ -351,14 +323,7 @@ export async function showRaidLog(
   }
 }
 
-// Cuánto tiene que dejar de crecer un report para considerarlo terminado.
-// Ojo: dejar de crecer NO prueba que la noche terminó (un corte entre pulls
-// también deja el report quieto), pero publicar temprano ya no rompe nada: el
-// mensaje se corrige solo cuando aparece el resto de los fights (ver
-// syncRaidLogGroups en raid-logs-publisher.ts).
-// Bajado de 30 a 10 minutos (24/09): con 30 la entrada tardaba hasta 35 min en
-// pasar de "En vivo" a publicada (30 de ventana + el ciclo), y la publicación
-// temprana es reversible:
+// Una entrada se considera terminada si queda estable o supera la duración máxima.
 const FINISHED_STABLE_MS = 10 * 60 * 1000;
 
 // Red de seguridad: una noche de raid no dura más que esto. Warcraft Logs a
@@ -641,10 +606,9 @@ export async function syncGuildWatch(input: {
       created.push(createdLog);
     }
 
-    // Logueamos SIEMPRE (incluso con 0 reports) para diagnosticar: si el
-    // gremio/servidor configurado no devuelve nada en WCL, lo vemos acá.
+    // Registrar también escaneos sin resultados ayuda a distinguirlos de fallos.
     console.log(
-      `[raid-logs] watch ${input.guild}@${input.server} (${input.region}): ` +
+      `[raid-logs] manual scan ${input.guild}@${input.server} (${input.region}): ` +
         `${reports.length} report/s, ${created.length} nuevo/s, ` +
         `${skippedByZone} fuera de zona raid, ` +
         `${reports.length - created.length - skippedByZone} ya existían`,
@@ -654,28 +618,4 @@ export async function syncGuildWatch(input: {
   } catch (error) {
     return { created: [], error: getErrorMessage(error) };
   }
-}
-
-// Guilds con vigilado configurado (para el scheduler del API).
-export async function listWatchGuildConfigs(): Promise<
-  Array<{ guild: string; guildId: string; region: string; server: string }>
-> {
-  const records = await prisma.guildConfig.findMany({
-    where: { logsWatchGuild: { not: null } },
-    select: {
-      guildId: true,
-      logsWatchGuild: true,
-      logsWatchRegion: true,
-      logsWatchServer: true,
-    },
-  });
-
-  return records
-    .filter((record) => record.logsWatchGuild && record.logsWatchServer)
-    .map((record) => ({
-      guild: record.logsWatchGuild as string,
-      guildId: record.guildId,
-      region: record.logsWatchRegion ?? "EU",
-      server: record.logsWatchServer as string,
-    }));
 }

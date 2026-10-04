@@ -50,17 +50,13 @@ import {
   hideRaidLog,
   listHiddenRaidLogs,
   listRaidLogs,
-  listWatchGuildConfigs,
   refreshRaidLog,
   showRaidLog,
   syncGuildWatch,
   type RaidLog,
 } from "./services/raid-logs-store.js";
 import {
-  getRaidLogSyncStatus,
   publishRaidLogEntry,
-  recordRaidLogSyncError,
-  syncRaidLogGroups,
   updateRaidLogEntry,
 } from "./services/raid-logs-publisher.js";
 import {
@@ -1217,120 +1213,6 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
       };
     })
     .filter((booster) => booster.userId);
-}
-
-// ── Scheduler de Logs de Raid ───────────────────────────────────────
-// Cada 2 minutos el API:
-//   1) busca reports NUEVOS del perfil vigilado y los guarda como borrador;
-//   2) cierra las entradas: publica las que ya terminaron y corrige los
-//      mensajes publicados que quedaron viejos (ver syncRaidLogGroups).
-// Los botones Publicar/Actualizar de la web siguen existiendo para forzarlo a
-// mano sin esperar el ciclo.
-// 2 minutos (era 5, 24/09): es el tramo que se suma a la ventana de cierre del
-// report, así que el log aparece publicado apenas termina la noche.
-const RAID_LOG_SYNC_INTERVAL_MS = 2 * 60 * 1000;
-let raidLogSyncTimer: NodeJS.Timeout | null = null;
-// Un ciclo puede tardar (consulta cada report y publica/edita en Discord). Con
-// este flag, si una vuelta se pasa de los 2 minutos, la siguiente se saltea:
-// así dos ciclos no se pisan y una noche nunca se publica dos veces.
-let raidLogSyncRunning = false;
-
-async function runRaidLogSync(): Promise<void> {
-  if (raidLogSyncRunning) {
-    const message = "el ciclo anterior todavía está corriendo";
-    recordRaidLogSyncError(message);
-    console.warn(`[raid-logs] ${message}: se saltea esta vuelta`);
-    return;
-  }
-  raidLogSyncRunning = true;
-  try {
-    await runRaidLogSyncInner();
-  } finally {
-    raidLogSyncRunning = false;
-  }
-}
-
-async function runRaidLogSyncInner(): Promise<void> {
-  // 1) Cierre automático + corrección de mensajes publicados. Adentro se
-  //    refrescan TODAS las partes de cada entrada antes de decidir: una noche
-  //    termina cuando ninguna parte sigue creciendo.
-  try {
-    await syncRaidLogGroups();
-  } catch (error) {
-    recordRaidLogSyncError(
-      error instanceof Error ? error.message : String(error),
-    );
-    console.error("[raid-logs] sync de entradas failed", error);
-  }
-
-  // 2) Vigilado de perfil: crea logs de RAID nuevos automáticamente.
-  try {
-    const watched = await listWatchGuildConfigs();
-    if (watched.length > 0) {
-      console.log(
-        `[raid-logs] watch: ${watched.length} guild/s con vigilado configurado`,
-      );
-    }
-
-    for (const watch of watched) {
-      if (!watch.guild || !watch.server) {
-        continue;
-      }
-      const config = await getGuildConfig(watch.guildId);
-      const token = env.DISCORD_BOT_TOKEN;
-
-      if (!config.logsWatchEnabled) {
-        // Log claro: si el toggle está apagado, el watch NO corre. Esto
-        // ayuda a diagnosticar "no detecta logs".
-        console.warn(
-          `[raid-logs] watch ${watch.guild}@${watch.server}: logsWatchEnabled está APAGADO para guild ${watch.guildId}. Activá "Vigilado activado" en el panel Admin.`,
-        );
-        continue;
-      }
-
-      const result = await syncGuildWatch({
-        guild: watch.guild,
-        guildId: watch.guildId,
-        region: watch.region || "EU",
-        server: watch.server,
-      });
-
-      if (result.error) {
-        console.warn(
-          `[raid-logs] watch failed for ${watch.guildId}: ${result.error}`,
-        );
-        continue;
-      }
-
-      for (const created of result.created) {
-        const refreshed = await refreshRaidLog(created.id);
-        if (refreshed.error) {
-          console.warn(
-            `[raid-logs] report ${created.reportCode} detectado pero no se pudo refrescar: ${refreshed.error}`,
-          );
-        } else {
-          console.log(
-            `[raid-logs] report ${created.reportCode} detectado como borrador para guild ${watch.guildId} (${refreshed.log?.fightCount ?? 0} fight/s)`,
-          );
-        }
-      }
-    }
-  } catch (error) {
-    console.error("[raid-logs] watch sync failed", error);
-  }
-}
-
-function startRaidLogSync(): void {
-  if (raidLogSyncTimer) {
-    return;
-  }
-  console.log(
-    `[raid-logs] scheduler iniciado (intervalo ${RAID_LOG_SYNC_INTERVAL_MS / 60000} min, API key ${env.WARCRAFT_LOGS_API_KEY ? "configurada" : "FALTANTE"}, token Discord ${env.DISCORD_BOT_TOKEN ? "configurado" : "FALTANTE"})`,
-  );
-  void runRaidLogSync();
-  raidLogSyncTimer = setInterval(() => {
-    void runRaidLogSync();
-  }, RAID_LOG_SYNC_INTERVAL_MS);
 }
 
 // ── Cierre de inscripciones de eventos ──────────────────────────────
@@ -2823,9 +2705,6 @@ export function buildApp() {
     service: "api",
     environment: env.NODE_ENV,
     timestamp: new Date().toISOString(),
-    // Estado del último ciclo de logs de raid: con esto se ve, sin mirar los
-    // logs del servidor, qué decidió el scheduler entrada por entrada.
-    raidLogs: getRaidLogSyncStatus(),
   }));
 
   app.get("/", async () => ({
@@ -4829,8 +4708,7 @@ export function buildApp() {
     };
   });
 
-  // Escanea Warcraft Logs ahora (sin esperar al scheduler) y refresca los
-  // borradores, para ver los números finales cuando ya se subió todo.
+  // El escaneo explícito de Warcraft Logs descubre reports y refresca borradores.
   app.post("/guilds/:guildId/raid-logs/scan", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -4847,25 +4725,27 @@ export function buildApp() {
     }
 
     const config = await getGuildConfig(params.guildId);
-    let detected = 0;
-    if (
-      config.logsWatchEnabled &&
-      config.logsWatchGuild &&
-      config.logsWatchServer
-    ) {
-      const result = await syncGuildWatch({
-        guild: config.logsWatchGuild,
-        guildId: params.guildId,
-        region: config.logsWatchRegion ?? "EU",
-        server: config.logsWatchServer,
+    if (!config.logsWatchGuild || !config.logsWatchServer) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          "Configura la guild y el realm de Warcraft Logs antes de escanear.",
       });
-      if (result.error) {
-        return reply.code(502).send({ ok: false, error: result.error });
-      }
-      detected = result.created.length;
-      for (const created of result.created) {
-        await refreshRaidLog(created.id);
-      }
+    }
+
+    let detected = 0;
+    const result = await syncGuildWatch({
+      guild: config.logsWatchGuild,
+      guildId: params.guildId,
+      region: config.logsWatchRegion ?? "EU",
+      server: config.logsWatchServer,
+    });
+    if (result.error) {
+      return reply.code(502).send({ ok: false, error: result.error });
+    }
+    detected = result.created.length;
+    for (const created of result.created) {
+      await refreshRaidLog(created.id);
     }
 
     const drafts = (await listRaidLogs(params.guildId)).filter(
@@ -4909,7 +4789,7 @@ export function buildApp() {
       if (!config.logsChannelId) {
         return reply.code(400).send({
           ok: false,
-          error: "Falta el canal de logs en Admin → Logs de Raid",
+          error: "Falta el canal de publicación en Raids → Logs",
         });
       }
       const token = env.DISCORD_BOT_TOKEN;
@@ -4921,7 +4801,7 @@ export function buildApp() {
       }
 
       // Refresca las partes, publica el mensaje y guarda dónde y qué quedó
-      // publicado: misma implementación que usa el cierre automático.
+      // publicado antes de devolver la lista actualizada.
       const result = await publishRaidLogEntry({
         channelId: config.logsChannelId,
         guildId: params.guildId,
@@ -4975,8 +4855,7 @@ export function buildApp() {
         });
       }
 
-      // Re-escanea las partes y edita el mensaje publicado SOLO si cambió
-      // (misma implementación que usa la corrección automática).
+      // Re-escanea las partes y edita el mensaje publicado solo si cambió.
       const result = await updateRaidLogEntry({
         guildId: params.guildId,
         logId: params.logId,
@@ -5048,8 +4927,8 @@ export function buildApp() {
     };
   });
 
-  // DELETE ahora OCULTA el log (soft-delete): desaparece de la lista y el
-  // watcher no lo vuelve a crear. Para borrarlo para siempre existe
+  // DELETE oculta el log (soft-delete): desaparece de la lista y conserva su
+  // fila. Para borrarlo para siempre existe
   // DELETE /raid-logs/:logId/permanent.
   app.delete("/guilds/:guildId/raid-logs/:logId", async (request, reply) => {
     const session = await requireSession(request);
@@ -5121,8 +5000,8 @@ export function buildApp() {
     },
   );
 
-  // Borrar definitivamente (no se puede recuperar; el watcher lo vuelve a
-  // crear si el raid sigue en Warcraft Logs).
+  // Borrar definitivamente (no se puede recuperar; un escaneo manual puede
+  // volver a detectar el report si sigue en Warcraft Logs).
   app.delete(
     "/guilds/:guildId/raid-logs/:logId/permanent",
     async (request, reply) => {
@@ -9130,7 +9009,6 @@ export function buildApp() {
     return { ok: true };
   });
 
-  startRaidLogSync();
   startEventCloseSync();
   startEventRecurrenceSync();
   startEventAutoCompleteSync();

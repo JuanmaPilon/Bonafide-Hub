@@ -103,33 +103,26 @@ el owner, reemplaza esas reglas. Si desaparecen tras un deploy, revisar que el
 servicio API siga apuntando a la misma `DATABASE_URL` y que no se haya creado
 una base de datos nueva o cambiado de environment en Railway.
 
-### Watcher de Warcraft Logs no detecta o publica raids
+### Escaneo manual de Warcraft Logs falla
 
-El watcher corre dentro del proceso **API**, no dentro de la Web. Ejecuta una
-comprobación inmediata al arrancar y luego cada 5 minutos.
+El escaneo se inicia desde **Raids → Logs**; no hay polling automático en la
+API ni en la Web. Revisar los logs de Railway de `API` al solicitar un escaneo:
 
-Revisar en los logs de Railway de `API`:
-
-1. `[raid-logs] scheduler iniciado` debe indicar `API key configurada` y
-   `token Discord configurado`.
-2. `[raid-logs] watch: N guild/s` confirma que la config tiene gremio y servidor.
-3. `watch ...: X report/s, Y nuevo/s` confirma que Warcraft Logs devolvió
-   reports. Los reports que no sean raid se cuentan como `fuera de zona raid`.
-4. `Warcraft Logs v1 respondió 401` indica key ausente, inválida o revocada.
-   `403` indica falta de permisos o key no autorizada.
-5. Si detecta un report pero no publica, revisar `no hay logsChannelId` o el
-   mensaje de Discord. `logsChannelId` debe ser un canal de texto y el bot debe
-   poder ver el canal, enviar mensajes y leer historial.
+1. Confirmar que la guild y el realm configurados coinciden con Warcraft Logs.
+2. `WARCRAFT_LOGS_API_KEY` ausente o inválida puede provocar una respuesta 401;
+   403 indica falta de permisos o una key no autorizada.
+3. El log `[raid-logs] scan manual` aparece cuando el escaneo termina y resume
+   reports detectados y borradores refrescados.
+4. Publicar y actualizar son acciones aparte. Si falla la publicación, revisar
+   `logsChannelId` y que el bot pueda ver el canal, enviar mensajes y leer historial.
 
 Variables necesarias en el servicio `API` (environment correcto):
 
 - `WARCRAFT_LOGS_API_KEY`
 - `DISCORD_BOT_TOKEN`
 
-La Web refresca la lista de logs cada 60 segundos mientras la pestaña `Raids`
-está abierta. La API sigue siendo la fuente de verdad; un redeploy de Web no
-soluciona un watcher detenido, por lo que hay que revisar primero los logs de
-API y sus variables.
+La Web consulta la lista al entrar a Raids o abrir el popup. Para detectar
+reports nuevos o actualizar borradores, se debe solicitar un escaneo manual.
 
 ## 6. Seguridad operativa
 

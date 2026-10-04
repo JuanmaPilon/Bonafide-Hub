@@ -183,12 +183,10 @@ Bot (cada ~2 min) -> lee config + frases habilitadas -> programa un timer aleato
 ## 12. Flujo de Logs de Raid (Warcraft Logs)
 
 ```text
-Admin pega un link (o activa el vigilado de perfil) -> API guarda un RaidLog
-   -> API consulta Warcraft Logs (endpoint público o API v1 con key)
-   -> guarda resumen (fights/kills) y publica en el canal configurado de Discord
-Scheduler (cada 5 min) -> observa reports sin publicar / perfiles vigilados
-   -> solo RAID (zone tipo Raid + título contiene "raid") -> publica cuando hay fights
-Web -> tab Raids muestra los logs (acordeón colapsable)
+Web (Raids -> Logs) -> escaneo manual de guild/realm configurados
+   -> API consulta Warcraft Logs y guarda/refresca borradores en raid_logs
+Web -> acción Publicar -> API envía la entrada agrupada al canal de Discord
+Web -> acción Actualizar -> API refresca y edita el mensaje publicado
 ```
 
 ## 13. Módulos del hub y permisos de staff

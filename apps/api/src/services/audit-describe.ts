@@ -2,8 +2,8 @@
  * Detalle humano de los cambios que se guardan en el registro de auditoría.
  *
  * Cada acción del panel Admin llama a uno de estos describers, que devuelve
- * una línea del estilo "canal de logs: #general → #auditoría · watcher de
- * raids: sí → no". Si devuelve null, no cambió nada y la acción no se
+ * una línea del estilo "canal de logs: #general → #auditoría · origen WCL:
+ * guild anterior → guild nueva". Si devuelve null, no cambió nada y la acción no se
  * registra (evita entradas vacías cuando el panel manda la config completa).
  *
  * Los ids de Discord (canales y roles) se traducen a nombres con los mapas
@@ -210,22 +210,22 @@ export function describeGuildConfigChanges(
     {
       after: next.logsWatchEnabled,
       before: previous.logsWatchEnabled,
-      label: "watcher de raids",
+      label: "escaneo manual de Warcraft Logs",
     },
     {
       after: next.logsWatchGuild,
       before: previous.logsWatchGuild,
-      label: "watcher: guild (Warcraft Logs)",
+      label: "origen: guild (Warcraft Logs)",
     },
     {
       after: next.logsWatchRegion,
       before: previous.logsWatchRegion,
-      label: "watcher: región (Warcraft Logs)",
+      label: "origen: región (Warcraft Logs)",
     },
     {
       after: next.logsWatchServer,
       before: previous.logsWatchServer,
-      label: "watcher: realm (Warcraft Logs)",
+      label: "origen: realm (Warcraft Logs)",
     },
     {
       after: next.karutaChannelId,

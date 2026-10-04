@@ -757,12 +757,7 @@ function RaidLogsList({
   };
 
   if (groups.length === 0) {
-    return (
-      <div className="empty-state">
-        Todavía no hay logs de raid. El bot los detecta desde Warcraft Logs y
-        quedan acá como borrador hasta que los publiques.
-      </div>
-    );
+    return <div className="empty-state">Todavía no hay logs de raid.</div>;
   }
 
   return (
@@ -771,8 +766,7 @@ function RaidLogsList({
         const expanded = expandedKeys.has(group.key);
         const lead = group.parts[0];
         const busy = busyKey === group.key;
-        // Publicado pero con el mensaje viejo: el API lo corrige solo. Si la
-        // noche sigue en curso no se avisa: primero tiene que terminar.
+        // Publicado con datos nuevos disponibles: requiere actualización manual.
         const pending =
           group.posted && group.needsUpdate === true && group.status !== "live";
         // Color del badge de PUBLICACIÓN: no depende de si la noche sigue en
@@ -4826,7 +4820,6 @@ const TAB_SECTIONS: Partial<
       module: "daily",
       tier: "officer",
     },
-    { key: "logs", label: "Logs", module: "raids", tier: "subofficer" },
     { key: "xp", label: "XP", module: "xp", tier: "admin" },
     {
       key: "registros",
@@ -5985,6 +5978,7 @@ function App() {
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [scanningRaidLogs, setScanningRaidLogs] = useState(false);
   const [raidLogsLoading, setRaidLogsLoading] = useState(false);
+  const [showRaidLogsModal, setShowRaidLogsModal] = useState(false);
   const [raidLogUrl, setRaidLogUrl] = useState("");
   const [hiddenRaidLogs, setHiddenRaidLogs] = useState<RaidLog[]>([]);
   const [karutaCards, setKarutaCards] = useState<KarutaCard[]>([]);
@@ -6534,6 +6528,7 @@ function App() {
   // ¿Puede usar un módulo puntual del Admin?
   const canAccess = (module: string): boolean =>
     isAdminOwner || adminAccessModules.includes(module);
+  const canManageRaidLogs = canAccess("raids");
 
   // Rango efectivo del usuario logueado, para el chip (owner/admin/officer).
   const myTier: "owner" | StaffTier | null = isAdminOwner
@@ -6825,13 +6820,43 @@ function App() {
     };
 
     refreshRaidLogs();
-    const refreshTimer = window.setInterval(refreshRaidLogs, 60_000);
 
     return () => {
       cancelled = true;
-      window.clearInterval(refreshTimer);
     };
-  }, [activeTab, selectedGuildId]);
+  }, [activeTab, selectedGuildId, showRaidLogsModal]);
+
+  useEffect(() => {
+    if (!showRaidLogsModal || !selectedGuildId || !canManageRaidLogs) {
+      return;
+    }
+    let cancelled = false;
+    void getGuildTextChannels(selectedGuildId)
+      .then((channels) => {
+        if (!cancelled) {
+          setTextChannels(channels);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTextChannels([]);
+        }
+      });
+    void listHiddenRaidLogs(selectedGuildId)
+      .then((logs) => {
+        if (!cancelled) {
+          setHiddenRaidLogs(logs);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHiddenRaidLogs([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageRaidLogs, showRaidLogsModal, selectedGuildId]);
 
   useEffect(() => {
     if (!selectedGuildId || activeTab !== "karuta") {
@@ -8535,7 +8560,7 @@ function App() {
     }
   }
 
-  // Oculta la entrada completa: el watcher no la vuelve a capturar.
+  // Oculta todos los reports de una noche hasta que se restauren.
   async function handleHideRaidLog(group: RaidLog[]): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -8548,7 +8573,7 @@ function App() {
       setRaidLogs((current) =>
         current.filter((entry) => !hidden.has(entry.id)),
       );
-      pushToast("Log eliminado. No se va a volver a capturar.", "success");
+      pushToast("Log ocultado.", "success");
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al eliminar el log.",
@@ -8561,7 +8586,7 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Eliminar log de raid",
-      message: `¿Eliminar "${group[0]?.title || group[0]?.reportCode}"? Se saca de la lista y el watcher no lo vuelve a capturar. Se puede recuperar desde el panel Admin → Logs.`,
+      message: `¿Ocultar "${group[0]?.title || group[0]?.reportCode}"? Puedes restaurarlo desde Warcraft Logs.`,
       onConfirm: () => {
         void handleHideRaidLog(group);
       },
@@ -8609,7 +8634,7 @@ function App() {
     }
   }
 
-  // Escaneo manual: no hace falta esperar al scheduler.
+  // Escaneo manual bajo demanda.
   async function handleScanRaidLogs(): Promise<void> {
     if (!selectedGuildId) {
       return;
@@ -8631,19 +8656,6 @@ function App() {
       );
     } finally {
       setScanningRaidLogs(false);
-    }
-  }
-
-  // ── Logs ocultos: restaurar o borrar definitivamente ─────────────
-  async function refreshHiddenRaidLogs(): Promise<void> {
-    if (!selectedGuildId) {
-      return;
-    }
-    try {
-      const logs = await listHiddenRaidLogs(selectedGuildId);
-      setHiddenRaidLogs(logs);
-    } catch {
-      setHiddenRaidLogs([]);
     }
   }
 
@@ -8682,7 +8694,7 @@ function App() {
     setConfirmDialog({
       kind: "danger",
       title: "Borrar definitivamente",
-      message: `¿Borrar "${log.title || log.reportCode}" para siempre? Ya no podrás recuperarlo y, si el raid sigue en Warcraft Logs, el watcher lo volverá a capturar.`,
+      message: `¿Borrar "${log.title || log.reportCode}" para siempre? Ya no podrás recuperarlo. Si el report sigue en Warcraft Logs, un próximo escaneo manual puede volver a detectarlo.`,
       onConfirm: () => {
         void (async () => {
           try {
@@ -8712,7 +8724,7 @@ function App() {
     setSavingAction("config");
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
-        logsChannelId: config.logsChannelId,
+        logsChannelId: config.logsChannelId ?? "",
       });
       clearDirty("logsChannel");
       setConfig(nextConfig);
@@ -8733,14 +8745,13 @@ function App() {
     setSavingAction("config");
     try {
       const nextConfig = await saveGuildConfig(selectedGuildId, {
-        logsWatchEnabled: config.logsWatchEnabled,
-        logsWatchGuild: config.logsWatchGuild,
-        logsWatchRegion: config.logsWatchRegion,
-        logsWatchServer: config.logsWatchServer,
+        logsWatchGuild: config.logsWatchGuild ?? "",
+        logsWatchRegion: config.logsWatchRegion ?? "EU",
+        logsWatchServer: config.logsWatchServer ?? "",
       });
       setConfig(nextConfig);
       clearDirty("logsWatch");
-      pushToast("Vigilado de gremio guardado.", "success");
+      pushToast("Fuente de Warcraft Logs guardada.", "success");
     } catch (error) {
       void error;
       pushToast("No se pudo guardar el vigilado de gremio.", "error");
@@ -9383,12 +9394,6 @@ function App() {
           );
         }
       });
-
-    if (canAccess("raids")) {
-      void refreshHiddenRaidLogs();
-    } else {
-      setHiddenRaidLogs([]);
-    }
 
     const isOwner = guilds.some(
       (guild) => guild.id === selectedGuildId && guild.owner,
@@ -10826,217 +10831,6 @@ function App() {
                     </details>
                   ) : null}
 
-                  {sectionFor("admin") === "logs" && canAccess("raids") ? (
-                    <details
-                      open
-                      className="admin-card admin-card-acc admin-card--subofficer"
-                    >
-                      <summary className="admin-card-header admin-acc-header">
-                        <div>
-                          <h3>
-                            Logs{" "}
-                            <span className="admin-tier-badge tier-subofficer">
-                              Sub Officer
-                            </span>
-                          </h3>
-                        </div>
-                        <span className="admin-acc-chevron" aria-hidden="true">
-                          ▸
-                        </span>
-                      </summary>
-                      <div className="admin-card-body">
-                        <label>
-                          <span>Canal de publicación</span>
-                          <select
-                            className="select"
-                            value={config.logsChannelId ?? ""}
-                            onChange={(event) =>
-                              editConfig(
-                                (current) => ({
-                                  ...current,
-                                  logsChannelId:
-                                    event.target.value || undefined,
-                                }),
-                                "logsChannel",
-                              )
-                            }
-                          >
-                            <option value="">Sin canal configurado</option>
-                            {textChannels.map((channel) => (
-                              <option key={channel.id} value={channel.id}>
-                                {channel.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {isDirty("logsChannel") ? (
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSaveLogsConfig()}
-                            disabled={savingAction !== null}
-                            type="button"
-                          >
-                            {savingAction === "config"
-                              ? "Guardando…"
-                              : "Guardar canal"}
-                          </button>
-                        ) : null}
-
-                        <div className="raid-watcher-editor">
-                          <div className="raid-watcher-head">
-                            <div>
-                              <strong>Watcher</strong>
-                              <span>Publica nuevas raids automáticamente</span>
-                            </div>
-                            <label className="raid-watcher-toggle">
-                              <input
-                                type="checkbox"
-                                checked={config.logsWatchEnabled ?? false}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      logsWatchEnabled: event.target.checked,
-                                    }),
-                                    "logsWatch",
-                                  )
-                                }
-                              />
-                              <span
-                                className="raid-watcher-switch"
-                                aria-hidden="true"
-                              />
-                              <span className="sr-only">Activar watcher</span>
-                            </label>
-                          </div>
-                          <div className="form-grid">
-                            <label>
-                              <span>Guild</span>
-                              <input
-                                value={config.logsWatchGuild ?? ""}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      logsWatchGuild:
-                                        event.target.value || undefined,
-                                    }),
-                                    "logsWatch",
-                                  )
-                                }
-                                placeholder="Nombre en Warcraft Logs"
-                              />
-                            </label>
-                            <label>
-                              <span>Realm</span>
-                              <input
-                                value={config.logsWatchServer ?? ""}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      logsWatchServer:
-                                        event.target.value || undefined,
-                                    }),
-                                    "logsWatch",
-                                  )
-                                }
-                                placeholder="Nombre del realm"
-                              />
-                            </label>
-                            <label>
-                              <span>Región</span>
-                              <select
-                                className="select"
-                                value={config.logsWatchRegion ?? "EU"}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      logsWatchRegion: event.target.value,
-                                    }),
-                                    "logsWatch",
-                                  )
-                                }
-                              >
-                                <option value="EU">EU</option>
-                                <option value="US">US</option>
-                              </select>
-                            </label>
-                          </div>
-                          {isDirty("logsWatch") ? (
-                            <button
-                              className="primary-button"
-                              onClick={() => void handleSaveLogsWatch()}
-                              disabled={savingAction !== null}
-                              type="button"
-                            >
-                              Guardar
-                            </button>
-                          ) : null}
-                        </div>
-
-                        <div className="daily-messages-editor">
-                          <div className="daily-messages-head">
-                            <strong>Agregar log</strong>
-                          </div>
-                          <input
-                            value={raidLogUrl}
-                            onChange={(event) =>
-                              setRaidLogUrl(event.target.value)
-                            }
-                            placeholder="https://www.warcraftlogs.com/reports/XXXX"
-                          />
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleCreateRaidLog()}
-                            type="button"
-                          >
-                            + Agregar log de raid
-                          </button>
-                        </div>
-
-                        {hiddenRaidLogs.length > 0 ? (
-                          <div className="hidden-raid-logs">
-                            <div className="daily-messages-head">
-                              <strong>
-                                Eliminados ({hiddenRaidLogs.length})
-                              </strong>
-                            </div>
-                            {hiddenRaidLogs.map((log) => (
-                              <div className="daily-message-row" key={log.id}>
-                                <div className="daily-message-content">
-                                  <strong>{log.title || log.reportCode}</strong>
-                                  <div className="muted-text">
-                                    ⚔️ {log.fightCount} · 💀 {log.kills}
-                                  </div>
-                                </div>
-                                <div className="daily-message-actions">
-                                  <button
-                                    className="ghost-button"
-                                    onClick={() => requestShowRaidLog(log)}
-                                    type="button"
-                                  >
-                                    Restaurar
-                                  </button>
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() =>
-                                      requestPermanentDeleteRaidLog(log)
-                                    }
-                                    type="button"
-                                  >
-                                    Borrar definitivamente
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </details>
-                  ) : null}
-
                   {sectionFor("admin") === "xp" && canAccess("xp") ? (
                     <details
                       open
@@ -11608,7 +11402,8 @@ function App() {
                     </details>
                   ) : null}
                   {sectionFor("admin") === "historial" &&
-                  canAccess("eventos") ? (
+                  canAccess("eventos") &&
+                  completedEvents.length > 0 ? (
                     <details
                       open
                       className="admin-card admin-card-acc admin-card--subofficer"
@@ -11627,115 +11422,107 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        {completedEvents.length === 0 ? (
-                          <p className="muted-text">
-                            Todavía no hay eventos completados.
-                          </p>
-                        ) : (
-                          <>
-                            <ListFilterBar
-                              onOrderChange={setEventHistoryOrder}
-                              onSearchChange={setEventHistorySearch}
-                              order={eventHistoryOrder}
-                              placeholder="Buscar evento…"
-                              search={eventHistorySearch}
-                            />
-                            {visibleEventHistory.length === 0 ? (
-                              <p className="muted-text">
-                                Ningún evento coincide con la búsqueda.
-                              </p>
-                            ) : (
-                              <div className="event-history-list">
-                                {visibleEventHistory.map((finished) => (
-                                  <details
-                                    className="event-history-item"
-                                    key={finished.id}
-                                  >
-                                    <summary className="event-history-head">
-                                      <strong>{finished.title}</strong>
-                                      <span className="event-history-date">
-                                        {formatDateTime24(finished.startsAt)}
-                                      </span>
-                                    </summary>
-                                    <div className="event-history-body">
-                                      {finished.signups.length === 0 ? (
-                                        <p className="muted-text">
-                                          Sin inscripciones.
-                                        </p>
-                                      ) : (
-                                        (
-                                          [
-                                            ["yes", "✅", "Asistieron"],
-                                            ["bench", "🪑", "Bench"],
-                                            ["late", "⏰", "Tarde"],
-                                            ["no", "❌", "No asistieron"],
-                                          ] as const
-                                        ).map(([st, emoji, label]) => {
-                                          const members =
-                                            finished.signups.filter(
-                                              (signup) => signup.status === st,
-                                            );
-                                          if (members.length === 0) {
-                                            return null;
-                                          }
-                                          return (
-                                            <div
-                                              className="event-history-group"
-                                              key={st}
-                                            >
-                                              <span className="event-roster-role">
-                                                {emoji} {label} (
-                                                {members.length})
-                                              </span>
-                                              <span className="event-history-names">
-                                                {members.map((signup) => (
-                                                  <span
-                                                    className="event-roster-member"
-                                                    key={signup.id}
-                                                  >
-                                                    {signup.username}
-                                                    {signup.character
-                                                      ? ` (${signup.character})`
-                                                      : ""}
-                                                  </span>
-                                                ))}
-                                              </span>
-                                            </div>
-                                          );
-                                        })
-                                      )}
-                                      <div className="event-history-actions">
-                                        <button
-                                          className="csv-button"
-                                          disabled={
-                                            reportBusyEventId === finished.id
-                                          }
-                                          onClick={() =>
-                                            setReportDownloadEvent(finished)
-                                          }
-                                          type="button"
-                                        >
-                                          {reportBusyEventId === finished.id
-                                            ? "Generando…"
-                                            : "⬇️ Descargar informe"}
-                                        </button>
-                                        <button
-                                          className="danger-button"
-                                          onClick={() =>
-                                            handleDeleteEvent(finished)
-                                          }
-                                          type="button"
-                                        >
-                                          🗑️ Eliminar evento
-                                        </button>
-                                      </div>
+                        <>
+                          <ListFilterBar
+                            onOrderChange={setEventHistoryOrder}
+                            onSearchChange={setEventHistorySearch}
+                            order={eventHistoryOrder}
+                            placeholder="Buscar evento…"
+                            search={eventHistorySearch}
+                          />
+                          {visibleEventHistory.length === 0 ? (
+                            <p className="muted-text">
+                              Ningún evento coincide con la búsqueda.
+                            </p>
+                          ) : (
+                            <div className="event-history-list">
+                              {visibleEventHistory.map((finished) => (
+                                <details
+                                  className="event-history-item"
+                                  key={finished.id}
+                                >
+                                  <summary className="event-history-head">
+                                    <strong>{finished.title}</strong>
+                                    <span className="event-history-date">
+                                      {formatDateTime24(finished.startsAt)}
+                                    </span>
+                                  </summary>
+                                  <div className="event-history-body">
+                                    {finished.signups.length === 0 ? (
+                                      <p className="muted-text">
+                                        Sin inscripciones.
+                                      </p>
+                                    ) : (
+                                      (
+                                        [
+                                          ["yes", "✅", "Asistieron"],
+                                          ["bench", "🪑", "Bench"],
+                                          ["late", "⏰", "Tarde"],
+                                          ["no", "❌", "No asistieron"],
+                                        ] as const
+                                      ).map(([st, emoji, label]) => {
+                                        const members = finished.signups.filter(
+                                          (signup) => signup.status === st,
+                                        );
+                                        if (members.length === 0) {
+                                          return null;
+                                        }
+                                        return (
+                                          <div
+                                            className="event-history-group"
+                                            key={st}
+                                          >
+                                            <span className="event-roster-role">
+                                              {emoji} {label} ({members.length})
+                                            </span>
+                                            <span className="event-history-names">
+                                              {members.map((signup) => (
+                                                <span
+                                                  className="event-roster-member"
+                                                  key={signup.id}
+                                                >
+                                                  {signup.username}
+                                                  {signup.character
+                                                    ? ` (${signup.character})`
+                                                    : ""}
+                                                </span>
+                                              ))}
+                                            </span>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                    <div className="event-history-actions">
+                                      <button
+                                        className="csv-button"
+                                        disabled={
+                                          reportBusyEventId === finished.id
+                                        }
+                                        onClick={() =>
+                                          setReportDownloadEvent(finished)
+                                        }
+                                        type="button"
+                                      >
+                                        {reportBusyEventId === finished.id
+                                          ? "Generando…"
+                                          : "⬇️ Descargar informe"}
+                                      </button>
+                                      <button
+                                        className="danger-button"
+                                        onClick={() =>
+                                          handleDeleteEvent(finished)
+                                        }
+                                        type="button"
+                                      >
+                                        🗑️ Eliminar evento
+                                      </button>
                                     </div>
-                                  </details>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        )}
+                                  </div>
+                                </details>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       </div>
                     </details>
                   ) : null}
@@ -11760,69 +11547,292 @@ function App() {
                   ) : null}
                   {sectionFor("raids") === "logs" ? (
                     <div className="raid-logs-view">
-                      {config.logsWatchEnabled && config.logsWatchGuild ? (
-                        <div className="raid-log-watcher">
-                          <strong>{config.logsWatchGuild}</strong>
+                      <div className="raid-logs-launcher">
+                        <div className="raid-logs-launcher-info">
+                          <span className="raid-log-watcher-label">
+                            Warcraft Logs
+                          </span>
+                          <strong>
+                            {raidLogs.length}{" "}
+                            {raidLogs.length === 1 ? "log" : "logs"}
+                          </strong>
                           <span className="muted-text">
-                            {config.logsWatchServer} · {config.logsWatchRegion}
+                            {config.logsWatchGuild && config.logsWatchServer
+                              ? `${config.logsWatchGuild} · ${config.logsWatchServer} · ${config.logsWatchRegion ?? "EU"}`
+                              : "Fuente sin configurar"}
                           </span>
                         </div>
-                      ) : null}
-                      <div className="comunicados-stack">
-                        {raidLogsLoading ? (
-                          <LoadingState label="Cargando logs de raid…" />
-                        ) : (
-                          <>
-                            <div className="raid-log-toolbar">
+                        <button
+                          className="primary-button"
+                          onClick={() => setShowRaidLogsModal(true)}
+                          type="button"
+                        >
+                          Administrar logs
+                        </button>
+                      </div>
+                      {showRaidLogsModal ? (
+                        <div
+                          className="modal-overlay raid-logs-overlay"
+                          onClick={() => setShowRaidLogsModal(false)}
+                        >
+                          <section
+                            aria-labelledby="raid-logs-modal-title"
+                            aria-modal="true"
+                            className="modal raid-logs-modal"
+                            onClick={(event) => event.stopPropagation()}
+                            role="dialog"
+                          >
+                            <header className="raid-logs-modal-header">
+                              <h2 id="raid-logs-modal-title">Warcraft Logs</h2>
+                              <button
+                                aria-label="Cerrar"
+                                className="ghost-button small"
+                                onClick={() => setShowRaidLogsModal(false)}
+                                type="button"
+                              >
+                                ✕
+                              </button>
+                            </header>
+                            <div className="raid-logs-modal-body">
                               {canAccess("raids") ? (
-                                <button
-                                  className="primary-button"
-                                  disabled={scanningRaidLogs}
-                                  onClick={() => void handleScanRaidLogs()}
-                                  type="button"
-                                >
-                                  {scanningRaidLogs
-                                    ? "Escaneando…"
-                                    : "Escanear Warcraft Logs"}
-                                </button>
+                                <section className="raid-logs-settings">
+                                  <h3>Configuración</h3>
+                                  <div className="form-grid">
+                                    <label>
+                                      <span>Canal de publicación</span>
+                                      <select
+                                        className="select"
+                                        value={config.logsChannelId ?? ""}
+                                        onChange={(event) =>
+                                          editConfig(
+                                            (current) => ({
+                                              ...current,
+                                              logsChannelId:
+                                                event.target.value || undefined,
+                                            }),
+                                            "logsChannel",
+                                          )
+                                        }
+                                      >
+                                        <option value="">
+                                          Sin canal configurado
+                                        </option>
+                                        {textChannels.map((channel) => (
+                                          <option
+                                            key={channel.id}
+                                            value={channel.id}
+                                          >
+                                            {channel.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label>
+                                      <span>Guild de Warcraft Logs</span>
+                                      <input
+                                        value={config.logsWatchGuild ?? ""}
+                                        onChange={(event) =>
+                                          editConfig(
+                                            (current) => ({
+                                              ...current,
+                                              logsWatchGuild:
+                                                event.target.value || undefined,
+                                            }),
+                                            "logsWatch",
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    <label>
+                                      <span>Realm</span>
+                                      <input
+                                        value={config.logsWatchServer ?? ""}
+                                        onChange={(event) =>
+                                          editConfig(
+                                            (current) => ({
+                                              ...current,
+                                              logsWatchServer:
+                                                event.target.value || undefined,
+                                            }),
+                                            "logsWatch",
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                    <label>
+                                      <span>Región</span>
+                                      <select
+                                        className="select"
+                                        value={config.logsWatchRegion ?? "EU"}
+                                        onChange={(event) =>
+                                          editConfig(
+                                            (current) => ({
+                                              ...current,
+                                              logsWatchRegion:
+                                                event.target.value,
+                                            }),
+                                            "logsWatch",
+                                          )
+                                        }
+                                      >
+                                        <option value="EU">EU</option>
+                                        <option value="US">US</option>
+                                      </select>
+                                    </label>
+                                  </div>
+                                  <div className="raid-logs-settings-actions">
+                                    {isDirty("logsChannel") ? (
+                                      <button
+                                        className="ghost-button"
+                                        disabled={savingAction !== null}
+                                        onClick={() =>
+                                          void handleSaveLogsConfig()
+                                        }
+                                        type="button"
+                                      >
+                                        Guardar canal
+                                      </button>
+                                    ) : null}
+                                    {isDirty("logsWatch") ? (
+                                      <button
+                                        className="primary-button"
+                                        disabled={savingAction !== null}
+                                        onClick={() =>
+                                          void handleSaveLogsWatch()
+                                        }
+                                        type="button"
+                                      >
+                                        Guardar fuente
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </section>
                               ) : null}
-                              {raidLogs.length > 0 ? (
-                                <ListFilterBar
-                                  onOrderChange={setRaidLogOrder}
-                                  onSearchChange={setRaidLogSearch}
-                                  order={raidLogOrder}
-                                  placeholder="Buscar log…"
-                                  search={raidLogSearch}
+                              <div className="raid-log-toolbar">
+                                {raidLogs.length > 0 ? (
+                                  <ListFilterBar
+                                    onOrderChange={setRaidLogOrder}
+                                    onSearchChange={setRaidLogSearch}
+                                    order={raidLogOrder}
+                                    placeholder="Buscar log…"
+                                    search={raidLogSearch}
+                                  />
+                                ) : null}
+                                {canAccess("raids") ? (
+                                  <button
+                                    className="primary-button"
+                                    disabled={
+                                      scanningRaidLogs ||
+                                      isDirty("logsWatch") ||
+                                      savingAction !== null ||
+                                      !config.logsWatchGuild?.trim() ||
+                                      !config.logsWatchServer?.trim()
+                                    }
+                                    onClick={() => void handleScanRaidLogs()}
+                                    type="button"
+                                  >
+                                    {scanningRaidLogs
+                                      ? "Escaneando…"
+                                      : "Escanear ahora"}
+                                  </button>
+                                ) : null}
+                              </div>
+                              {canAccess("raids") ? (
+                                <div className="raid-logs-add">
+                                  <label>
+                                    <span>Agregar por URL</span>
+                                    <input
+                                      value={raidLogUrl}
+                                      onChange={(event) =>
+                                        setRaidLogUrl(event.target.value)
+                                      }
+                                      placeholder="https://www.warcraftlogs.com/reports/…"
+                                    />
+                                  </label>
+                                  <button
+                                    className="ghost-button"
+                                    disabled={!raidLogUrl.trim()}
+                                    onClick={() => void handleCreateRaidLog()}
+                                    type="button"
+                                  >
+                                    Agregar
+                                  </button>
+                                </div>
+                              ) : null}
+                              {raidLogsLoading ? (
+                                <LoadingState label="Cargando logs…" />
+                              ) : raidLogs.length > 0 &&
+                                visibleRaidLogs.length === 0 ? (
+                                <div className="empty-state">
+                                  Ningún log coincide con el filtro.
+                                </div>
+                              ) : (
+                                <RaidLogsList
+                                  logs={visibleRaidLogs}
+                                  onHide={
+                                    canAccess("raids")
+                                      ? requestHideRaidLog
+                                      : undefined
+                                  }
+                                  onPublish={
+                                    canAccess("raids")
+                                      ? handlePublishRaidLog
+                                      : undefined
+                                  }
+                                  onUpdate={
+                                    canAccess("raids")
+                                      ? handleUpdateRaidLog
+                                      : undefined
+                                  }
                                 />
+                              )}
+                              {canAccess("raids") &&
+                              hiddenRaidLogs.length > 0 ? (
+                                <details className="hidden-raid-logs">
+                                  <summary>
+                                    Ocultos ({hiddenRaidLogs.length})
+                                  </summary>
+                                  {hiddenRaidLogs.map((log) => (
+                                    <div
+                                      className="daily-message-row"
+                                      key={log.id}
+                                    >
+                                      <div className="daily-message-content">
+                                        <strong>
+                                          {log.title || log.reportCode}
+                                        </strong>
+                                        <div className="muted-text">
+                                          ⚔️ {log.fightCount} · 💀 {log.kills}
+                                        </div>
+                                      </div>
+                                      <div className="daily-message-actions">
+                                        <button
+                                          className="ghost-button"
+                                          onClick={() =>
+                                            requestShowRaidLog(log)
+                                          }
+                                          type="button"
+                                        >
+                                          Restaurar
+                                        </button>
+                                        <button
+                                          className="ghost-button danger"
+                                          onClick={() =>
+                                            requestPermanentDeleteRaidLog(log)
+                                          }
+                                          type="button"
+                                        >
+                                          Borrar definitivamente
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </details>
                               ) : null}
                             </div>
-                            {raidLogs.length > 0 &&
-                            visibleRaidLogs.length === 0 ? (
-                              <div className="empty-state">
-                                Ningún log coincide con el filtro.
-                              </div>
-                            ) : null}
-                            <RaidLogsList
-                              logs={visibleRaidLogs}
-                              onHide={
-                                canAccess("raids")
-                                  ? requestHideRaidLog
-                                  : undefined
-                              }
-                              onPublish={
-                                canAccess("raids")
-                                  ? handlePublishRaidLog
-                                  : undefined
-                              }
-                              onUpdate={
-                                canAccess("raids")
-                                  ? handleUpdateRaidLog
-                                  : undefined
-                              }
-                            />
-                          </>
-                        )}
-                      </div>
+                          </section>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
