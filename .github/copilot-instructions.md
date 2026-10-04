@@ -117,7 +117,6 @@ Implementation standards:
 - For changes that need review, use feature/fix/chore/docs branches and open a PR.
 - Keep commits small and descriptive.
 - Resolve comments before merge.
-- Require at least one approval and passing checks for PRs.
 
 Recommended branch naming:
 

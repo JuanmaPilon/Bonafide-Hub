@@ -1118,5 +1118,4 @@ Una tarea debería considerarse terminada cuando:
 - Las variables nuevas están documentadas en `.env.example`.
 - La documentación está actualizada cuando corresponde.
 - CI está pasando.
-- La Pull Request fue aprobada.
 - La funcionalidad fue probada en un ambiente de desarrollo.

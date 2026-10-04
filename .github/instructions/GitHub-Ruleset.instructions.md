@@ -45,7 +45,6 @@ Un PR debe incluir:
 
 Reglas recomendadas para merge:
 
-- Minimo 1 aprobacion.
 - Todos los checks requeridos en verde.
 - Sin conversaciones sin resolver.
 - Branch actualizada con `main`.
@@ -98,13 +97,14 @@ Configurar en `main`:
 
 - Require a pull request before merging: solo si se quiere bloquear el push
   directo; **dejarlo desactivado** si se permite (ver Reglas de push).
-- Require approvals: 1.
-- Dismiss stale approvals when new commits are pushed.
 - Require status checks to pass.
 - Require conversation resolution before merge.
-- Restrict who can push (opcional, segun equipo).
+- Restrict who can push (opcional).
 - Do not allow force pushes.
 - Do not allow deletions.
+
+Sin `Require approvals` mientras el repo lo mantenga una sola persona: GitHub
+no permite aprobar el PR propio.
 
 ---
 

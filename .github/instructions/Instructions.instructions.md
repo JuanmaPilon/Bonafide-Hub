@@ -447,7 +447,6 @@ Como mínimo:
 - Variables nuevas documentadas en `.env.example`.
 - Documentación actualizada cuando corresponda.
 - CI pasando.
-- Pull Request aprobado.
 - Feature probada en ambiente de desarrollo.
 
 ---
