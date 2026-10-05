@@ -2691,7 +2691,8 @@ a:hover {
 .roster-role {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 6px;
+  /* El gap tiene que dejar entrar la carta que asoma en el mazo (~16px). */
+  gap: 18px;
 }
 
 .roster-role-title {
@@ -2718,24 +2719,41 @@ a:hover {
 }
 
 .roster-member {
+  /* Color con el que la carta marca su clase. En claro lo pisa una tinta más
+     oscura (el amarillo de pícaro o el blanco de sacerdote no se ven sobre
+     blanco). */
+  --roster-class-ink: var(--roster-class-color);
   position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
+  /* Todas las cartas miden lo mismo aunque tengan offs, alters o nada: el alto
+     lo fija la carta más completa (nombre + spec + offs + pestañas). */
+  min-height: 116px;
   gap: 2px 8px;
   padding: 10px 8px;
   border-radius: 10px;
   border: 1px solid
-    color-mix(in srgb, var(--roster-class-color) 62%, transparent);
-  border-left: 3px solid var(--roster-class-color);
-  background: rgba(17, 25, 45, 0.7);
-  box-shadow: 0 0 18px
-    color-mix(in srgb, var(--roster-class-color) 20%, transparent);
+    color-mix(in srgb, var(--roster-class-ink) 58%, transparent);
+  border-left: 4px solid var(--roster-class-ink);
+  /* Fondo opaco + tinte de la clase arriba a la izquierda: la carta de atrás no
+     debe verse a través de la de adelante, y el color tiene que identificar la
+     clase de un vistazo. */
+  background:
+    linear-gradient(
+        140deg,
+        color-mix(in srgb, var(--roster-class-ink) 20%, transparent),
+        transparent 58%
+      )
+      padding-box,
+    #111929;
+  box-shadow: 0 0 20px
+    color-mix(in srgb, var(--roster-class-ink) 28%, transparent);
 }
 
 /* Mazo: la carta principal adelante y las clases secundarias apiladas detrás,
-   asomando 6px abajo a la derecha (el gap de la grilla es de 6px). Todas
-   comparten la celda para que el mazo mida lo que la carta de adelante. */
+   asomando abajo a la derecha, cada una un poco más. El ancho de la asomada
+   entra en el gap de la grilla (18px). */
 .roster-stack {
   display: grid;
   position: relative;
@@ -2750,22 +2768,37 @@ a:hover {
 }
 
 .roster-member--front {
-  z-index: 2;
+  z-index: 3;
 }
 
 /* La carta de atrás es un botón: se clickea para traerla al frente. */
 .roster-member--back {
   z-index: 1;
   appearance: none;
-  transform: translate(6px, 6px);
+  /* El borde derecho pinta su clase en la parte que asoma. */
+  border-right: 4px solid var(--roster-class-ink);
   color: inherit;
   cursor: pointer;
   font: inherit;
 }
 
+.roster-member--back-1 {
+  transform: translate(7px, 7px) rotate(0.5deg);
+}
+
+.roster-member--back-2 {
+  z-index: 0;
+  transform: translate(14px, 14px) rotate(1deg);
+}
+
+.roster-member--back-3 {
+  z-index: 0;
+  transform: translate(21px, 21px) rotate(1.5deg);
+}
+
 .roster-member--back:hover {
   box-shadow: 0 0 24px
-    color-mix(in srgb, var(--roster-class-color) 34%, transparent);
+    color-mix(in srgb, var(--roster-class-ink) 40%, transparent);
 }
 
 /* Pestañas del mazo: qué clases tiene la persona y cuál está al frente. */
@@ -3193,10 +3226,34 @@ a:hover {
   background: rgba(53, 185, 111, 0.18);
 }
 
-:root[data-theme="light"] .roster-member,
 :root[data-theme="light"] .roster-off-chip {
   background: rgba(255, 255, 255, 0.85);
   border-color: rgba(60, 85, 130, 0.22);
+}
+
+/* En claro la carta sigue llevando el color de la clase, pero sobre blanco y
+   con una tinta más oscura para que se vea. */
+:root[data-theme="light"] .roster-member {
+  --roster-class-ink: color-mix(
+    in srgb,
+    var(--roster-class-color) 60%,
+    #16233d
+  );
+  border-color: color-mix(in srgb, var(--roster-class-ink) 50%, transparent);
+  border-left-color: var(--roster-class-ink);
+  background:
+    linear-gradient(
+        140deg,
+        color-mix(in srgb, var(--roster-class-ink) 16%, transparent),
+        transparent 58%
+      )
+      padding-box,
+    #ffffff;
+  box-shadow: 0 6px 18px rgba(54, 89, 185, 0.1);
+}
+
+:root[data-theme="light"] .roster-member--back {
+  border-right-color: var(--roster-class-ink);
 }
 
 :root[data-theme="light"] .roster-off {
