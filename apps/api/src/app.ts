@@ -186,6 +186,7 @@ import {
   type RosterTag,
 } from "./services/roster-store.js";
 import {
+  benchRoleForGame,
   expectedRoster,
   type RosterMember,
 } from "./services/event-roster.js";
@@ -2094,10 +2095,11 @@ function validateDiscordOptions(options: EventDiscordOptions): string | null {
 // Cuántos miembros tienen el rol mínimo del evento (roster esperado). Sin rol
 // mínimo no hay número: devuelve undefined. La lectura de miembros va cacheada
 // (4 min), así refrescar varios avisos seguidos no castiga a Discord. El bench
-// del roster entra en la cuenta (ver benchRoleIdFor).
+// del roster entra en la cuenta en los eventos de WoW (ver ROSTER_GAME).
 async function expectedCountFor(
   guildId: string,
   event: {
+    game?: string;
     requiredRoleId?: string;
     signups?: Array<{ userId?: string }>;
   },
@@ -2109,7 +2111,8 @@ async function expectedCountFor(
     fetchAllGuildMembers(guildId).catch(() => []),
     benchRoleIdFor(guildId),
   ]);
-  return expectedRoster(members, event, benchRoleId)?.expectedCount;
+  return expectedRoster(members, event, benchRoleForGame(event.game, benchRoleId))
+    ?.expectedCount;
 }
 
 // Sincroniza el evento hacia Discord y persiste los ids resultantes.
@@ -2173,8 +2176,11 @@ async function syncAndStoreEventDiscord(input: {
     paused: event.paused,
     poll,
     pollHours: event.pollHours,
-    // El aviso menciona también al bench del roster (si está mapeado).
-    benchRoleId: await benchRoleIdFor(event.guildId),
+    // El aviso menciona también al bench del roster, si el evento es de WoW.
+    benchRoleId: benchRoleForGame(
+      event.game,
+      await benchRoleIdFor(event.guildId),
+    ),
     requiredRoleId: event.requiredRoleId,
     roles: await resolveEventRolesFor(event.guildId, event.game, eventConfig),
     signupDeadline: event.signupDeadline,
@@ -2261,7 +2267,7 @@ async function refreshEventAnnouncement(
         event.recurrenceEnabled && event.recurrenceEveryDays
           ? event.recurrenceEveryDays
           : undefined,
-      benchRoleId: await benchRoleIdFor(guildId),
+      benchRoleId: benchRoleForGame(event.game, await benchRoleIdFor(guildId)),
       requiredRoleId: event.requiredRoleId,
       roles: await resolveEventRolesFor(guildId, event.game, eventConfig),
       signupDeadline: event.signupDeadline,
@@ -2288,7 +2294,7 @@ async function refreshEventAnnouncement(
       // contenido; si la tiene y falta la mención, la agrega (así el rol queda
       // etiquetado aunque el aviso sea viejo).
       content: await resolveAnnouncementContent({
-        benchRoleId: await benchRoleIdFor(guildId),
+        benchRoleId: benchRoleForGame(event.game, await benchRoleIdFor(guildId)),
         channelId: event.publishChannelId,
         messageId,
         requiredRoleId: event.requiredRoleId,
@@ -5149,7 +5155,11 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       events: events.map((event) => {
-        const roster = expectedRoster(members, event, benchRoleId);
+        const roster = expectedRoster(
+          members,
+          event,
+          benchRoleForGame(event.game, benchRoleId),
+        );
         return {
           ...event,
           benchExpectedCount: roster?.bench.length,
@@ -5190,7 +5200,7 @@ export function buildApp() {
     const roster = expectedRoster(
       members,
       event,
-      await benchRoleIdFor(params.guildId),
+      benchRoleForGame(event.game, await benchRoleIdFor(params.guildId)),
     );
     if (!roster) {
       return reply.code(400).send({
@@ -7405,14 +7415,21 @@ export function buildApp() {
         getGuildConfig(params.guildId),
         listGuildMappings(params.guildId),
       ]);
+      const rankRoles = resolveRosterRankRoles(mappings, config);
+      // El bench del roster lo decide el API: el bot solo lo usa. Solo aplica a
+      // los eventos del juego del roster (WoW).
+      const withBench = <T extends { game?: string }>(event: T) => ({
+        ...event,
+        benchRoleId: benchRoleForGame(event.game, rankRoles.bench),
+      });
       return {
         ok: true,
         guildId: params.guildId,
-        reports,
-        reminders,
-        // Rol del bench del roster: los recordatorios y el informe lo suman al
-        // rol mínimo del evento para que el bench también cuente y se avise.
-        benchRoleId: resolveRosterRankRoles(mappings, config).bench,
+        reports: reports.map(withBench),
+        reminders: reminders.map((item) => ({
+          ...item,
+          event: withBench(item.event),
+        })),
         // A dónde va el informe de asistencia (se configura en el panel): un
         // canal de texto, sin menciones.
         report: {

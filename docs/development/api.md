@@ -84,12 +84,15 @@ cartas apiladas detrás de la principal. **Nunca cuentan como jugador extra**: l
 carta principal es siempre `roster_profiles`, así que los totales y los filtros
 de rol/estado siguen mirando una sola ficha por persona.
 
-El bench del roster **sí** cuenta en los eventos. El roster esperado de un evento
+El bench del roster **sí** cuenta en los eventos, pero solo en los del juego del
+roster (WoW): el roster esperado de un evento
 (`apps/api/src/services/event-roster.ts`) es el rol mínimo del evento MÁS el rol
-de Bench mapeado en el roster: el `N/M` de la tarjeta, el "faltan anotarse" del
-detalle y los avisos de Discord miran ese universo. Los del bench viajan marcados
-(`bench: true`) para que la web y el informe del bot los muestren aparte y no se
-lean como si faltara el core. El aviso del evento menciona los dos roles.
+de Bench mapeado en el roster. En eventos de otros juegos el universo es solo el
+rol mínimo, porque ese bench es de WoW. El `N/M` de la tarjeta, el "faltan
+anotarse" del detalle y los avisos de Discord miran ese universo. Los del bench
+viajan marcados (`bench: true`) para que la web y el informe del bot los muestren
+aparte y no se lean como si faltara el core. El aviso del evento menciona los dos
+roles, y el control del bot manda el `benchRoleId` ya resuelto por evento.
 
 Registro de mapeos (Admin → Mapeo):
 

@@ -10,6 +10,19 @@
 
 export type RosterMember = { bench: boolean; userId: string; username: string };
 
+// El roster (y por lo tanto el bench) es de World of Warcraft: el bench solo
+// cuenta en eventos de ese juego, no en los de otros juegos del módulo.
+export const ROSTER_GAME = "wow";
+
+// Rol de bench que corresponde a un evento: el mapeado si el evento es del juego
+// del roster, nada en caso contrario.
+export function benchRoleForGame(
+  game: string | undefined,
+  benchRoleId?: string,
+): string | undefined {
+  return game === ROSTER_GAME ? (benchRoleId?.trim() || undefined) : undefined;
+}
+
 type DiscordMemberLike = {
   nick?: string | null;
   roles?: string[];

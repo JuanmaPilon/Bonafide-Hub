@@ -32,6 +32,8 @@ type RemoteSignup = {
 };
 
 type RemoteEvent = {
+  // Rol de Bench del roster: lo decide el API y solo viene en eventos de WoW.
+  benchRoleId?: string;
   completedAt?: string;
   createdByUserId?: string;
   createdByUsername?: string;
@@ -54,8 +56,6 @@ type RemoteReportConfig = {
 };
 
 type RemoteControl = {
-  // Rol del bench del roster: suma al rol mínimo a la hora de contar y avisar.
-  benchRoleId?: string;
   report: RemoteReportConfig;
   reports: RemoteEvent[];
   reminders: Array<{ dueHours: number[]; event: RemoteEvent }>;
@@ -234,7 +234,6 @@ async function sendToChannel(
 async function processReminder(
   guild: Guild,
   item: { dueHours: number[]; event: RemoteEvent },
-  benchRoleId?: string,
 ): Promise<void> {
   const { event } = item;
   const roleId = event.requiredRoleId;
@@ -243,7 +242,11 @@ async function processReminder(
     return;
   }
   try {
-    const rosterMembers = await fetchRosterMembers(guild, roleId, benchRoleId);
+    const rosterMembers = await fetchRosterMembers(
+      guild,
+      roleId,
+      event.benchRoleId,
+    );
     const missing = computeMissingMembers(rosterMembers, event.signups);
     const reminderMessageIds: string[] = [];
 
@@ -298,14 +301,17 @@ async function processReport(
   guild: Guild,
   event: RemoteEvent,
   reportConfig: RemoteReportConfig,
-  benchRoleId?: string,
 ): Promise<void> {
   const roleId = event.requiredRoleId;
   if (!roleId) {
     return;
   }
   try {
-    const rosterMembers = await fetchRosterMembers(guild, roleId, benchRoleId);
+    const rosterMembers = await fetchRosterMembers(
+      guild,
+      roleId,
+      event.benchRoleId,
+    );
     const missing = computeMissingMembers(rosterMembers, event.signups);
     const missingCore = missing.filter((member) => !member.bench);
     const missingBench = missing.filter((member) => member.bench);
@@ -413,10 +419,10 @@ async function runControlPass(client: Client): Promise<void> {
     for (const guild of client.guilds.cache.values()) {
       const control = await fetchControl(guild.id);
       for (const item of control.reminders) {
-        await processReminder(guild, item, control.benchRoleId);
+        await processReminder(guild, item);
       }
       for (const event of control.reports) {
-        await processReport(guild, event, control.report, control.benchRoleId);
+        await processReport(guild, event, control.report);
       }
     }
   } finally {
