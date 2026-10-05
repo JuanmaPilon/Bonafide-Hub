@@ -206,7 +206,11 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
 2. `admin_role_modules` asocia roles de Discord a módulos del Admin
    (config, comunicados, raids, daily, xp, karuta, eventos).
 3. La UI agrupa el staff en tiers para mostrar quién tiene qué:
-   owner (naranja) > admin (dorado) > officer (verde).
+   owner (naranja) > admin (dorado) > officer (verde) > sub officer (violeta).
+   Los conjuntos de módulos de cada tier viven en `STAFF_TIERS` (web) y
+   `STAFF_TIER_MODULES` (API) y tienen que coincidir: config/xp → admin,
+   daily/karuta → officer, comunicados/eventos/raids → sub officer. Las páginas
+   del panel Admin se muestran según el módulo de cada una (`section.module`).
 4. Los guardados parciales de configuración y los del bot no modifican
    `admin_role_modules`. Esa relación solo se reemplaza cuando el owner guarda
    explícitamente la tarjeta de permisos de staff.

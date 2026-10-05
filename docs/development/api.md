@@ -263,8 +263,8 @@ que la guild haya cargado a mano.
 5. `DELETE /guilds/:guildId/events/:eventId/signups/me/reset` (borra inscripción + personaje recordado)
 6. `GET/POST /guilds/:guildId/events/specs` (catálogo; `?game=` filtra por juego)
 7. `PATCH/DELETE /guilds/:guildId/events/specs/:specId`
-8. `GET /guilds/:guildId/events/templates` (plantillas disponibles)
-9. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada)
+8. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
+9. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
 10. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
 11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
 

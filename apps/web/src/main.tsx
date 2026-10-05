@@ -241,6 +241,13 @@ function accessTierLabel(tier: AccessTier): string {
     : tier[0].toUpperCase() + tier.slice(1);
 }
 
+// ¿El refresco trae lo mismo que ya está en pantalla? El dashboard se refresca
+// solo cada minuto: sin esta comparación, un payload idéntico igual provoca un
+// objeto nuevo y React vuelve a renderizar todo (incluido el carrusel).
+function samePayload(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 const STAFF_TIERS: Record<
   StaffTier,
   { label: string; description: string; modules: string[] }
@@ -4849,7 +4856,7 @@ const TAB_SECTIONS: Partial<
       module: "config",
       tier: "owner",
     },
-    { key: "eventos", label: "Eventos", module: "config", tier: "admin" },
+    { key: "eventos", label: "Eventos", module: "eventos", tier: "subofficer" },
     {
       key: "historial",
       label: "Historial",
@@ -5714,7 +5721,7 @@ const DASHBOARD_REFRESH_MS = 60_000;
 const GAME_MARQUEE_TARGET_TILES = 24;
 // Segundos por tarjeta: fija la velocidad, así con más juegos tarda más en dar
 // la vuelta en vez de correr más rápido.
-const GAME_MARQUEE_SECONDS_PER_TILE = 2.2;
+const GAME_MARQUEE_SECONDS_PER_TILE = 3.2;
 
 // Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
 const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
@@ -7001,16 +7008,18 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
-  // Tipos de evento disponibles en el módulo.
+  // Tipos de evento disponibles en el módulo. Los ve el staff de eventos
+  // (Sub Officer en adelante); los emojis de cada rol salen del registro de
+  // mapeos, que es solo para quien configura (si no puede, van sin emoji).
   useEffect(() => {
-    if (!selectedGuildId || activeTab !== "admin" || !canAccess("config")) {
+    if (!selectedGuildId || activeTab !== "admin" || !canAccess("eventos")) {
       return;
     }
     let cancelled = false;
-    Promise.all([
-      getEventTemplates(selectedGuildId),
-      getGuildMappings(selectedGuildId).catch(() => [] as MappingGroup[]),
-    ])
+    const mappings = canAccess("config")
+      ? getGuildMappings(selectedGuildId).catch(() => [] as MappingGroup[])
+      : Promise.resolve([] as MappingGroup[]);
+    Promise.all([getEventTemplates(selectedGuildId), mappings])
       .then(([templates, groups]) => {
         if (cancelled) {
           return;
@@ -9550,11 +9559,18 @@ function App() {
       if (cancelled) {
         return;
       }
+      // Si el refresco trae exactamente lo mismo, se deja el estado como está:
+      // un objeto nuevo igual hace que React vuelva a renderizar toda la página
+      // (y el carrusel) al pedo, y eso se ve como una traba cada minuto.
       if (status.status === "fulfilled") {
-        setWidgetStatus(status.value);
+        setWidgetStatus((current) =>
+          samePayload(current, status.value) ? current : status.value,
+        );
       }
       if (activity.status === "fulfilled") {
-        setGameActivity(activity.value);
+        setGameActivity((current) =>
+          samePayload(current, activity.value) ? current : activity.value,
+        );
       } else if (!sameGuild) {
         setGameActivity(null);
       }
@@ -9922,7 +9938,11 @@ function App() {
                           >
                             <span className="game-cover-art">
                               {game.coverUrl ? (
-                                <img alt="" loading="lazy" src={game.coverUrl} />
+                                <img
+                                  alt=""
+                                  decoding="async"
+                                  src={game.coverUrl}
+                                />
                               ) : null}
                             </span>
                             <span className="game-cover-name">{game.name}</span>
@@ -11505,17 +11525,17 @@ function App() {
                     </details>
                   ) : null}
 
-                  {sectionFor("admin") === "eventos" && canAccess("config") ? (
+                  {sectionFor("admin") === "eventos" && canAccess("eventos") ? (
                     <details
                       open
-                      className="admin-card admin-card-acc admin-card--admin"
+                      className="admin-card admin-card-acc admin-card--subofficer"
                     >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
                             Eventos{" "}
-                            <span className="admin-tier-badge tier-admin">
-                              Admin
+                            <span className="admin-tier-badge tier-subofficer">
+                              Sub Officer
                             </span>
                           </h3>
                         </div>
