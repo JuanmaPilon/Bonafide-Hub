@@ -2729,9 +2729,9 @@ a:hover {
   align-items: center;
   /* Todas las cartas miden lo mismo aunque tengan offs, alters o nada: el alto
      lo fija la carta más completa (nombre + spec + offs + pestañas). */
-  min-height: 116px;
-  gap: 2px 8px;
-  padding: 10px 8px;
+  min-height: 104px;
+  gap: 1px 8px;
+  padding: 8px;
   border-radius: 10px;
   border: 1px solid
     color-mix(in srgb, var(--roster-class-ink) 58%, transparent);
@@ -2807,7 +2807,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .roster-set-tab {
@@ -2815,14 +2815,14 @@ a:hover {
   align-items: center;
   gap: 4px;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
   border: 1px solid
     color-mix(in srgb, var(--roster-class-color) 40%, transparent);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
 }
 
 /* El alter se marca punteado: es la carta que no cuenta para los totales. */
@@ -3152,8 +3152,8 @@ a:hover {
   border-radius: 999px;
   border: 1px solid rgba(134, 158, 214, 0.28);
   color: var(--muted);
-  font-size: 0.72rem;
-  padding: 2px 8px;
+  font-size: 0.7rem;
+  padding: 1px 7px;
 }
 
 .roster-off img {
