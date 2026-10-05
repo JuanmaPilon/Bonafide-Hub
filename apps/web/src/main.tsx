@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { RaidLogsBoard } from "./RaidLogsBoard";
+import { nextAutoScroll } from "./carousel";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
@@ -2385,102 +2386,108 @@ function AdminMappingsSection({
       </summary>
       <div className="admin-card-body">
         {groups.map((group) => (
-          // Todos los grupos arrancan colapsados: son 4 catálogos y abrirlos
-          // todos deja el panel larguísimo.
-          <details className="mapping-group" key={group.key}>
-            <summary className="mapping-group-header">
-              <span className="mapping-group-title">{group.label}</span>
+          // Mismos sub-cards que usa el módulo de Eventos (`.event-template-picker`):
+          // antes eran filas planas separadas por una línea y se veían como otra UI.
+          // Todos arrancan colapsados: son 4 catálogos y abrirlos todos deja el
+          // panel larguísimo.
+          <details className="event-template-picker mapping-group" key={group.key}>
+            <summary>
+              <strong>{group.label}</strong>
               <span className="mapping-group-count">
                 {group.rows.filter((row) => draft[row.key]?.emojiId).length} de{" "}
                 {group.rows.length} con emoji
               </span>
-              <span className="mapping-group-chevron" aria-hidden="true">
+              <span className="admin-acc-chevron" aria-hidden="true">
                 ▸
               </span>
             </summary>
             <div className="mapping-group-body">
-              {group.rows.map((row) => {
-                const emojiId = draft[row.key]?.emojiId;
-                const emoji = emojis.find((entry) => entry.id === emojiId);
-                const warning = roleWarning(draft[row.key]?.roleId);
-                return (
-                  <div className="mapping-item" key={row.key}>
-                    <div className="mapping-row">
-                      <span className="mapping-label">{row.label}</span>
-                      <select
-                        aria-label={`Rol de ${row.label}`}
-                        className="select"
-                        onChange={(event) =>
-                          patch(row.key, { roleId: event.target.value })
-                        }
-                        value={draft[row.key]?.roleId ?? ""}
-                      >
-                        <option value="">Sin rol</option>
-                        {roles.map((role) => (
-                          <option key={role.id} value={role.id}>
-                            {role.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        className={`mapping-emoji-button${emoji ? " active" : ""}`}
-                        onClick={() =>
-                          setEmojiPickerFor((current) =>
-                            current === row.key ? null : row.key,
-                          )
-                        }
-                        title={emoji ? `:${emoji.name}:` : "Elegir emoji"}
-                        type="button"
-                      >
-                        {emoji ? (
-                          <DiscordEmojiImage
-                            animated={emoji.animated}
-                            emojiId={emoji.id}
-                            name={emoji.name}
-                            size={20}
-                          />
-                        ) : (
-                          "＋"
-                        )}
-                      </button>
-                    </div>
-                    {warning ? (
-                      <p className="mapping-warning">{warning}</p>
-                    ) : null}
-                    {emojiPickerFor === row.key ? (
-                      <div className="spec-emoji-grid">
-                        {emojis.map((entry) => {
-                          const selected = emojiId === entry.id;
-                          return (
-                            <button
-                              className={`spec-emoji-option${selected ? " active" : ""}`}
-                              key={entry.id}
-                              onClick={() =>
-                                patch(row.key, {
-                                  emojiId: selected ? undefined : entry.id,
-                                })
-                              }
-                              title={
-                                selected
-                                  ? `Quitar :${entry.name}:`
-                                  : `:${entry.name}:`
-                              }
-                              type="button"
-                            >
+              <div className="form-grid">
+                {group.rows.map((row) => {
+                  const emojiId = draft[row.key]?.emojiId;
+                  const emoji = emojis.find((entry) => entry.id === emojiId);
+                  const warning = roleWarning(draft[row.key]?.roleId);
+                  return (
+                    <div className="mapping-item" key={row.key}>
+                      <label>
+                        <span>{row.label}</span>
+                        <div className="mapping-field">
+                          <select
+                            aria-label={`Rol de ${row.label}`}
+                            className="select"
+                            onChange={(event) =>
+                              patch(row.key, { roleId: event.target.value })
+                            }
+                            value={draft[row.key]?.roleId ?? ""}
+                          >
+                            <option value="">Sin rol</option>
+                            {roles.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className={`mapping-emoji-button${emoji ? " active" : ""}`}
+                            onClick={() =>
+                              setEmojiPickerFor((current) =>
+                                current === row.key ? null : row.key,
+                              )
+                            }
+                            title={emoji ? `:${emoji.name}:` : "Elegir emoji"}
+                            type="button"
+                          >
+                            {emoji ? (
                               <DiscordEmojiImage
-                                animated={entry.animated}
-                                emojiId={entry.id}
-                                name={entry.name}
-                                size={22}
+                                animated={emoji.animated}
+                                emojiId={emoji.id}
+                                name={emoji.name}
+                                size={20}
                               />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+                            ) : (
+                              "＋"
+                            )}
+                          </button>
+                        </div>
+                      </label>
+                      {warning ? (
+                        <p className="mapping-warning">{warning}</p>
+                      ) : null}
+                      {emojiPickerFor === row.key ? (
+                        <div className="spec-emoji-grid">
+                          {emojis.map((entry) => {
+                            const selected = emojiId === entry.id;
+                            return (
+                              <button
+                                className={`spec-emoji-option${selected ? " active" : ""}`}
+                                key={entry.id}
+                                onClick={() =>
+                                  patch(row.key, {
+                                    emojiId: selected ? undefined : entry.id,
+                                  })
+                                }
+                                title={
+                                  selected
+                                    ? `Quitar :${entry.name}:`
+                                    : `:${entry.name}:`
+                                }
+                                type="button"
+                              >
+                                <DiscordEmojiImage
+                                  animated={entry.animated}
+                                  emojiId={entry.id}
+                                  name={entry.name}
+                                  size={22}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </details>
         ))}
@@ -5697,6 +5704,10 @@ const DASHBOARD_REFRESH_MS = 60_000;
 
 // Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
 const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
+
+// Auto-avance del carrusel de juegos: una tarjeta por vez (124px + el gap).
+const GAME_AUTO_SCROLL_MS = 4_000;
+const GAME_AUTO_SCROLL_STEP = 138;
 
 // Guía de comandos de Karuta con el prefijo del server ("k" + comando).
 // Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
@@ -9563,6 +9574,46 @@ function App() {
       observer.disconnect();
     };
   }, [gameActivity, activeTab]);
+
+  // El carrusel avanza solo: corre una tarjeta y, al llegar al final, vuelve al
+  // principio de un salto (rebobinar con animación larga mareaba más que el
+  // salto). Se frena con el puntero encima o enganchado, y con la pestaña del
+  // navegador en segundo plano. Sin animación si el sistema pide no animar.
+  useEffect(() => {
+    const element = gameCoversRef.current;
+    if (!gamesOverflow || activeTab !== "dashboard" || !element) {
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      if (
+        element.matches(":hover") ||
+        element.contains(document.activeElement)
+      ) {
+        return;
+      }
+      const target = nextAutoScroll({
+        clientWidth: element.clientWidth,
+        scrollLeft: element.scrollLeft,
+        scrollWidth: element.scrollWidth,
+        step: GAME_AUTO_SCROLL_STEP,
+      });
+      if (!target) {
+        return;
+      }
+      element.scrollTo(target);
+    }, GAME_AUTO_SCROLL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeTab, gameActivity, gamesOverflow]);
 
   function scrollGameCovers(direction: 1 | -1): void {
     const element = gameCoversRef.current;

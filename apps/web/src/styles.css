@@ -2945,33 +2945,15 @@ a:hover {
   position: relative;
 }
 
-.mapping-group {
-  border-top: 1px solid var(--panel-border);
+/* Los grupos del catálogo de Mapeo usan el mismo sub-card que los tipos de
+   evento (`.event-template-picker`), así las dos secciones se leen igual. */
+.mapping-group[open] > summary .admin-acc-chevron {
+  transform: rotate(90deg);
 }
 
-.mapping-group:first-of-type {
-  border-top: 0;
-}
-
-.mapping-group-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 0;
-  cursor: pointer;
-  list-style: none;
-}
-
-.mapping-group-header::-webkit-details-marker {
-  display: none;
-}
-
-.mapping-group-title {
-  color: var(--text);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+/* El resumen de Mapeo suma el contador, que Eventos no tiene. */
+.mapping-group > summary {
+  flex-wrap: wrap;
 }
 
 .mapping-group-count {
@@ -2984,6 +2966,21 @@ a:hover {
   white-space: nowrap;
 }
 
+.mapping-group-body .form-grid {
+  gap: 12px;
+}
+
+/* Select + botón de emoji como un solo campo: el select se estira, el botón no. */
+.mapping-field {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.mapping-field .select {
+  min-width: 0;
+}
+
 /* El aviso de "no cargó el catálogo" va al lado izquierdo del pie, lejos del
    botón de guardar (que es justo el que no hay que tocar). */
 .admin-card-footer .mapping-warning {
@@ -2991,43 +2988,15 @@ a:hover {
   max-width: 42ch;
 }
 
-.mapping-group-chevron {
-  margin-left: auto;
-  color: var(--muted);
-  transition: transform 140ms ease;
-}
-
-.mapping-group[open] .mapping-group-chevron {
-  transform: rotate(90deg);
-}
-
-.mapping-group-body {
-  padding-bottom: 12px;
-}
-
-.mapping-item + .mapping-item {
-  margin-top: 6px;
-}
-
-.mapping-row {
-  display: grid;
-  grid-template-columns: minmax(96px, 1fr) minmax(150px, 1.2fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.mapping-label {
-  font-weight: 700;
-}
-
 .mapping-emoji-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  /* Alto el del select (lo estira la fila): así el campo se ve de una pieza. */
   width: 36px;
-  height: 32px;
   padding: 0;
-  border-radius: 9px;
+  border-radius: 12px;
   border: 1px dashed rgba(134, 158, 214, 0.5);
   background: transparent;
   color: var(--muted);
@@ -3056,12 +3025,6 @@ a:hover {
 
 .mapping-item .spec-emoji-grid {
   margin-top: 8px;
-}
-
-@media (max-width: 720px) {
-  .mapping-label {
-    grid-column: 1 / -1;
-  }
 }
 
 .roster-status-menu .roster-status-badge {
