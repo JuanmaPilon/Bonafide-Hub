@@ -4709,6 +4709,39 @@ a:hover {
   object-fit: cover;
 }
 
+/* Mientras llega la primera respuesta del dashboard: la misma caja que una
+   tarjeta real (misma proporción) para que no se reacomode nada. */
+.game-cover--skeleton .game-cover-art,
+.game-cover--skeleton .game-cover-name {
+  border-radius: 12px;
+  background: linear-gradient(
+    90deg,
+    rgba(134, 158, 214, 0.08),
+    rgba(134, 158, 214, 0.2),
+    rgba(134, 158, 214, 0.08)
+  );
+  background-size: 200% 100%;
+  animation: game-skeleton 1.4s ease-in-out infinite;
+}
+
+.game-cover--skeleton .game-cover-name {
+  width: 72%;
+  /* Misma altura que la línea real del nombre (1.4 × 0.84rem): así el
+     esqueleto ocupa lo mismo que la tarjeta y nada se reacomoda. */
+  height: 1.4em;
+  border-radius: 999px;
+}
+
+@keyframes game-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
 .game-cover-name {
   overflow: hidden;
   max-width: 100%;

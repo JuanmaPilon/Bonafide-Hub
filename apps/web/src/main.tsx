@@ -5685,6 +5685,9 @@ const PODIUM_LABELS = ["1ro", "2do", "3ro", "4to", "5to"];
 // tres veces contra Discord, así que el intervalo no puede ser corto.
 const DASHBOARD_REFRESH_MS = 60_000;
 
+// Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
+const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
+
 // Guía de comandos de Karuta con el prefijo del server ("k" + comando).
 // Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
 // renombra comandos, esta lista se actualiza acá.
@@ -6292,6 +6295,12 @@ function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
+  const [boostersLoading, setBoostersLoading] = useState(true);
+  // Guild de los datos que están en pantalla: al cambiar de guild hay que
+  // limpiar, al cambiar de pestaña no.
+  const boostersGuildRef = useRef<string | null>(null);
+  const [gamesLoading, setGamesLoading] = useState(true);
+  const dashboardGuildRef = useRef<string | null>(null);
   const [gameActivity, setGameActivity] = useState<{
     days: number;
     games: GuildGameActivity[];
@@ -9218,6 +9227,11 @@ function App() {
       setSelectedGuildId(null);
       setConfig({});
       setWidgetStatus(null);
+      // Lo de la sección anterior no puede quedar para la próxima sesión.
+      setBoosters([]);
+      setGameActivity(null);
+      boostersGuildRef.current = null;
+      dashboardGuildRef.current = null;
       pushToast("Sesión cerrada.", "success");
     } catch (error) {
       void error;
@@ -9420,10 +9434,20 @@ function App() {
     };
   }, [canManageRaidLogs, inRaidLogs, selectedGuildId]);
 
+  // Boosters de Nitro. Al salir de Inicio NO se borran: borrarlos obligaba a
+  // esperar la respuesta y el bloque aparecía de golpe (mostrando mientras
+  // tanto el estado vacío, que además miente). Solo se limpian al cambiar de
+  // guild, para no mostrar los de la guild anterior.
   useEffect(() => {
     if (activeTab !== "home" || !selectedGuildId) {
-      setBoosters([]);
       return;
+    }
+
+    const sameGuild = boostersGuildRef.current === selectedGuildId;
+    boostersGuildRef.current = selectedGuildId;
+    if (!sameGuild) {
+      setBoosters([]);
+      setBoostersLoading(true);
     }
 
     let cancelled = false;
@@ -9434,8 +9458,13 @@ function App() {
         }
       })
       .catch(() => {
-        if (!cancelled) {
+        if (!cancelled && !sameGuild) {
           setBoosters([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBoostersLoading(false);
         }
       });
 
@@ -9453,8 +9482,16 @@ function App() {
   // largo a propósito: /widget pega contra Discord (preview + guild + widget).
   useEffect(() => {
     if (activeTab !== "dashboard" || !selectedGuildId) {
-      setGameActivity(null);
       return;
+    }
+
+    // Igual que los boosters: al volver a la sección se muestra lo último que
+    // hay y el refresco va detrás, sin que el carrusel aparezca de golpe.
+    const sameGuild = dashboardGuildRef.current === selectedGuildId;
+    dashboardGuildRef.current = selectedGuildId;
+    if (!sameGuild) {
+      setGameActivity(null);
+      setGamesLoading(true);
     }
 
     let cancelled = false;
@@ -9471,12 +9508,16 @@ function App() {
       }
       if (activity.status === "fulfilled") {
         setGameActivity(activity.value);
-      } else {
+      } else if (!sameGuild) {
         setGameActivity(null);
       }
     };
 
-    void refresh();
+    void refresh().finally(() => {
+      if (!cancelled) {
+        setGamesLoading(false);
+      }
+    });
 
     const runIfVisible = (): void => {
       if (document.visibilityState === "visible") {
@@ -9792,7 +9833,7 @@ function App() {
             boosters={boosters}
             colorFor={levelStyleFor}
             leaderboard={leaderboard}
-            loading={loadingGuildData}
+            loading={loadingGuildData || boostersLoading}
             onOpenProfile={openMemberProfile}
             username={username}
           />
@@ -9884,6 +9925,23 @@ function App() {
                           </button>
                         </>
                       ) : null}
+                    </div>
+                  ) : gamesLoading ? (
+                    /* Mientras llega la primera respuesta: la misma caja, así
+                       el dashboard no se reacomoda cuando aparecen. */
+                    <div className="game-carousel">
+                      <div className="game-covers">
+                        {GAME_SKELETON_TILES.map((index) => (
+                          <span
+                            aria-hidden="true"
+                            className="game-cover game-cover--skeleton"
+                            key={index}
+                          >
+                            <span className="game-cover-art" />
+                            <span className="game-cover-name" />
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
 
