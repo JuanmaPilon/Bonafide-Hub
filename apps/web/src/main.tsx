@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { RaidLogsBoard } from "./RaidLogsBoard";
+import { createMarquee } from "./marquee";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
@@ -5716,12 +5717,12 @@ const DASHBOARD_REFRESH_MS = 60_000;
 //      una copia al medio y no coinciden);
 //   2. la separación entre tarjetas es margen y no `gap` (ver styles.css): con
 //      `gap` el ancho de la mitad queda 7px corto y se nota el salto.
-// Se apunta a ~24 tarjetas para que la mitad del track cubra siempre el ancho
-// visible: con pocos juegos hay que repetir más veces.
+// Se apunta a ~24 tarjetas para que la mitad del track (≥1656px) sea más ancha
+// que la fila visible (~1224px), que es la condición para que el bucle no deje
+// un hueco a la derecha.
 const GAME_MARQUEE_TARGET_TILES = 24;
-// Segundos por tarjeta: fija la velocidad, así con más juegos tarda más en dar
-// la vuelta en vez de correr más rápido.
-const GAME_MARQUEE_SECONDS_PER_TILE = 3.2;
+// Velocidad de crucero del carrusel, en px/s.
+const GAME_MARQUEE_SPEED = 43;
 
 // Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
 const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
@@ -6339,6 +6340,7 @@ function App() {
   const boostersGuildRef = useRef<string | null>(null);
   const [gamesLoading, setGamesLoading] = useState(true);
   const dashboardGuildRef = useRef<string | null>(null);
+  const gameTrackRef = useRef<HTMLDivElement | null>(null);
   const [gameActivity, setGameActivity] = useState<{
     days: number;
     games: GuildGameActivity[];
@@ -6357,11 +6359,7 @@ function App() {
     );
     return Array.from({ length: pairs * 2 }, () => games).flat();
   }, [gameActivity]);
-  // El bucle recorre la mitad del track (la otra mitad es la repetición), así que
-  // la duración acompaña al contenido para que la velocidad sea siempre la misma.
-  const marqueeSeconds = Math.round(
-    (marqueeGames.length / 2) * GAME_MARQUEE_SECONDS_PER_TILE,
-  );
+  // El bucle recorre la mitad del track (la otra mitad es la repetición).
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<Communication[]>([]);
   const [publishedLoading, setPublishedLoading] = useState(true);
@@ -9599,8 +9597,17 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
-  // El carrusel se anima solo con CSS (marquee): no hay flechas, ni scroll, ni
-  // JS que lo mueva. Ver `.game-covers` y @keyframes game-marquee en styles.css.
+  // El carrusel se mueve con JS (no con una animación CSS) para poder agarrarlo y
+  // arrastrarlo: ver src/marquee.ts. El motor decide solo si corresponde moverse
+  // (si el sistema pide no animar, deja la fila quieta).
+  useEffect(() => {
+    const track = gameTrackRef.current;
+    if (!track || activeTab !== "dashboard" || marqueeGames.length === 0) {
+      return;
+    }
+    const marquee = createMarquee({ speed: GAME_MARQUEE_SPEED, track });
+    return () => marquee.destroy();
+  }, [activeTab, marqueeGames]);
 
   // Carrusel de la landing: nombres reales del leaderboard público.
   useEffect(() => {
@@ -9926,10 +9933,7 @@ function App() {
 
                   {gameActivity && gameActivity.games.length > 0 ? (
                     <div className="game-marquee">
-                      <div
-                        className="game-covers"
-                        style={{ animationDuration: `${marqueeSeconds}s` }}
-                      >
+                      <div className="game-covers" ref={gameTrackRef}>
                         {marqueeGames.map((game, index) => (
                           <article
                             className="game-cover"

@@ -4585,7 +4585,10 @@ a:hover {
   overflow: hidden;
   padding: 6px 0;
   margin: -6px 0;
-  /* Sin difuminado de bordes: la fila sigue la línea del resto del dashboard. */
+  /* El arrastre es horizontal: el scroll vertical de la página sigue siendo del
+     navegador (si no, en el celular no se puede bajar). El cursor lo pone el
+     carrusel cuando arranca (ver src/marquee.ts). */
+  touch-action: pan-y;
 }
 
 .game-covers {
@@ -4596,25 +4599,7 @@ a:hover {
   /* El track va en su propia capa: al moverse no repinta las 24 tarjetas con
      sombra y degradado, y el desplazamiento no se traba. */
   will-change: transform;
-  animation: game-marquee linear infinite;
-}
-
-/* La mitad del track es la repetición exacta de la otra mitad, así que trasladar
-   -50% deja el bucle sin costura. */
-@keyframes game-marquee {
-  from {
-    transform: translateX(0);
-  }
-
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .game-covers {
-    animation: none;
-  }
+  user-select: none;
 }
 
 .game-cover {
@@ -4651,6 +4636,9 @@ a:hover {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Sin eventos de puntero: la imagen no arranca su propio arrastre nativo (que
+     pelearía con el del carrusel). */
+  pointer-events: none;
 }
 
 /* Mientras llega la primera respuesta del dashboard: la misma caja que una
