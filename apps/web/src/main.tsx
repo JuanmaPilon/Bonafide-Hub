@@ -6341,6 +6341,9 @@ function App() {
   const [gamesLoading, setGamesLoading] = useState(true);
   const dashboardGuildRef = useRef<string | null>(null);
   const gameTrackRef = useRef<HTMLDivElement | null>(null);
+  // Posición del carrusel de juegos: se guarda al desmontarlo para retomar donde
+  // iba. Volver a cero se ve como un corte (la lista salta al principio).
+  const gameMarqueeOffsetRef = useRef(0);
   const [gameActivity, setGameActivity] = useState<{
     days: number;
     games: GuildGameActivity[];
@@ -9600,14 +9603,26 @@ function App() {
   // El carrusel se mueve con JS (no con una animación CSS) para poder agarrarlo y
   // arrastrarlo: ver src/marquee.ts. El motor decide solo si corresponde moverse
   // (si el sistema pide no animar, deja la fila quieta).
+  //
+  // Depende de si hay tarjetas y no de la lista: el refresco del dashboard trae
+  // objetos nuevos con los mismos juegos, y recrear el motor en cada refresco
+  // devolvía el carrusel al principio (se veía como un corte al moverlo).
+  const hayCarrusel = marqueeGames.length > 0;
   useEffect(() => {
     const track = gameTrackRef.current;
-    if (!track || activeTab !== "dashboard" || marqueeGames.length === 0) {
+    if (!track || activeTab !== "dashboard" || !hayCarrusel) {
       return;
     }
-    const marquee = createMarquee({ speed: GAME_MARQUEE_SPEED, track });
-    return () => marquee.destroy();
-  }, [activeTab, marqueeGames]);
+    const marquee = createMarquee({
+      initialOffset: gameMarqueeOffsetRef.current,
+      speed: GAME_MARQUEE_SPEED,
+      track,
+    });
+    return () => {
+      gameMarqueeOffsetRef.current = marquee.offset();
+      marquee.destroy();
+    };
+  }, [activeTab, hayCarrusel]);
 
   // Carrusel de la landing: nombres reales del leaderboard público.
   useEffect(() => {
