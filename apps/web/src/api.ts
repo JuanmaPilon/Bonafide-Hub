@@ -1408,6 +1408,10 @@ export type EventSignup = {
   id: string;
   note?: string;
   role?: string;
+  // Clase del roster de quien no eligió una al anotarse (en Discord el botón de
+  // "no asisto" no abre el asistente). Es para el emoji: la inscripción sigue
+  // sin clase y no cambia de columna.
+  rosterClass?: { className: string; specName: string };
   spec?: string;
   status: string;
   updatedAt: string;

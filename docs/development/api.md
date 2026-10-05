@@ -256,6 +256,16 @@ que la guild haya cargado a mano.
 > mano. `POST /events/templates/:key/apply` queda disponible en el API (precarga
 > roles y catálogo de un juego) por si se quiere usar más adelante.
 
+**Clase de quien no eligió una:** en Discord los botones rápidos de estado no
+abren el asistente (sólo Asisto / Bench / Llego tarde), así que quien únicamente
+marcó "No asisto" queda sin clase en la inscripción y el aviso lo mostraba con
+`❔`. Para que igual salga su emoji, el API agrega `rosterClass` (clase + spec de
+`roster_profiles`, y sólo si el juego de la ficha es el del evento) a las
+inscripciones que no tienen clase. Es **sólo para mostrar** el renglón: no cambia
+la columna del roster, no toca la inscripción guardada y no altera el asistente
+del bot (que sigue mirando `wowClass`). El roster se consulta únicamente si hay
+alguna inscripción sin clase.
+
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`

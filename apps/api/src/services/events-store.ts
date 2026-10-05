@@ -1,6 +1,10 @@
 import { Prisma, prisma } from "../db/prisma.js";
 import { listTemplateSpecs } from "./event-templates.js";
 import {
+  listRosterProfiles,
+  type RosterProfile,
+} from "./roster-store.js";
+import {
   DEFAULT_TAG_COLOR,
   MAX_TAGS,
   normalizeTags,
@@ -327,6 +331,11 @@ export type EventSignup = {
   id: string;
   note?: string;
   role?: string;
+  // Clase del roster de quien no eligió una al anotarse: en Discord el botón
+  // de "no asisto" no abre el asistente, así que sin esto queda sin emoji en
+  // el aviso. Es sólo para mostrar (el emoji del aviso y de la web): no cambia
+  // la columna del roster ni lo que está guardado.
+  rosterClass?: { className: string; specName: string };
   spec?: string;
   status: string;
   updatedAt: Date;
@@ -393,7 +402,14 @@ type SignupRecord = {
   wowClass: string | null;
 };
 
-function toSignup(record: SignupRecord): EventSignup {
+function toSignup(
+  record: SignupRecord,
+  roster?: Map<string, RosterProfile>,
+  game?: string,
+): EventSignup {
+  // Sólo para quien no eligió clase: el emoji del aviso sale del roster, que es
+  // la ficha que la guild ya tiene cargada.
+  const profile = record.wowClass ? undefined : roster?.get(record.userId);
   return {
     character: record.character ?? undefined,
     createdAt: record.createdAt,
@@ -401,6 +417,10 @@ function toSignup(record: SignupRecord): EventSignup {
     id: record.id,
     note: record.note ?? undefined,
     role: record.role ?? undefined,
+    rosterClass:
+      profile && profile.game === game
+        ? { className: profile.className, specName: profile.specName }
+        : undefined,
     spec: record.spec ?? undefined,
     status: record.status,
     updatedAt: record.updatedAt,
@@ -417,7 +437,10 @@ function eventTags(record: EventRecord): EventTag[] {
   return tagsFromRecord(record);
 }
 
-function toEvent(record: EventRecord): HubEvent {
+function toEvent(
+  record: EventRecord,
+  roster?: Map<string, RosterProfile>,
+): HubEvent {
   return {
     characterEnabled: record.characterEnabled,
     completedAt: record.completedAt ?? undefined,
@@ -458,8 +481,22 @@ function toEvent(record: EventRecord): HubEvent {
     type: record.type,
     updatedAt: record.updatedAt,
     voiceChannelId: record.voiceChannelId ?? undefined,
-    signups: record.signups.map(toSignup),
+    signups: record.signups.map((signup) =>
+      toSignup(signup, roster, record.game),
+    ),
   };
+}
+
+// Ficha del roster por persona, sólo si alguna inscripción quedó sin clase: en
+// el caso normal no cuesta una consulta de más.
+async function rosterClassesFor(
+  records: Array<{ signups: Array<{ wowClass?: string | null }> }>,
+  guildId: string,
+): Promise<Map<string, RosterProfile> | undefined> {
+  const haceFalta = records.some((record) =>
+    record.signups.some((signup) => !signup.wowClass),
+  );
+  return haceFalta ? await listRosterProfiles(guildId) : undefined;
 }
 
 export async function listEvents(guildId: string): Promise<HubEvent[]> {
@@ -468,7 +505,8 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
     orderBy: { startsAt: "asc" },
     include: { signups: { orderBy: { createdAt: "asc" } } },
   });
-  return records.map((record) => toEvent(record));
+  const roster = await rosterClassesFor(records, guildId);
+  return records.map((record) => toEvent(record, roster));
 }
 
 // Eventos próximos que ya tienen un recordatorio "vencido" por enviar (falta
@@ -553,7 +591,11 @@ export async function getEvent(
     where: { id: eventId, guildId },
     include: { signups: { orderBy: { createdAt: "asc" } } },
   });
-  return record ? toEvent(record) : null;
+  if (!record) {
+    return null;
+  }
+  const roster = await rosterClassesFor([record], guildId);
+  return toEvent(record, roster);
 }
 
 export async function createEvent(input: {

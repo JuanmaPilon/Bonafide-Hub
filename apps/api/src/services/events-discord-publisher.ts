@@ -385,6 +385,10 @@ export async function resolveAnnouncementContent(input: {
 export type AnnouncementSignup = {
   character?: string;
   role?: string;
+  // Clase del roster para quien no eligió una en la inscripción (p. ej. quien
+  // sólo marcó "no asisto" desde Discord: ese botón no abre el asistente). Es
+  // para el emoji del renglón: no lo mueve de columna.
+  rosterClass?: { className: string; specName: string };
   spec?: string;
   status: string;
   // Id del miembro: lo usan el contador del roster y el match con el rol
@@ -695,14 +699,25 @@ export function buildEventAnnouncementEmbeds(input: {
 
   const resolveSpec = (
     signup: AnnouncementSignup,
-  ): AnnouncementSpec | undefined =>
-    input.specs.find(
+  ): AnnouncementSpec | undefined => {
+    const elegida = input.specs.find(
       (spec) =>
         spec.role === signup.role &&
         spec.className === signup.wowClass &&
         // El segundo eje puede estar desactivado (se guarda vacío).
         spec.specName === (signup.spec ?? ""),
     );
+    if (elegida || !signup.rosterClass) {
+      return elegida;
+    }
+    // No eligió clase en el evento: se muestra la del roster (misma clase y
+    // spec, sin mirar el rol: el emoji es el mismo).
+    return input.specs.find(
+      (spec) =>
+        spec.className === signup.rosterClass?.className &&
+        spec.specName === signup.rosterClass?.specName,
+    );
+  };
 
   const memberLabel = (signup: AnnouncementSignup): string => {
     const spec = resolveSpec(signup);

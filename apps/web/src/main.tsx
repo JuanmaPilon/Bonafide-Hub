@@ -3778,12 +3778,23 @@ function EventCard({
   // configurado) + nick y personaje. El staff además ve el botón para editar
   // esa inscripción a mano.
   const renderRosterEntry = (signup: EventSignup) => {
-    const specRow = specs.find(
-      (row) =>
-        row.role === signup.role &&
-        row.className === signup.wowClass &&
-        row.specName === (signup.spec ?? ""),
-    );
+    const specRow =
+      specs.find(
+        (row) =>
+          row.role === signup.role &&
+          row.className === signup.wowClass &&
+          row.specName === (signup.spec ?? ""),
+      ) ??
+      // No eligió clase en el evento (p. ej. sólo marcó "no asisto"): se muestra
+      // la del roster, que es la ficha que ya tiene cargada. Mismo emoji: no
+      // cambia la columna ni la inscripción.
+      (signup.rosterClass
+        ? specs.find(
+            (row) =>
+              row.className === signup.rosterClass?.className &&
+              row.specName === signup.rosterClass?.specName,
+          )
+        : undefined);
     return (
       <span className="event-roster-entry" key={signup.id}>
         <span className="event-roster-member">
