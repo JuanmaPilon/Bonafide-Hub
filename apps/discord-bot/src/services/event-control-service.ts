@@ -54,6 +54,8 @@ type RemoteReportConfig = {
 };
 
 type RemoteControl = {
+  // Rol del bench del roster: suma al rol mínimo a la hora de contar y avisar.
+  benchRoleId?: string;
   report: RemoteReportConfig;
   reports: RemoteEvent[];
   reminders: Array<{ dueHours: number[]; event: RemoteEvent }>;
@@ -165,13 +167,35 @@ async function fetchMembersWithRole(
   }));
 }
 
-// Quienes tienen el rol requerido y NO tienen ninguna inscripción.
-function computeMissingMembers(
-  roleMembers: Array<{ displayName: string; id: string }>,
+// A quiénes les corresponde responder: los del rol mínimo del evento y los del
+// rol de Bench del roster. El bench es parte del roster (cuenta y se avisa),
+// pero va marcado para que el informe y el recordatorio no lo mezclen con el
+// core. Quien tiene los dos roles cuenta como core.
+export async function fetchRosterMembers(
+  guild: Guild,
+  requiredRoleId: string,
+  benchRoleId?: string,
+): Promise<Array<{ bench: boolean; displayName: string; id: string }>> {
+  const required = await fetchMembersWithRole(guild, requiredRoleId);
+  const core = required.map((member) => ({ ...member, bench: false }));
+  const benchRole = benchRoleId?.trim();
+  if (!benchRole || benchRole === requiredRoleId) {
+    return core;
+  }
+  const coreIds = new Set(core.map((member) => member.id));
+  const bench = (await fetchMembersWithRole(guild, benchRole))
+    .filter((member) => !coreIds.has(member.id))
+    .map((member) => ({ ...member, bench: true }));
+  return [...core, ...bench];
+}
+
+// Quienes tienen rol (mínimo o bench) y NO tienen ninguna inscripción.
+export function computeMissingMembers(
+  rosterMembers: Array<{ bench: boolean; displayName: string; id: string }>,
   signups: RemoteSignup[] | undefined,
-): Array<{ displayName: string; id: string }> {
+): Array<{ bench: boolean; displayName: string; id: string }> {
   const signedUserIds = new Set(signups?.map((signup) => signup.userId) ?? []);
-  return roleMembers.filter((member) => !signedUserIds.has(member.id));
+  return rosterMembers.filter((member) => !signedUserIds.has(member.id));
 }
 
 function formatEventDate(iso: string): string {
@@ -210,6 +234,7 @@ async function sendToChannel(
 async function processReminder(
   guild: Guild,
   item: { dueHours: number[]; event: RemoteEvent },
+  benchRoleId?: string,
 ): Promise<void> {
   const { event } = item;
   const roleId = event.requiredRoleId;
@@ -218,13 +243,14 @@ async function processReminder(
     return;
   }
   try {
-    const roleMembers = await fetchMembersWithRole(guild, roleId);
-    const missing = computeMissingMembers(roleMembers, event.signups);
+    const rosterMembers = await fetchRosterMembers(guild, roleId, benchRoleId);
+    const missing = computeMissingMembers(rosterMembers, event.signups);
     const reminderMessageIds: string[] = [];
 
     if (missing.length > 0) {
       const startsMs = new Date(event.startsAt).getTime();
       const mentions = missing.map((member) => `<@${member.id}>`).join(" ");
+      const benchMissing = missing.filter((member) => member.bench).length;
       // Las menciones van en el CONTENIDO: dentro de un embed no notifican.
       const embed = new EmbedBuilder()
         .setColor(0xffb454)
@@ -233,7 +259,7 @@ async function processReminder(
           [
             `🗓️ ${formatEventDate(event.startsAt)} · <t:${Math.floor(startsMs / 1000)}:R>`,
             "",
-            "**Faltan anotarse:**",
+            `**Faltan anotarse:** ${missing.length}${benchMissing > 0 ? ` · 🪑 ${benchMissing} en bench` : ""}`,
           ].join("\n"),
         )
         .setFooter({ text: "Bonafide Hub · Recordatorio de asistencia" });
@@ -272,14 +298,17 @@ async function processReport(
   guild: Guild,
   event: RemoteEvent,
   reportConfig: RemoteReportConfig,
+  benchRoleId?: string,
 ): Promise<void> {
   const roleId = event.requiredRoleId;
   if (!roleId) {
     return;
   }
   try {
-    const roleMembers = await fetchMembersWithRole(guild, roleId);
-    const missing = computeMissingMembers(roleMembers, event.signups);
+    const rosterMembers = await fetchRosterMembers(guild, roleId, benchRoleId);
+    const missing = computeMissingMembers(rosterMembers, event.signups);
+    const missingCore = missing.filter((member) => !member.bench);
+    const missingBench = missing.filter((member) => member.bench);
     const signups = event.signups ?? [];
     const confirmed = signups.filter((s) => s.status === "yes").length;
     const bench = signups.filter((s) => s.status === "bench").length;
@@ -296,15 +325,28 @@ async function processReport(
           value: `✅ ${confirmed} · 🪑 ${bench} · ⏰ ${late} · ❌ ${countNo}`,
         },
         {
-          name: `🛡️ No se anotaron (${missing.length} con el rol)`,
+          name: `🛡️ No se anotaron (${missingCore.length} con el rol)`,
           value:
-            missing.length > 0
-              ? missing
+            missingCore.length > 0
+              ? missingCore
                   .map((m) => `• ${m.displayName}`)
                   .join("\n")
                   .slice(0, 1024)
               : "Nadie: todos con el rol respondieron. 🎉",
         },
+        // El bench cuenta como roster, pero se lista aparte para que no se lea
+        // como si faltara el core.
+        ...(missingBench.length > 0
+          ? [
+              {
+                name: `🪑 Bench sin anotarse (${missingBench.length})`,
+                value: missingBench
+                  .map((m) => `• ${m.displayName}`)
+                  .join("\n")
+                  .slice(0, 1024),
+              },
+            ]
+          : []),
       )
       .setFooter({ text: "Bonafide Hub · Informe de asistencia" });
 
@@ -371,10 +413,10 @@ async function runControlPass(client: Client): Promise<void> {
     for (const guild of client.guilds.cache.values()) {
       const control = await fetchControl(guild.id);
       for (const item of control.reminders) {
-        await processReminder(guild, item);
+        await processReminder(guild, item, control.benchRoleId);
       }
       for (const event of control.reports) {
-        await processReport(guild, event, control.report);
+        await processReport(guild, event, control.report, control.benchRoleId);
       }
     }
   } finally {

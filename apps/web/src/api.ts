@@ -1357,8 +1357,10 @@ export type HubEvent = {
   // Al marcar Completado, borra el aviso/evento de Discord tras guardar.
   discordCleanupOnComplete?: boolean;
   durationMinutes?: number;
-  // Control del roster: cuántos miembros tienen el rol mínimo (el total contra
-  // el que se compara la asistencia) y cuántos todavía no respondieron.
+  // Control del roster: cuántos miembros tienen el rol mínimo o el de Bench del
+  // roster (el total contra el que se compara la asistencia) y cuántos todavía
+  // no respondieron.
+  benchExpectedCount?: number;
   expectedCount?: number;
   missingCount?: number;
   // Juego del evento (wow | lol | …): decide qué roles de inscripción y qué
@@ -1422,12 +1424,14 @@ export async function getEvents(guildId: string): Promise<HubEvent[]> {
   return data.events;
 }
 
-// Detalle del roster esperado de un evento: quiénes tienen el rol mínimo, quiénes
-// ya respondieron y quiénes faltan (lo pide el contador "N/M" al clickearse).
+// Detalle del roster esperado de un evento: quiénes tienen el rol mínimo o el
+// de Bench del roster, quiénes ya respondieron y quiénes faltan (lo pide el
+// contador "N/M" al clickearse).
 export type EventRoster = {
+  benchCount: number;
   confirmedCount: number;
   expectedCount: number;
-  missing: Array<{ userId: string; username: string }>;
+  missing: Array<{ bench?: boolean; userId: string; username: string }>;
   requiredRoleId?: string;
   signedCount: number;
 };

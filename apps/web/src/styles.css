@@ -5856,6 +5856,17 @@ select.list-order {
   gap: 8px 12px;
 }
 
+/* El bench del roster también cuenta en el evento: se marca para que no se
+   confunda con el core. */
+.event-count.bench {
+  border-color: rgba(245, 181, 64, 0.5);
+  color: #ffd477;
+}
+
+.event-roster-missing .roster-missing-bench {
+  color: #ffd477;
+}
+
 .event-roster-missing .member-link {
   border: 0;
   background: transparent;

@@ -4628,6 +4628,11 @@ function EventCard({
                   <span className="event-count total">
                     👥 {roster.confirmedCount} confirmados
                   </span>
+                  {roster.benchCount > 0 ? (
+                    <span className="event-count bench">
+                      🪑 {roster.benchCount} en bench
+                    </span>
+                  ) : null}
                   {roster.missing.length > 0 ? (
                     <span className="event-count late">
                       ⏳ Faltan {roster.missing.length}
@@ -4639,15 +4644,20 @@ function EventCard({
                   <div className="event-roster-missing">
                     {roster.missing.map((member) => (
                       <button
-                        className="member-link"
+                        className={`member-link${member.bench ? " roster-missing-bench" : ""}`}
                         key={member.userId}
                         onClick={() => {
                           setRosterOpen(false);
                           onOpenProfile(member.userId);
                         }}
-                        title="Ver su perfil"
+                        title={
+                          member.bench
+                            ? "Ver su perfil (está en bench)"
+                            : "Ver su perfil"
+                        }
                         type="button"
                       >
+                        {member.bench ? "🪑 " : ""}
                         {member.username}
                       </button>
                     ))}

@@ -344,22 +344,34 @@ async function fetchMessageContent(
   }
 }
 
-// Contenido del mensaje-aviso según el rol requerido del evento:
-//   - con rol  → la mención pelada `<@&rol>`;
-//   - sin rol  → "" (limpia una mención vieja que haya quedado).
+// Contenido del mensaje-aviso según los roles que tienen que enterarse:
+//   - el rol mínimo del evento (el que exige la inscripción), y
+//   - el rol de Bench del roster, si está mapeado: el bench es parte del roster
+//     (tiene que enterarse), pero sin el rol mínimo su inscripción queda Bench.
 //
-// Devuelve `undefined` (no tocar) cuando el mensaje YA dice exactamente eso:
-// así los refrescos no reescriben el contenido. Si el mensaje tiene la mención
-// con decoración vieja (p. ej. `🛡️ <@&rol>`), se normaliza al refrescar sin
-// notificar (el PATCH va con `allowed_mentions: { parse: [] }`).
+// Devuelve "" sin roles (limpia una mención vieja que haya quedado).
+export function announcementContent(input: {
+  benchRoleId?: string;
+  requiredRoleId?: string;
+}): string {
+  const roles = [input.requiredRoleId, input.benchRoleId]
+    .map((roleId) => roleId?.trim())
+    .filter((roleId): roleId is string => Boolean(roleId));
+  return [...new Set(roles)].map((roleId) => `<@&${roleId}>`).join(" ");
+}
+
+// Contenido que DEBE tener el aviso. Devuelve `undefined` (no tocar) cuando el
+// mensaje YA dice exactamente eso: así los refrescos no reescriben el contenido.
+// Si el mensaje tiene la mención con decoración vieja (p. ej. `🛡️ <@&rol>`), se
+// normaliza al refrescar sin notificar (el PATCH va con
+// `allowed_mentions: { parse: [] }`).
 export async function resolveAnnouncementContent(input: {
+  benchRoleId?: string;
   channelId: string;
   messageId: string;
   requiredRoleId?: string;
 }): Promise<string | undefined> {
-  const desired = input.requiredRoleId?.trim()
-    ? `<@&${input.requiredRoleId.trim()}>`
-    : "";
+  const desired = announcementContent(input);
   const current = await fetchMessageContent(input.channelId, input.messageId);
   if (current === null) {
     // No pudimos leer el mensaje: no lo tocamos.
@@ -569,6 +581,9 @@ export function buildEventAnnouncementEmbeds(input: {
   // Cuántos miembros tienen el rol mínimo (roster esperado). Con esto el aviso
   // muestra el control "confirmados / esperados".
   expectedCount?: number;
+  // Rol de Bench del roster: el aviso también lo menciona (el bench es parte
+  // del roster y tiene que enterarse).
+  benchRoleId?: string;
   recurrence: EventRecurrence;
   // Recurrencia PROPIA del evento (cada X días, la maneja el API). Manda sobre
   // la recurrencia del evento agendado de Discord.
@@ -1034,7 +1049,7 @@ async function postAnnouncement(
   // que Discord NOTIFIQUE a todos los que tienen ese rol (las menciones dentro
   // del embed no avisan). Solo al publicar: los refrescos editan solo el
   // embed, así no se vuelve a mencionar (y no spamea).
-  const requiredRoleId = input.requiredRoleId?.trim();
+  const content = announcementContent(input);
   const response = await discordFetch(
     `/channels/${encodeURIComponent(input.channelId)}/messages`,
     {
@@ -1050,7 +1065,7 @@ async function postAnnouncement(
               input.signupDeadline.getTime() <= Date.now()),
           specLabel: input.specLabel,
         }),
-        content: requiredRoleId ? `<@&${requiredRoleId}>` : undefined,
+        content: content || undefined,
         embeds,
       },
     },
@@ -1137,6 +1152,8 @@ export async function postEventPoll(input: {
 // y publicar de nuevo. Así se reflejan los cambios sin perder el hilo del
 // canal ni re-notificar al rol.
 export async function syncEventToDiscord(input: {
+  // Rol de Bench del roster: el aviso lo menciona junto al rol mínimo.
+  benchRoleId?: string;
   characterEnabled?: boolean;
   classLabel?: string;
   description?: string;
@@ -1226,6 +1243,7 @@ export async function syncEventToDiscord(input: {
   // 2) Aviso en canal (si se pidió).
   if (options.publishMessage && options.publishChannelId) {
     const announcementInput = {
+      benchRoleId: input.benchRoleId,
       channelId: options.publishChannelId,
       characterEnabled: input.characterEnabled,
       classLabel: input.classLabel,
@@ -1266,6 +1284,7 @@ export async function syncEventToDiscord(input: {
       // Deja la mención del rol al día: la agrega si falta y la normaliza si
       // quedó con decoración vieja (p. ej. `🛡️ <@&rol>`), sin re-notificar.
       const content = await resolveAnnouncementContent({
+        benchRoleId: input.benchRoleId,
         channelId: options.publishChannelId,
         messageId: previousMessages[0],
         requiredRoleId: input.requiredRoleId,

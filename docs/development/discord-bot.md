@@ -115,7 +115,11 @@ el bot maneja los clicks con mensajes efímeros y guarda por API interna:
    Al pedir el evento con `?userId=` el API devuelve `event.playerCharacter`, así
    no se lo volvemos a pedir a quien ya lo cargó en otro evento.
 3. Los recordatorios de asistencia y los informes de "no se anotaron" los dispara
-   el scheduler del bot consultando `GET /internal/.../events/control`.
+   el scheduler del bot consultando `GET /internal/.../events/control`. Ese
+   payload trae `benchRoleId` (el rol de Bench del roster): los dos suman al rol
+   mínimo del evento a la hora de contar, avisar y listar, porque el bench es
+   parte del roster. En el informe el bench va en un campo aparte, para que no se
+   lea como si faltara el core.
 
 ### Karuta (cartas raras y wishlists)
 

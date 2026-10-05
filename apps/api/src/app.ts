@@ -186,6 +186,10 @@ import {
   type RosterTag,
 } from "./services/roster-store.js";
 import {
+  expectedRoster,
+  type RosterMember,
+} from "./services/event-roster.js";
+import {
   botTopRolePosition,
   colorRamp,
   createGuildRole,
@@ -526,47 +530,17 @@ async function fetchAuditNames(
   return { channels, roles, users };
 }
 
-// Roster esperado de un evento: los miembros HUMANOS que tienen el rol mínimo
-// (el mismo universo que usan el informe de asistencia y los recordatorios, así
-// el contador "N/M" no inventa un número nuevo). Devuelve null si el evento no
-// tiene rol mínimo: ahí no hay contra qué contar. `missing` = los que todavía no
-// respondieron nada (el que marcó "no asisto" ya respondió, no va acá).
-type RosterMember = { userId: string; username: string };
+// Roster esperado de un evento: ver services/event-roster.ts (los del rol mínimo
+// más el bench del roster, que también cuenta y va marcado).
 
-function expectedRoster(
-  members: DiscordGuildMember[],
-  event: {
-    requiredRoleId?: string;
-    signups?: Array<{ userId?: string }>;
-  },
-): { expectedCount: number; missing: RosterMember[] } | null {
-  const roleId = event.requiredRoleId?.trim();
-  if (!roleId) {
-    return null;
-  }
-
-  const answered = new Set(
-    (event.signups ?? [])
-      .map((signup) => signup.userId)
-      .filter((userId): userId is string => Boolean(userId)),
-  );
-  const expected: RosterMember[] = [];
-  for (const member of members) {
-    const user = member.user;
-    if (!user?.id || user.bot === true || !member.roles?.includes(roleId)) {
-      continue;
-    }
-    expected.push({
-      userId: user.id,
-      username: member.nick ?? user.global_name ?? user.username ?? user.id,
-    });
-  }
-  expected.sort((left, right) => left.username.localeCompare(right.username));
-
-  return {
-    expectedCount: expected.length,
-    missing: expected.filter((member) => !answered.has(member.userId)),
-  };
+// Rol de Discord del estado "Bench" del roster (Admin → Mapeo). Es lo que hace
+// que el bench cuente en los eventos: son parte del roster, solo que no son core.
+async function benchRoleIdFor(guildId: string): Promise<string | undefined> {
+  const [config, mappings] = await Promise.all([
+    getGuildConfig(guildId),
+    listGuildMappings(guildId),
+  ]);
+  return resolveRosterRankRoles(mappings, config).bench;
 }
 
 async function fetchAllGuildMembers(
@@ -2119,7 +2093,8 @@ function validateDiscordOptions(options: EventDiscordOptions): string | null {
 
 // Cuántos miembros tienen el rol mínimo del evento (roster esperado). Sin rol
 // mínimo no hay número: devuelve undefined. La lectura de miembros va cacheada
-// (4 min), así refrescar varios avisos seguidos no castiga a Discord.
+// (4 min), así refrescar varios avisos seguidos no castiga a Discord. El bench
+// del roster entra en la cuenta (ver benchRoleIdFor).
 async function expectedCountFor(
   guildId: string,
   event: {
@@ -2130,8 +2105,11 @@ async function expectedCountFor(
   if (!event.requiredRoleId) {
     return undefined;
   }
-  const members = await fetchAllGuildMembers(guildId).catch(() => []);
-  return expectedRoster(members, event)?.expectedCount;
+  const [members, benchRoleId] = await Promise.all([
+    fetchAllGuildMembers(guildId).catch(() => []),
+    benchRoleIdFor(guildId),
+  ]);
+  return expectedRoster(members, event, benchRoleId)?.expectedCount;
 }
 
 // Sincroniza el evento hacia Discord y persiste los ids resultantes.
@@ -2195,6 +2173,8 @@ async function syncAndStoreEventDiscord(input: {
     paused: event.paused,
     poll,
     pollHours: event.pollHours,
+    // El aviso menciona también al bench del roster (si está mapeado).
+    benchRoleId: await benchRoleIdFor(event.guildId),
     requiredRoleId: event.requiredRoleId,
     roles: await resolveEventRolesFor(event.guildId, event.game, eventConfig),
     signupDeadline: event.signupDeadline,
@@ -2281,6 +2261,7 @@ async function refreshEventAnnouncement(
         event.recurrenceEnabled && event.recurrenceEveryDays
           ? event.recurrenceEveryDays
           : undefined,
+      benchRoleId: await benchRoleIdFor(guildId),
       requiredRoleId: event.requiredRoleId,
       roles: await resolveEventRolesFor(guildId, event.game, eventConfig),
       signupDeadline: event.signupDeadline,
@@ -2307,6 +2288,7 @@ async function refreshEventAnnouncement(
       // contenido; si la tiene y falta la mención, la agrega (así el rol queda
       // etiquetado aunque el aviso sea viejo).
       content: await resolveAnnouncementContent({
+        benchRoleId: await benchRoleIdFor(guildId),
         channelId: event.publishChannelId,
         messageId,
         requiredRoleId: event.requiredRoleId,
@@ -5159,13 +5141,18 @@ export function buildApp() {
     const members = events.some((event) => event.requiredRoleId)
       ? await fetchAllGuildMembers(params.guildId).catch(() => [])
       : [];
+    // El bench del roster cuenta como esperado: se resuelve una sola vez.
+    const benchRoleId = events.some((event) => event.requiredRoleId)
+      ? await benchRoleIdFor(params.guildId)
+      : undefined;
     return {
       ok: true,
       guildId: params.guildId,
       events: events.map((event) => {
-        const roster = expectedRoster(members, event);
+        const roster = expectedRoster(members, event, benchRoleId);
         return {
           ...event,
+          benchExpectedCount: roster?.bench.length,
           expectedCount: roster?.expectedCount,
           missingCount: roster?.missing.length,
           requiredRoleName: event.requiredRoleId
@@ -5200,7 +5187,11 @@ export function buildApp() {
     }
 
     const members = await fetchAllGuildMembers(params.guildId).catch(() => []);
-    const roster = expectedRoster(members, event);
+    const roster = expectedRoster(
+      members,
+      event,
+      await benchRoleIdFor(params.guildId),
+    );
     if (!roster) {
       return reply.code(400).send({
         ok: false,
@@ -5211,6 +5202,7 @@ export function buildApp() {
     const signups = event.signups ?? [];
     return {
       ok: true,
+      benchCount: roster.bench.length,
       confirmedCount: signups.filter((signup) => signup.status === "yes")
         .length,
       eventId: params.eventId,
@@ -7407,16 +7399,20 @@ export function buildApp() {
       if (!params.guildId) {
         return reply.code(400).send({ ok: false, error: "Missing guildId" });
       }
-      const [reminders, reports, config] = await Promise.all([
+      const [reminders, reports, config, mappings] = await Promise.all([
         listReminderDueEvents(params.guildId),
         listReportPendingEvents(params.guildId),
         getGuildConfig(params.guildId),
+        listGuildMappings(params.guildId),
       ]);
       return {
         ok: true,
         guildId: params.guildId,
         reports,
         reminders,
+        // Rol del bench del roster: los recordatorios y el informe lo suman al
+        // rol mínimo del evento para que el bench también cuente y se avise.
+        benchRoleId: resolveRosterRankRoles(mappings, config).bench,
         // A dónde va el informe de asistencia (se configura en el panel): un
         // canal de texto, sin menciones.
         report: {
