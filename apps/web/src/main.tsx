@@ -11,7 +11,6 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { RaidLogsBoard } from "./RaidLogsBoard";
-import { nextAutoScroll } from "./carousel";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
@@ -5702,12 +5701,23 @@ const PODIUM_LABELS = ["1ro", "2do", "3ro", "4to", "5to"];
 // tres veces contra Discord, así que el intervalo no puede ser corto.
 const DASHBOARD_REFRESH_MS = 60_000;
 
+// El carrusel de juegos es un marquee, igual que el de la landing: el track se
+// repite y se traslada la mitad de su ancho, así el bucle no tiene costura. Dos
+// cuidados, porque si no el bucle da un salto chico en cada vuelta:
+//   1. las repeticiones van de a pares, para que la mitad del track sea una
+//      repetición exacta de la otra mitad (con una cantidad impar la mitad corta
+//      una copia al medio y no coinciden);
+//   2. la separación entre tarjetas es margen y no `gap` (ver styles.css): con
+//      `gap` el ancho de la mitad queda 7px corto y se nota el salto.
+// Se apunta a ~24 tarjetas para que la mitad del track cubra siempre el ancho
+// visible: con pocos juegos hay que repetir más veces.
+const GAME_MARQUEE_TARGET_TILES = 24;
+// Segundos por tarjeta: fija la velocidad, así con más juegos tarda más en dar
+// la vuelta en vez de correr más rápido.
+const GAME_MARQUEE_SECONDS_PER_TILE = 2.2;
+
 // Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
 const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
-
-// Auto-avance del carrusel de juegos: una tarjeta por vez (124px + el gap).
-const GAME_AUTO_SCROLL_MS = 4_000;
-const GAME_AUTO_SCROLL_STEP = 138;
 
 // Guía de comandos de Karuta con el prefijo del server ("k" + comando).
 // Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
@@ -6327,8 +6337,24 @@ function App() {
     games: GuildGameActivity[];
     source: "activity" | "configured";
   } | null>(null);
-  const gameCoversRef = useRef<HTMLDivElement | null>(null);
-  const [gamesOverflow, setGamesOverflow] = useState(false);
+  // El marquee necesita el track repetido: ver GAME_MARQUEE_TARGET_TILES.
+  const marqueeGames = useMemo(() => {
+    const games = gameActivity?.games ?? [];
+    if (games.length === 0) {
+      return [];
+    }
+    // Pares: la mitad del track tiene que ser una copia exacta de la otra mitad.
+    const pairs = Math.max(
+      1,
+      Math.ceil(GAME_MARQUEE_TARGET_TILES / (2 * games.length)),
+    );
+    return Array.from({ length: pairs * 2 }, () => games).flat();
+  }, [gameActivity]);
+  // El bucle recorre la mitad del track (la otra mitad es la repetición), así que
+  // la duración acompaña al contenido para que la velocidad sea siempre la misma.
+  const marqueeSeconds = Math.round(
+    (marqueeGames.length / 2) * GAME_MARQUEE_SECONDS_PER_TILE,
+  );
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<Communication[]>([]);
   const [publishedLoading, setPublishedLoading] = useState(true);
@@ -9557,74 +9583,8 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
-  // Las flechas del carrusel solo tienen sentido si hay algo cortado.
-  useEffect(() => {
-    const element = gameCoversRef.current;
-    if (!element) {
-      setGamesOverflow(false);
-      return;
-    }
-    const measure = (): void => {
-      setGamesOverflow(element.scrollWidth > element.clientWidth + 1);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, [gameActivity, activeTab]);
-
-  // El carrusel avanza solo: corre una tarjeta y, al llegar al final, vuelve al
-  // principio de un salto (rebobinar con animación larga mareaba más que el
-  // salto). Se frena con el puntero encima o enganchado, y con la pestaña del
-  // navegador en segundo plano. Sin animación si el sistema pide no animar.
-  useEffect(() => {
-    const element = gameCoversRef.current;
-    if (!gamesOverflow || activeTab !== "dashboard" || !element) {
-      return;
-    }
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-      if (
-        element.matches(":hover") ||
-        element.contains(document.activeElement)
-      ) {
-        return;
-      }
-      const target = nextAutoScroll({
-        clientWidth: element.clientWidth,
-        scrollLeft: element.scrollLeft,
-        scrollWidth: element.scrollWidth,
-        step: GAME_AUTO_SCROLL_STEP,
-      });
-      if (!target) {
-        return;
-      }
-      element.scrollTo(target);
-    }, GAME_AUTO_SCROLL_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [activeTab, gameActivity, gamesOverflow]);
-
-  function scrollGameCovers(direction: 1 | -1): void {
-    const element = gameCoversRef.current;
-    if (!element) {
-      return;
-    }
-    element.scrollBy({
-      behavior: "smooth",
-      left: direction * Math.max(200, element.clientWidth * 0.9),
-    });
-  }
+  // El carrusel se anima solo con CSS (marquee): no hay flechas, ni scroll, ni
+  // JS que lo mueva. Ver `.game-covers` y @keyframes game-marquee en styles.css.
 
   // Carrusel de la landing: nombres reales del leaderboard público.
   useEffect(() => {
@@ -9949,12 +9909,15 @@ function App() {
                   />
 
                   {gameActivity && gameActivity.games.length > 0 ? (
-                    <div className="game-carousel">
-                      <div className="game-covers" ref={gameCoversRef}>
-                        {gameActivity.games.map((game) => (
+                    <div className="game-marquee">
+                      <div
+                        className="game-covers"
+                        style={{ animationDuration: `${marqueeSeconds}s` }}
+                      >
+                        {marqueeGames.map((game, index) => (
                           <article
                             className="game-cover"
-                            key={game.applicationId ?? game.name}
+                            key={`${game.applicationId ?? game.name}-${index}`}
                             title={game.name}
                           >
                             <span className="game-cover-art">
@@ -9966,31 +9929,11 @@ function App() {
                           </article>
                         ))}
                       </div>
-                      {gamesOverflow ? (
-                        <>
-                          <button
-                            className="game-carousel-arrow game-carousel-arrow-left"
-                            type="button"
-                            onClick={() => scrollGameCovers(-1)}
-                            aria-label="Juegos anteriores"
-                          >
-                            ‹
-                          </button>
-                          <button
-                            className="game-carousel-arrow game-carousel-arrow-right"
-                            type="button"
-                            onClick={() => scrollGameCovers(1)}
-                            aria-label="Juegos siguientes"
-                          >
-                            ›
-                          </button>
-                        </>
-                      ) : null}
                     </div>
                   ) : gamesLoading ? (
                     /* Mientras llega la primera respuesta: la misma caja, así
                        el dashboard no se reacomoda cuando aparecen. */
-                    <div className="game-carousel">
+                    <div className="game-marquee">
                       <div className="game-covers">
                         {GAME_SKELETON_TILES.map((index) => (
                           <span
@@ -10003,8 +9946,7 @@ function App() {
                           </span>
                         ))}
                       </div>
-                    </div>
-                  ) : null}
+                    </div>                  ) : null}
 
                   <div className="leaderboard-panel">
                     <h3>Leaderboard de XP</h3>
