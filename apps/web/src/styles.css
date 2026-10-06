@@ -2956,7 +2956,9 @@ a:hover {
   flex-wrap: wrap;
 }
 
-.mapping-group-count {
+/* Conteo de un sub-card (los grupos del Mapeo y los tipos de evento del panel
+   de Eventos): la misma pieza en los dos lados, para que el UI sea el mismo. */
+.sub-card-count {
   padding: 1px 7px;
   border-radius: 999px;
   background: rgba(134, 158, 214, 0.16);
@@ -4630,6 +4632,44 @@ a:hover {
   overflow: hidden;
   border-radius: 12px;
   background: rgba(134, 158, 214, 0.08);
+  /* El distintivo de "más jugado" va pegado a la esquina de la portada. */
+  position: relative;
+}
+
+/* Juego más jugado del server: borde y halo cálidos, para que se distinga de un
+   vistazo en la fila. El brillo se suma al degradado, no lo reemplaza. */
+.game-cover--hot {
+  border-color: rgba(255, 164, 90, 0.55);
+  background: linear-gradient(
+    145deg,
+    rgba(72, 45, 26, 0.75),
+    rgba(28, 19, 14, 0.72)
+  );
+  box-shadow:
+    0 10px 24px rgba(2, 8, 13, 0.24),
+    0 0 18px rgba(255, 138, 61, 0.22);
+}
+
+.game-cover--hot .game-cover-art {
+  box-shadow: inset 0 0 0 1px rgba(255, 176, 105, 0.35);
+}
+
+.game-cover-hot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 176, 105, 0.45);
+  /* Fondo propio: la portada puede ser clara y el número se perdería. */
+  background: rgba(20, 12, 8, 0.82);
+  color: #ffd7b0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .game-cover-art img {
@@ -8849,6 +8889,25 @@ select.list-order {
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(54, 89, 185, 0.18);
   box-shadow: 0 10px 24px rgba(54, 89, 185, 0.08);
+}
+
+/* El "más jugado" también en claro: mismo criterio (tinte y halo cálidos, más
+   suaves porque el fondo ya es claro). El 🔥 mantiene el fondo oscuro: va sobre
+   la portada, que es igual en los dos temas. */
+:root[data-theme="light"] .game-cover--hot {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 246, 236, 0.9),
+    rgba(255, 233, 213, 0.85)
+  );
+  border-color: rgba(206, 112, 26, 0.45);
+  box-shadow:
+    0 10px 24px rgba(54, 89, 185, 0.08),
+    0 0 16px rgba(206, 112, 26, 0.18);
+}
+
+:root[data-theme="light"] .game-cover--hot .game-cover-art {
+  box-shadow: inset 0 0 0 1px rgba(206, 112, 26, 0.3);
 }
 
 :root[data-theme="light"] .module-toggle,

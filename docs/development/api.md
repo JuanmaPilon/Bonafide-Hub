@@ -183,10 +183,13 @@ bot con `PresenceUpdate` (intent `GuildPresences`) y el API guarda una fila por
 persona + aplicación + **día** en `member_game_activity`. El endpoint devuelve
 `{ days, games: [{ applicationId, days, name, players, coverUrl }], source }`,
 ordenado por jugadores distintos: el dashboard muestra los juegos en un carrusel
-de portadas y el orden es la señal de qué se juega más. `source: "configured"`
-significa que todavía no hay
-actividad registrada y se están mostrando los juegos configurados del módulo de
-eventos.
+de portadas y el orden es la señal de qué se juega más. Sobre ese orden el
+dashboard marca los **más jugados** (🔥 con la cantidad de jugadores en la
+esquina de la portada, más borde y halo cálidos): son los primeros por jugadores
+distintos, hasta 3 y con un mínimo de 2 jugadores —con uno solo no hay nada que
+distinguir, y `source: "configured"` viene con todo en cero, o sea sin
+distintivo—. Los cortes viven en la web (`GAME_HOT_COUNT` /
+`GAME_HOT_MIN_PLAYERS`, `apps/web/src/main.tsx`): el API no sabe de presentación.
 
 La portada (`coverUrl`) es la que Discord muestra en su panel de "Juegos
 jugados". No se puede pedir por app: `GET /applications/{id}` está cerrado (401

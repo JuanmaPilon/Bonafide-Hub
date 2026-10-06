@@ -2400,7 +2400,7 @@ function AdminMappingsSection({
           <details className="event-template-picker mapping-group" key={group.key}>
             <summary>
               <strong>{group.label}</strong>
-              <span className="mapping-group-count">
+              <span className="sub-card-count">
                 {group.rows.filter((row) => draft[row.key]?.emojiId).length} de{" "}
                 {group.rows.length} con emoji
               </span>
@@ -5735,6 +5735,14 @@ const GAME_MARQUEE_TARGET_TILES = 24;
 // Velocidad de crucero del carrusel, en px/s.
 const GAME_MARQUEE_SPEED = 43;
 
+// Cuántos juegos se marcan como "más jugados" en el carrusel (el 🔥 con la
+// cantidad de jugadores). El ranking lo hace el API por jugadores distintos en
+// la ventana consultada, así que acá solo se cortan los primeros. Se exigen al
+// menos 2 jugadores: con uno solo no hay nada que distinguir (y el respaldo sin
+// actividad registrada viene con todo en cero, o sea sin distintivo).
+const GAME_HOT_COUNT = 3;
+const GAME_HOT_MIN_PLAYERS = 2;
+
 // Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
 const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
 
@@ -6373,7 +6381,18 @@ function App() {
     );
     return Array.from({ length: pairs * 2 }, () => games).flat();
   }, [gameActivity]);
-  // El bucle recorre la mitad del track (la otra mitad es la repetición).
+  // Juegos "más jugados" (el 🔥 del carrusel): el ranking lo hace el API por
+  // jugadores distintos, así que acá solo se cortan los primeros. Se marca por
+  // juego y no por posición porque el track es la misma lista repetida.
+  const hotGameKeys = useMemo(() => {
+    const games = gameActivity?.games ?? [];
+    return new Set(
+      games
+        .filter((game) => game.players >= GAME_HOT_MIN_PLAYERS)
+        .slice(0, GAME_HOT_COUNT)
+        .map((game) => game.applicationId ?? game.name),
+    );
+  }, [gameActivity]);
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [published, setPublished] = useState<Communication[]>([]);
   const [publishedLoading, setPublishedLoading] = useState(true);
@@ -9960,24 +9979,43 @@ function App() {
                   {gameActivity && gameActivity.games.length > 0 ? (
                     <div className="game-marquee">
                       <div className="game-covers" ref={gameTrackRef}>
-                        {marqueeGames.map((game, index) => (
-                          <article
-                            className="game-cover"
-                            key={`${game.applicationId ?? game.name}-${index}`}
-                            title={game.name}
-                          >
-                            <span className="game-cover-art">
-                              {game.coverUrl ? (
-                                <img
-                                  alt=""
-                                  decoding="async"
-                                  src={game.coverUrl}
-                                />
-                              ) : null}
-                            </span>
-                            <span className="game-cover-name">{game.name}</span>
-                          </article>
-                        ))}
+                        {marqueeGames.map((game, index) => {
+                          const hot = hotGameKeys.has(
+                            game.applicationId ?? game.name,
+                          );
+                          return (
+                            <article
+                              className={`game-cover${hot ? " game-cover--hot" : ""}`}
+                              key={`${game.applicationId ?? game.name}-${index}`}
+                              title={
+                                hot
+                                  ? `${game.name} · ${game.players} jugadores en los últimos ${gameActivity.days} días`
+                                  : game.name
+                              }
+                            >
+                              <span className="game-cover-art">
+                                {game.coverUrl ? (
+                                  <img
+                                    alt=""
+                                    decoding="async"
+                                    src={game.coverUrl}
+                                  />
+                                ) : null}
+                                {hot ? (
+                                  <span
+                                    className="game-cover-hot"
+                                    aria-hidden="true"
+                                  >
+                                    🔥 {game.players}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="game-cover-name">
+                                {game.name}
+                              </span>
+                            </article>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : gamesLoading ? (
@@ -11586,6 +11624,12 @@ function App() {
                             >
                               <summary>
                                 <strong>{template.label}</strong>
+                                {/* Mismo conteo que los grupos del Mapeo: cuántas
+                                    respuestas (roles) trae el tipo de evento. */}
+                                <span className="sub-card-count">
+                                  {template.roles.length} respuesta
+                                  {template.roles.length === 1 ? "" : "s"}
+                                </span>
                                 <span
                                   className="admin-acc-chevron"
                                   aria-hidden="true"
