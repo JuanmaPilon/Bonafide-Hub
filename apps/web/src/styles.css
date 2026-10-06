@@ -1754,6 +1754,63 @@ a:hover {
   font-size: 0.78rem;
 }
 
+/* Sección del análisis con lista larga: el corte lo pone el inline (alto de la
+   gráfica de DPS) y el botón de ver todo vive abajo, siempre visible. */
+.rlb-list-body {
+  overflow: hidden;
+}
+
+.rlb-list-toggle {
+  margin-top: 10px;
+}
+
+/* Progresión de la guild: un chip por dificultad, como los badges del resto. */
+.rlb-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rlb-progress-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 3px 9px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.rlb-progress-chip i {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.rlb-progress-chip.full {
+  border-color: rgba(53, 224, 107, 0.35);
+  color: #35e06b;
+}
+
+.rlb-progress-chip.full i {
+  color: rgba(53, 224, 107, 0.75);
+}
+
+/* Botón circular destacado (la acción principal del tablero). */
+.icon-button--primary {
+  border-color: rgba(106, 168, 255, 0.55);
+  color: #cfe2ff;
+  background: rgba(106, 168, 255, 0.16);
+}
+
+.icon-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .rlb-none {
   padding: 28px 16px;
   color: var(--muted);
@@ -2233,8 +2290,6 @@ a:hover {
 .rlb-consumable-pulls {
   display: grid;
   gap: 6px;
-  max-height: 320px;
-  overflow-y: auto;
 }
 
 /* Cada persona que no usó ese consumible: "Roco 5/7" = faltó en 5 de 7 pulls.

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   classColor,
   type RaidConsumableKey,
@@ -6,8 +6,62 @@ import {
   type RaidLogAnalysis,
 } from "./api";
 
-type Fight = { kill: boolean; name: string };
+type Fight = { difficulty?: number; kill: boolean; name: string };
 type NightState = "draft" | "failed" | "pending" | "posted";
+
+// Dificultades de Warcraft Logs (los ids viejos y nuevos apuntan al mismo
+// nivel). El orden es el que se muestra: de la más baja a la más alta.
+const DIFFICULTIES: Array<{
+  ids: number[];
+  label: string;
+  short: string;
+}> = [
+  { ids: [3, 14], label: "Normal", short: "N" },
+  { ids: [4, 15], label: "Heroico", short: "H" },
+  { ids: [5, 16], label: "Mítico", short: "M" },
+];
+
+// Progresión de la guild por dificultad: bosses distintos matados sobre bosses
+// distintos que enfrentó. El total sale del mayor número de bosses vistos en una
+// dificultad, porque Warcraft Logs no dice cuántos tiene la banda y las que
+// todavía no se intentaron no pueden contar como "vistas".
+function progression(
+  nights: Night[],
+): Array<{ killed: number; label: string; short: string; total: number }> {
+  const porDificultad = DIFFICULTIES
+    .map((difficulty) => {
+      const seen = new Set<string>();
+      const killed = new Set<string>();
+      for (const night of nights) {
+        for (const fight of night.fights) {
+          if (fight.difficulty === undefined) {
+            continue;
+          }
+          if (!difficulty.ids.includes(fight.difficulty)) {
+            continue;
+          }
+          seen.add(fight.name);
+          if (fight.kill) {
+            killed.add(fight.name);
+          }
+        }
+      }
+      return {
+        killed: killed.size,
+        label: difficulty.label,
+        seen: seen.size,
+        short: difficulty.short,
+      };
+    })
+    .filter((entry) => entry.seen > 0);
+  const total = Math.max(0, ...porDificultad.map((entry) => entry.seen));
+  return porDificultad.map((entry) => ({
+    killed: entry.killed,
+    label: entry.label,
+    short: entry.short,
+    total,
+  }));
+}
 
 type Night = {
   date: Date | null;
@@ -75,6 +129,7 @@ function toNights(logs: RaidLog[]): Night[] {
       fightCount: parts.reduce((total, part) => total + part.fightCount, 0),
       fights: parts.flatMap((part) =>
         (part.summary?.fights ?? []).map((fight) => ({
+          difficulty: fight.difficulty,
           kill: Boolean(fight.kill),
           name: fight.name ?? "Fight",
         })),
@@ -111,6 +166,106 @@ function monthOf(date: Date | null): { key: string; label: string } {
 
 function compactNumber(value: number): string {
   return Math.round(value).toLocaleString("es-AR");
+}
+
+// Tuerca de "Configuración" y lupa de "Escanear": mismos trazos que los iconos
+// del resto del panel (24x24, `currentColor`).
+function GearIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="icon-button-icon"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.08A1.7 1.7 0 0 0 10 3.04V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.08a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function ScanIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="icon-button-icon"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6" />
+      <path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 1 0 12 8.5" />
+    </svg>
+  );
+}
+
+// Alto al que se corta una lista larga del análisis: es el que ocupa la gráfica
+// de DPS, así el par de secciones de al lado termina a la misma altura.
+const LIST_MAX_PX = 320;
+
+// Sección del análisis con lista larga: se corta y se abre con el botón. El
+// botón aparece solo si el contenido no entra (medido, no adivinado): con pocos
+// nombres sería ruido. `footer` va afuera del corte, para lo que tiene que verse
+// siempre (las causas de muerte, que son pocas).
+function ClampedSection({
+  children,
+  footer,
+  title,
+}: {
+  children: ReactNode;
+  footer?: ReactNode;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [recortable, setRecortable] = useState(false);
+  const caja = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = caja.current;
+    if (!el) {
+      return undefined;
+    }
+    const medir = (): void => {
+      // Abierta entra siempre: si no, el botón de cerrar desaparecería.
+      if (!open) {
+        setRecortable(el.scrollHeight > el.clientHeight + 1);
+      }
+    };
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => observador.disconnect();
+  }, [children, open]);
+
+  return (
+    <div className="rlb-analysis-section">
+      <h5>{title}</h5>
+      <div
+        className={`rlb-list-body${open ? " open" : ""}`}
+        ref={caja}
+        style={{ maxHeight: open ? undefined : LIST_MAX_PX }}
+      >
+        {children}
+      </div>
+      {open || recortable ? (
+        <button
+          className="ghost-button small rlb-list-toggle"
+          onClick={() => setOpen((current) => !current)}
+          type="button"
+        >
+          {open ? "Ver menos" : "Ver todo"}
+        </button>
+      ) : null}
+      {footer}
+    </div>
+  );
 }
 
 function bossBreakdown(fights: Fight[]): Array<{
@@ -205,7 +360,7 @@ export function RaidLogsBoard({
     [logs],
   );
 
-  const totalKills = nights.reduce((total, night) => total + night.kills, 0);
+  const progress = useMemo(() => progression(nights), [nights]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -330,30 +485,48 @@ export function RaidLogsBoard({
             <span>Noches</span>
           </div>
           <div className="rlb-stat">
-            <strong>{totalKills}</strong>
-            <span>Kills</span>
+            {/* Progresión de la guild: un chip por dificultad jugada. */}
+            <strong className="rlb-progress">
+              {progress.length > 0
+                ? progress.map((entry) => (
+                    <span
+                      className={`rlb-progress-chip${entry.killed >= entry.total ? " full" : ""}`}
+                      key={entry.short}
+                      title={`${entry.label}: ${entry.killed} de ${entry.total} bosses`}
+                    >
+                      {entry.killed}/{entry.total}
+                      <i>{entry.short}</i>
+                    </span>
+                  ))
+                : "—"}
+            </strong>
+            <span>Progresión</span>
           </div>
         </div>
         {onScan || manage ? (
           <div className="rlb-actions">
             {onScan ? (
               <button
-                className="primary-button"
+                aria-label={scanning ? "Escaneando" : "Escanear ahora"}
+                className="icon-button icon-button--primary"
                 disabled={scanDisabled || scanning}
                 onClick={onScan}
+                title={scanning ? "Escaneando…" : "Escanear ahora"}
                 type="button"
               >
-                {scanning ? "Escaneando…" : "Escanear ahora"}
+                <ScanIcon />
               </button>
             ) : null}
             {manage ? (
               <button
                 aria-expanded={manageOpen}
-                className="ghost-button"
+                aria-label="Configuración"
+                className={`icon-button${manageOpen ? " active" : ""}`}
                 onClick={() => setShowManage((current) => !current)}
+                title="Configuración"
                 type="button"
               >
-                Configuración
+                <GearIcon />
               </button>
             ) : null}
           </div>
@@ -635,8 +808,7 @@ export function RaidLogsBoard({
                             </div>
 
                             <div className="rlb-analysis-grid">
-                              <div className="rlb-analysis-section">
-                                <h5>DPS promedio por encuentro</h5>
+                              <ClampedSection title="DPS promedio por encuentro">
                                 {dpsRows.length > 0 ? (
                                   <div className="rlb-analysis-dps">
                                     {dpsRows.map((player, index) => {
@@ -689,10 +861,31 @@ export function RaidLogsBoard({
                                     Warcraft Logs no devolvió datos de daño.
                                   </p>
                                 )}
-                              </div>
+                              </ClampedSection>
 
-                              <div className="rlb-analysis-section">
-                                <h5>Muertes</h5>
+                              <ClampedSection
+                                footer={
+                                  knownDeathCauses &&
+                                  knownDeathCauses.length > 0 ? (
+                                    <div className="rlb-death-causes">
+                                      <span className="rlb-label">
+                                        Causas principales
+                                      </span>
+                                      {knownDeathCauses
+                                        .slice(0, 5)
+                                        .map((cause) => (
+                                          <span
+                                            className="rlb-cause-chip"
+                                            key={cause.ability}
+                                          >
+                                            {cause.ability} · {cause.deaths}
+                                          </span>
+                                        ))}
+                                    </div>
+                                  ) : null
+                                }
+                                title="Muertes"
+                              >
                                 {selectedAnalysis.deathsByPlayer.length > 0 ? (
                                   <div className="rlb-analysis-list">
                                     {selectedAnalysis.deathsByPlayer.map(
@@ -712,35 +905,15 @@ export function RaidLogsBoard({
                                     No se registraron muertes.
                                   </p>
                                 )}
-                                {knownDeathCauses &&
-                                knownDeathCauses.length > 0 ? (
-                                  <div className="rlb-death-causes">
-                                    <span className="rlb-label">
-                                      Causas principales
-                                    </span>
-                                    {knownDeathCauses
-                                      .slice(0, 5)
-                                      .map((cause) => (
-                                        <span
-                                          className="rlb-cause-chip"
-                                          key={cause.ability}
-                                        >
-                                          {cause.ability} · {cause.deaths}
-                                        </span>
-                                      ))}
-                                  </div>
-                                ) : null}
-                              </div>
+                              </ClampedSection>
                             </div>
 
                             {consumables ? (
                               <div className="rlb-analysis-grid">
-                                <div className="rlb-analysis-section">
-                                  <h5>Sin consumibles</h5>
-                                  {/* Al revés que antes: en vez del conteo de
-                                      cada uno, la lista de quién faltó. Es lo
-                                      que se puede accionar (hablar con esa
-                                      persona), y la clase no hace falta acá. */}
+                                {/* Al revés que antes: en vez del conteo de cada
+                                    uno, la lista de quién faltó. Es lo que se
+                                    puede accionar (hablar con esa persona). */}
+                                <ClampedSection title="Sin consumibles">
                                   <div className="rlb-consumable-pulls">
                                     {consumables.categories.map((category) => {
                                       const missing = consumables.players
@@ -785,10 +958,9 @@ export function RaidLogsBoard({
                                       );
                                     })}
                                   </div>
-                                </div>
+                                </ClampedSection>
 
-                                <div className="rlb-analysis-section">
-                                  <h5>Por pull</h5>
+                                <ClampedSection title="Por pull">
                                   <div className="rlb-consumable-pulls">
                                     {consumables.pulls.map(
                                       (pull, index) => (
@@ -828,7 +1000,7 @@ export function RaidLogsBoard({
                                       ),
                                     )}
                                   </div>
-                                </div>
+                                </ClampedSection>
                               </div>
                             ) : null}
 

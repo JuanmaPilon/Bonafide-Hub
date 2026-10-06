@@ -139,6 +139,14 @@ son:
 El escaneo se inicia desde Raids → Logs. Publicar, actualizar, ocultar o
 restaurar una entrada también requiere una acción explícita.
 
+El tablero muestra la **progresión** de la guild por dificultad (N / H / M) a
+partir del `difficulty` de cada fight del `summary`: bosses distintos matados
+sobre bosses distintos enfrentados, y el total sale del mayor número de bosses
+vistos en una dificultad (Warcraft Logs no dice cuántos tiene la banda, y los que
+todavía no se intentaron no pueden contar). Las listas largas del análisis (DPS,
+muertes, consumibles, por pull) se cortan a la altura de la gráfica de DPS y se
+abren con un botón, que aparece solo si el contenido no entra.
+
 Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
 una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
 que cruza la medianoche no se parta): una subida en dos partes sale como **un**
