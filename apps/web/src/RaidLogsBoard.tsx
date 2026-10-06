@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   classColor,
   type RaidConsumableKey,
@@ -203,17 +212,61 @@ function TriangleIcon({ up }: { up: boolean }) {
   );
 }
 
-// Alto al que se corta una lista larga del análisis: es el que ocupa la gráfica
-// de DPS con la raid llena (~14 jugadores), así el par de secciones de al lado
-// termina a la misma altura.
+// Alto máximo al que se corta una lista larga: techo para que una fila con dos
+// listas enormes no se coma la pantalla.
 const LIST_MAX_PX = 320;
 
-// Sección del análisis con lista larga: se corta y se abre con el triángulo del
-// encabezado. El botón aparece solo si el contenido no entra (medido, no
-// adivinado): con pocos nombres sería ruido. Va en el TÍTULO y no abajo del
-// corte para que quede a la misma altura en las dos columnas. `footer` va afuera
-// del corte, para lo que tiene que verse siempre (las causas de muerte, que son
-// pocas).
+type RowClamp = {
+  registrar: (el: HTMLDivElement | null) => void;
+  tope: number;
+};
+
+const RowClampContext = createContext<RowClamp | null>(null);
+
+// Fila del análisis: las listas de las DOS columnas se cortan a la misma altura,
+// y esa altura es donde termina la más corta. Así las dos columnas cierran en la
+// misma línea y el botón de la larga arranca justo ahí.
+function AnalysisRow({ children }: { children: ReactNode }) {
+  const cuerpos = useRef<HTMLDivElement[]>([]);
+  const [tope, setTope] = useState(LIST_MAX_PX);
+
+  const registrar = useCallback((el: HTMLDivElement | null): void => {
+    if (el && !cuerpos.current.includes(el)) {
+      cuerpos.current.push(el);
+    }
+  }, []);
+
+  useEffect(() => {
+    const medir = (): void => {
+      // `scrollHeight` es el alto natural del contenido: no cambia al recortarlo,
+      // así que abrir una lista no mueve el corte de la otra.
+      const altos = cuerpos.current
+        .filter((el) => Boolean(el))
+        .map((el) => el.scrollHeight);
+      if (altos.length > 0) {
+        setTope(Math.min(LIST_MAX_PX, ...altos));
+      }
+    };
+    medir();
+    const observador = new ResizeObserver(medir);
+    for (const el of cuerpos.current) {
+      observador.observe(el);
+    }
+    return () => observador.disconnect();
+  }, [children]);
+
+  return (
+    <RowClampContext.Provider value={{ registrar, tope }}>
+      {children}
+    </RowClampContext.Provider>
+  );
+}
+
+// Sección del análisis con lista: se corta al tope de la fila y se abre con el
+// triángulo de abajo (que por eso queda en la misma línea en las dos columnas).
+// El triángulo aparece solo si hay algo tapado: con pocos nombres sería ruido.
+// `footer` va afuera del corte, para lo que tiene que verse siempre (las causas
+// de muerte, que son pocas).
 function ClampedSection({
   children,
   footer,
@@ -223,9 +276,11 @@ function ClampedSection({
   footer?: ReactNode;
   title: string;
 }) {
+  const fila = useContext(RowClampContext);
   const [open, setOpen] = useState(false);
   const [recortable, setRecortable] = useState(false);
   const caja = useRef<HTMLDivElement | null>(null);
+  const tope = fila?.tope ?? LIST_MAX_PX;
 
   useEffect(() => {
     const el = caja.current;
@@ -235,41 +290,40 @@ function ClampedSection({
     const medir = (): void => {
       // Abierta entra siempre: si no, el botón de cerrar desaparecería.
       if (!open) {
-        setRecortable(el.scrollHeight > el.clientHeight + 1);
+        setRecortable(el.scrollHeight > tope + 1);
       }
     };
     medir();
     const observador = new ResizeObserver(medir);
     observador.observe(el);
     return () => observador.disconnect();
-  }, [children, open]);
-
-  const mostrarBoton = open || recortable;
+  }, [children, open, tope]);
 
   return (
     <div className="rlb-analysis-section">
-      <h5>
-        {title}
-        {mostrarBoton ? (
-          <button
-            aria-expanded={open}
-            aria-label={open ? "Ver menos" : "Ver todo"}
-            className="rlb-list-toggle"
-            onClick={() => setOpen((current) => !current)}
-            title={open ? "Ver menos" : "Ver todo"}
-            type="button"
-          >
-            <TriangleIcon up={open} />
-          </button>
-        ) : null}
-      </h5>
+      <h5>{title}</h5>
       <div
-        className={`rlb-list-body${open ? " open" : ""}${recortable ? " clamped" : ""}`}
-        ref={caja}
-        style={{ maxHeight: open ? undefined : LIST_MAX_PX }}
+        className="rlb-list-body"
+        ref={(el) => {
+          caja.current = el;
+          fila?.registrar(el);
+        }}
+        style={{ maxHeight: open ? undefined : tope }}
       >
         {children}
       </div>
+      {open || recortable ? (
+        <button
+          aria-expanded={open}
+          aria-label={open ? "Ver menos" : "Ver todo"}
+          className="rlb-list-toggle"
+          onClick={() => setOpen((current) => !current)}
+          title={open ? "Ver menos" : "Ver todo"}
+          type="button"
+        >
+          <TriangleIcon up={open} />
+        </button>
+      ) : null}
       {footer}
     </div>
   );
@@ -835,6 +889,7 @@ export function RaidLogsBoard({
                             </div>
 
                             <div className="rlb-analysis-grid">
+                              <AnalysisRow>
                               <ClampedSection title="DPS promedio por encuentro">
                                 {dpsRows.length > 0 ? (
                                   <div className="rlb-analysis-dps">
@@ -933,10 +988,12 @@ export function RaidLogsBoard({
                                   </p>
                                 )}
                               </ClampedSection>
+                              </AnalysisRow>
                             </div>
 
                             {consumables ? (
                               <div className="rlb-analysis-grid">
+                                <AnalysisRow>
                                 {/* Al revés que antes: en vez del conteo de cada
                                     uno, la lista de quién faltó. Es lo que se
                                     puede accionar (hablar con esa persona). */}
@@ -1028,6 +1085,7 @@ export function RaidLogsBoard({
                                     )}
                                   </div>
                                 </ClampedSection>
+                                </AnalysisRow>
                               </div>
                             ) : null}
 

@@ -1760,35 +1760,28 @@ a:hover {
   overflow: hidden;
 }
 
-/* Lista cortada: el degradado del final avisa que hay más sin ocupar lugar (el
-   botón es el triángulo del encabezado). */
-.rlb-list-body.clamped {
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
-}
-
+/* Triángulo al pie de la lista: ancho completo y área de click generosa, con el
+   triángulo centrado (es la única pieza de la sección que se ve "plegable"). */
 .rlb-list-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  /* Círculo chico: el ícono se ve del tamaño de un badge. */
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--panel-border);
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--panel-border);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
 }
 
 .rlb-list-toggle:hover {
-  border-color: var(--accent);
   color: var(--accent);
 }
 
 .rlb-list-toggle-icon {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 /* Progresión de la guild: un chip por dificultad, como los badges del resto. */
@@ -2153,12 +2146,6 @@ a:hover {
 }
 
 .rlb-analysis-section h5 {
-  /* El título lleva el botón de la lista larga a la derecha: así queda a la
-     misma altura en las dos columnas, siempre. */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   font-size: 0.88rem;
 }
 
