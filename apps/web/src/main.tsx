@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { RaidLogsBoard } from "./RaidLogsBoard";
+import { copyToClipboard } from "./clipboard";
 import { createMarquee } from "./marquee";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -8006,12 +8007,21 @@ function App() {
 
   async function copyComunicadoLink(comm: { title: string }): Promise<void> {
     const url = `${window.location.origin}${window.location.pathname}#/comunicados/${slugifyTitle(comm.title)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      pushToast("Enlace del comunicado copiado.", "success");
-    } catch {
-      pushToast("No se pudo copiar el enlace.", "error");
-    }
+    const ok = await copyToClipboard(url);
+    pushToast(
+      ok ? "Enlace del comunicado copiado." : "No se pudo copiar el enlace.",
+      ok ? "success" : "error",
+    );
+  }
+
+  // Copia el TEXTO del comunicado, que es lo que se publica en Discord (el
+  // título es solo la etiqueta del hub): sirve para pegarlo rápido en otro lado.
+  async function copyComunicadoContent(comm: { content: string }): Promise<void> {
+    const ok = await copyToClipboard(comm.content);
+    pushToast(
+      ok ? "Mensaje copiado." : "No se pudo copiar el mensaje.",
+      ok ? "success" : "error",
+    );
   }
 
   // Abre el comunicado en el modal. El slug va a la URL, así el enlace se
@@ -13389,6 +13399,14 @@ function App() {
               }}
             />
             <div className="comunicado-modal-actions">
+              <button
+                className="ghost-button"
+                onClick={() => void copyComunicadoContent(currentComunicado)}
+                title="Copia el texto del comunicado, tal como se publica"
+                type="button"
+              >
+                📋 Copiar mensaje
+              </button>
               <button
                 className="ghost-button"
                 onClick={() => void copyComunicadoLink(currentComunicado)}
