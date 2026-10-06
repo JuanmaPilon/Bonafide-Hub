@@ -168,9 +168,9 @@ function compactNumber(value: number): string {
   return Math.round(value).toLocaleString("es-AR");
 }
 
-// Tuerca de "Configuración" y lupa de "Escanear": mismos trazos que los iconos
-// del resto del panel (24x24, `currentColor`).
-function GearIcon() {
+// Lupa de "Escanear": la acción busca reports nuevos en Warcraft Logs (mismos
+// trazos que los iconos del resto del panel: 24x24, `currentColor`).
+function SearchIcon() {
   return (
     <svg
       aria-hidden="true"
@@ -182,38 +182,38 @@ function GearIcon() {
       strokeWidth="2"
       viewBox="0 0 24 24"
     >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.08A1.7 1.7 0 0 0 10 3.04V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.08a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4.3-4.3" />
     </svg>
   );
 }
 
-function ScanIcon() {
+// Triángulo del botón de las listas largas: apunta abajo cuando la lista está
+// cortada y arriba cuando está abierta.
+function TriangleIcon({ up }: { up: boolean }) {
   return (
     <svg
       aria-hidden="true"
-      className="icon-button-icon"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
+      className="rlb-list-toggle-icon"
+      fill="currentColor"
       viewBox="0 0 24 24"
     >
-      <path d="M3 3h6M3 3v6M21 3h-6M21 3v6M3 21h6M3 21v-6M21 21h-6M21 21v-6" />
-      <path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 1 0 12 8.5" />
+      <path d={up ? "M12 8l7 9H5z" : "M12 16l-7-9h14z"} />
     </svg>
   );
 }
 
 // Alto al que se corta una lista larga del análisis: es el que ocupa la gráfica
-// de DPS, así el par de secciones de al lado termina a la misma altura.
+// de DPS con la raid llena (~14 jugadores), así el par de secciones de al lado
+// termina a la misma altura.
 const LIST_MAX_PX = 320;
 
-// Sección del análisis con lista larga: se corta y se abre con el botón. El
-// botón aparece solo si el contenido no entra (medido, no adivinado): con pocos
-// nombres sería ruido. `footer` va afuera del corte, para lo que tiene que verse
-// siempre (las causas de muerte, que son pocas).
+// Sección del análisis con lista larga: se corta y se abre con el triángulo del
+// encabezado. El botón aparece solo si el contenido no entra (medido, no
+// adivinado): con pocos nombres sería ruido. Va en el TÍTULO y no abajo del
+// corte para que quede a la misma altura en las dos columnas. `footer` va afuera
+// del corte, para lo que tiene que verse siempre (las causas de muerte, que son
+// pocas).
 function ClampedSection({
   children,
   footer,
@@ -244,27 +244,54 @@ function ClampedSection({
     return () => observador.disconnect();
   }, [children, open]);
 
+  const mostrarBoton = open || recortable;
+
   return (
     <div className="rlb-analysis-section">
-      <h5>{title}</h5>
+      <h5>
+        {title}
+        {mostrarBoton ? (
+          <button
+            aria-expanded={open}
+            aria-label={open ? "Ver menos" : "Ver todo"}
+            className="rlb-list-toggle"
+            onClick={() => setOpen((current) => !current)}
+            title={open ? "Ver menos" : "Ver todo"}
+            type="button"
+          >
+            <TriangleIcon up={open} />
+          </button>
+        ) : null}
+      </h5>
       <div
-        className={`rlb-list-body${open ? " open" : ""}`}
+        className={`rlb-list-body${open ? " open" : ""}${recortable ? " clamped" : ""}`}
         ref={caja}
         style={{ maxHeight: open ? undefined : LIST_MAX_PX }}
       >
         {children}
       </div>
-      {open || recortable ? (
-        <button
-          className="ghost-button small rlb-list-toggle"
-          onClick={() => setOpen((current) => !current)}
-          type="button"
-        >
-          {open ? "Ver menos" : "Ver todo"}
-        </button>
-      ) : null}
       {footer}
     </div>
+  );
+}
+
+// Tuerca de "Configuración": mismos trazos que los iconos del resto del panel
+// (24x24, `currentColor`).
+function GearIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="icon-button-icon"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.08A1.7 1.7 0 0 0 10 3.04V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.08a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" />
+    </svg>
   );
 }
 
@@ -514,7 +541,7 @@ export function RaidLogsBoard({
                 title={scanning ? "Escaneando…" : "Escanear ahora"}
                 type="button"
               >
-                <ScanIcon />
+                <SearchIcon />
               </button>
             ) : null}
             {manage ? (

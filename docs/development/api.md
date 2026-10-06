@@ -145,7 +145,8 @@ sobre bosses distintos enfrentados, y el total sale del mayor número de bosses
 vistos en una dificultad (Warcraft Logs no dice cuántos tiene la banda, y los que
 todavía no se intentaron no pueden contar). Las listas largas del análisis (DPS,
 muertes, consumibles, por pull) se cortan a la altura de la gráfica de DPS y se
-abren con un botón, que aparece solo si el contenido no entra.
+abren con el triángulo del título (que queda así siempre en la misma línea en las
+dos columnas); el triángulo aparece solo si hay algo tapado.
 
 Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
 una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
