@@ -136,6 +136,7 @@ import {
 import {
   listGuildMappings,
   saveGuildMappings,
+  specMappingKey,
   type GuildMapping,
   type MappingEmoji,
 } from "./services/mappings-store.js";
@@ -920,6 +921,7 @@ function buildMappingGroups(
   mappings: Map<string, GuildMapping>,
   classes: string[],
   classEmojis: Record<string, MappingEmoji>,
+  specs: RaidSpec[],
 ): MappingGroup[] {
   const roster: MappingGroup = {
     key: "roster",
@@ -951,10 +953,40 @@ function buildMappingGroups(
     }),
   };
 
+  // Una fila por spec del catálogo (clase + spec), con la clase adelante: así se
+  // ve de un vistazo qué specs ya tienen emoji y cuáles no.
+  const specsGroup: MappingGroup = {
+    key: "spec",
+    label: "Specs de clases (WoW)",
+    rows: specs.map((spec) => {
+      const key = specMappingKey(spec.className, spec.specName);
+      const mapping = mappings.get(key);
+      return {
+        // El catálogo ya viene con el mapeo aplicado (ver listRaidSpecs): el
+        // respaldo muestra el emoji que la spec tenga cargado.
+        emoji:
+          mapping?.emoji ??
+          (spec.emojiId
+            ? {
+                animated: spec.animated,
+                emojiId: spec.emojiId,
+                emojiName: spec.emojiName,
+              }
+            : spec.emojiUnicode
+              ? { unicode: spec.emojiUnicode }
+              : undefined),
+        key,
+        label: `${spec.className} · ${spec.specName}`,
+        roleId: mapping?.roleId,
+      };
+    }),
+  };
+
   return [
     roster,
     eventRoleMappingGroup(mappings, "wow"),
     classesGroup,
+    specsGroup,
     eventRoleMappingGroup(mappings, "lol"),
   ].filter((group): group is MappingGroup => group !== null);
 }
@@ -5648,6 +5680,7 @@ export function buildApp() {
         mappings,
         classes,
         resolveClassEmojisWithFallback(mappings, specs),
+        specs,
       ),
     };
   });

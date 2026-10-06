@@ -14,7 +14,6 @@ export type RaidRole = "dps" | "healer" | "tank";
 export type RaidConsumableKey =
   | "flask"
   | "food"
-  | "runes"
   | "potions"
   | "prepot"
   | "healthstones"
@@ -429,8 +428,8 @@ function castConsumableCategory(
   return normalized.includes("potion") ? "potions" : undefined;
 }
 
-// Flask/comida/runa se leen de las auras activas al empezar el pull, así que
-// no hace falta castear nada: alcanza con el nombre del aura.
+// Flask y comida se leen de las auras activas al empezar el pull, así que no
+// hace falta castear nada: alcanza con el nombre del aura.
 function auraConsumableCategory(
   name: string,
 ): RaidConsumableKey | undefined {
@@ -440,12 +439,6 @@ function auraConsumableCategory(
   }
   if (normalized.includes("well fed")) {
     return "food";
-  }
-  if (
-    normalized.includes("augment rune") ||
-    normalized.includes("vantus rune")
-  ) {
-    return "runes";
   }
   return normalized.includes("flask") || normalized.includes("phial")
     ? "flask"
@@ -835,7 +828,7 @@ async function buildRaidLogNightAnalysis(
   }
   const consumableCategories: RaidConsumableKey[] = [];
   if (auraReadable) {
-    consumableCategories.push("flask", "food", "runes");
+    consumableCategories.push("flask", "food");
   }
   if (castCategories.has("potions")) {
     consumableCategories.push("potions", "prepot");

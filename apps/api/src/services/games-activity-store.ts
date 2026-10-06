@@ -15,8 +15,11 @@ const COVERS_TTL_MS = 24 * 60 * 60 * 1000;
 const COVERS_RETRY_MS = 10 * 60 * 1000;
 
 // Herramientas que Discord detecta como "está jugando" y no son juegos (mod
-// managers, launchers, editores). Se filtran al mostrar, no al guardar: la
-// actividad queda en la base y sacarlas de acá las devuelve a la grilla.
+// managers, launchers, editores) y entradas que no se quieren mostrar: la
+// presencia reporta un id viejo del mismo juego sin portada al lado del bueno
+// (SCP: Discord tiene los dos), y dos tarjetas iguales en la grilla confunden.
+// Se filtran al mostrar, no al guardar: la actividad queda en la base y sacarlas
+// de acá las devuelve a la grilla.
 const NON_GAME_APPLICATIONS = new Set([
   "adobe after effects",
   "adobe photoshop",
@@ -30,6 +33,7 @@ const NON_GAME_APPLICATIONS = new Set([
   "medal",
   "obs studio",
   "overwolf",
+  "scp secret laboratory",
   "steam",
   "unity",
   "unreal engine",

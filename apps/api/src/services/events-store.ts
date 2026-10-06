@@ -1,5 +1,6 @@
 import { Prisma, prisma } from "../db/prisma.js";
 import { listTemplateSpecs } from "./event-templates.js";
+import { applySpecMappings, listGuildMappings } from "./mappings-store.js";
 import {
   listRosterProfiles,
   type RosterProfile,
@@ -71,6 +72,10 @@ export type RaidSpec = {
   createdAt: Date;
   emojiId?: string;
   emojiName?: string;
+  // Emoji unicode elegido en el Mapeo del Admin para esta spec, cuando no hay
+  // uno custom de Discord: es el respaldo que muestra la web (Discord necesita
+  // id + nombre). No vive en la base: lo agrega `listRaidSpecs` al leer.
+  emojiUnicode?: string;
   // Juego al que pertenece la fila (wow | lol | ...).
   game: string;
   guildId: string;
@@ -162,13 +167,17 @@ export async function listRaidSpecs(
   });
 
   // Lo que la guild tenga cargado y NO esté en la plantilla se agrega al final.
-  return [
+  const specs = [
     ...fromCode,
     ...stored.filter(
       (spec) =>
         !codeKeys.has(`${spec.game}|${spec.className}|${spec.specName}`),
     ),
   ];
+  // El emoji del Mapeo del Admin manda sobre el del catálogo. Se aplica acá y no
+  // en cada consumidor: todos (el aviso de Discord, el roster, el asistente del
+  // bot y la web) leen el catálogo por esta función.
+  return applySpecMappings(specs, await listGuildMappings(guildId));
 }
 
 export async function createRaidSpec(input: {

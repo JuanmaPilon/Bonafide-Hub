@@ -99,11 +99,18 @@ Registro de mapeos (Admin → Mapeo):
 1. `GET /guilds/:guildId/mappings` (catálogo de entidades + lo ya elegido)
 2. `PUT /guilds/:guildId/mappings` (guarda los vínculos)
 
-El catálogo de entidades lo define el código (rangos del roster, clases del
-catálogo), así que la guild solo elige el rol y/o el emoji de cada una. Se
+El catálogo de entidades lo define el código (rangos del roster, clases y specs
+del catálogo), así que la guild solo elige el rol y/o el emoji de cada una. Se
 guardan en la tabla `guild_mappings` con la clave de la entidad (`roster.raid`,
-`class.Demon Hunter`). El roster lee sus rangos de acá; si todavía no hay nada
-mapeado, cae al `rosterRanks` viejo de la config.
+`class.Demon Hunter`, `spec.Mage.Fire`). El roster lee sus rangos de acá; si
+todavía no hay nada mapeado, cae al `rosterRanks` viejo de la config.
+
+Las specs tienen su propio grupo ("Specs de clases (WoW)", una fila por clase +
+spec del catálogo) para poder cargarles el emoji: la clave `spec.<Clase>.<Spec>`
+**manda sobre** el emoji guardado en el catálogo, y eso se aplica al leer
+(`listRaidSpecs`), así que el mismo emoji vale para el aviso de Discord, el
+roster, el asistente del bot y la web. Un emoji unicode viaja como
+`emojiUnicode` y la web lo usa de respaldo (Discord necesita id + nombre).
 
 Logs de raid (Warcraft Logs):
 
@@ -136,11 +143,13 @@ Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
 una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
 que cruza la medianoche no se parta): una subida en dos partes sale como **un**
 mensaje con los dos links. El estado (`status: new | live | synced | failed`)
-sale del mismo cálculo de estabilidad y es lo que muestra la web: `live` =
-sigue creciendo, `synced` = terminado, `failed` = no se pudo consultar. La web
-además marca **"Actualizando…"** cuando la entrada está publicada pero el
-mensaje quedó viejo (`needsUpdate`, que calcula el API comparando el texto
-guardado con el que generaría ahora).
+sale del mismo cálculo de estabilidad; la web solo muestra `live` ("En vivo",
+la subida sigue en curso), porque publicar o no es cosa de quien lo maneja: la
+acción aparece en la ficha ("Publicar en Discord" / "Actualizar mensaje") según
+el estado, pero el estado en sí no se muestra. La web además marca
+**"Actualizando…"** cuando la entrada está publicada pero el mensaje quedó viejo
+(`needsUpdate`, que calcula el API comparando el texto guardado con el que
+generaría ahora).
 
 Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
 Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
@@ -155,17 +164,19 @@ Devuelve:
    "top DPS" por pull. Si WCL no devuelve roles, se muestran todos.
 2. `deathsByPlayer` / `deathsByAbility` / `encounters` — muertes y detalle por
    pull (todos los roles cuentan acá).
-3. `consumables` — poción, prepot, piedra de brujo, poción de vida, flask,
-   comida y runa. `categories` lista lo que se pudo medir en la noche (y su
+3. `consumables` — poción, prepot, piedra de brujo, poción de vida, flask y
+   comida. `categories` lista lo que se pudo medir en la noche (y su
    orden es el que usa la web); `players[].counts` y `pulls[].used/missing`
    usan esas mismas claves, así que una categoría que no se pudo medir no
    aparece y la web no inventa faltantes. Pociones y piedras se identifican por
    NOMBRE en `tables/casts` (sin ids por expansión) y su uso real sale de
    `events/casts` filtrado por esos ids; la **prepot** es la poción usada en los
-   30 s previos al pull, contada aparte de las de la pelea. Flask, comida y runa
+   30 s previos al pull, contada aparte de las de la pelea. Flask y comida
    salen de las auras de CombatantInfo (activas al empezar el pull): en la v1
    cada aura trae el id, así que cuando no viene el nombre se resuelve con
-   `tables/buffs`.
+   `tables/buffs`. La web muestra esto al revés del conteo: por consumible, la
+   lista de quién **no** lo tenía (con en cuántos pulls faltó), que es lo que se
+   puede accionar, y el detalle por pull.
 4. `attendance` — cruce entre los que aparecen en el log y los anotados al
    evento de raid más cercano (±14 h, `type: raid`). Cuenta "voy" y "tarde"
    como compromiso; bench y tentativo, si vienen, caen en `unsignedPresent`.
@@ -211,7 +222,11 @@ juegos (CurseForge, Steam, OBS, VS Code…): viven en `NON_GAME_APPLICATIONS`
 (`apps/api/src/services/games-activity-store.ts`) y se comparan contra el nombre
 normalizado, porque esas apps no aparecen en `/applications/detectable`. El
 filtro se aplica al mostrar, no al guardar: si sacás un nombre de la lista, su
-actividad histórica vuelve a la grilla.
+actividad histórica vuelve a la grilla. La lista también sirve para las entradas
+que no se quieren mostrar: Discord tiene ids viejos del mismo juego y la
+presencia puede reportar el que no tiene portada ("scp secret laboratory" al
+lado del "SCP: Secret Laboratory" bueno), así que la entrada sin portada se
+descarta para no dejar dos tarjetas del mismo juego.
 
 XP:
 

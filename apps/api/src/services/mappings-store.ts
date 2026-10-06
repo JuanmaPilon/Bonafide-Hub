@@ -18,6 +18,44 @@ export type GuildMapping = {
   roleId?: string;
 };
 
+// Clave de una spec del catálogo: `spec.<Clase>.<Spec>`. La clase va incluida
+// porque el nombre de la spec solo no la identifica ("Holy" es de Priest y de
+// Paladin).
+export function specMappingKey(className: string, specName: string): string {
+  return `spec.${className}.${specName}`;
+}
+
+// Emoji de cada spec con el mapeo del Admin POR ENCIMA del que tenga cargado el
+// catálogo: el registro de mapeos es donde se asignan los emojis, así que su
+// elección manda y el catálogo queda como respaldo de lo ya cargado.
+// `emojiUnicode` viaja para que la web pueda mostrar un emoji unicode cuando no
+// hay uno custom de Discord (el aviso de Discord necesita id + nombre).
+export function applySpecMappings<
+  T extends {
+    animated: boolean;
+    className: string;
+    emojiId?: string;
+    emojiName?: string;
+    emojiUnicode?: string;
+    specName: string;
+  },
+>(specs: T[], mappings: Map<string, GuildMapping>): T[] {
+  return specs.map((spec) => {
+    const emoji = mappings.get(specMappingKey(spec.className, spec.specName))
+      ?.emoji;
+    if (!emoji) {
+      return spec;
+    }
+    return {
+      ...spec,
+      animated: Boolean(emoji.emojiId) && Boolean(emoji.animated),
+      emojiId: emoji.emojiId,
+      emojiName: emoji.emojiName,
+      emojiUnicode: emoji.emojiId ? undefined : emoji.unicode,
+    };
+  });
+}
+
 // Tope defensivo: el catálogo real es mucho más chico.
 const MAX_MAPPINGS = 200;
 

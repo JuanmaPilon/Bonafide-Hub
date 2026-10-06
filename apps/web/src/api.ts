@@ -120,8 +120,7 @@ export type RaidConsumableKey =
   | "healthPotions"
   | "healthstones"
   | "potions"
-  | "prepot"
-  | "runes";
+  | "prepot";
 
 export type RaidLogConsumables = {
   categories: RaidConsumableKey[];
@@ -1846,6 +1845,9 @@ export type RaidSpec = {
   createdAt: string;
   emojiId?: string;
   emojiName?: string;
+  // Emoji unicode elegido en el Mapeo del Admin, cuando no hay uno custom de
+  // Discord: se usa como respaldo en lugar del emoji de la clase.
+  emojiUnicode?: string;
   // Juego al que pertenece la fila (wow | lol | …).
   game: string;
   guildId: string;

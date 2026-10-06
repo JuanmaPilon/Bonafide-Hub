@@ -6,9 +6,8 @@ import {
   type RaidLogAnalysis,
 } from "./api";
 
-type Fight = { kill: boolean; name: string; percent?: number };
+type Fight = { kill: boolean; name: string };
 type NightState = "draft" | "failed" | "pending" | "posted";
-type Filter = "all" | "draft" | "live" | "posted";
 
 type Night = {
   date: Date | null;
@@ -21,20 +20,6 @@ type Night = {
   parts: RaidLog[];
   state: NightState;
   title: string;
-};
-
-const STATE_LABEL: Record<NightState, string> = {
-  draft: "Sin publicar",
-  failed: "Sin datos",
-  pending: "Por actualizar",
-  posted: "Publicado",
-};
-
-const STATE_BADGE: Record<NightState, string> = {
-  draft: "",
-  failed: "raid-log-failed",
-  pending: "raid-log-pending",
-  posted: "raid-log-synced",
 };
 
 const SIGNUP_STATUS_LABEL: Record<string, string> = {
@@ -53,7 +38,6 @@ const CONSUMABLE_LABEL: Record<RaidConsumableKey, string> = {
   healthstones: "Piedra",
   potions: "Pota",
   prepot: "Prepot",
-  runes: "Runa",
 };
 
 function toNights(logs: RaidLog[]): Night[] {
@@ -93,7 +77,6 @@ function toNights(logs: RaidLog[]): Night[] {
         (part.summary?.fights ?? []).map((fight) => ({
           kill: Boolean(fight.kill),
           name: fight.name ?? "Fight",
-          percent: fight.fightPercentage,
         })),
       ),
       key,
@@ -126,23 +109,18 @@ function monthOf(date: Date | null): { key: string; label: string } {
   };
 }
 
-function percentLabel(value: number): string {
-  return `${Math.round(value * 10) / 10}%`;
-}
-
 function compactNumber(value: number): string {
   return Math.round(value).toLocaleString("es-AR");
 }
 
 function bossBreakdown(fights: Fight[]): Array<{
-  best?: number;
   kills: number;
   name: string;
   pulls: number;
 }> {
   const bosses = new Map<
     string,
-    { best?: number; kills: number; name: string; pulls: number }
+    { kills: number; name: string; pulls: number }
   >();
   for (const fight of fights) {
     const boss = bosses.get(fight.name) ?? {
@@ -153,11 +131,6 @@ function bossBreakdown(fights: Fight[]): Array<{
     boss.pulls += 1;
     if (fight.kill) {
       boss.kills += 1;
-    } else if (fight.percent !== undefined) {
-      boss.best =
-        boss.best === undefined
-          ? fight.percent
-          : Math.min(boss.best, fight.percent);
     }
     bosses.set(fight.name, boss);
   }
@@ -209,7 +182,6 @@ export function RaidLogsBoard({
   scanning?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [showManage, setShowManage] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -233,42 +205,18 @@ export function RaidLogsBoard({
     [logs],
   );
 
-  const counts = useMemo(
-    () => ({
-      all: nights.length,
-      draft: nights.filter((night) => night.state === "draft").length,
-      live: nights.filter((night) => night.live).length,
-      posted: nights.filter(
-        (night) => night.state === "posted" || night.state === "pending",
-      ).length,
-    }),
-    [nights],
-  );
   const totalKills = nights.reduce((total, night) => total + night.kills, 0);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return nights.filter((night) => {
-      if (filter === "draft" && night.state !== "draft") {
-        return false;
-      }
-      if (
-        filter === "posted" &&
-        night.state !== "posted" &&
-        night.state !== "pending"
-      ) {
-        return false;
-      }
-      if (filter === "live" && !night.live) {
-        return false;
-      }
       if (!needle) {
         return true;
       }
       const when = night.date?.toLocaleDateString("es-AR") ?? "";
       return `${night.title} ${when}`.toLowerCase().includes(needle);
     });
-  }, [filter, nights, search]);
+  }, [nights, search]);
 
   const months = useMemo(() => {
     const groups: Array<{ key: string; label: string; nights: Night[] }> = [];
@@ -373,34 +321,17 @@ export function RaidLogsBoard({
     }
   };
 
-  const chips: Array<{ count: number; key: Filter; label: string }> = [
-    { count: counts.all, key: "all", label: "Todos" },
-    { count: counts.draft, key: "draft", label: "Sin publicar" },
-    { count: counts.posted, key: "posted", label: "Publicados" },
-  ];
-  if (counts.live > 0) {
-    chips.push({ count: counts.live, key: "live", label: "En vivo" });
-  }
-
   return (
     <div className="rlb">
       <div className="rlb-top">
         <div className="rlb-stats">
           <div className="rlb-stat">
-            <strong>{counts.all}</strong>
+            <strong>{nights.length}</strong>
             <span>Noches</span>
           </div>
           <div className="rlb-stat">
             <strong>{totalKills}</strong>
             <span>Kills</span>
-          </div>
-          <div className="rlb-stat">
-            <strong>{counts.posted}</strong>
-            <span>Publicadas</span>
-          </div>
-          <div className={`rlb-stat${counts.draft > 0 ? " accent" : ""}`}>
-            <strong>{counts.draft}</strong>
-            <span>Sin publicar</span>
           </div>
         </div>
         {onScan || manage ? (
@@ -445,20 +376,6 @@ export function RaidLogsBoard({
               type="search"
               value={search}
             />
-            <div className="rlb-chips">
-              {chips.map((chip) => (
-                <button
-                  aria-pressed={filter === chip.key}
-                  className={`rlb-chip${filter === chip.key ? " active" : ""}`}
-                  key={chip.key}
-                  onClick={() => setFilter(chip.key)}
-                  type="button"
-                >
-                  {chip.label}
-                  <b>{chip.count}</b>
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="rlb-layout">
@@ -497,10 +414,6 @@ export function RaidLogsBoard({
                           <FightStrip fights={night.fights} />
                         </span>
                         <span className="rlb-row-side">
-                          <span
-                            className={`rlb-dot ${night.state}`}
-                            title={STATE_LABEL[night.state]}
-                          />
                           <span>💀 {night.kills}</span>
                         </span>
                       </button>
@@ -535,11 +448,6 @@ export function RaidLogsBoard({
                         ● En vivo
                       </span>
                     ) : null}
-                    <span
-                      className={`raid-log-badge ${STATE_BADGE[selected.state]}`}
-                    >
-                      {STATE_LABEL[selected.state]}
-                    </span>
                   </div>
                 </div>
 
@@ -588,11 +496,7 @@ export function RaidLogsBoard({
                           <span
                             className={`rlb-boss-result ${boss.kills > 0 ? "kill" : "wipe"}`}
                           >
-                            {boss.kills > 0
-                              ? "Kill"
-                              : boss.best !== undefined
-                                ? `Mejor avance ${percentLabel(boss.best)}`
-                                : "Wipe"}
+                            {boss.kills > 0 ? "Kill" : "Wipe"}
                           </span>
                         </div>
                       ))}
@@ -832,59 +736,54 @@ export function RaidLogsBoard({
                             {consumables ? (
                               <div className="rlb-analysis-grid">
                                 <div className="rlb-analysis-section">
-                                  <h5>Consumibles por jugador</h5>
-                                  <div className="rlb-consumables">
-                                    {consumables.players.map(
-                                      (player) => (
-                                        <div
-                                          className="rlb-consumable-row"
-                                          key={player.name}
-                                        >
-                                          <span className="rlb-analysis-player-name">
-                                            {classColor(player.class) ? (
-                                              <i
-                                                aria-label={player.class}
-                                                className="rlb-class-dot"
-                                                style={{
-                                                  backgroundColor: classColor(
-                                                    player.class,
-                                                  ),
-                                                }}
-                                              />
-                                            ) : null}
-                                            {player.name}
+                                  <h5>Sin consumibles</h5>
+                                  {/* Al revés que antes: en vez del conteo de
+                                      cada uno, la lista de quién faltó. Es lo
+                                      que se puede accionar (hablar con esa
+                                      persona), y la clase no hace falta acá. */}
+                                  <div className="rlb-consumable-pulls">
+                                    {consumables.categories.map((category) => {
+                                      const missing = consumables.players
+                                        .map((player) => ({
+                                          absent:
+                                            player.pulls -
+                                            (player.counts[category] ?? 0),
+                                          name: player.name,
+                                          pulls: player.pulls,
+                                        }))
+                                        .filter((entry) => entry.absent > 0)
+                                        .sort(
+                                          (left, right) =>
+                                            right.absent - left.absent ||
+                                            left.name.localeCompare(right.name),
+                                        );
+                                      return (
+                                        <p key={category}>
+                                          <span className="rlb-label">
+                                            Sin{" "}
+                                            {CONSUMABLE_LABEL[
+                                              category
+                                            ].toLowerCase()}{" "}
+                                            ({missing.length})
                                           </span>
-                                          <span className="rlb-consumable-counts">
-                                            {consumables.categories.map(
-                                              (category) => {
-                                                const used =
-                                                  player.counts[category] ?? 0;
-                                                return (
-                                                  <span
-                                                    className={`rlb-consumable-count${
-                                                      used >= player.pulls &&
-                                                      player.pulls > 0
-                                                        ? " full"
-                                                        : used === 0
-                                                          ? " empty"
-                                                          : ""
-                                                    }`}
-                                                    key={category}
-                                                  >
-                                                    {
-                                                      CONSUMABLE_LABEL[
-                                                        category
-                                                      ]
-                                                    }{" "}
-                                                    {used}/{player.pulls}
-                                                  </span>
-                                                );
-                                              },
-                                            )}
-                                          </span>
-                                        </div>
-                                      ),
-                                    )}
+                                          {missing.map((entry) => (
+                                            <span
+                                              className="rlb-missing-name"
+                                              key={entry.name}
+                                              title={`Faltó en ${entry.absent} de ${entry.pulls} pulls`}
+                                            >
+                                              {entry.name}{" "}
+                                              <b>
+                                                {entry.absent}/{entry.pulls}
+                                              </b>
+                                            </span>
+                                          ))}
+                                          {missing.length === 0
+                                            ? "Todos usaron."
+                                            : null}
+                                        </p>
+                                      );
+                                    })}
                                   </div>
                                 </div>
 

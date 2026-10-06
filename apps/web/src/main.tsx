@@ -2105,7 +2105,7 @@ function RosterSheet({
                     <DiscordEmojiImage
                       animated={spec.animated}
                       emojiId={spec.emojiId}
-                      fallback={classEmoji(spec.className)}
+                      fallback={spec.emojiUnicode ?? classEmoji(spec.className)}
                       name={spec.specName}
                       size={16}
                     />
@@ -3801,6 +3801,7 @@ function EventCard({
           <DiscordEmojiImage
             animated={specRow?.animated}
             emojiId={specRow?.emojiId}
+            fallback={specRow?.emojiUnicode}
             name={specRow?.specName}
           />
           <button
@@ -4256,6 +4257,7 @@ function EventCard({
                                         <DiscordEmojiImage
                                           animated={row.animated}
                                           emojiId={row.emojiId}
+                                          fallback={row.emojiUnicode}
                                           name={row.specName}
                                           size={24}
                                         />
@@ -4273,7 +4275,10 @@ function EventCard({
                             <DiscordEmojiImage
                               animated={currentSpecRow?.animated}
                               emojiId={currentSpecRow?.emojiId}
-                              fallback={classEmoji(wowClass)}
+                              fallback={
+                                currentSpecRow?.emojiUnicode ??
+                                classEmoji(wowClass)
+                              }
                               name={currentSpecRow?.specName}
                             />
                             <span>
@@ -4525,6 +4530,7 @@ function EventCard({
                                 <DiscordEmojiImage
                                   animated={row.animated}
                                   emojiId={row.emojiId}
+                                  fallback={row.emojiUnicode}
                                   name={row.specName}
                                   size={24}
                                 />

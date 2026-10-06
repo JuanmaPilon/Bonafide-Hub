@@ -1472,31 +1472,10 @@ a:hover {
   white-space: nowrap;
 }
 
-.raid-log-synced {
-  color: #7ce38b;
-  border-color: rgba(124, 227, 139, 0.35);
-  background: rgba(124, 227, 139, 0.08);
-}
-
 .raid-log-live {
   color: #ffb454;
   border-color: rgba(255, 180, 84, 0.4);
   background: rgba(255, 180, 84, 0.1);
-}
-
-.raid-log-failed {
-  color: #ff8a8a;
-  border-color: rgba(255, 138, 138, 0.35);
-  background: rgba(255, 138, 138, 0.08);
-}
-
-/* Publicado pero el mensaje quedó viejo: el API lo corrige solo.
-   Va DESPUÉS de synced/live/failed para ganarle en la cascada (misma
-   especificidad: dos clases sueltas). */
-.raid-log-pending {
-  color: #6aa8ff;
-  border-color: rgba(106, 168, 255, 0.4);
-  background: rgba(106, 168, 255, 0.1);
 }
 
 .raid-log-meta {
@@ -1627,7 +1606,7 @@ a:hover {
 .rlb-stats {
   display: grid;
   flex: 1 1 420px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1648,14 +1627,6 @@ a:hover {
 .rlb-stat span {
   color: var(--muted);
   font-size: 0.78rem;
-}
-
-.rlb-stat.accent {
-  border-color: rgba(255, 180, 84, 0.5);
-}
-
-.rlb-stat.accent strong {
-  color: #ffb454;
 }
 
 .rlb-actions {
@@ -1684,41 +1655,6 @@ a:hover {
 .rlb-search {
   flex: 1 1 240px;
   max-width: 380px;
-}
-
-.rlb-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.rlb-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 0.86rem;
-  cursor: pointer;
-}
-
-.rlb-chip b {
-  font-size: 0.78rem;
-  opacity: 0.8;
-}
-
-.rlb-chip:hover {
-  color: var(--text);
-}
-
-.rlb-chip.active {
-  border-color: var(--accent);
-  background: rgba(106, 168, 255, 0.14);
-  color: var(--text);
 }
 
 .rlb-layout {
@@ -1816,29 +1752,6 @@ a:hover {
   gap: 5px;
   color: var(--muted);
   font-size: 0.78rem;
-}
-
-.rlb-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: rgba(148, 172, 228, 0.5);
-}
-
-.rlb-dot.posted {
-  background: #35e06b;
-}
-
-.rlb-dot.pending {
-  background: #6aa8ff;
-}
-
-.rlb-dot.draft {
-  background: #ffb454;
-}
-
-.rlb-dot.failed {
-  background: #ff6a6a;
 }
 
 .rlb-none {
@@ -2317,54 +2230,28 @@ a:hover {
   color: #ff8a8a;
 }
 
-.rlb-consumables {
-  display: grid;
-  gap: 2px;
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.rlb-consumable-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(134, 158, 214, 0.1);
-  font-size: 0.82rem;
-}
-
-.rlb-consumable-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.rlb-consumable-count {
-  padding: 3px 7px;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 0.74rem;
-  white-space: nowrap;
-}
-
-.rlb-consumable-count.full {
-  border-color: rgba(53, 224, 107, 0.35);
-  color: #35e06b;
-}
-
-.rlb-consumable-count.empty {
-  border-color: rgba(255, 138, 138, 0.35);
-  color: #ff8a8a;
-}
-
 .rlb-consumable-pulls {
   display: grid;
   gap: 6px;
   max-height: 320px;
   overflow-y: auto;
+}
+
+/* Cada persona que no usó ese consumible: "Roco 5/7" = faltó en 5 de 7 pulls.
+   Píldoras grises, sin color: acá no hay nada que destacar en verde. */
+.rlb-consumable-pulls .rlb-missing-name {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 2px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.rlb-consumable-pulls .rlb-missing-name b {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .rlb-consumable-pull {
@@ -2393,6 +2280,19 @@ a:hover {
   margin: 0 0 8px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+/* El bloque de "Sin <consumible>" de la noche usa el mismo formato que el de
+   cada pull: la etiqueta arriba y los nombres abajo. */
+.rlb-consumable-pulls > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.rlb-consumable-pulls > p .rlb-label {
+  display: block;
+  margin-bottom: 2px;
 }
 
 .rlb-consumable-pull .rlb-label {
@@ -8916,30 +8816,12 @@ select.list-order {
   background: var(--surface-card);
 }
 
-/* Estados del log de raid: sobre fondo claro los tonos neón no se leen, así
-   que cada estado usa su versión oscura (mismo criterio que los tier-*-text). */
-:root[data-theme="light"] .raid-log-synced {
-  color: #1f7a35;
-  border-color: rgba(31, 122, 53, 0.35);
-  background: rgba(31, 122, 53, 0.08);
-}
-
+/* Estado del log de raid: sobre fondo claro los tonos neón no se leen, así que
+   usa su versión oscura (mismo criterio que los tier-*-text). */
 :root[data-theme="light"] .raid-log-live {
   color: #a35b00;
   border-color: rgba(163, 91, 0, 0.35);
   background: rgba(163, 91, 0, 0.08);
-}
-
-:root[data-theme="light"] .raid-log-failed {
-  color: #b3261e;
-  border-color: rgba(179, 38, 30, 0.3);
-  background: rgba(179, 38, 30, 0.07);
-}
-
-:root[data-theme="light"] .raid-log-pending {
-  color: #2258a8;
-  border-color: rgba(34, 88, 168, 0.3);
-  background: rgba(34, 88, 168, 0.08);
 }
 
 /* El chip del rol con color mantiene su tinte en tema claro: la regla de
