@@ -637,6 +637,11 @@ export function buildEventAnnouncementEmbeds(input: {
           (input.startsAt.getTime() + input.durationMinutes * 60_000) / 1000,
         )
       : undefined;
+  // Cuánto dura, en horas: va al lado de la hora de fin ("Termina 00:00 (3 hs)").
+  const durationHours =
+    input.durationMinutes && input.durationMinutes > 0
+      ? formatDurationHours(input.durationMinutes)
+      : undefined;
   if (input.location) {
     whenLines.push(`📍 ${input.location}`);
   }
@@ -692,12 +697,10 @@ export function buildEventAnnouncementEmbeds(input: {
   fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
   fields.push({
     inline: true,
-    name: "⏱️ Duración",
+    name: "🏁 Termina",
     value:
-      input.durationMinutes && input.durationMinutes > 0
-        ? `${formatDurationHours(input.durationMinutes)}${
-            endTimestamp ? `\n(termina <t:${endTimestamp}:t>)` : ""
-          }`
+      endTimestamp && durationHours
+        ? `<t:${endTimestamp}:t> (${durationHours})`
         : "—",
   });
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda

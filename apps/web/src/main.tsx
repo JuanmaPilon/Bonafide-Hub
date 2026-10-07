@@ -3695,6 +3695,10 @@ function EventCard({
         new Date(event.startsAt).getTime() + event.durationMinutes * 60_000,
       )
     : undefined;
+  // Cuánto dura, en horas: va al lado de la hora de fin ("Termina 00:00 (3 hs)").
+  const durationHours = event.durationMinutes
+    ? `${hoursFromMinutes(event.durationMinutes)} hs`
+    : undefined;
 
   // Clases presentes en el rol que se está explorando (con sus specs).
   const catalogClasses = useMemo(() => {
@@ -3937,10 +3941,10 @@ function EventCard({
               </span>
             </div>
             <div className="event-info-item">
-              <span className="event-info-label">⏱️ Duración</span>
+              <span className="event-info-label">🏁 Termina</span>
               <span className="event-info-value">
-                {event.durationMinutes
-                  ? `${hoursFromMinutes(event.durationMinutes)} hs${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
+                {endAt && durationHours
+                  ? `${formatDateTime24(endAt)} (${durationHours})`
                   : "—"}
               </span>
             </div>{" "}
