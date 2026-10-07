@@ -16,12 +16,14 @@ import {
   describeAuditChanges,
   describeListDelta,
   formatAuditMoment,
+  formatAuditValue,
   orEmpty,
   snippetText,
   type AuditChange,
 } from "./audit-change.js";
 import type { Communication } from "./communications-store.js";
 import type { DailyMessage } from "./daily-messages-store.js";
+import { formatDurationHours } from "./duration.js";
 import type { AdminRoleRule, GuildConfig } from "./guild-config-store.js";
 import type { HubEvent } from "./events-store.js";
 import type {
@@ -551,7 +553,13 @@ export function describeEventChanges(
     {
       after: next.durationMinutes,
       before: previous?.durationMinutes,
-      label: "duración (min)",
+      // En horas, como se carga y se muestra en el panel (la base guarda
+      // minutos). Un valor vacío se muestra como "(vacío)", igual que el resto.
+      format: (value) =>
+        value === null || value === undefined || value === ""
+          ? formatAuditValue(value)
+          : formatDurationHours(Number(value)),
+      label: "duración (hs)",
     },
     {
       after: next.pollHours,

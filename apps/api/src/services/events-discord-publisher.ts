@@ -1,4 +1,5 @@
 import { env } from "../config/env.js";
+import { formatDurationHours } from "./duration.js";
 import type { EventTag } from "./events-store.js";
 
 // ── Publicación de eventos del Módulo X en Discord ──────────────────
@@ -692,9 +693,12 @@ export function buildEventAnnouncementEmbeds(input: {
   fields.push({
     inline: true,
     name: "⏱️ Duración",
-    value: endTimestamp
-      ? `${input.durationMinutes} min\n(termina <t:${endTimestamp}:t>)`
-      : "—",
+    value:
+      input.durationMinutes && input.durationMinutes > 0
+        ? `${formatDurationHours(input.durationMinutes)}${
+            endTimestamp ? `\n(termina <t:${endTimestamp}:t>)` : ""
+          }`
+        : "—",
   });
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda
   // para la fecha concreta del evento.

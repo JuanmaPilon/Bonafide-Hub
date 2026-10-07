@@ -306,6 +306,15 @@ alguien de "faltan anotarse") sobre el roster esperado — después **empieza** 
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que
 van).
 
+**Duración en horas:** el evento se **carga y se muestra en horas** (formulario,
+tarjeta del hub, aviso de Discord y registro de auditoría), pero el API y la base
+siguen guardando **minutos** (`durationMinutes`): es lo que usa Discord para
+calcular el final y lo que ya estaba guardado, así que no hay migración. La
+conversión vive en `apps/web/src/duration.ts` (cargar) y
+`apps/api/src/services/duration.ts` (mostrar); admite decimales para los casos
+que necesitan minutos (0.25 = 15 min). Ojo: como la base guarda minutos enteros,
+0.21 hs (12.6 min) se guarda como 13 min y al reabrir se ve 0.22.
+
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`

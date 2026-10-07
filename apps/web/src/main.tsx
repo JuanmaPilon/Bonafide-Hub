@@ -12,6 +12,7 @@ import {
 import { createRoot } from "react-dom/client";
 import { RaidLogsBoard } from "./RaidLogsBoard";
 import { copyToClipboard } from "./clipboard";
+import { hoursFromMinutes, minutesFromHours } from "./duration";
 import { createMarquee } from "./marquee";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -3939,7 +3940,7 @@ function EventCard({
               <span className="event-info-label">⏱️ Duración</span>
               <span className="event-info-value">
                 {event.durationMinutes
-                  ? `${event.durationMinutes} min${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
+                  ? `${hoursFromMinutes(event.durationMinutes)} hs${endAt ? ` (termina ${formatTime24(endAt)})` : ""}`
                   : "—"}
               </span>
             </div>{" "}
@@ -6275,7 +6276,9 @@ function App() {
       voiceChannelId: string;
     };
     discordCleanupOnComplete: boolean;
-    durationMinutes: string;
+    // Duración del evento en HORAS (el API guarda minutos: ver minutesFromHours).
+    // Admite decimales para los casos raros que necesitan minutos (0.25 = 15 min).
+    durationHours: string;
     // Juego del evento (clave de la lista de juegos).
     game: string;
     imageUrl: string;
@@ -6298,7 +6301,7 @@ function App() {
     characterEnabled: true,
     discord: defaultEventDiscord(),
     discordCleanupOnComplete: false,
-    durationMinutes: "",
+    durationHours: "",
     game: "",
     imageUrl: "",
     paused: false,
@@ -7592,7 +7595,7 @@ function App() {
       characterEnabled: true,
       discord: defaultEventDiscord(),
       discordCleanupOnComplete: false,
-      durationMinutes: "",
+      durationHours: "",
       // Arranca con el primer juego disponible (normalmente WoW).
       game: eventGames[0]?.key ?? "",
       imageUrl: "",
@@ -7631,8 +7634,10 @@ function App() {
         voiceChannelId: event.voiceChannelId ?? "",
       },
       discordCleanupOnComplete: event.discordCleanupOnComplete ?? false,
-      durationMinutes:
-        event.durationMinutes != null ? String(event.durationMinutes) : "",
+      durationHours:
+        event.durationMinutes != null
+          ? hoursFromMinutes(event.durationMinutes)
+          : "",
       game: event.game ?? "",
       imageUrl: event.imageUrl ?? "",
       paused: event.paused ?? false,
@@ -7683,8 +7688,10 @@ function App() {
         voiceChannelId: event.voiceChannelId ?? "",
       },
       discordCleanupOnComplete: event.discordCleanupOnComplete ?? false,
-      durationMinutes:
-        event.durationMinutes != null ? String(event.durationMinutes) : "",
+      durationHours:
+        event.durationMinutes != null
+          ? hoursFromMinutes(event.durationMinutes)
+          : "",
       game: event.game ?? "",
       imageUrl: event.imageUrl ?? "",
       // La copia no hereda pausa ni recurrencia (evita dos series andando).
@@ -7812,9 +7819,7 @@ function App() {
         const result = await updateEvent(selectedGuildId, editingEventId, {
           characterEnabled: eventForm.characterEnabled,
           discord: discordPayload,
-          durationMinutes: eventForm.durationMinutes
-            ? Number(eventForm.durationMinutes)
-            : null,
+          durationMinutes: minutesFromHours(eventForm.durationHours) ?? null,
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
           imageUrl: eventForm.imageUrl || undefined,
@@ -7858,9 +7863,7 @@ function App() {
         const result = await createEvent(selectedGuildId, {
           characterEnabled: eventForm.characterEnabled,
           discord: discordPayload,
-          durationMinutes: eventForm.durationMinutes
-            ? Number(eventForm.durationMinutes)
-            : undefined,
+          durationMinutes: minutesFromHours(eventForm.durationHours),
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
           imageUrl: eventForm.imageUrl || undefined,
@@ -12662,16 +12665,18 @@ function App() {
                             />
                           </div>
                           <label>
-                            <span>Duración (minutos)</span>
+                            <span>Duración (horas)</span>
                             <input
                               className="input"
                               type="number"
                               min="0"
-                              value={eventForm.durationMinutes}
+                              step="any"
+                              placeholder="3"
+                              value={eventForm.durationHours}
                               onChange={(event) =>
                                 setEventForm((current) => ({
                                   ...current,
-                                  durationMinutes: event.target.value,
+                                  durationHours: event.target.value,
                                 }))
                               }
                             />
