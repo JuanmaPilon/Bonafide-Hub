@@ -2124,18 +2124,20 @@ function validateDiscordOptions(options: EventDiscordOptions): string | null {
   return null;
 }
 
-// Cuántos miembros tienen el rol mínimo del evento (roster esperado). Sin rol
-// mínimo no hay número: devuelve undefined. La lectura de miembros va cacheada
-// (4 min), así refrescar varios avisos seguidos no castiga a Discord. El bench
-// del roster entra en la cuenta en los eventos de WoW (ver ROSTER_GAME).
-async function expectedCountFor(
+// Cobertura del roster de un evento: cuántos miembros lo forman (rol mínimo +
+// bench del roster) y cuántos ya RESPONDIERON, sin importar el estado (bench,
+// tarde o incluso "no asisto": haber contestado es lo que saca a alguien de la
+// lista de "faltan anotarse"). Es lo que el aviso muestra como "Roster 20/24".
+// Sin rol mínimo no hay número: devuelve undefined. La lectura de miembros va
+// cacheada (4 min), así refrescar varios avisos seguidos no castiga a Discord.
+async function rosterCoverageFor(
   guildId: string,
   event: {
     game?: string;
     requiredRoleId?: string;
     signups?: Array<{ userId?: string }>;
   },
-): Promise<number | undefined> {
+): Promise<{ expectedCount: number; signedCount: number } | undefined> {
   if (!event.requiredRoleId) {
     return undefined;
   }
@@ -2143,8 +2145,18 @@ async function expectedCountFor(
     fetchAllGuildMembers(guildId).catch(() => []),
     benchRoleIdFor(guildId),
   ]);
-  return expectedRoster(members, event, benchRoleForGame(event.game, benchRoleId))
-    ?.expectedCount;
+  const roster = expectedRoster(
+    members,
+    event,
+    benchRoleForGame(event.game, benchRoleId),
+  );
+  if (!roster) {
+    return undefined;
+  }
+  return {
+    expectedCount: roster.expectedCount,
+    signedCount: roster.expectedCount - roster.missing.length,
+  };
 }
 
 // Sincroniza el evento hacia Discord y persiste los ids resultantes.
@@ -2186,6 +2198,8 @@ async function syncAndStoreEventDiscord(input: {
   const { discordOpts, event } = input;
   const specs = await listRaidSpecs(event.guildId, event.game);
   const eventConfig = await getGuildConfig(event.guildId);
+  // Cobertura del roster: cuántos son y cuántos ya respondieron.
+  const coverage = await rosterCoverageFor(event.guildId, event);
   // Plantilla de encuesta: además del aviso, se publica el poll nativo.
   const poll = findEventTemplate(event.game)?.poll === true;
   const result = await syncEventToDiscord({
@@ -2194,7 +2208,8 @@ async function syncAndStoreEventDiscord(input: {
     description: event.description,
     durationMinutes: event.durationMinutes,
     eventId: event.id,
-    expectedCount: await expectedCountFor(event.guildId, event),
+    expectedCount: coverage?.expectedCount,
+    rosterSignedCount: coverage?.signedCount,
     existing: input.existing,
     guildIconUrl: await fetchGuildIconUrl(event.guildId),
     guildId: event.guildId,
@@ -2276,6 +2291,7 @@ async function refreshEventAnnouncement(
     }
     const specs = await listRaidSpecs(guildId, event.game);
     const eventConfig = await getGuildConfig(guildId);
+    const coverage = await rosterCoverageFor(guildId, event);
     const embeds = buildEventAnnouncementEmbeds({
       characterEnabled: event.characterEnabled !== false,
       classLabel: eventConfig.eventClassLabel,
@@ -2283,7 +2299,8 @@ async function refreshEventAnnouncement(
       discordEventId: event.discordEventId,
       durationMinutes: event.durationMinutes,
       eventId: event.id,
-      expectedCount: await expectedCountFor(guildId, event),
+      expectedCount: coverage?.expectedCount,
+      rosterSignedCount: coverage?.signedCount,
       guildIconUrl: await fetchGuildIconUrl(guildId),
       guildId,
       gameLabel: resolveGameLabel(eventConfig, event.game),

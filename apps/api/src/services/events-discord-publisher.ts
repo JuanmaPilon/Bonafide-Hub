@@ -582,9 +582,11 @@ export function buildEventAnnouncementEmbeds(input: {
   imageUrl?: string;
   location?: string;
   paused?: boolean;
-  // Cuántos miembros tienen el rol mínimo (roster esperado). Con esto el aviso
-  // muestra el control "confirmados / esperados".
+  // Cuántos miembros forman el roster esperado del evento (rol mínimo + bench
+  // del roster). Es el denominador del "Roster X/Y" del aviso.
   expectedCount?: number;
+  // Cuántos de esos ya respondieron (cualquier estado, bench incluido).
+  rosterSignedCount?: number;
   // Rol de Bench del roster: el aviso también lo menciona (el bench es parte
   // del roster y tiene que enterarse).
   benchRoleId?: string;
@@ -646,56 +648,63 @@ export function buildEventAnnouncementEmbeds(input: {
   // Igual que en la web: los que marcaron "no asisto" también se listan.
   const absent = input.signups.filter((signup) => signup.status === "no");
   const possibles = bench.length + late.length;
-  // Control del roster: cuántos de los que TIENEN el rol mínimo ya están
-  // confirmados. Es el mismo universo que el informe de asistencia.
+  // Roster esperado del evento (rol mínimo + bench del roster).
   const expected = input.expectedCount ?? 0;
+  // Asistencia: confirmados y, entre paréntesis, los posibles (bench + tarde).
+  // Los dos números van en el TÍTULO del field: así se leen de un vistazo sin
+  // abrir el detalle.
   const assistanceValue =
     input.signups.length === 0
-      ? expected > 0
-        ? `Sin anotados todavía\n🎯 **0/${expected}** del roster`
-        : "Sin anotados todavía"
+      ? "Sin anotados todavía"
       : [
-          `**${confirmed.length}** confirmados${
-            possibles > 0 ? ` (+${possibles})` : ""
-          }`,
-          [
-            `✅ ${confirmed.length}`,
-            `🪑 ${bench.length}`,
-            `⏰ ${late.length}`,
-            `❌ ${absent.length}`,
-          ].join(" · "),
-          ...(expected > 0
-            ? [`🎯 **${confirmed.length}/${expected}** del roster`]
-            : []),
-        ].join("\n");
+          `✅ ${confirmed.length}`,
+          `🪑 ${bench.length}`,
+          `⏰ ${late.length}`,
+          `❌ ${absent.length}`,
+        ].join(" · ");
 
   const fields: Array<{ inline?: boolean; name: string; value: string }> = [];
-  // Datos del evento: uno por línea (vertical), así se leen cómodos.
-  fields.push({ name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
+  // Datos del evento de a DOS columnas por fila, igual que el roster por roles
+  // (Discord empaqueta los fields inline de a tres, así que el par se cierra con
+  // un espacio). El roster va PRIMERO: es lo que el staff mira para saber si
+  // falta gente, y su número cuenta a TODOS los que respondieron, estén en bench
+  // o no (no solo a los que van).
+  const requiredRoleId = input.requiredRoleId?.trim();
+  if (requiredRoleId) {
+    fields.push({
+      inline: true,
+      name:
+        expected > 0
+          ? `👥 Roster ${input.rosterSignedCount ?? 0}/${expected}`
+          : "👥 Roster",
+      value: `Requiere <@&${requiredRoleId}>\n*Sin el rol, la inscripción queda como Bench.*`,
+    });
+  }
   fields.push({
-    name: "⏱️ Duración",
-    value: endTimestamp
-      ? `${input.durationMinutes} min\n(termina <t:${endTimestamp}:t>)`
-      : "—",
-  });
-  fields.push({
+    inline: true,
     name: "⏳ Cierre de inscripciones",
     value: input.signupDeadline
       ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
       : "—",
   });
+  pushSpacer(fields);
+  fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
+  fields.push({
+    inline: true,
+    name: "⏱️ Duración",
+    value: endTimestamp
+      ? `${input.durationMinutes} min\n(termina <t:${endTimestamp}:t>)`
+      : "—",
+  });
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda
   // para la fecha concreta del evento.
-  // Requisito de rol: caja aparte (bien visible) + el mensaje menciona al rol
-  // para que notifique a todos los que lo tienen.
-  const requiredRoleId = input.requiredRoleId?.trim();
-  if (requiredRoleId) {
-    fields.push({
-      name: "👥 Roster principal",
-      value: `Requiere <@&${requiredRoleId}>\n*Sin el rol, la inscripción queda como Bench.*`,
-    });
-  }
-  fields.push({ name: "📊 Asistencia", value: assistanceValue });
+  fields.push({
+    name:
+      input.signups.length > 0
+        ? `📊 Asistencia ${confirmed.length}${possibles > 0 ? ` (+${possibles})` : ""}`
+        : "📊 Asistencia",
+    value: assistanceValue,
+  });
 
   const resolveSpec = (
     signup: AnnouncementSignup,
@@ -802,12 +811,12 @@ export function buildEventAnnouncementEmbeds(input: {
     );
   });
   // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
-  // de la otra) y en este orden: tarde → bench → no asisten. Van separados del
+  // de la otra) y en este orden: bench → tarde → no asisten. Van separados del
   // roster (y entre ellos) con un poco de aire. Igual que el roster, los
   // nombres van citados (`> `) para que el bloque se lea igual que los roles.
   const statusGroups: Array<[string, AnnouncementSignup[]]> = [
-    [`⏰ Llegan tarde (${late.length})`, late],
     [`🪑 Bench (${bench.length})`, bench],
+    [`⏰ Llegan tarde (${late.length})`, late],
     [`❌ No asisten (${absent.length})`, absent],
   ];
   let firstStatus = true;
@@ -1175,8 +1184,11 @@ export async function syncEventToDiscord(input: {
   discordEventId?: string;
   durationMinutes?: number;
   eventId: string;
-  // Miembros con el rol mínimo: el aviso muestra "confirmados / esperados".
+  // Roster esperado del evento (rol mínimo + bench del roster): el denominador
+  // del "Roster X/Y" del aviso.
   expectedCount?: number;
+  // Cuántos del roster ya respondieron (cualquier estado, bench incluido).
+  rosterSignedCount?: number;
   existing?: {
     discordEventId?: string;
     messageIds?: string[];
@@ -1267,6 +1279,7 @@ export async function syncEventToDiscord(input: {
       durationMinutes: input.durationMinutes,
       eventId: input.eventId,
       expectedCount: input.expectedCount,
+      rosterSignedCount: input.rosterSignedCount,
       gameLabel: input.gameLabel,
       guildIconUrl: input.guildIconUrl,
       guildId: input.guildId,

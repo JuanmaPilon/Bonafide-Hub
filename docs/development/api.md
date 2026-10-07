@@ -293,6 +293,19 @@ la columna del roster, no toca la inscripción guardada y no altera el asistente
 del bot (que sigue mirando `wowClass`). El roster se consulta únicamente si hay
 alguna inscripción sin clase.
 
+**Aviso en Discord (orden y números):** los datos del evento van de a dos
+columnas por fila (Discord empaqueta los fields inline de a tres, así que cada
+par se cierra con un field de ancho cero). Primero el **roster** con el cierre al
+lado — `👥 Roster 20/24`, donde el número son los que **respondieron** (cualquier
+estado, bench incluido, y también "no asisto": haber contestado es lo que saca a
+alguien de "faltan anotarse") sobre el roster esperado — después **empieza** y
+**duración**, y abajo **asistencia** a lo ancho con los números en el título
+(`📊 Asistencia 20 (+3)`, confirmados y posibles). Los conteos salen de
+`rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
+([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
+sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que
+van).
+
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`
