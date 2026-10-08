@@ -115,7 +115,6 @@ function toRaidLog(record: {
     groupKey: raidLogGroupKey({
       firstFightAt: record.firstFightAt,
       reportCode: record.reportCode,
-      title: record.title,
     }),
     guildId: record.guildId,
     hidden: record.hidden,
@@ -141,23 +140,25 @@ function toRaidLog(record: {
   };
 }
 
-// Clave de "noche de raid": mismo título normalizado y misma fecha. La fecha se
-// corre 6 horas para que una raid que cruza la medianoche no se parta en dos
-// entradas (21:00 AR = 00:00 UTC del día siguiente).
+// Clave de "noche de raid": la fecha, sin el título. El título lo escribe quien
+// sube el log, así que dos personas loggeando la MISMA raid quedaban en dos
+// entradas (una con más bosses que la otra) y sus fights, kills y pulls se
+// contaban dos veces en el tablero. La fecha se corre 6 horas para que una raid
+// que cruza la medianoche no se parta en dos entradas (21:00 AR = 00:00 UTC del
+// día siguiente).
 export function raidLogGroupKey(log: {
   firstFightAt?: Date | null;
   reportCode: string;
-  title?: string | null;
 }): string {
-  const title = (log.title ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  if (!title || !log.firstFightAt) {
-    // Sin título o sin fecha todavía: cada report es su propia entrada.
+  if (!log.firstFightAt) {
+    // Todavía no sabemos de qué noche es (el report no se refrescó): va solo,
+    // y se une a la noche cuando el refresh le traiga la fecha.
     return `code:${log.reportCode}`;
   }
   const nightKey = new Date(log.firstFightAt.getTime() - 6 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
-  return `${title}|${nightKey}`;
+  return `night:${nightKey}`;
 }
 
 // Extrae el código de un link de Warcraft Logs (o acepta el código suelto).
@@ -542,12 +543,21 @@ export async function updateRaidLogsPostedText(
   });
 }
 
+// El título de una noche lo pone el report más completo: cuando dos personas
+// loggean la misma raid, la que subió más bosses es la que mejor la nombra.
+function primaryPart(parts: RaidLog[]): RaidLog | undefined {
+  return parts.reduce<RaidLog | undefined>(
+    (best, part) => (!best || part.fightCount > best.fightCount ? part : best),
+    undefined,
+  );
+}
+
 // Mensaje que se publica en el canal. Recibe TODAS las partes de una misma
 // noche (ver raidLogGroupKey) y las publica como un solo log.
 export function buildRaidLogMessage(logs: RaidLog[]): string {
   const parts = logs;
   const lines: string[] = ["📊 **Log de Raid**"];
-  const title = parts[0]?.title;
+  const title = primaryPart(parts)?.title;
   if (title) {
     lines.push(`**${title}**`);
   }

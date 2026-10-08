@@ -34,9 +34,20 @@ const DIFFICULTIES: Array<{
 // distintos que enfrentó. El total sale del mayor número de bosses vistos en una
 // dificultad, porque Warcraft Logs no dice cuántos tiene la banda y las que
 // todavía no se intentaron no pueden contar como "vistas".
-function progression(
-  nights: Night[],
-): Array<{ killed: number; label: string; short: string; total: number }> {
+//
+// El chip de Total es la suma de las dificultades jugadas (los kills de todas
+// sobre los bosses enfrentados en todas): suma, no unión, porque un boss matado
+// en Normal y en Heroico es progreso en las dos y "todo lo visto murió" pasaría
+// por limpieza total con una sola dificultad terminada.
+function progression(nights: Night[]): {
+  difficulties: Array<{
+    killed: number;
+    label: string;
+    short: string;
+    total: number;
+  }>;
+  total: { killed: number; seen: number };
+} {
   const porDificultad = DIFFICULTIES
     .map((difficulty) => {
       const seen = new Set<string>();
@@ -64,12 +75,21 @@ function progression(
     })
     .filter((entry) => entry.seen > 0);
   const total = Math.max(0, ...porDificultad.map((entry) => entry.seen));
-  return porDificultad.map((entry) => ({
-    killed: entry.killed,
-    label: entry.label,
-    short: entry.short,
-    total,
-  }));
+  return {
+    difficulties: porDificultad.map((entry) => ({
+      killed: entry.killed,
+      label: entry.label,
+      short: entry.short,
+      total,
+    })),
+    total: porDificultad.reduce(
+      (accumulator, entry) => ({
+        killed: accumulator.killed + entry.killed,
+        seen: accumulator.seen + entry.seen,
+      }),
+      { killed: 0, seen: 0 },
+    ),
+  };
 }
 
 type Night = {
@@ -102,6 +122,16 @@ const CONSUMABLE_LABEL: Record<RaidConsumableKey, string> = {
   potions: "Pota",
   prepot: "Prepot",
 };
+
+// El título de una noche lo pone el report más completo: cuando dos personas
+// loggean la misma raid, la que subió más bosses es la que mejor la nombra.
+function primaryPartTitle(parts: RaidLog[]): string {
+  const best = parts.reduce(
+    (current, part) => (part.fightCount > current.fightCount ? part : current),
+    parts[0],
+  );
+  return best?.title || "Log de raid";
+}
 
 function toNights(logs: RaidLog[]): Night[] {
   const byKey = new Map<string, RaidLog[]>();
@@ -154,7 +184,7 @@ function toNights(logs: RaidLog[]): Night[] {
         : failed
           ? "failed"
           : "draft",
-      title: parts[0]?.title || "Log de raid",
+      title: primaryPartTitle(parts),
     };
   });
 }
@@ -605,10 +635,19 @@ export function RaidLogsBoard({
             <span>Noches</span>
           </div>
           <div className="rlb-stat">
-            {/* Progresión de la guild: un chip por dificultad jugada. */}
+            {/* Progresión de la guild: total primero, después un chip por
+                dificultad jugada. */}
             <strong className="rlb-progress">
-              {progress.length > 0
-                ? progress.map((entry) => (
+              {progress.difficulties.length > 0 ? (
+                <>
+                  <span
+                    className="rlb-progress-chip rlb-progress-chip--total"
+                    title={`Total: ${progress.total.killed} de ${progress.total.seen} (suma de las dificultades)`}
+                  >
+                    {progress.total.killed}/{progress.total.seen}
+                    <i>Total</i>
+                  </span>
+                  {progress.difficulties.map((entry) => (
                     <span
                       className={`rlb-progress-chip${entry.killed >= entry.total ? " full" : ""}`}
                       key={entry.short}
@@ -617,8 +656,11 @@ export function RaidLogsBoard({
                       {entry.killed}/{entry.total}
                       <i>{entry.short}</i>
                     </span>
-                  ))
-                : "—"}
+                  ))}
+                </>
+              ) : (
+                "—"
+              )}
             </strong>
             <span>Progresión</span>
           </div>

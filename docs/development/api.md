@@ -157,15 +157,25 @@ El tablero muestra la **progresión** de la guild por dificultad (N / H / M) a
 partir del `difficulty` de cada fight del `summary`: bosses distintos matados
 sobre bosses distintos enfrentados, y el total sale del mayor número de bosses
 vistos en una dificultad (Warcraft Logs no dice cuántos tiene la banda, y los que
-todavía no se intentaron no pueden contar). Las listas largas del análisis (DPS,
-muertes, consumibles, por pull) se cortan **a la misma altura en las dos columnas**
-— la de la lista más corta de la fila, con 320px de techo — y se abren con el
-triángulo del pie de la lista; el triángulo aparece solo si hay algo tapado.
+todavía no se intentaron no pueden contar). Delante de esos chips va el de
+**Total**, que es la **suma** de las dificultades jugadas (kills de todas sobre
+bosses enfrentados en todas): suma y no unión porque un boss matado en Normal y
+en Heroico es progreso en las dos, y con la unión "todo lo visto murió" pasaría
+por limpieza total con una sola dificultad terminada. Las listas largas del
+análisis (DPS, muertes, consumibles, por pull) se cortan **a la misma altura en
+las dos columnas** — la de la lista más corta de la fila, con 320px de techo — y
+se abren con el triángulo del pie de la lista; el triángulo aparece solo si hay
+algo tapado.
 
-Los reports que comparten título (normalizado) y fecha de inicio se agrupan en
-una sola entrada (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid
-que cruza la medianoche no se parta): una subida en dos partes sale como **un**
-mensaje con los dos links. El estado (`status: new | live | synced | failed`)
+Los reports de la **misma fecha** se agrupan en una sola entrada
+(`raidLogGroupKey`, con la fecha corrida 6 h para que una raid que cruza la
+medianoche no se parta): una subida en dos partes sale como **un** mensaje con los
+dos links. La clave es solo la noche, **no el título**: el título lo escribe quien
+sube el log, así que dos personas loggeando la misma raid (una con más bosses que
+la otra) quedaban como dos entradas y sus fights, kills y pulls contaban dos
+veces en el tablero. El nombre de la entrada lo pone el report más completo (el
+de más fights), que es el que mejor la nombra. Un report que todavía no se
+refrescó (sin fecha) queda solo hasta que el refresh le traiga la fecha. El estado (`status: new | live | synced | failed`)
 sale del mismo cálculo de estabilidad; la web solo muestra `live` ("En vivo",
 la subida sigue en curso), porque publicar o no es cosa de quien lo maneja: la
 acción aparece en la ficha ("Publicar en Discord" / "Actualizar mensaje") según

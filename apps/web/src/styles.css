@@ -1819,6 +1819,16 @@ a:hover {
   color: rgba(53, 224, 107, 0.75);
 }
 
+/* El total de la raid no es una dificultad: se distingue del resto. */
+.rlb-progress-chip--total {
+  border-color: rgba(134, 158, 214, 0.55);
+  background: rgba(134, 158, 214, 0.14);
+}
+
+.rlb-progress-chip--total i {
+  color: var(--text);
+}
+
 /* Botón circular destacado (la acción principal del tablero). */
 .icon-button--primary {
   border-color: rgba(106, 168, 255, 0.55);
