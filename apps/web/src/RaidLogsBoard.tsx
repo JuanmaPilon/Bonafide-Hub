@@ -9,6 +9,21 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ChevronDown,
+  Crown,
+  Files,
+  FlaskConical,
+  ListOrdered,
+  Radar,
+  Search,
+  Settings,
+  Skull,
+  Swords,
+  Target,
+  TriangleAlert,
+  Users,
+} from "lucide-react";
+import {
   classColor,
   type RaidConsumableKey,
   type RaidLog,
@@ -265,38 +280,14 @@ function compactNumber(value: number): string {
   return Math.round(value).toLocaleString("es-AR");
 }
 
-// Lupa de "Escanear": la acción busca reports nuevos en Warcraft Logs (mismos
-// trazos que los iconos del resto del panel: 24x24, `currentColor`).
-function SearchIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="icon-button-icon"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-4.3-4.3" />
-    </svg>
-  );
-}
-
 // Triángulo del botón de las listas largas: apunta abajo cuando la lista está
-// cortada y arriba cuando está abierta.
-function TriangleIcon({ up }: { up: boolean }) {
+// cortada y arriba (rotado por CSS) cuando está abierta.
+function ListToggleIcon({ up }: { up: boolean }) {
   return (
-    <svg
+    <ChevronDown
       aria-hidden="true"
-      className="rlb-list-toggle-icon"
-      fill="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path d={up ? "M12 8l7 9H5z" : "M12 16l-7-9h14z"} />
-    </svg>
+      className={`rlb-list-toggle-icon${up ? " rlb-list-toggle-icon--up" : ""}`}
+    />
   );
 }
 
@@ -358,10 +349,12 @@ function AnalysisRow({ children }: { children: ReactNode }) {
 function ClampedSection({
   children,
   footer,
+  icon,
   title,
 }: {
   children: ReactNode;
   footer?: ReactNode;
+  icon?: ReactNode;
   title: string;
 }) {
   const fila = useContext(RowClampContext);
@@ -389,7 +382,10 @@ function ClampedSection({
 
   return (
     <div className="rlb-analysis-section">
-      <h5>{title}</h5>
+      <h5>
+        {icon}
+        {title}
+      </h5>
       <div
         className="rlb-list-body"
         ref={(el) => {
@@ -409,31 +405,11 @@ function ClampedSection({
           title={open ? "Ver menos" : "Ver todo"}
           type="button"
         >
-          <TriangleIcon up={open} />
+          <ListToggleIcon up={open} />
         </button>
       ) : null}
       {footer}
     </div>
-  );
-}
-
-// Tuerca de "Configuración": mismos trazos que los iconos del resto del panel
-// (24x24, `currentColor`).
-function GearIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="icon-button-icon"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.08A1.7 1.7 0 0 0 10 3.04V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.08a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" />
-    </svg>
   );
 }
 
@@ -693,7 +669,14 @@ export function RaidLogsBoard({
           </div>
           <div className="rlb-stat">
             {/* Progresión de la guild: un chip por dificultad jugada. */}
-            <strong className="rlb-progress">
+            <strong
+              className="rlb-progress"
+              title={
+                progress.zoneName
+                  ? `Progresión en ${progress.zoneName}`
+                  : "Progresión de la guild"
+              }
+            >
               {progress.difficulties.length > 0
                 ? progress.difficulties.map((entry) => (
                     <span
@@ -707,9 +690,6 @@ export function RaidLogsBoard({
                   ))
                 : "—"}
             </strong>
-            <span>
-              Progresión{progress.zoneName ? ` · ${progress.zoneName}` : ""}
-            </span>
           </div>
         </div>
         {onScan || manage ? (
@@ -723,7 +703,7 @@ export function RaidLogsBoard({
                 title={scanning ? "Escaneando…" : "Escanear ahora"}
                 type="button"
               >
-                <SearchIcon />
+                <Radar aria-hidden="true" className="icon-button-icon" />
               </button>
             ) : null}
             {manage ? (
@@ -735,7 +715,7 @@ export function RaidLogsBoard({
                 title="Configuración"
                 type="button"
               >
-                <GearIcon />
+                <Settings aria-hidden="true" className="icon-button-icon" />
               </button>
             ) : null}
           </div>
@@ -749,15 +729,18 @@ export function RaidLogsBoard({
       ) : (
         <>
           <div className="rlb-toolbar">
-            <input
-              aria-label="Buscar log"
-              autoComplete="off"
-              className="rlb-search"
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por nombre o fecha…"
-              type="search"
-              value={search}
-            />
+            <div className="rlb-search-box">
+              <Search aria-hidden="true" className="rlb-search-icon" />
+              <input
+                aria-label="Buscar log"
+                autoComplete="off"
+                className="rlb-search"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre o fecha…"
+                type="search"
+                value={search}
+              />
+            </div>
           </div>
 
           <div className="rlb-layout">
@@ -796,7 +779,10 @@ export function RaidLogsBoard({
                           <FightStrip fights={night.fights} />
                         </span>
                         <span className="rlb-row-side">
-                          <span>💀 {night.kills}</span>
+                          <span className="rlb-night-kills">
+                        <Skull aria-hidden="true" />
+                        {night.kills}
+                      </span>
                         </span>
                       </button>
                     ))}
@@ -836,38 +822,59 @@ export function RaidLogsBoard({
                 <div className="rlb-metrics">
                   <div className="rlb-metric">
                     <strong>{selected.fightCount}</strong>
-                    <span>Pulls</span>
+                    <span className="rlb-metric-label">
+                      <Target aria-hidden="true" />
+                      Pulls
+                    </span>
                   </div>
                   <div className="rlb-metric">
                     <strong className="kill">{selected.kills}</strong>
-                    <span>Kills</span>
+                    <span className="rlb-metric-label">
+                      <Swords aria-hidden="true" />
+                      Kills
+                    </span>
                   </div>
                   <div className="rlb-metric">
                     <strong>
                       {Math.max(selected.fightCount - selected.kills, 0)}
                     </strong>
-                    <span>Wipes</span>
+                    <span className="rlb-metric-label">
+                      <Skull aria-hidden="true" />
+                      Wipes
+                    </span>
                   </div>
                   <div className="rlb-metric">
                     <strong>{bosses.length}</strong>
-                    <span>Bosses</span>
+                    <span className="rlb-metric-label">
+                      <Crown aria-hidden="true" />
+                      Bosses
+                    </span>
                   </div>
                 </div>
 
                 {selected.error ? (
-                  <div className="rlb-error">⚠️ {selected.error}</div>
+                  <div className="rlb-error">
+                    <TriangleAlert aria-hidden="true" />
+                    {selected.error}
+                  </div>
                 ) : null}
 
                 {selected.fights.length > 0 ? (
                   <div className="rlb-block">
-                    <span className="rlb-label">Pulls en orden</span>
+                    <span className="rlb-label">
+                      <ListOrdered aria-hidden="true" />
+                      Pulls en orden
+                    </span>
                     <FightStrip fights={selected.fights} large />
                   </div>
                 ) : null}
 
                 {bosses.length > 0 ? (
                   <div className="rlb-block">
-                    <span className="rlb-label">Por boss</span>
+                    <span className="rlb-label">
+                      <Crown aria-hidden="true" />
+                      Por boss
+                    </span>
                     <div className="rlb-bosses">
                       {bosses.map((boss) => (
                         <div className="rlb-boss" key={boss.name}>
@@ -888,6 +895,7 @@ export function RaidLogsBoard({
 
                 <div className="rlb-block">
                   <span className="rlb-label">
+                    <Files aria-hidden="true" />
                     {selected.parts.length === 1
                       ? "Report"
                       : `Reports (${selected.parts.length})`}
@@ -902,8 +910,11 @@ export function RaidLogsBoard({
                         target="_blank"
                       >
                         <span className="rlb-part-code">{part.reportCode}</span>
-                        <span className="muted-text">
-                          ⚔️ {part.fightCount} · 💀 {part.kills}
+                        <span className="rlb-part-counts">
+                          <Swords aria-hidden="true" />
+                          {part.fightCount}
+                          <Skull aria-hidden="true" />
+                          {part.kills}
                         </span>
                         <span className="raid-log-link">
                           Abrir en Warcraft Logs ↗
@@ -936,7 +947,8 @@ export function RaidLogsBoard({
                           </div>
                         ) : selectedAnalysisError ? (
                           <div className="rlb-error">
-                            ⚠️ {selectedAnalysisError}
+                            <TriangleAlert aria-hidden="true" />
+                            {selectedAnalysisError}
                           </div>
                         ) : selectedAnalysis ? (
                           <>
@@ -1018,7 +1030,10 @@ export function RaidLogsBoard({
 
                             <div className="rlb-analysis-grid">
                               <AnalysisRow>
-                              <ClampedSection title="DPS promedio por encuentro">
+                              <ClampedSection
+                                icon={<Swords aria-hidden="true" />}
+                                title="DPS promedio por encuentro"
+                              >
                                 {dpsRows.length > 0 ? (
                                   <div className="rlb-analysis-dps">
                                     {dpsRows.map((player, index) => {
@@ -1094,6 +1109,7 @@ export function RaidLogsBoard({
                                     </div>
                                   ) : null
                                 }
+                                icon={<Skull aria-hidden="true" />}
                                 title="Muertes"
                               >
                                 {selectedAnalysis.deathsByPlayer.length > 0 ? (
@@ -1125,7 +1141,10 @@ export function RaidLogsBoard({
                                 {/* Al revés que antes: en vez del conteo de cada
                                     uno, la lista de quién faltó. Es lo que se
                                     puede accionar (hablar con esa persona). */}
-                                <ClampedSection title="Sin consumibles">
+                                <ClampedSection
+                                  icon={<FlaskConical aria-hidden="true" />}
+                                  title="Sin consumibles"
+                                >
                                   <div className="rlb-consumable-pulls">
                                     {consumables.categories.map((category) => {
                                       const missing = consumables.players
@@ -1172,7 +1191,10 @@ export function RaidLogsBoard({
                                   </div>
                                 </ClampedSection>
 
-                                <ClampedSection title="Por pull">
+                                <ClampedSection
+                                  icon={<Target aria-hidden="true" />}
+                                  title="Por pull"
+                                >
                                   <div className="rlb-consumable-pulls">
                                     {consumables.pulls.map(
                                       (pull, index) => (
@@ -1219,7 +1241,10 @@ export function RaidLogsBoard({
 
                             {attendance ? (
                               <div className="rlb-analysis-section">
-                                <h5>Asistencia</h5>
+                                <h5>
+                                  <Users aria-hidden="true" />
+                                  Asistencia
+                                </h5>
                                 <div className="rlb-attendance-stats">
                                   <div>
                                     <span>Anotados que vinieron</span>
@@ -1293,7 +1318,8 @@ export function RaidLogsBoard({
                                     ))}
                                     {aliasError ? (
                                       <div className="rlb-error">
-                                        ⚠️ {aliasError}
+                                        <TriangleAlert aria-hidden="true" />
+                                        {aliasError}
                                       </div>
                                     ) : null}
                                   </div>
@@ -1344,7 +1370,10 @@ export function RaidLogsBoard({
 
                             {selectedAnalysis.encounters.length > 0 ? (
                               <div className="rlb-analysis-section">
-                                <h5>Por boss</h5>
+                                <h5>
+                                <Crown aria-hidden="true" />
+                                Por boss
+                              </h5>
                                 <div className="rlb-encounters">
                                   {selectedAnalysis.encounters.map(
                                     (encounter) => (

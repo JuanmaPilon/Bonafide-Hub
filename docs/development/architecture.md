@@ -24,6 +24,7 @@
 - UI de Guild Hub (React + Vite)
 - Home (podio + nitro), dashboard, tab Eventos, panel admin
 - Consume endpoints del API
+- Iconos: `lucide-react` (24x24, `currentColor`); el tamaño lo fija el CSS del panel
 
 4. `PostgreSQL`
 

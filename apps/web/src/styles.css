@@ -1657,6 +1657,30 @@ a:hover {
   max-width: 380px;
 }
 
+/* El buscador con su lupa: el campo arranca después del icono. */
+.rlb-search-box {
+  position: relative;
+  display: flex;
+  flex: 1 1 240px;
+  max-width: 380px;
+  align-items: center;
+}
+
+.rlb-search-box .rlb-search {
+  flex: 1 1 auto;
+  max-width: none;
+  padding-left: 34px;
+}
+
+.rlb-search-icon {
+  position: absolute;
+  left: 11px;
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
 .rlb-layout {
   display: grid;
   grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
@@ -1782,6 +1806,12 @@ a:hover {
 .rlb-list-toggle-icon {
   width: 14px;
   height: 14px;
+  transition: transform 150ms ease;
+}
+
+/* El chevron apunta arriba cuando la lista está abierta ("ver menos"). */
+.rlb-list-toggle-icon--up {
+  transform: rotate(180deg);
 }
 
 /* Progresión de la guild: un chip por dificultad, como los badges del resto. */
@@ -1943,6 +1973,56 @@ a:hover {
 .rlb-metric span {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+/* Iconos de la tarjeta y las listas: vienen de lucide-react (24x24,
+   currentColor) y acá solo se les fija el tamaño y la alineación. */
+.rlb-metric-label svg,
+.rlb-label svg,
+.rlb-analysis-section h5 svg,
+.game-cover-hot svg,
+.profile-badge svg {
+  width: 13px;
+  height: 13px;
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
+/* Los conteos del logo de la tarjeta de raid (pulls y kills). */
+.log-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.log-counts svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rlb-analysis-section h5 svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rlb-night-kills,
+.rlb-part-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rlb-night-kills svg,
+.rlb-part-counts svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rlb-error svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  vertical-align: -2px;
 }
 
 .rlb-block {

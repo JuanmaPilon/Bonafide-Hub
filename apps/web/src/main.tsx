@@ -9,7 +9,9 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { createRoot } from "react-dom/client";
+import {
+  createRoot } from "react-dom/client";
+import { CalendarDays, Flame, Moon, RefreshCw, Skull, Sun, Swords } from "lucide-react";
 import { RaidLogsBoard } from "./RaidLogsBoard";
 import { copyToClipboard } from "./clipboard";
 import { hoursFromMinutes, minutesFromHours } from "./duration";
@@ -984,7 +986,7 @@ function EventDateTimeField({
           title="Elegir la fecha en el almanaque"
           type="button"
         >
-          📅
+          <CalendarDays aria-hidden="true" />
         </button>
         {calendarOpen ? (
           <>
@@ -5728,57 +5730,6 @@ function RolesCard({
   );
 }
 
-function RefreshIcon() {
-  return (
-    <svg
-      className="icon-button-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <polyline points="21 3 21 9 15 9" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
-}
-
 // Etiqueta de cada puesto del podio. El color del puesto lo pone el CSS
 // (`.podium-place-N`).
 const PODIUM_LABELS = ["1ro", "2do", "3ro", "4to", "5to"];
@@ -5802,7 +5753,7 @@ const GAME_MARQUEE_TARGET_TILES = 24;
 // Velocidad de crucero del carrusel, en px/s.
 const GAME_MARQUEE_SPEED = 43;
 
-// Cuántos juegos se marcan como "más jugados" en el carrusel (el 🔥 con la
+// Cuántos juegos se marcan como "más jugados" en el carrusel (la llama con la
 // cantidad de jugadores). El ranking lo hace el API por jugadores distintos en
 // la ventana consultada, así que acá solo se cortan los primeros. Se exigen al
 // menos 2 jugadores: con uno solo no hay nada que distinguir (y el respaldo sin
@@ -6450,7 +6401,7 @@ function App() {
     );
     return Array.from({ length: pairs * 2 }, () => games).flat();
   }, [gameActivity]);
-  // Juegos "más jugados" (el 🔥 del carrusel): el ranking lo hace el API por
+  // Juegos "más jugados" (la llama del carrusel): el ranking lo hace el API por
   // jugadores distintos, así que acá solo se cortan los primeros. Se marca por
   // juego y no por posición porque el track es la misma lista repetida.
   const hotGameKeys = useMemo(() => {
@@ -10005,7 +9956,7 @@ function App() {
               }
               aria-label="Cambiar tema"
             >
-              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+              {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
             </button>
             <button
               className="logout-button"
@@ -10110,7 +10061,8 @@ function App() {
                                     className="game-cover-hot"
                                     aria-hidden="true"
                                   >
-                                    🔥 {game.players}
+                                    <Flame />
+                                    {game.players}
                                   </span>
                                 ) : null}
                               </span>
@@ -11638,7 +11590,10 @@ function App() {
                             aria-label="Refrescar registro"
                             type="button"
                           >
-                            <RefreshIcon />
+                            <RefreshCw
+                              aria-hidden="true"
+                              className="icon-button-icon"
+                            />
                           </button>
                         </div>
                         {selectedGuild?.owner && auditLogs.length > 0 ? (
@@ -12102,8 +12057,11 @@ function App() {
                                           <strong>
                                             {log.title || log.reportCode}
                                           </strong>
-                                          <div className="muted-text">
-                                            ⚔️ {log.fightCount} · 💀 {log.kills}
+                                          <div className="muted-text log-counts">
+                                            <Swords aria-hidden="true" />
+                                            {log.fightCount}
+                                            <Skull aria-hidden="true" />
+                                            {log.kills}
                                           </div>
                                         </div>
                                         <div className="daily-message-actions">
@@ -12196,7 +12154,8 @@ function App() {
                           ) : null}
                           {profile.joinedAt ? (
                             <span className="profile-badge">
-                              📅 Desde {formatDate24(profile.joinedAt)}
+                              <CalendarDays aria-hidden="true" />
+                              Desde {formatDate24(profile.joinedAt)}
                             </span>
                           ) : null}
                         </div>
