@@ -11,7 +11,15 @@ import {
 } from "react";
 import {
   createRoot } from "react-dom/client";
-import { CalendarDays, Flame, Moon, RefreshCw, Skull, Sun, Swords } from "lucide-react";
+import {
+  ArrowsClockwise,
+  Calendar,
+  Fire,
+  Moon,
+  Skull,
+  Sun,
+  Sword,
+} from "@phosphor-icons/react";
 import { RaidLogsBoard } from "./RaidLogsBoard";
 import { copyToClipboard } from "./clipboard";
 import { hoursFromMinutes, minutesFromHours } from "./duration";
@@ -986,7 +994,7 @@ function EventDateTimeField({
           title="Elegir la fecha en el almanaque"
           type="button"
         >
-          <CalendarDays aria-hidden="true" />
+          <Calendar weight="fill" aria-hidden="true" />
         </button>
         {calendarOpen ? (
           <>
@@ -9956,7 +9964,7 @@ function App() {
               }
               aria-label="Cambiar tema"
             >
-              {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+              {theme === "dark" ? <Sun weight="fill" aria-hidden="true" /> : <Moon weight="fill" aria-hidden="true" />}
             </button>
             <button
               className="logout-button"
@@ -10061,7 +10069,7 @@ function App() {
                                     className="game-cover-hot"
                                     aria-hidden="true"
                                   >
-                                    <Flame />
+                                    <Fire weight="fill" />
                                     {game.players}
                                   </span>
                                 ) : null}
@@ -11590,7 +11598,7 @@ function App() {
                             aria-label="Refrescar registro"
                             type="button"
                           >
-                            <RefreshCw
+                            <ArrowsClockwise weight="fill"
                               aria-hidden="true"
                               className="icon-button-icon"
                             />
@@ -12058,9 +12066,9 @@ function App() {
                                             {log.title || log.reportCode}
                                           </strong>
                                           <div className="muted-text log-counts">
-                                            <Swords aria-hidden="true" />
+                                            <Sword weight="fill" aria-hidden="true" />
                                             {log.fightCount}
-                                            <Skull aria-hidden="true" />
+                                            <Skull weight="fill" aria-hidden="true" />
                                             {log.kills}
                                           </div>
                                         </div>
@@ -12154,7 +12162,7 @@ function App() {
                           ) : null}
                           {profile.joinedAt ? (
                             <span className="profile-badge">
-                              <CalendarDays aria-hidden="true" />
+                              <Calendar weight="fill" aria-hidden="true" />
                               Desde {formatDate24(profile.joinedAt)}
                             </span>
                           ) : null}

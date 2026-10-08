@@ -1975,36 +1975,21 @@ a:hover {
   font-size: 0.78rem;
 }
 
-/* Iconos de la tarjeta y las listas: vienen de lucide-react (24x24,
-   currentColor) y acá solo se les fija el tamaño y la alineación. */
+/* Iconos del panel: un solo set (`@phosphor-icons/react`, weight fill) y tres
+   tamaños. El color lo hereda del texto que acompañan, salvo los de las métricas
+   y los títulos del análisis, que van con el azul de la marca para que se lean. */
 .rlb-metric-label svg,
 .rlb-label svg,
 .rlb-analysis-section h5 svg,
 .game-cover-hot svg,
 .profile-badge svg {
-  width: 13px;
-  height: 13px;
-  margin-right: 5px;
-  vertical-align: -2px;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -3px;
 }
 
-/* Los conteos del logo de la tarjeta de raid (pulls y kills). */
-.log-counts {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.log-counts svg {
-  width: 13px;
-  height: 13px;
-}
-
-.rlb-analysis-section h5 svg {
-  width: 15px;
-  height: 15px;
-}
-
+/* Los conteos de la tarjeta de raid (pulls y kills) y su lista de reports. */
 .rlb-night-kills,
 .rlb-part-counts {
   display: inline-flex;
@@ -2014,15 +1999,26 @@ a:hover {
 
 .rlb-night-kills svg,
 .rlb-part-counts svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.rlb-analysis-section h5 svg {
+  width: 17px;
+  height: 17px;
+}
+
+.rlb-metric-label svg,
+.rlb-analysis-section h5 svg {
+  color: var(--accent);
 }
 
 .rlb-error svg {
-  width: 14px;
-  height: 14px;
-  margin-right: 5px;
-  vertical-align: -2px;
+  width: 15px;
+  height: 15px;
+  margin-right: 6px;
+  vertical-align: -3px;
 }
 
 .rlb-block {
