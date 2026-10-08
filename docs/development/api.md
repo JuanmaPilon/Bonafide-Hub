@@ -161,11 +161,20 @@ todavía no se intentaron no pueden contar). Delante de esos chips va el de
 **Total**, que es la **suma** de las dificultades jugadas (kills de todas sobre
 bosses enfrentados en todas): suma y no unión porque un boss matado en Normal y
 en Heroico es progreso en las dos, y con la unión "todo lo visto murió" pasaría
-por limpieza total con una sola dificultad terminada. Las listas largas del
-análisis (DPS, muertes, consumibles, por pull) se cortan **a la misma altura en
-las dos columnas** — la de la lista más corta de la fila, con 320px de techo — y
-se abren con el triángulo del pie de la lista; el triángulo aparece solo si hay
-algo tapado.
+por limpieza total con una sola dificultad terminada.
+
+Los chips son de **una sola raid**: la zona con más noches cargadas (una legacy
+suelta no le gana al tier) y, si hay empate, la más reciente. El nombre se muestra
+en la etiqueta ("Progresión · Nerub'ar Palace"), sale de `zoneName` y lo llena el
+refresh con el catálogo de zonas de Warcraft Logs. Sin esto, la progresión sumaba
+los bosses de **todas** las raids juntas: con una legacy loggeada el mismo día, el
+tier mostraba un boss de más (y "10/10" donde la raid tiene 9). Un fight sin zona
+(log viejo) se cuenta con la raid actual; una noche de otra raid se sigue listando
+en el tablero y cuenta en su propio día, pero no en la progresión del tier. Las
+listas largas del análisis (DPS, muertes, consumibles, por pull) se cortan **a la
+misma altura en las dos columnas** — la de la lista más corta de la fila, con
+320px de techo — y se abren con el triángulo del pie de la lista; el triángulo
+aparece solo si hay algo tapado.
 
 Los reports de la **misma fecha** se agrupan en una sola entrada
 (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid que cruza la
@@ -451,7 +460,7 @@ Tablas:
 6. `discord_sessions` / `oauth_states` — OAuth
 7. `communications` / `communication_instances` — comunicados y sus publicaciones
 8. `daily_messages` — frases del loro de Karpindomo
-9. `raid_logs` — logs de raid sincronizados con Warcraft Logs
+9. `raid_logs` — logs de raid sincronizados con Warcraft Logs (`zone`/`zoneName` son la raid a la que pertenece el report, para la progresión)
 10. `karuta_cards` — posesión de cartas raras (print/wishlist/dueño)
 11. `karuta_albums` — álbumes (`ka`) de cada usuario, con puntero al mensaje
 12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)

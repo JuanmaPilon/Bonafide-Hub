@@ -228,6 +228,10 @@ model RaidLog {
   reportUrl          String
   title              String?
   zone               Int?
+  // Nombre de la zona según Warcraft Logs (p. ej. "Nerub'ar Palace"): la web lo
+  // usa para decir a qué raid se refiere la progresión. Se resuelve al refrescar
+  // el report, no al leer, para no consultar Warcraft Logs en la lista.
+  zoneName           String?
   fightCount         Int       @default(0)
   kills              Int       @default(0)
   summary            Json?

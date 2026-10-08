@@ -91,6 +91,8 @@ export type RaidLog = {
   title?: string;
   updatedAt: string;
   zone?: number | null;
+  // Nombre de la raid (lo llena el API al refrescar el log).
+  zoneName?: string;
 };
 
 export type RaidRole = "dps" | "healer" | "tank";

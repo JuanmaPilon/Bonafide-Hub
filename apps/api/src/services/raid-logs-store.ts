@@ -45,6 +45,9 @@ export type RaidLog = {
   title?: string;
   updatedAt: Date;
   zone?: number | null;
+  // Nombre de la zona (la raid): lo llena el refresh con el catálogo de
+  // Warcraft Logs, así la lista no tiene que consultarlo.
+  zoneName?: string;
 };
 
 type WclFight = {
@@ -92,6 +95,7 @@ function toRaidLog(record: {
   title: string | null;
   updatedAt: Date;
   zone: number | null;
+  zoneName: string | null;
 }): RaidLog {
   const rawSummary = record.summary;
   const summary =
@@ -137,6 +141,7 @@ function toRaidLog(record: {
     title: record.title ?? undefined,
     updatedAt: record.updatedAt,
     zone: record.zone,
+    zoneName: record.zoneName ?? undefined,
   };
 }
 
@@ -410,6 +415,27 @@ export async function showRaidLog(
 // Una entrada se considera terminada si queda estable o supera la duración máxima.
 const FINISHED_STABLE_MS = 10 * 60 * 1000;
 
+// Nombre de la raid (zona) para mostrarlo en la web. Best effort: si Warcraft
+// Logs no responde, el log se guarda sin nombre (la progresión lo usa para
+// etiquetar, no para contar).
+async function resolveZoneName(
+  zone: number | null,
+  previous: { name: string | null; zone: number | null },
+): Promise<string | null> {
+  if (zone === null) {
+    return null;
+  }
+  if (previous.zone === zone && previous.name) {
+    return previous.name;
+  }
+  try {
+    const zones = await getZones();
+    return zones.get(zone)?.name ?? previous.name ?? null;
+  } catch {
+    return previous.name ?? null;
+  }
+}
+
 // Red de seguridad: una noche de raid no dura más que esto. Warcraft Logs a
 // veces sigue ajustando un report viejo (una kill que se recalcula, un fight
 // que aparece), y como cualquier cambio reinicia la cuenta de estabilidad, la
@@ -468,6 +494,13 @@ export async function refreshRaidLog(id: string): Promise<{
     const isStable = quietLongEnough || nightIsOver;
 
     const status = fightCount === 0 ? "new" : isStable ? "synced" : "live";
+    const zone = summary.zone ?? current.zone ?? null;
+    // El nombre de la raid sale del catálogo de Warcraft Logs; se pide solo
+    // cuando falta o cambió, y si WCL no responde el log se guarda igual.
+    const zoneName = await resolveZoneName(zone, {
+      name: current.zoneName,
+      zone: current.zone,
+    });
 
     const updated = await prisma.raidLog.update({
       where: { id },
@@ -486,7 +519,8 @@ export async function refreshRaidLog(id: string): Promise<{
           zone: summary.zone,
         },
         title: summary.title ?? current.title,
-        zone: summary.zone ?? current.zone,
+        zone,
+        zoneName,
       },
     });
 

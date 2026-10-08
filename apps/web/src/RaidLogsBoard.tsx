@@ -15,7 +15,14 @@ import {
   type RaidLogAnalysis,
 } from "./api";
 
-type Fight = { difficulty?: number; kill: boolean; name: string };
+type Fight = {
+  difficulty?: number;
+  kill: boolean;
+  name: string;
+  // Zona (raid) del report del que sale el fight: la progresión se cuenta por
+  // raid, así una legacy loggeada el mismo día no le suma bosses al tier.
+  zone?: number | null;
+};
 type NightState = "draft" | "failed" | "pending" | "posted";
 
 // Dificultades de Warcraft Logs (los ids viejos y nuevos apuntan al mismo
@@ -30,10 +37,38 @@ const DIFFICULTIES: Array<{
   { ids: [5, 16], label: "Mítico", short: "M" },
 ];
 
-// Progresión de la guild por dificultad: bosses distintos matados sobre bosses
-// distintos que enfrentó. El total sale del mayor número de bosses vistos en una
-// dificultad, porque Warcraft Logs no dice cuántos tiene la banda y las que
-// todavía no se intentaron no pueden contar como "vistas".
+// La raid que se está jugando: la zona con más noches cargadas (una legacy
+// suelta no le gana al tier) y, si hay empate, la más reciente.
+function currentRaid(nights: Night[]): { id?: number; name?: string } {
+  const stats = new Map<number, { last: number; name?: string; nights: number }>();
+  for (const night of nights) {
+    const zones = new Set<number>();
+    for (const fight of night.fights) {
+      if (typeof fight.zone === "number") {
+        zones.add(fight.zone);
+      }
+    }
+    for (const zone of zones) {
+      const entry = stats.get(zone) ?? { last: 0, nights: 0 };
+      entry.nights += 1;
+      entry.last = Math.max(entry.last, night.date?.getTime() ?? 0);
+      entry.name ??= night.parts.find(
+        (part) => part.zone === zone && part.zoneName,
+      )?.zoneName;
+      stats.set(zone, entry);
+    }
+  }
+  const best = [...stats.entries()].sort(
+    (a, b) => b[1].nights - a[1].nights || b[1].last - a[1].last,
+  )[0];
+  return best ? { id: best[0], name: best[1].name } : {};
+}
+
+// Progresión de la guild en la raid que está jugando, por dificultad: bosses
+// distintos matados sobre bosses distintos que enfrentó. El total sale del mayor
+// número de bosses vistos en una dificultad, porque Warcraft Logs no dice cuántos
+// tiene la banda y los que todavía no se intentaron no pueden contar como
+// "vistas".
 //
 // El chip de Total es la suma de las dificultades jugadas (los kills de todas
 // sobre los bosses enfrentados en todas): suma, no unión, porque un boss matado
@@ -47,7 +82,13 @@ function progression(nights: Night[]): {
     total: number;
   }>;
   total: { killed: number; seen: number };
+  zoneName?: string;
 } {
+  const raid = currentRaid(nights);
+  // Un fight sin zona (log viejo) se cuenta con la raid actual: antes de
+  // guardar el nombre de la zona no hay con qué distinguirlo.
+  const enLaRaid = (fight: Fight): boolean =>
+    raid.id === undefined || fight.zone === null || fight.zone === raid.id;
   const porDificultad = DIFFICULTIES
     .map((difficulty) => {
       const seen = new Set<string>();
@@ -58,6 +99,9 @@ function progression(nights: Night[]): {
             continue;
           }
           if (!difficulty.ids.includes(fight.difficulty)) {
+            continue;
+          }
+          if (!enLaRaid(fight)) {
             continue;
           }
           seen.add(fight.name);
@@ -89,6 +133,7 @@ function progression(nights: Night[]): {
       }),
       { killed: 0, seen: 0 },
     ),
+    zoneName: raid.name,
   };
 }
 
@@ -171,6 +216,7 @@ function toNights(logs: RaidLog[]): Night[] {
           difficulty: fight.difficulty,
           kill: Boolean(fight.kill),
           name: fight.name ?? "Fight",
+          zone: part.zone ?? null,
         })),
       ),
       key,
@@ -662,7 +708,9 @@ export function RaidLogsBoard({
                 "—"
               )}
             </strong>
-            <span>Progresión</span>
+            <span>
+              Progresión{progress.zoneName ? ` · ${progress.zoneName}` : ""}
+            </span>
           </div>
         </div>
         {onScan || manage ? (
