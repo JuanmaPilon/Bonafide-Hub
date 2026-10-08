@@ -181,6 +181,7 @@ import {
   listRosterAlts,
   listRosterProfiles,
   replaceRosterAlts,
+  setRosterProfileActive,
   upsertRosterProfile,
   type RosterAlt,
   type RosterProfile,
@@ -400,6 +401,13 @@ const guildMembersCache = new Map<
   { at: number; members: DiscordGuildMember[] }
 >();
 const GUILD_MEMBERS_TTL_MS = 4 * 60 * 1000;
+
+// Se cambió un rol a mano (roster, staff): la copia cacheada de miembros quedó
+// vieja, así que se tira. Sin esto, quitar a alguien del roster lo dejaba
+// apareciendo hasta 4 minutos más (el rol viejo seguía en la caché).
+function invalidateGuildMembers(guildId: string): void {
+  guildMembersCache.delete(guildId);
+}
 
 // Caché corta de roles de la guild: la usa el listado de eventos para mandar
 // el NOMBRE del rol mínimo junto al evento (así la tarjeta no muestra primero
@@ -5433,8 +5441,10 @@ export function buildApp() {
           Boolean(raidOfficerRoleId) &&
           roles.includes(raidOfficerRoleId as string);
         const profile = profiles.get(userId) ?? null;
-        // Fuera del roster: sin rol de estado, sin Raid Officer y sin ficha.
-        if (!rankKey && !isRaidOfficer && !profile) {
+        // Fuera del roster: sin rol de estado, sin Raid Officer y sin ficha
+        // activa. Ojo: una ficha `active: false` (alguien que se quitó del
+        // roster) NO alcanza para aparecer; un rol de estado sí, siempre.
+        if (!rankKey && !isRaidOfficer && !profile?.active) {
           return null;
         }
         return {
@@ -5615,6 +5625,19 @@ export function buildApp() {
       resolveRosterRankRoles(mappings, config),
       rank,
     );
+    // Volver al roster (raid o bench) reactiva la ficha de quien se había
+    // quitado: si no, seguiría oculta por `active: false`. Al revés no: elegir
+    // "Inactivo" solo saca los roles, así se sigue viendo quién está afuera.
+    const reactivated = rank ? await setRosterProfileActive(params.guildId, params.userId, true) : false;
+    if (reactivated) {
+      await logAdminAction(session, params.guildId, "roster:restore", {
+        details: `Ficha de ${params.userId} reactivada (estado ${rank}).`,
+        targetId: params.userId,
+        targetType: "user",
+      });
+    }
+    // Los roles cambiaron en Discord: la lista de miembros cacheada quedó vieja.
+    invalidateGuildMembers(params.guildId);
 
     await logAdminAction(session, params.guildId, "roster:rank", {
       details: `Rango de ${params.userId}: ${rank ?? "fuera del roster"}${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
@@ -5625,9 +5648,65 @@ export function buildApp() {
     return {
       ok: true,
       rank,
+      reactivated,
       roleSyncError: roleSync.ok ? undefined : roleSync.detail,
     };
   });
+
+  // Quitar a alguien del roster: le saca los roles de estado (Raid y Bench) en
+  // Discord y deja su ficha inactiva, así desaparece de la lista sin perder la
+  // clase, la spec ni los alters (volver a ponerle un rol de estado la
+  // reactiva sola).
+  app.post(
+    "/guilds/:guildId/roster/:userId/remove",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { guildId?: string; userId?: string };
+      if (!params.guildId || !params.userId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "raids"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const config = await getGuildConfig(params.guildId);
+      const mappings = await listGuildMappings(params.guildId);
+      const roleSync = await syncRosterRankRole(
+        params.guildId,
+        params.userId,
+        resolveRosterRankRoles(mappings, config),
+        null,
+      );
+      const profileActive = (await setRosterProfileActive(
+        params.guildId,
+        params.userId,
+        false,
+      ))
+        ? false
+        : undefined;
+      // Los roles cambiaron en Discord: la lista de miembros cacheada quedó
+      // vieja y, sin esto, la persona seguía apareciendo hasta 4 minutos más.
+      invalidateGuildMembers(params.guildId);
+
+      await logAdminAction(session, params.guildId, "roster:remove", {
+        details: `${params.userId} fuera del roster (roles de Raid/Bench quitados${profileActive === false ? ", ficha inactiva" : ""})${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
+        targetId: params.userId,
+        targetType: "user",
+      });
+
+      return {
+        ok: true,
+        profileActive,
+        rank: null,
+        roleSyncError: roleSync.ok ? undefined : roleSync.detail,
+      };
+    },
+  );
 
   // Rol de Discord que representa cada rango del roster.
   app.put("/guilds/:guildId/roster/ranks", async (request, reply) => {

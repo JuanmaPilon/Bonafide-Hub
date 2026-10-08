@@ -1571,10 +1571,30 @@ export async function setRosterRank(
   guildId: string,
   userId: string,
   rank: RosterRankKey | null,
-): Promise<{ rank: RosterRankKey | null; roleSyncError?: string }> {
-  return requestJson<{ rank: RosterRankKey | null; roleSyncError?: string }>(
-    `/guilds/${guildId}/roster/${encodeURIComponent(userId)}/rank`,
-    { body: JSON.stringify({ rank }), method: "PUT" },
+): Promise<{
+  rank: RosterRankKey | null;
+  reactivated?: boolean;
+  roleSyncError?: string;
+}> {
+  return requestJson<{
+    rank: RosterRankKey | null;
+    reactivated?: boolean;
+    roleSyncError?: string;
+  }>(`/guilds/${guildId}/roster/${encodeURIComponent(userId)}/rank`, {
+    body: JSON.stringify({ rank }),
+    method: "PUT",
+  });
+}
+
+// Quitar a alguien del roster: le saca los roles de estado en Discord y deja su
+// ficha inactiva (no se pierde la clase/spec: vuelve sola al ponerle un rol).
+export async function removeRosterMember(
+  guildId: string,
+  userId: string,
+): Promise<{ profileActive?: boolean; roleSyncError?: string }> {
+  return requestJson<{ profileActive?: boolean; roleSyncError?: string }>(
+    `/guilds/${guildId}/roster/${encodeURIComponent(userId)}/remove`,
+    { method: "POST" },
   );
 }
 

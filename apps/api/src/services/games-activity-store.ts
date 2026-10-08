@@ -267,35 +267,72 @@ export async function listGuildGameActivity(input: {
     where: { day: { gte: since }, guildId: input.guildId },
   })) as ActivityRow[];
 
-  const byApplication = new Map<
+  // Se agrupa por NOMBRE normalizado y no por id de aplicación: Discord tiene
+  // más de un id para el mismo juego (ids viejos/nuevos, una beta aparte), y
+  // agrupando por id el carrusel mostraba la misma tarjeta dos veces (con la
+  // misma portada, porque se resuelve por nombre). Los jugadores y los días se
+  // unen entre esos ids: es el mismo juego para la guild.
+  const byGame = new Map<
     string,
-    { activeDays: Set<string>; name: string; players: Set<string> }
+    {
+      activeDays: Set<string>;
+      // Ids que reportaron ese nombre, con cuántas filas: el que más aparece es
+      // el que se usa para la portada.
+      byApplication: Map<string, number>;
+      name: string;
+      players: Set<string>;
+    }
   >();
   for (const row of rows) {
     const applicationId = row.applicationId;
-    if (!applicationId) {
+    const key = normalizeName(row.applicationName);
+    if (!applicationId || !key) {
       continue;
     }
-    const entry = byApplication.get(applicationId) ?? {
+    const entry = byGame.get(key) ?? {
       activeDays: new Set<string>(),
+      byApplication: new Map<string, number>(),
       name: row.applicationName,
       players: new Set<string>(),
     };
-    // El nombre puede cambiar del lado de Discord: vale el último visto.
+    // El nombre de Discord puede cambiar (mayúsculas, un ":" de más): vale el
+    // último visto, así la tarjeta muestra el más reciente.
     entry.name = row.applicationName;
     entry.activeDays.add(row.day);
     entry.players.add(row.userId);
-    byApplication.set(applicationId, entry);
+    entry.byApplication.set(
+      applicationId,
+      (entry.byApplication.get(applicationId) ?? 0) + 1,
+    );
+    byGame.set(key, entry);
   }
 
-  const games: GuildGameActivity[] = [...byApplication.entries()]
-    .filter(([, entry]) => !NON_GAME_APPLICATIONS.has(normalizeName(entry.name)))
-    .map(([applicationId, entry]) => ({
-      applicationId,
-      days: entry.activeDays.size,
-      name: entry.name,
-      players: entry.players.size,
-    }))
+  const index = await loadCoverHashes();
+  const games: GuildGameActivity[] = [...byGame.entries()]
+    .filter(([key]) => !NON_GAME_APPLICATIONS.has(key))
+    .map(([, entry]) => {
+      // Los ids del mismo juego, del que más actividad tiene al que menos: la
+      // portada se busca en ese orden, así un id viejo sin portada no deja la
+      // tarjeta vacía.
+      const ids = [...entry.byApplication.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([id]) => id);
+      const applicationId = ids[0];
+      let coverUrl: string | undefined;
+      for (const id of ids) {
+        coverUrl = resolveApplicationImage(id, entry.name, index);
+        if (coverUrl) {
+          break;
+        }
+      }
+      return {
+        applicationId,
+        coverUrl,
+        days: entry.activeDays.size,
+        name: entry.name,
+        players: entry.players.size,
+      };
+    })
     .sort(
       (a, b) =>
         b.players - a.players ||
@@ -304,11 +341,5 @@ export async function listGuildGameActivity(input: {
     )
     .slice(0, MAX_GAMES);
 
-  const index = await loadCoverHashes();
-  return games.map((game) => ({
-    ...game,
-    coverUrl: game.applicationId
-      ? resolveApplicationImage(game.applicationId, game.name, index)
-      : undefined,
-  }));
+  return games;
 }

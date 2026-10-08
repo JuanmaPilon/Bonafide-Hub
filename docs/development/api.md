@@ -67,15 +67,28 @@ Roster de raids:
 
 1. `GET /guilds/:guildId/roster` (miembros, fichas, clases secundarias y rangos)
 2. `PUT /guilds/:guildId/roster/me` y `PUT /guilds/:guildId/roster/:userId` (ficha: clase, spec, offs, tags y `alts`)
-3. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `trial` | `null`)
-4. `PUT /guilds/:guildId/roster/ranks` (mapeo rango → rol de Discord)
-5. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha y sus clases secundarias)
+3. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `bench` | `null`)
+4. `POST /guilds/:guildId/roster/:userId/remove` (quitar del roster: saca los roles de estado y deja la ficha inactiva)
+5. `PUT /guilds/:guildId/roster/ranks` (mapeo rango → rol de Discord)
+6. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha y sus clases secundarias)
 
 El estado del roster **es** el rol de Discord del miembro: solo el endpoint de
-rango mueve roles. Administra `raid` (Activo) y `trial` (Prueba); `guild`
+rango mueve roles. Administra `raid` (Activo) y `bench` (Bench); `guild`
 (Raid Officer) se mapea aparte y el roster nunca lo toca. Guardar la ficha no toca
 los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
 el motivo y el guardado no se pierde.
+
+**Quién aparece en la lista:** un miembro entra al roster si tiene el rol de
+`raid`, el de `bench`, el de Raid Officer **o una ficha activa** — o sea que tener
+ficha alcanza para figurar, aunque no tenga ningún rol de estado (la tarjeta sale
+como "Inactivo" y se puede cambiar el estado desde ahí). Por eso "quitar del
+roster" (`/remove`) hace dos cosas: saca los dos roles de estado en Discord **y**
+marca la ficha `active: false`, que es lo que la esconde de la lista. La clase, la
+spec y los alters **no se borran**: al volver a ponerle un rol de estado (desde el
+mismo menú) la ficha se reactiva sola (`reactivated: true`). Elegir "Inactivo", en
+cambio, solo saca los roles y deja la persona a la vista, para saber quién está
+afuera. Los dos endpoints tiran la caché de miembros (4 min) después de tocar
+roles, así el cambio se ve al instante.
 
 Clases secundarias ("alter"): `alts: [{ className, specName }]` (tope 4) viajan
 en el mismo PUT que la ficha y reemplazan la lista completa. Se guardan en
@@ -210,6 +223,13 @@ distintos, hasta 3 y con un mínimo de 2 jugadores —con uno solo no hay nada q
 distinguir, y `source: "configured"` viene con todo en cero, o sea sin
 distintivo—. Los cortes viven en la web (`GAME_HOT_COUNT` /
 `GAME_HOT_MIN_PLAYERS`, `apps/web/src/main.tsx`): el API no sabe de presentación.
+
+La agregación agrupa por **nombre normalizado**, no por id de aplicación: Discord
+tiene más de un id para el mismo juego (ids viejos y nuevos, una beta aparte) y
+agrupando por id el carrusel mostraba la misma tarjeta dos veces (con la misma
+portada, porque se resuelve por nombre). Los jugadores y los días de esos ids se
+**unen**, y la portada se busca empezando por el id con más actividad, para que un
+id viejo sin portada no deje la tarjeta vacía.
 
 La portada (`coverUrl`) es la que Discord muestra en su panel de "Juegos
 jugados". No se puede pedir por app: `GET /applications/{id}` está cerrado (401

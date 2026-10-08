@@ -3053,6 +3053,19 @@ a:hover {
   color: #ff9292;
 }
 
+/* Quitar del roster: la acción destructiva del menú, separada del resto. */
+.roster-status-option--quitar {
+  margin-top: 4px;
+  border-top: 1px solid rgba(229, 72, 77, 0.35);
+  border-radius: 0 0 8px 8px;
+  color: #ff9292;
+  font-weight: 700;
+}
+
+.roster-status-option--quitar:hover {
+  background: rgba(229, 72, 77, 0.18);
+}
+
 .roster-status-badge {
   padding: 3px 7px;
   border: 1px solid rgba(229, 72, 77, 0.55);

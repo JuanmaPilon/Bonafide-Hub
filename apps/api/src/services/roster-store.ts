@@ -93,6 +93,22 @@ export async function deleteRosterProfile(
   return result.count > 0;
 }
 
+// Ficha dentro o fuera del roster. Quitar a alguien del roster la deja
+// `active: false` en vez de borrarla: la clase, la spec y los alters quedan
+// guardados para cuando vuelva (y volver es solo ponerle el rol de estado otra
+// vez: ver el endpoint de rango). Devuelve false si no tenía ficha.
+export async function setRosterProfileActive(
+  guildId: string,
+  userId: string,
+  active: boolean,
+): Promise<boolean> {
+  const result = await prisma.rosterProfile.updateMany({
+    data: { active },
+    where: { guildId, userId },
+  });
+  return result.count > 0;
+}
+
 // Alters agrupados por persona: el roster pide todos los de la guild de una.
 export async function listRosterAlts(
   guildId: string,

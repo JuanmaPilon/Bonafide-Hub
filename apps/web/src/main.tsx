@@ -96,6 +96,7 @@ import {
   resetEventOccurrence,
   saveMemberRosterProfile,
   saveMyRosterProfile,
+  removeRosterMember,
   setRosterRank,
   scanRaidLogs,
   updateEvent,
@@ -2760,6 +2761,41 @@ function RosterSection({
     }
   }
 
+  // Quitar del roster: saca los roles de estado en Discord y deja la ficha
+  // inactiva, así la tarjeta desaparece de la lista (la clase/spec quedan
+  // guardadas y vuelven si se le pone un rol de estado otra vez).
+  async function removeFromRoster(member: RosterMember): Promise<void> {
+    if (!canEditOthers) {
+      return;
+    }
+    try {
+      const result = await removeRosterMember(guildId, member.userId);
+      setRoster((current) =>
+        current
+          ? {
+              ...current,
+              members: current.members.filter(
+                (row) => row.userId !== member.userId,
+              ),
+            }
+          : current,
+      );
+      notify(
+        result.roleSyncError
+          ? `Quitado del roster. Pero Discord: ${result.roleSyncError}`
+          : "Quitado del roster.",
+        result.roleSyncError ? "error" : "success",
+      );
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudo quitar del roster.",
+        "error",
+      );
+    }
+  }
+
   async function deleteProfile(): Promise<void> {
     const target = sheetFor;
     if (!target || !canEditOthers) {
@@ -3045,6 +3081,18 @@ function RosterSection({
                       type="button"
                     >
                       Inactivo
+                    </button>
+                    <button
+                      className="roster-status-option roster-status-option--quitar"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setRankMenuFor(null);
+                        void removeFromRoster(member);
+                      }}
+                      title="Saca los roles de Raid y Bench en Discord y la ficha del roster (la clase y la spec quedan guardadas)"
+                      type="button"
+                    >
+                      Quitar del roster
                     </button>
                   </div>
                 ) : null}
