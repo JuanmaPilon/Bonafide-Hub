@@ -83,10 +83,6 @@ const DIFFICULTIES: Array<{
 // encuentro: el NOMBRE cambia con el idioma del cliente que subió el log
 // ("The Coiled Altar" vs "El Altar Serpenteante") y con el nombre el mismo jefe
 // contaba dos veces (un boss de más y "10/10" en una raid de 9).
-//
-// El chip de Total es de la raid: bosses matados **al menos una vez** sobre
-// bosses vistos, sin importar la dificultad ("la raid está limpia" cuando
-// cayeron todos).
 function progression(nights: Night[]): {
   difficulties: Array<{
     killed: number;
@@ -94,11 +90,8 @@ function progression(nights: Night[]): {
     short: string;
     total: number;
   }>;
-  total: { killed: number; seen: number };
   zoneName?: string;
 } {
-  const killedAny = new Set<string>();
-  const seenAny = new Set<string>();
   const zoneNames = new Set<string>();
   for (const night of nights) {
     for (const fight of night.fights) {
@@ -122,10 +115,8 @@ function progression(nights: Night[]): {
           }
           const key = fightKey(fight);
           seen.add(key);
-          seenAny.add(key);
           if (fight.kill) {
             killed.add(key);
-            killedAny.add(key);
           }
         }
       }
@@ -145,7 +136,6 @@ function progression(nights: Night[]): {
       short: entry.short,
       total,
     })),
-    total: { killed: killedAny.size, seen: seenAny.size },
     // El nombre de la raid solo se muestra cuando todos los logs son de una
     // misma: si hay más de una, la etiqueta mentiría.
     zoneName: zoneNames.size === 1 ? [...zoneNames][0] : undefined,
@@ -702,19 +692,10 @@ export function RaidLogsBoard({
             <span>Noches</span>
           </div>
           <div className="rlb-stat">
-            {/* Progresión de la guild: el total de la raid y un chip por
-                dificultad jugada. */}
+            {/* Progresión de la guild: un chip por dificultad jugada. */}
             <strong className="rlb-progress">
-              {progress.difficulties.length > 0 ? (
-                <>
-                  <span
-                    className="rlb-progress-chip rlb-progress-chip--total"
-                    title={`Total: ${progress.total.killed} de ${progress.total.seen} bosses matados al menos una vez`}
-                  >
-                    {progress.total.killed}/{progress.total.seen}
-                    <i>Total</i>
-                  </span>
-                  {progress.difficulties.map((entry) => (
+              {progress.difficulties.length > 0
+                ? progress.difficulties.map((entry) => (
                     <span
                       className={`rlb-progress-chip${entry.killed >= entry.total ? " full" : ""}`}
                       key={entry.short}
@@ -723,11 +704,8 @@ export function RaidLogsBoard({
                       {entry.killed}/{entry.total}
                       <i>{entry.short}</i>
                     </span>
-                  ))}
-                </>
-              ) : (
-                "—"
-              )}
+                  ))
+                : "—"}
             </strong>
             <span>
               Progresión{progress.zoneName ? ` · ${progress.zoneName}` : ""}

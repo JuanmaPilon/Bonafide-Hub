@@ -157,14 +157,12 @@ El tablero muestra la **progresión** de la guild por dificultad (N / H / M): bo
 distintos matados sobre bosses distintos enfrentados, sobre todos los logs. El
 denominador sale del mayor número de bosses vistos en una dificultad (Warcraft
 Logs no dice cuántos tiene la banda, y los que todavía no se intentaron no pueden
-contar como "vistos"). El chip de **Total** es de la raid: bosses matados **al
-menos una vez** sobre bosses vistos, sin importar la dificultad ("la raid está
-limpia" cuando cayeron todos). La etiqueta muestra el nombre de la raid
-(`zoneName`) solo cuando **todos** los logs son de la misma; con más de una, la
-etiqueta mentiría y se omite. Las listas largas del análisis (DPS, muertes,
-consumibles, por pull) se cortan **a la misma altura en las dos columnas** — la de
-la lista más corta de la fila, con 320px de techo — y se abren con el triángulo
-del pie de la lista; el triángulo aparece solo si hay algo tapado.
+contar como "vistos"). La etiqueta muestra el nombre de la raid (`zoneName`) solo
+cuando **todos** los logs son de la misma; con más de una, la etiqueta mentiría y se
+omite. Las listas largas del análisis (DPS, muertes, consumibles, por pull) se
+cortan **a la misma altura en las dos columnas** — la de la lista más corta de la
+fila, con 320px de techo — y se abren con el triángulo del pie de la lista; el
+triángulo aparece solo si hay algo tapado.
 
 **La identidad de un boss es su id de encuentro, no su nombre**: el nombre cambia
 con el idioma del cliente que subió el log ("The Coiled Altar" vs "El Altar
