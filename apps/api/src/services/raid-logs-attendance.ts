@@ -1,9 +1,25 @@
 import { prisma } from "../db/prisma.js";
+import { bestSimilarName, characterKey, nameKey } from "./name-match.js";
+import { listRaidLogAliasesByUser } from "./raid-log-aliases-store.js";
 
 export type PlayerRole = "dps" | "healer" | "tank";
 
 export type RaidLogAttendance = {
   event?: { id: string; startsAt: string; title: string };
+  // Parecidos que NO se cuentan como asistencia: dos nombres que se parecen
+  // mucho pueden ser la misma persona (se anotó con un typo), pero darlo por
+  // hecho sería un falso positivo. El staff lo confirma y ahí queda guardado
+  // como exacto para los próximos cruces.
+  likelyPresent: Array<{
+    // Nombre que figura en el log: es el que se guarda al confirmar.
+    logName: string;
+    // Nombre con el que se anotó.
+    name: string;
+    pulls: number;
+    similarity: number;
+    status: string;
+    userId: string;
+  }>;
   // true cuando no se pudo leer la presencia por pull (CombatantInfo) y los
   // participantes salieron de la tabla de daño: los healers sin daño pueden
   // faltar, así que un "no vino" puede ser un falso negativo.
@@ -28,14 +44,8 @@ const EVENT_WINDOW_MS = 14 * 60 * 60 * 1000;
 // muestran como "vinieron sin confirmar" en vez de sumar asistencia esperada.
 const EXPECTED_STATUSES = new Set(["yes", "late"]);
 
-// Los personajes se guardan a veces como "Nombre-Reino"; WCL no trae el reino.
-function normalizeName(value: string | null | undefined, stripRealm: boolean) {
-  const base = stripRealm ? (value ?? "").split("-")[0] : (value ?? "");
-  return base
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/gi, "")
-    .toLowerCase();
+function hasText(value: string | null | undefined): value is string {
+  return Boolean(value?.trim());
 }
 
 export async function crossRaidAttendance(input: {
@@ -49,6 +59,7 @@ export async function crossRaidAttendance(input: {
     (a, b) => b.pulls - a.pulls || a.name.localeCompare(b.name),
   );
   const result: RaidLogAttendance = {
+    likelyPresent: [],
     partial: Boolean(input.partialParticipants),
     players,
     signedAbsent: [],
@@ -89,43 +100,110 @@ export async function crossRaidAttendance(input: {
     title: event.title,
   };
 
-  const profiles = await prisma.eventPlayerProfile.findMany({
-    where: {
-      guildId: input.guildId,
-      userId: { in: event.signups.map((signup) => signup.userId) },
-    },
-  });
+  const userIds = event.signups.map((signup) => signup.userId);
+  const [profiles, aliases] = await Promise.all([
+    prisma.eventPlayerProfile.findMany({
+      where: { guildId: input.guildId, userId: { in: userIds } },
+    }),
+    listRaidLogAliasesByUser(input.guildId, userIds),
+  ]);
   const profileCharacter = new Map(
     profiles.map((profile) => [profile.userId, profile.character]),
   );
+
   const presentByKey = new Map(
-    players.map((player) => [normalizeName(player.name, false), player]),
+    players.map((player) => [nameKey(player.name), player]),
   );
   const statusByKey = new Map<string, string>();
+  // Nombres del log ya asignados: un jugador no puede ser la asistencia de dos
+  // inscripciones distintas.
+  const attributed = new Set<string>();
 
-  for (const signup of event.signups) {
-    const characters = [
-      signup.character,
-      profileCharacter.get(signup.userId),
-    ].filter((value): value is string => Boolean(value?.trim()));
+  // Con qué nombres se puede identificar a cada miembro: el de esta
+  // inscripción, el recordado y los PJ que el staff confirmó en otros cruces.
+  const entries = event.signups.map((signup) => {
+    const characters = [signup.character, profileCharacter.get(signup.userId)]
+      .filter(hasText)
+      .map((value) => value.trim());
     const keys = [
-      ...characters.map((value) => normalizeName(value, true)),
-      normalizeName(signup.username, false),
+      ...characters.map(characterKey),
+      ...(aliases.get(signup.userId) ?? []),
+      nameKey(signup.username),
     ].filter(Boolean);
-    const matchedKey = keys.find((key) => presentByKey.has(key));
-    if (matchedKey) {
-      statusByKey.set(matchedKey, signup.status);
+    return { characters, keys, signup };
+  });
+
+  // 1) Exactos: mismo nombre normalizado (o un PJ ya confirmado a mano).
+  const exact = new Set<string>();
+  for (const entry of entries) {
+    const matchedKey = entry.keys.find((key) => presentByKey.has(key));
+    if (!matchedKey) {
+      continue;
     }
+    exact.add(entry.signup.userId);
+    attributed.add(matchedKey);
+    statusByKey.set(matchedKey, entry.signup.status);
+  }
+
+  // 2) Parecidos: solo entre los que comprometieron asistir (los que se
+  // cuentan), solo con los que siguen sin dueño y solo si hay un PJ escrito:
+  // el nombre de Discord no sirve para esto.
+  const likely = new Map<
+    string,
+    { logName: string; pulls: number; similarity: number }
+  >();
+  for (const entry of entries) {
+    if (
+      exact.has(entry.signup.userId) ||
+      !EXPECTED_STATUSES.has(entry.signup.status) ||
+      entry.characters.length === 0
+    ) {
+      continue;
+    }
+    const free = players.filter(
+      (player) => !attributed.has(nameKey(player.name)),
+    );
+    const match = bestSimilarName(entry.characters[0], [
+      ...new Set(free.map((player) => player.name)),
+    ]);
+    if (!match) {
+      continue;
+    }
+    const matchedKey = nameKey(match.name);
+    likely.set(entry.signup.userId, {
+      logName: match.name,
+      pulls: presentByKey.get(matchedKey)?.pulls ?? 0,
+      similarity: Math.round(match.ratio * 100) / 100,
+    });
+    attributed.add(matchedKey);
+    statusByKey.set(matchedKey, entry.signup.status);
+  }
+
+  for (const entry of entries) {
+    const { signup } = entry;
     if (!EXPECTED_STATUSES.has(signup.status)) {
       continue;
     }
-
     result.signedTotal += 1;
-    if (matchedKey) {
+    if (exact.has(signup.userId)) {
       result.signedPresent += 1;
-    } else if (characters.length > 0) {
+      continue;
+    }
+    const probable = likely.get(signup.userId);
+    if (probable) {
+      result.likelyPresent.push({
+        logName: probable.logName,
+        name: entry.characters[0].split("-")[0],
+        pulls: probable.pulls,
+        similarity: probable.similarity,
+        status: signup.status,
+        userId: signup.userId,
+      });
+      continue;
+    }
+    if (entry.characters.length > 0) {
       result.signedAbsent.push({
-        name: characters[0].split("-")[0],
+        name: entry.characters[0].split("-")[0],
         status: signup.status,
       });
     } else {
@@ -148,6 +226,7 @@ export async function crossRaidAttendance(input: {
     });
   }
   result.unsignedPresent.sort((a, b) => b.pulls - a.pulls);
+  result.likelyPresent.sort((a, b) => b.similarity - a.similarity);
 
   return result;
 }

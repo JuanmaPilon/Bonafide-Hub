@@ -99,6 +99,9 @@ type WclActor = {
 type WclAnalysisReport = {
   fights?: WclAnalysisFight[];
   friendlies?: WclActor[];
+  // Inicio del report (epoch ms): permite ubicar cada pull en hora absoluta y
+  // así detectar pulls repetidos entre reports de la misma noche.
+  start?: number;
 };
 
 type WclDeathEvent = {
@@ -199,6 +202,7 @@ type RaidReportPart = {
   fights: WclAnalysisFight[];
   friendlies: WclActor[];
   roles?: Map<string, RaidRole>;
+  start?: number;
 };
 
 type FightResult = {
@@ -216,11 +220,25 @@ type FightResult = {
 const ANALYSIS_CACHE_TTL_MS = 10 * 60 * 1000;
 const ANALYSIS_CACHE_LIMIT = 100;
 const ANALYSIS_CONCURRENCY = 3;
+// Dos reports de la misma noche marcan el mismo pull con unos segundos de
+// diferencia (cada uno arranca su reloj en un momento distinto).
+const FIGHT_OVERLAP_MS = 15 * 1000;
 const analysisCache = new Map<
   string,
   { analysis: RaidLogAnalysis; expiresAt: number }
 >();
 const analysisInFlight = new Map<string, Promise<RaidLogAnalysis>>();
+
+// El análisis se cachea por noche; lo que lo cambia desde afuera (un PJ
+// confirmado a mano) tiene que poder tirarlo para que el próximo pedido lo
+// vuelva a armar con el dato nuevo.
+export function invalidateRaidLogAnalysis(guildId: string): void {
+  for (const key of analysisCache.keys()) {
+    if (key.startsWith(`${guildId}:`)) {
+      analysisCache.delete(key);
+    }
+  }
+}
 
 async function mapWithConcurrency<T, R>(
   values: T[],
@@ -792,17 +810,45 @@ async function buildRaidLogNightAnalysis(
         fights,
         friendlies: report.friendlies ?? [],
         roles,
+        start: typeof report.start === "number" ? report.start : undefined,
       };
     }),
   );
-  const jobs = reports.flatMap((report) =>
-    report.fights.map((fight, index) => ({
-      actors: report.actors,
-      code: report.code,
-      extras: report.consumables?.fights[index],
-      fight,
-    })),
-  );
+  // Dos reports distintos de la misma noche (dos personas loggeando la misma
+  // raid) traen los MISMOS pulls duplicados: se comparan por boss + hora
+  // absoluta y se analiza cada pull una sola vez.
+  const jobs: FightJob[] = [];
+  const fightStarts = new Map<string, number[]>();
+  let repeatedFights = 0;
+  for (const report of reports) {
+    report.fights.forEach((fight, index) => {
+      const absoluteStart =
+        report.start !== undefined && typeof fight.start_time === "number"
+          ? report.start + fight.start_time
+          : undefined;
+      if (absoluteStart !== undefined) {
+        const boss = fight.name ?? "";
+        const starts = fightStarts.get(boss) ?? [];
+        if (starts.some((time) => Math.abs(time - absoluteStart) <= FIGHT_OVERLAP_MS)) {
+          repeatedFights += 1;
+          return;
+        }
+        starts.push(absoluteStart);
+        fightStarts.set(boss, starts);
+      }
+      jobs.push({
+        actors: report.actors,
+        code: report.code,
+        extras: report.consumables?.fights[index],
+        fight,
+      });
+    });
+  }
+  if (repeatedFights > 0) {
+    console.log(
+      `[raid-logs] ${selected.reportCode}: ${repeatedFights} pull/s repetidos entre los reports de la noche (se contaron una sola vez)`,
+    );
+  }
 
   const fightResults = await mapWithConcurrency(
     jobs,

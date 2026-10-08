@@ -400,6 +400,25 @@ model EventPlayerProfile {
   @@map("event_player_profiles")
 }
 
+// PJ de un miembro dado por bueno en el cruce de asistencia de los logs: el
+// nombre tal como figura en Warcraft Logs. Existe porque en la inscripción el
+// nombre puede quedar escrito distinto (un typo, otro nombre); una vez
+// confirmado, el cruce lo toma como exacto y no vuelve a figurar como "no vino"
+// ni como "vino sin anotarse".
+model EventPlayerCharacter {
+  guildId   String
+  userId    String
+  // Nombre normalizado (sin reino, sin acentos, minúsculas): clave de comparación.
+  nameKey   String
+  // Nombre tal como figura en el log, para mostrarlo.
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([guildId, userId, nameKey])
+  @@map("event_player_characters")
+}
+
 // Catálogo de specs configurable por guild y por JUEGO (estilo Raid Helper):
 // cada fila es un (juego, rol, clase, spec) con su emoji custom opcional. Lo
 // administra el staff desde el panel Admin y alimenta el selector y el roster

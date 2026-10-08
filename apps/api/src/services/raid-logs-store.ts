@@ -219,7 +219,7 @@ export async function listRaidLogs(guildId: string): Promise<RaidLog[]> {
     where: { guildId, hidden: false },
     orderBy: { createdAt: "desc" },
   });
-  const logs = records.map(toRaidLog);
+  const logs = dedupeByReportCode(records.map(toRaidLog));
 
   // Marca las entradas publicadas cuyo mensaje quedó desactualizado para que
   // la web pueda ofrecer una actualización explícita.
@@ -259,6 +259,72 @@ export async function listHiddenRaidLogs(guildId: string): Promise<RaidLog[]> {
   return records.map(toRaidLog);
 }
 
+// De dos filas del MISMO report se queda con la que más avanzó: la publicada,
+// si no la que más fights tiene, y si no la sincronizada más recientemente.
+function keepBestReport(first: RaidLog, second: RaidLog): RaidLog {
+  if (first.discordPosted !== second.discordPosted) {
+    return first.discordPosted ? first : second;
+  }
+  if (first.fightCount !== second.fightCount) {
+    return first.fightCount > second.fightCount ? first : second;
+  }
+  return (first.lastSyncedAt?.getTime() ?? 0) >=
+    (second.lastSyncedAt?.getTime() ?? 0)
+    ? first
+    : second;
+}
+
+// Un mismo report guardado dos veces caería dos veces en la misma entrada (se
+// agrupan por título + noche) y el análisis bajaría el report dos veces.
+function dedupeByReportCode(logs: RaidLog[]): RaidLog[] {
+  const byCode = new Map<string, RaidLog>();
+  for (const log of logs) {
+    const keeper = byCode.get(log.reportCode);
+    byCode.set(log.reportCode, keeper ? keepBestReport(keeper, log) : log);
+  }
+  return [...byCode.values()];
+}
+
+// Saca de circulación los reports repetidos que ya estaban guardados: se ocultan
+// (no se borran) y solo si nunca se publicaron, para no dejar el mensaje de
+// Discord huérfano. Devuelve cuántos ocultó.
+export async function hideDuplicateRaidLogs(guildId: string): Promise<number> {
+  const records = await prisma.raidLog.findMany({
+    where: { guildId, hidden: false },
+    orderBy: { createdAt: "desc" },
+  });
+  const groups = new Map<string, RaidLog[]>();
+  for (const log of records.map(toRaidLog)) {
+    const bucket = groups.get(log.reportCode);
+    if (bucket) {
+      bucket.push(log);
+    } else {
+      groups.set(log.reportCode, [log]);
+    }
+  }
+
+  const duplicates: string[] = [];
+  for (const parts of groups.values()) {
+    if (parts.length < 2) {
+      continue;
+    }
+    const keeper = parts.reduce(keepBestReport);
+    for (const part of parts) {
+      if (part.id !== keeper.id && !part.discordPosted) {
+        duplicates.push(part.id);
+      }
+    }
+  }
+  if (duplicates.length === 0) {
+    return 0;
+  }
+  const result = await prisma.raidLog.updateMany({
+    data: { hidden: true },
+    where: { id: { in: duplicates } },
+  });
+  return result.count;
+}
+
 export async function getRaidLog(id: string): Promise<RaidLog | null> {
   const record = await prisma.raidLog.findUnique({ where: { id } });
   return record ? toRaidLog(record) : null;
@@ -268,7 +334,24 @@ export async function createRaidLog(input: {
   guildId: string;
   reportCode: string;
   reportUrl: string;
-}): Promise<RaidLog> {
+}): Promise<{ created: boolean; log: RaidLog }> {
+  // Un mismo report entra una sola vez: pegar el link dos veces (o que lo pegue
+  // otra persona) duplicaba la entrada y el análisis bajaba el report una vez
+  // por fila, contando cada pull y cada muerte al doble.
+  const existing = await prisma.raidLog.findFirst({
+    where: { guildId: input.guildId, reportCode: input.reportCode },
+  });
+  if (existing) {
+    // Pedir explícitamente un log oculto lo trae de vuelta.
+    const record = existing.hidden
+      ? await prisma.raidLog.update({
+          data: { hidden: false },
+          where: { id: existing.id },
+        })
+      : existing;
+    return { created: false, log: toRaidLog(record) };
+  }
+
   const record = await prisma.raidLog.create({
     data: {
       guildId: input.guildId,
@@ -276,7 +359,7 @@ export async function createRaidLog(input: {
       reportUrl: input.reportUrl,
     },
   });
-  return toRaidLog(record);
+  return { created: true, log: toRaidLog(record) };
 }
 
 export async function deleteRaidLog(
@@ -597,13 +680,13 @@ export async function syncGuildWatch(input: {
       if (existingCodes.has(report.id)) {
         continue;
       }
-      const createdLog = await createRaidLog({
+      const result = await createRaidLog({
         guildId: input.guildId,
         reportCode: report.id,
         reportUrl: `https://www.warcraftlogs.com/reports/${report.id}`,
       });
       existingCodes.add(report.id);
-      created.push(createdLog);
+      created.push(result.log);
     }
 
     // Registrar también escaneos sin resultados ayuda a distinguirlos de fallos.

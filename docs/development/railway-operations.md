@@ -47,7 +47,7 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 ### API
 
 1. Pre-deploy: `npx prisma db push --accept-data-loss`
-   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`, `karuta_album_pages`).
+   - Crea/actualiza las tablas nuevas del schema (ej. `audit_log_entries`, `admin_role_modules`, `communications`, `daily_messages`, `raid_logs`, `event_player_characters`, `karuta_album_pages`).
    - ⚠️ **Usar `--accept-data-loss`**: cuando el schema quita columnas/tablas (p. ej. al eliminar un módulo, como se hizo con `karuta_drops` y `karuta_debug_events`), un `prisma db push` pelado **falla** y el deploy de la API no avanza. Con el flag, borra solo lo que ya no está en `schema.prisma`.
 2. Build: `npm ci --include=dev && npm run build`
 3. Start: `npm run start`

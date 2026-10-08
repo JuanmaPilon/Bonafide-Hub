@@ -47,6 +47,7 @@ import {
   createRaidLog,
   deleteRaidLog,
   extractReportCode,
+  hideDuplicateRaidLogs,
   hideRaidLog,
   listHiddenRaidLogs,
   listRaidLogs,
@@ -59,7 +60,11 @@ import {
   publishRaidLogEntry,
   updateRaidLogEntry,
 } from "./services/raid-logs-publisher.js";
-import { analyzeRaidLogNight } from "./services/raid-logs-analysis.js";
+import {
+  analyzeRaidLogNight,
+  invalidateRaidLogAnalysis,
+} from "./services/raid-logs-analysis.js";
+import { saveRaidLogAlias } from "./services/raid-log-aliases-store.js";
 import {
   listGuildGameActivity,
   recordGameActivity,
@@ -4800,18 +4805,28 @@ export function buildApp() {
       reportUrl,
     });
 
-    const result = await refreshRaidLog(created.id);
+    const result = await refreshRaidLog(created.log.id);
 
-    await logAdminAction(session, params.guildId, "raid-log:create", {
-      details: `Log de raid agregado (borrador sin publicar): ${code}`,
-      targetType: "raid-log",
-      targetId: created.id,
-    });
+    await logAdminAction(
+      session,
+      params.guildId,
+      created.created ? "raid-log:create" : "raid-log:repeated",
+      {
+        details: created.created
+          ? `Log de raid agregado (borrador sin publicar): ${code}`
+          : `Log de raid ya cargado, se reutilizó la entrada existente: ${code}`,
+        targetType: "raid-log",
+        targetId: created.log.id,
+      },
+    );
 
     return {
       ok: true,
       guildId: params.guildId,
-      log: result.log ?? created,
+      // `created: false` cuando el report ya estaba: la web avisa en vez de
+      // mostrar un borrador nuevo que en realidad es el mismo.
+      created: created.created,
+      log: result.log ?? created.log,
       error: result.error,
     };
   });
@@ -4856,6 +4871,10 @@ export function buildApp() {
       await refreshRaidLog(created.id);
     }
 
+    // El escaneo es el momento de mantenimiento: acá se sacan de circulación
+    // los reports repetidos que quedaron guardados de antes.
+    const repeated = await hideDuplicateRaidLogs(params.guildId);
+
     const drafts = (await listRaidLogs(params.guildId)).filter(
       (log) => !log.discordPosted,
     );
@@ -4864,7 +4883,7 @@ export function buildApp() {
     }
 
     console.log(
-      `[raid-logs] scan manual (guild ${params.guildId}): ${detected} report/s nuevo/s, ${drafts.length} borrador/es refrescado/s`,
+      `[raid-logs] scan manual (guild ${params.guildId}): ${detected} report/s nuevo/s, ${repeated} repetido/s ocultado/s, ${drafts.length} borrador/es refrescado/s`,
     );
 
     return {
@@ -4872,6 +4891,56 @@ export function buildApp() {
       guildId: params.guildId,
       detected,
       logs: await listRaidLogs(params.guildId),
+      repeated,
+    };
+  });
+
+  // Confirmación del staff: este nombre del log es el PJ de este miembro
+  // ("Azaio" se anotó pero en el log figura "Azzaio"). Queda guardado y los
+  // próximos cruces lo toman como exacto.
+  app.post("/guilds/:guildId/raid-logs/aliases", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { name?: string; userId?: string };
+    const userId = body.userId?.trim();
+    const name = body.name?.trim();
+    if (!userId || !name) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Falta el miembro o el nombre del log" });
+    }
+
+    const alias = await saveRaidLogAlias({
+      guildId: params.guildId,
+      name,
+      userId,
+    });
+    // El análisis de la noche está cacheado: sin esto el nombre seguiría
+    // apareciendo como "posible" hasta que venza el cache.
+    invalidateRaidLogAnalysis(params.guildId);
+
+    await logAdminAction(session, params.guildId, "raid-log:alias", {
+      details: `PJ confirmado en los logs: ${alias.name} → miembro ${userId}`,
+      targetId: userId,
+      targetType: "raid-log-alias",
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      alias,
     };
   });
 

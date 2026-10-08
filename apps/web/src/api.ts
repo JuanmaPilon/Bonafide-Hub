@@ -104,6 +104,16 @@ export type RaidLogAttendancePlayer = {
 
 export type RaidLogAttendance = {
   event?: { id: string; startsAt: string; title: string };
+  // Nombres del log que se parecen al de la inscripción pero no coinciden: se
+  // muestran aparte para que el staff confirme si es la misma persona.
+  likelyPresent: Array<{
+    logName: string;
+    name: string;
+    pulls: number;
+    similarity: number;
+    status: string;
+    userId: string;
+  }>;
   partial: boolean;
   players: RaidLogAttendancePlayer[];
   signedAbsent: Array<{ name: string; status: string }>;
@@ -1016,8 +1026,8 @@ export async function getRaidLogAnalysis(
 export async function createRaidLog(
   guildId: string,
   url: string,
-): Promise<{ error?: string; log: RaidLog }> {
-  return requestJson<{ error?: string; log: RaidLog }>(
+): Promise<{ created: boolean; error?: string; log: RaidLog }> {
+  return requestJson<{ created: boolean; error?: string; log: RaidLog }>(
     `/guilds/${guildId}/raid-logs`,
     {
       method: "POST",
@@ -1026,13 +1036,30 @@ export async function createRaidLog(
   );
 }
 
+// Confirmar que un nombre del log es el PJ de un miembro: a partir de ahí los
+// cruces de asistencia lo reconocen sin volver a preguntar.
+export async function saveRaidLogAlias(
+  guildId: string,
+  userId: string,
+  name: string,
+): Promise<{ name: string; userId: string }> {
+  const data = await requestJson<{ alias: { name: string; userId: string } }>(
+    `/guilds/${guildId}/raid-logs/aliases`,
+    {
+      method: "POST",
+      body: JSON.stringify({ name, userId }),
+    },
+  );
+  return data.alias;
+}
+
 // Escaneo manual: fuerza la detección en Warcraft Logs y refresca los
 // borradores (para ver los números finales cuando ya se subió todo).
 export async function scanRaidLogs(
   guildId: string,
-): Promise<{ detected: number; logs: RaidLog[] }> {
+): Promise<{ detected: number; logs: RaidLog[]; repeated: number }> {
   // Consulta Warcraft Logs report por report: puede tardar minutos.
-  return requestJson<{ detected: number; logs: RaidLog[] }>(
+  return requestJson<{ detected: number; logs: RaidLog[]; repeated: number }>(
     `/guilds/${guildId}/raid-logs/scan`,
     { method: "POST" },
     0,

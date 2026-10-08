@@ -2247,6 +2247,19 @@ a:hover {
   color: #ff8a8a;
 }
 
+/* Nombre del log que se parece al de la inscripción: el % y el botón para
+   confirmarlo como la misma persona. */
+.rlb-likely-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlb-likely-confirm {
+  font-size: 0.76rem;
+  padding: 4px 10px;
+}
+
 .rlb-death-causes {
   display: flex;
   flex-wrap: wrap;

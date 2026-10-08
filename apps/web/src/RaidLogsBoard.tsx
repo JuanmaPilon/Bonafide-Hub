@@ -400,6 +400,7 @@ export function RaidLogsBoard({
   logs,
   manage,
   onAnalyze,
+  onConfirmAlias,
   onHide,
   onPublish,
   onScan,
@@ -410,6 +411,8 @@ export function RaidLogsBoard({
   logs: RaidLog[];
   manage?: ReactNode;
   onAnalyze?: (log: RaidLog) => Promise<RaidLogAnalysis>;
+  // Confirmar que un nombre del log es el PJ de un miembro (queda exacto).
+  onConfirmAlias?: (userId: string, name: string) => Promise<void>;
   onHide?: (parts: RaidLog[]) => void;
   onPublish?: (log: RaidLog) => Promise<void>;
   onScan?: () => void;
@@ -432,6 +435,9 @@ export function RaidLogsBoard({
     key: string;
     message: string;
   } | null>(null);
+  // Confirmación de un PJ parecido: qué fila se está guardando y qué falló.
+  const [aliasBusy, setAliasBusy] = useState<string | null>(null);
+  const [aliasError, setAliasError] = useState<string | null>(null);
 
   const nights = useMemo(
     () =>
@@ -554,6 +560,39 @@ export function RaidLogsBoard({
       });
     } finally {
       setAnalysisLoadingKey(null);
+    }
+  };
+
+  // Confirmar un parecido: se guarda el PJ y se vuelve a armar el análisis (en
+  // la API el cache de esa noche se invalida al confirmar), así el nombre deja
+  // de figurar como posible y pasa a contar como asistencia.
+  const confirmAlias = async (
+    night: Night,
+    userId: string,
+    name: string,
+  ): Promise<void> => {
+    if (!onConfirmAlias) {
+      return;
+    }
+    setAliasBusy(`${userId}:${name}`);
+    setAliasError(null);
+    try {
+      await onConfirmAlias(userId, name);
+      if (onAnalyze) {
+        const analysis = await onAnalyze(night.parts[0]);
+        setAnalysisByNight((current) => ({
+          ...current,
+          [night.key]: analysis,
+        }));
+      }
+    } catch (error) {
+      setAliasError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo confirmar el PJ.",
+      );
+    } finally {
+      setAliasBusy(null);
     }
   };
 
@@ -1121,6 +1160,54 @@ export function RaidLogsBoard({
                                     Presencia parcial: se contó solo a quien
                                     hizo daño, así que puede faltar algún heal.
                                   </span>
+                                ) : null}
+                                {/* Nombres que se parecen al de la inscripción:
+                                    no se cuentan hasta que el staff confirma. */}
+                                {attendance.likelyPresent.length > 0 ? (
+                                  <div className="rlb-analysis-list">
+                                    <span className="rlb-label">
+                                      Parecidos sin confirmar
+                                    </span>
+                                    {attendance.likelyPresent.map((item) => (
+                                      <div
+                                        className="rlb-analysis-list-row"
+                                        key={`${item.userId}:${item.logName}`}
+                                      >
+                                        <span>
+                                          {item.name} ≈ {item.logName}
+                                        </span>
+                                        <span className="rlb-likely-side">
+                                          <span className="rlb-label">
+                                            {Math.round(item.similarity * 100)}%
+                                          </span>
+                                          {onConfirmAlias ? (
+                                            <button
+                                              className="ghost-button rlb-likely-confirm"
+                                              disabled={aliasBusy !== null}
+                                              onClick={() =>
+                                                void confirmAlias(
+                                                  selected,
+                                                  item.userId,
+                                                  item.logName,
+                                                )
+                                              }
+                                              type="button"
+                                            >
+                                              {aliasBusy ===
+                                              `${item.userId}:${item.logName}`
+                                                ? "Guardando…"
+                                                : "Confirmar"}
+                                            </button>
+                                          ) : null}
+                                        </span>
+                                      </div>
+                                    ))}
+                                    {aliasError ? (
+                                      <div className="rlb-error">
+                                        ⚠️ {aliasError}
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 ) : null}
                                 {attendanceNoShows.length > 0 ? (
                                   <div className="rlb-analysis-list">

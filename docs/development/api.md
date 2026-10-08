@@ -130,7 +130,8 @@ Logs de raid (Warcraft Logs):
 1. `GET/POST /guilds/:guildId/raid-logs`
 2. `DELETE /guilds/:guildId/raid-logs/:logId`
 3. `GET /guilds/:guildId/raid-logs/:logId/analysis`
-4. `GET /public/leaderboard` (top 30 público para la landing)
+4. `POST /guilds/:guildId/raid-logs/aliases`
+5. `GET /public/leaderboard` (top 30 público para la landing)
 
 La API consulta Warcraft Logs v1 con `WARCRAFT_LOGS_API_KEY`. No hay un
 watcher periódico: los reports nuevos y sus fights se consultan al solicitar
@@ -173,6 +174,31 @@ el estado, pero el estado en sí no se muestra. La web además marca
 (`needsUpdate`, que calcula el API comparando el texto guardado con el que
 generaría ahora).
 
+**Un report se guarda una sola vez** (`reportCode` por guild):
+
+1. El alta manual (`POST`) es idempotente: si el código ya está, devuelve la
+   entrada existente con `created: false` y no inserta nada (la web avisa
+   "ese report ya estaba cargado" en vez de mostrar un borrador nuevo). Un log
+   **oculto** que se vuelve a pegar se restaura: el pedido explícito manda
+   sobre el soft-delete.
+2. `listRaidLogs` colapsa las filas repetidas que hayan quedado guardadas de
+   antes (se queda con la publicada, si no con la de más fights y si no con la
+   sincronizada más recientemente), así el análisis y el mensaje publicado no
+   ven el mismo report dos veces.
+3. El escaneo manual, que ya es una acción de mantenimiento, **oculta** los
+   repetidos que encuentra (`hideDuplicateRaidLogs`) y lo informa en el
+   resultado (`repeated`) y en el log. No se borran y no se tocan los que ya
+   se publicaron, para no dejar el mensaje de Discord huérfano.
+
+Sin esto, dos personas pegando el mismo link dejaban dos filas que caían en la
+misma entrada y el análisis bajaba el report una vez por fila: cada pull, muerte
+y consumible contaba al doble. En el mismo sentido, cuando dos reports
+**distintos** de la misma noche traen los mismos pulls (dos personas loggeando la
+misma raid), el análisis los compara por boss + **hora absoluta** (`report.start`
++ `start_time`, con 15 s de tolerancia) y analiza cada pull una sola vez; los
+pulls nuevos de cada parte sí se suman, así que una raid partida en dos sigue
+contando completa.
+
 Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
 Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
 minutos por entrada y se apoya en tres consultas a la API v1 de Warcraft Logs:
@@ -205,6 +231,31 @@ Devuelve:
    `partial` avisa cuando no se pudo leer la presencia por pull (CombatantInfo)
    y los participantes salieron de la tabla de daño: ahí un "no vino" puede ser
    un heal que no hizo daño.
+
+El emparejamiento por nombre tiene dos pasos:
+
+1. **Exacto**: el nombre normalizado (sin reino, sin acentos, minúsculas) del
+   personaje de la inscripción, el recordado en `event_player_profiles` o
+   cualquiera de los PJ ya **confirmados** del miembro
+   (`event_player_characters`). Un nombre del log se asigna a una sola
+   inscripción, así que no se reparte entre dos personas.
+2. **Parecido**: si no hubo exacto y el miembro comprometió asistir, se busca el
+   nombre del log más parecido por distancia de edición
+   (`apps/api/src/services/name-match.ts`). Solo cuenta si el parecido es
+   ≥ 0.7, los nombres tienen 4+ letras y el mejor candidato le saca 0.1 al
+   segundo: con dos nombres casi iguales de parecido ("Azzai0" y "Azzai1") no se
+   elige ninguno, porque atribuirle los pulls a la persona equivocada es peor
+   que no atribuirlos.
+
+Los parecidos no se cuentan como asistencia: salen en `likelyPresent`
+(`name` de la inscripción, `logName` del log, `pulls`, `similarity`) y la web los
+muestra aparte con el % y un botón **Confirmar**, que llama a
+`POST /guilds/:g/:raid-logs/aliases` con `{ userId, name }`. Eso guarda el PJ en
+`event_player_characters` (clave normalizada) y **invalida el cache** de la
+noche, así que el mismo caso no se vuelve a preguntar nunca: pasa a ser un
+exacto. Los nombres que se parecen pero pertenecen a un bench o a un tentativo no
+se atribuyen (no se inventa una identidad que nadie confirmó) y siguen
+apareciendo en `unsignedPresent`.
 
 Juegos que se juegan en el server:
 
@@ -397,10 +448,11 @@ Tablas:
 13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`). Con `recurrenceEnabled` el evento es el **molde** de una serie: cada `recurrenceEveryDays` el motor crea una ocurrencia (evento nuevo con el mismo título, publicado `recurrencePublishDaysBefore` días antes). `POST /guilds/:g/events/:id/reset-occurrence` limpia la ocurrencia (avisos + recordatorios en Discord, inscripciones y marcadores) y mueve el molde a la próxima fecha libre de la serie, sin perder la serie.
 14. `event_signups` — inscripciones por evento y usuario (`status`, `role`, `wowClass`, `spec`, `character`)
 15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild
-16. `raid_specs` — catálogo de clases/specs por guild y JUEGO (`game`, `role`, `className`, `specName`, emoji custom)
-17. `event_images` — biblioteca de imágenes del módulo (data URL)
-18. `roster_profiles` — ficha principal del roster (clase, spec, offs, tags)
-19. `roster_alt_profiles` — clases secundarias ("alter") de una persona: clave (guild, persona, clase). No cuentan para ningún total.
+16. `event_player_characters` — PJ de un miembro ya confirmados en el cruce de asistencia de los logs (clave normalizada del nombre que figura en Warcraft Logs)
+17. `raid_specs` — catálogo de clases/specs por guild y JUEGO (`game`, `role`, `className`, `specName`, emoji custom)
+18. `event_images` — biblioteca de imágenes del módulo (data URL)
+19. `roster_profiles` — ficha principal del roster (clase, spec, offs, tags)
+20. `roster_alt_profiles` — clases secundarias ("alter") de una persona: clave (guild, persona, clase). No cuentan para ningún total.
 
 Campos relevantes de `guild_configs`:
 

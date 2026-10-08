@@ -96,6 +96,7 @@ import {
   resetEventOccurrence,
   saveMemberRosterProfile,
   saveMyRosterProfile,
+  saveRaidLogAlias,
   removeRosterMember,
   setRosterRank,
   scanRaidLogs,
@@ -8687,10 +8688,12 @@ function App() {
       const result = await createRaidLog(selectedGuildId, url);
       setRaidLogUrl("");
       pushToast(
-        result.error
-          ? `Log agregado, pero Warcraft Logs respondió: ${result.error}`
-          : "Log agregado como borrador. Revisalo y publicalo.",
-        result.error ? "error" : "success",
+        !result.created
+          ? "Ese report ya estaba cargado: se reutilizó la entrada que ya existía."
+          : result.error
+            ? `Log agregado, pero Warcraft Logs respondió: ${result.error}`
+            : "Log agregado como borrador. Revisalo y publicalo.",
+        result.created && result.error ? "error" : "success",
       );
       await refreshRaidLogs();
     } catch (error) {
@@ -8698,6 +8701,27 @@ function App() {
         error instanceof Error ? error.message : "Error al agregar el log.",
         "error",
       );
+    }
+  }
+
+  // El staff confirma que un nombre de los logs es el PJ de un miembro: queda
+  // guardado y los próximos cruces lo toman como exacto.
+  async function handleConfirmRaidLogAlias(
+    userId: string,
+    name: string,
+  ): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await saveRaidLogAlias(selectedGuildId, userId, name);
+      pushToast(`Listo: ${name} queda asociado a ese miembro.`, "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo confirmar el PJ.",
+        "error",
+      );
+      throw error;
     }
   }
 
@@ -8785,9 +8809,12 @@ function App() {
       const result = await scanRaidLogs(selectedGuildId);
       setRaidLogs(result.logs);
       pushToast(
-        result.detected > 0
+        (result.detected > 0
           ? `Escaneo listo: ${result.detected} report/s nuevo/s.`
-          : "Escaneo listo: no hay reports nuevos.",
+          : "Escaneo listo: no hay reports nuevos.") +
+          (result.repeated > 0
+            ? ` Se ocultaron ${result.repeated} report/s repetido/s.`
+            : ""),
         "success",
       );
     } catch (error) {
@@ -11890,6 +11917,11 @@ function App() {
                             selectedGuildId
                               ? (log) =>
                                   getRaidLogAnalysis(selectedGuildId, log.id)
+                              : undefined
+                          }
+                          onConfirmAlias={
+                            canManageRaidLogs
+                              ? handleConfirmRaidLogAlias
                               : undefined
                           }
                           onHide={
