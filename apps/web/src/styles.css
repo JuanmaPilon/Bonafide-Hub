@@ -2733,6 +2733,12 @@ a:hover {
   min-width: 0;
 }
 
+/* El menú de estado flota fuera de la tarjeta (abajo): mientras está abierto, el
+   mazo sube de capa para que la tarjeta de la fila de abajo no lo tape. */
+.roster-stack--menu-open {
+  z-index: 20;
+}
+
 .roster-stack .roster-member {
   grid-area: 1 / 1;
   transition:
@@ -3053,11 +3059,15 @@ a:hover {
   color: #ff9292;
 }
 
-/* Quitar del roster: la acción destructiva del menú, separada del resto. */
+/* Quitar del roster: la acción destructiva, separada del resto por una línea
+   (no con un borde en el botón, que quedaba como un subrayado suelto). */
+.roster-status-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--panel-border);
+}
+
 .roster-status-option--quitar {
-  margin-top: 4px;
-  border-top: 1px solid rgba(229, 72, 77, 0.35);
-  border-radius: 0 0 8px 8px;
   color: #ff9292;
   font-weight: 700;
 }

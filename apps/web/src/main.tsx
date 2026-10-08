@@ -2878,7 +2878,12 @@ function RosterSection({
       ? rosterStatus.toLowerCase().replaceAll(" ", "-")
       : "";
     return (
-      <div className="roster-stack" key={member.userId}>
+      <div
+        // Con el menú abierto el mazo sube de capa: si no, la tarjeta de la fila
+        // de abajo (se pinta después) le tapa las últimas opciones.
+        className={`roster-stack${rankMenuFor === member.userId ? " roster-stack--menu-open" : ""}`}
+        key={member.userId}
+      >
         {backSets.map((set, index) => (
           <button
             aria-label={`Traer al frente: ${set.className} ${set.specName}`}
@@ -3082,6 +3087,7 @@ function RosterSection({
                     >
                       Inactivo
                     </button>
+                    <span className="roster-status-separator" />
                     <button
                       className="roster-status-option roster-status-option--quitar"
                       onClick={(event) => {
