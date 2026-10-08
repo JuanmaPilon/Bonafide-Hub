@@ -1829,21 +1829,6 @@ a:hover {
   color: var(--text);
 }
 
-/* Una fila por raid: el nombre y sus chips. */
-.rlb-raid {
-  display: flex;
-  flex-basis: 100%;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.rlb-raid-name {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
 /* Botón circular destacado (la acción principal del tablero). */
 .icon-button--primary {
   border-color: rgba(106, 168, 255, 0.55);

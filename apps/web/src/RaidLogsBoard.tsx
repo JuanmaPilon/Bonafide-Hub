@@ -78,7 +78,16 @@ const DIFFICULTIES: Array<{
   { ids: [5, 16], label: "Mítico", short: "M" },
 ];
 
-type RaidChips = {
+// Progresión de la guild, por dificultad: bosses distintos matados sobre bosses
+// distintos enfrentados, sobre TODOS los logs. Un boss se cuenta por su id de
+// encuentro: el NOMBRE cambia con el idioma del cliente que subió el log
+// ("The Coiled Altar" vs "El Altar Serpenteante") y con el nombre el mismo jefe
+// contaba dos veces (un boss de más y "10/10" en una raid de 9).
+//
+// El chip de Total es de la raid: bosses matados **al menos una vez** sobre
+// bosses vistos, sin importar la dificultad ("la raid está limpia" cuando
+// cayeron todos).
+function progression(nights: Night[]): {
   difficulties: Array<{
     killed: number;
     label: string;
@@ -86,33 +95,38 @@ type RaidChips = {
     total: number;
   }>;
   total: { killed: number; seen: number };
-};
-
-// Chips de una raid, por dificultad: bosses distintos matados sobre bosses
-// distintos enfrentados (identificados por el id de encuentro, no por el
-// nombre). El denominador sale del mayor número de bosses vistos en una
-// dificultad, porque Warcraft Logs no dice cuántos tiene la banda y los que
-// todavía no se intentaron no pueden contar como "vistos".
-function raidChips(fights: Fight[]): RaidChips {
+  zoneName?: string;
+} {
   const killedAny = new Set<string>();
   const seenAny = new Set<string>();
+  const zoneNames = new Set<string>();
+  for (const night of nights) {
+    for (const fight of night.fights) {
+      const zoneName = fight.zoneName?.trim();
+      if (zoneName) {
+        zoneNames.add(zoneName);
+      }
+    }
+  }
   const porDificultad = DIFFICULTIES
     .map((difficulty) => {
       const seen = new Set<string>();
       const killed = new Set<string>();
-      for (const fight of fights) {
-        if (fight.difficulty === undefined) {
-          continue;
-        }
-        if (!difficulty.ids.includes(fight.difficulty)) {
-          continue;
-        }
-        const key = fightKey(fight);
-        seen.add(key);
-        seenAny.add(key);
-        if (fight.kill) {
-          killed.add(key);
-          killedAny.add(key);
+      for (const night of nights) {
+        for (const fight of night.fights) {
+          if (fight.difficulty === undefined) {
+            continue;
+          }
+          if (!difficulty.ids.includes(fight.difficulty)) {
+            continue;
+          }
+          const key = fightKey(fight);
+          seen.add(key);
+          seenAny.add(key);
+          if (fight.kill) {
+            killed.add(key);
+            killedAny.add(key);
+          }
         }
       }
       return {
@@ -131,53 +145,11 @@ function raidChips(fights: Fight[]): RaidChips {
       short: entry.short,
       total,
     })),
-    // Total de la raid: bosses matados al menos una vez sobre bosses vistos, sin
-    // importar la dificultad ("la raid está limpia" cuando cayeron todos).
     total: { killed: killedAny.size, seen: seenAny.size },
+    // El nombre de la raid solo se muestra cuando todos los logs son de una
+    // misma: si hay más de una, la etiqueta mentiría.
+    zoneName: zoneNames.size === 1 ? [...zoneNames][0] : undefined,
   };
-}
-
-// Progresión de CADA raid que aparece en los logs. Antes se sumaban los bosses
-// de todas juntas, así que una legacy (u otra instancia) inflaba el tier: un
-// boss de más y "10/10" en una raid de 9. La raid se agrupa por NOMBRE de zona
-// (el id puede cambiar para la misma instancia) y se ordena por noches jugadas.
-function raidProgressions(
-  nights: Night[],
-): Array<RaidChips & { key: string; nights: number; zoneName: string }> {
-  const raids = new Map<
-    string,
-    { fights: Fight[]; nights: Set<string>; zoneName: string }
-  >();
-  for (const night of nights) {
-    for (const fight of night.fights) {
-      const zoneName = fight.zoneName?.trim();
-      const key = zoneName
-        ? `name:${zoneName.toLowerCase()}`
-        : fight.zone === null || fight.zone === undefined
-          ? "sin-zona"
-          : `zone:${fight.zone}`;
-      const raid = raids.get(key) ?? {
-        fights: [],
-        nights: new Set<string>(),
-        zoneName: zoneName ?? "",
-      };
-      raid.fights.push(fight);
-      raid.nights.add(night.key);
-      raids.set(key, raid);
-    }
-  }
-  return [...raids.entries()]
-    .sort(
-      (a, b) =>
-        b[1].nights.size - a[1].nights.size ||
-        b[1].fights.length - a[1].fights.length,
-    )
-    .map(([key, raid]) => ({
-      ...raidChips(raid.fights),
-      key,
-      nights: raid.nights.size,
-      zoneName: raid.zoneName,
-    }));
 }
 
 type Night = {
@@ -572,7 +544,7 @@ export function RaidLogsBoard({
     [logs],
   );
 
-  const raidProgress = useMemo(() => raidProgressions(nights), [nights]);
+  const progress = useMemo(() => progression(nights), [nights]);
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -730,39 +702,36 @@ export function RaidLogsBoard({
             <span>Noches</span>
           </div>
           <div className="rlb-stat">
-            {/* Progresión por raid: el nombre, el total de la raid y un chip por
+            {/* Progresión de la guild: el total de la raid y un chip por
                 dificultad jugada. */}
             <strong className="rlb-progress">
-              {raidProgress.length > 0 ? (
-                raidProgress.map((raid) => (
-                  <span className="rlb-raid" key={raid.key}>
-                    {raid.zoneName ? (
-                      <span className="rlb-raid-name">{raid.zoneName}</span>
-                    ) : null}
-                    <span
-                      className="rlb-progress-chip rlb-progress-chip--total"
-                      title={`Total: ${raid.total.killed} de ${raid.total.seen} bosses matados al menos una vez`}
-                    >
-                      {raid.total.killed}/{raid.total.seen}
-                      <i>Total</i>
-                    </span>
-                    {raid.difficulties.map((entry) => (
-                      <span
-                        className={`rlb-progress-chip${entry.killed >= entry.total ? " full" : ""}`}
-                        key={entry.short}
-                        title={`${entry.label}: ${entry.killed} de ${entry.total} bosses`}
-                      >
-                        {entry.killed}/{entry.total}
-                        <i>{entry.short}</i>
-                      </span>
-                    ))}
+              {progress.difficulties.length > 0 ? (
+                <>
+                  <span
+                    className="rlb-progress-chip rlb-progress-chip--total"
+                    title={`Total: ${progress.total.killed} de ${progress.total.seen} bosses matados al menos una vez`}
+                  >
+                    {progress.total.killed}/{progress.total.seen}
+                    <i>Total</i>
                   </span>
-                ))
+                  {progress.difficulties.map((entry) => (
+                    <span
+                      className={`rlb-progress-chip${entry.killed >= entry.total ? " full" : ""}`}
+                      key={entry.short}
+                      title={`${entry.label}: ${entry.killed} de ${entry.total} bosses`}
+                    >
+                      {entry.killed}/{entry.total}
+                      <i>{entry.short}</i>
+                    </span>
+                  ))}
+                </>
               ) : (
                 "—"
               )}
             </strong>
-            <span>Progresión</span>
+            <span>
+              Progresión{progress.zoneName ? ` · ${progress.zoneName}` : ""}
+            </span>
           </div>
         </div>
         {onScan || manage ? (

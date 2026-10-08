@@ -601,13 +601,33 @@ function primaryPart(parts: RaidLog[]): RaidLog | undefined {
 }
 
 // Un log guardado antes de que la tarjeta y el análisis supieran identificar un
-// pull no tiene `boss`/`start` en el summary (ni el nombre de la raid): un
-// escaneo lo refresca una vez y queda al día.
+// pull no tiene `boss`/`start` en el summary (ni el nombre de la raid): hay que
+// refrescarlo una vez para que su tarjeta deje de contar los pulls repetidos.
 export function needsRaidLogRefresh(log: RaidLog): boolean {
   return (
     !log.zoneName ||
     (log.summary?.fights ?? []).some((fight) => fight.start === undefined)
   );
+}
+
+// Refresca en segundo plano los logs que quedaron viejos (una sola vez cada
+// uno). Best effort: si Warcraft Logs falla, se reintenta en el próximo arranque.
+export async function backfillRaidLogDetails(): Promise<number> {
+  const records = await prisma.raidLog.findMany({
+    where: { hidden: false },
+    orderBy: { createdAt: "desc" },
+  });
+  let refreshed = 0;
+  for (const log of records.map(toRaidLog)) {
+    if (!needsRaidLogRefresh(log)) {
+      continue;
+    }
+    const result = await refreshRaidLog(log.id);
+    if (!result.error) {
+      refreshed += 1;
+    }
+  }
+  return refreshed;
 }
 
 // Mensaje que se publica en el canal. Recibe TODAS las partes de una misma

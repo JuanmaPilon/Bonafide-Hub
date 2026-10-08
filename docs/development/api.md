@@ -153,35 +153,35 @@ son:
 El escaneo se inicia desde Raids → Logs. Publicar, actualizar, ocultar o
 restaurar una entrada también requiere una acción explícita.
 
-El tablero muestra la **progresión por raid**: una fila por raid que aparece en los
-logs (la que más noches tiene, primero), con el nombre de la raid y los chips por
-dificultad (N / H / M). Antes se sumaban los bosses de todas las raids juntas, así
-que una legacy (u otra instancia) inflaba el tier: un boss de más y "10/10" en una
-raid de 9. La raid se agrupa por **nombre de zona** (el id puede cambiar para la
-misma instancia) y ese nombre sale de `zoneName`, que llena el refresh con el
-catálogo de zonas de Warcraft Logs. Un fight sin zona (log viejo sin refrescar) cae
-en su propio grupo; una noche de otra raid se sigue listando en el tablero y cuenta
-en su propio día, con sus chips aparte.
-
-Cada chip es bosses distintos matados sobre bosses distintos enfrentados en esa
-dificultad, y el denominador sale del mayor número de bosses vistos en una
-dificultad (Warcraft Logs no dice cuántos tiene la banda, y los que todavía no se
-intentaron no pueden contar como "vistos"). El chip de **Total** es de la raid:
-bosses matados **al menos una vez** sobre bosses vistos, sin importar la dificultad
-("la raid está limpia" cuando cayeron todos). Las listas largas del análisis (DPS,
-muertes, consumibles, por pull) se cortan **a la misma altura en las dos columnas**
-— la de la lista más corta de la fila, con 320px de techo — y se abren con el
-triángulo del pie de la lista; el triángulo aparece solo si hay algo tapado.
+El tablero muestra la **progresión** de la guild por dificultad (N / H / M): bosses
+distintos matados sobre bosses distintos enfrentados, sobre todos los logs. El
+denominador sale del mayor número de bosses vistos en una dificultad (Warcraft
+Logs no dice cuántos tiene la banda, y los que todavía no se intentaron no pueden
+contar como "vistos"). El chip de **Total** es de la raid: bosses matados **al
+menos una vez** sobre bosses vistos, sin importar la dificultad ("la raid está
+limpia" cuando cayeron todos). La etiqueta muestra el nombre de la raid
+(`zoneName`) solo cuando **todos** los logs son de la misma; con más de una, la
+etiqueta mentiría y se omite. Las listas largas del análisis (DPS, muertes,
+consumibles, por pull) se cortan **a la misma altura en las dos columnas** — la de
+la lista más corta de la fila, con 320px de techo — y se abren con el triángulo
+del pie de la lista; el triángulo aparece solo si hay algo tapado.
 
 **La identidad de un boss es su id de encuentro, no su nombre**: el nombre cambia
 con el idioma del cliente que subió el log ("The Coiled Altar" vs "El Altar
 Serpenteante"), así que contar por nombre daba un boss de más — el mismo problema
-que producía el "10/10". Un **pull** se identifica por boss + hora absoluta del
-fight (`start` en el `summary`, con 15 s de tolerancia): los pulls que traen dos
-reports de la misma noche se cuentan una sola vez (en la tarjeta y en el análisis) y
-los pulls distintos del mismo boss (un wipe y su kill) siguen contando los dos. Un
-log guardado antes de esto no tiene `boss`/`start` en el summary ni `zoneName`: el
-escaneo manual lo refresca una vez (`needsRaidLogRefresh`) y queda al día.
+que producía el "10/10" en una raid de 9 bosses. Un **pull** se identifica por boss
++ hora absoluta del fight (`start` en el `summary`, con 15 s de tolerancia): los
+pulls que traen dos reports de la misma noche se cuentan una sola vez (en la
+tarjeta y en el análisis) y los pulls distintos del mismo boss (un wipe y su kill)
+siguen contando los dos. Los logs guardados antes de esto no tienen `boss`/`start`
+ni `zoneName`: `backfillRaidLogDetails` los refresca una vez al arrancar el API
+(fire & forget, como las otras migraciones) y el escaneo manual hace lo mismo, así
+las noches viejas también dejan de contar los pulls repetidos.
+
+> La progresión es **una sola**: no se agrupa por zona. El `zone` de Warcraft Logs
+> no identifica la raid de forma confiable (la misma raid apareció con dos ids
+> distintos, y con logs sin zona, lo que partía la progresión en dos filas que
+> parecían dos raids).
 
 Los reports de la **misma fecha** se agrupan en una sola entrada
 (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid que cruza la
