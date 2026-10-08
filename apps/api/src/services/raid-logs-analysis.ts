@@ -827,7 +827,10 @@ async function buildRaidLogNightAnalysis(
           ? report.start + fight.start_time
           : undefined;
       if (absoluteStart !== undefined) {
-        const boss = fight.name ?? "";
+        // La identidad del pull es el id de encuentro: el NOMBRE del boss cambia
+        // con el idioma del cliente que subió el log ("The Coiled Altar" vs
+        // "El Altar Serpenteante"), así que con el nombre se contaba dos veces.
+        const boss = fight.boss === undefined ? (fight.name ?? "") : String(fight.boss);
         const starts = fightStarts.get(boss) ?? [];
         if (starts.some((time) => Math.abs(time - absoluteStart) <= FIGHT_OVERLAP_MS)) {
           repeatedFights += 1;

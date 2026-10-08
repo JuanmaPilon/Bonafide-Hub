@@ -2,10 +2,18 @@ import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
 
 export type RaidFightSummary = {
+  // Id de encuentro de Warcraft Logs: es la identidad del boss, porque el
+  // NOMBRE cambia con el idioma del cliente que subió el log ("The Coiled Altar"
+  // vs "El Altar Serpenteante").
+  boss?: number;
   difficulty?: number;
   fightPercentage?: number;
   kill?: boolean;
   name?: string;
+  // Hora absoluta del pull (epoch ms): identifica el pull entre reports. Dos
+  // personas loggeando la misma raid traen los mismos pulls con unos segundos de
+  // diferencia.
+  start?: number;
 };
 
 export type RaidLog = {
@@ -204,13 +212,19 @@ function summarize(report: WclReport): {
 } {
   // Solo fights de boss reales (boss > 0). Trash con nombre (p. ej.
   // "Radian Spellower", "Venomfang Juggernaut") tiene boss=0 y se excluye.
+  const reportStart = typeof report.start === "number" ? report.start : null;
   const fights = (report.fights ?? [])
     .filter((fight) => (fight.boss ?? 0) > 0)
     .map((fight) => ({
+      boss: fight.boss,
       difficulty: fight.difficulty,
       fightPercentage: fight.fightPercentage,
       kill: fight.kill,
       name: fight.name,
+      start:
+        reportStart !== null && typeof fight.start_time === "number"
+          ? reportStart + fight.start_time
+          : undefined,
     }));
 
   return {
@@ -583,6 +597,16 @@ function primaryPart(parts: RaidLog[]): RaidLog | undefined {
   return parts.reduce<RaidLog | undefined>(
     (best, part) => (!best || part.fightCount > best.fightCount ? part : best),
     undefined,
+  );
+}
+
+// Un log guardado antes de que la tarjeta y el análisis supieran identificar un
+// pull no tiene `boss`/`start` en el summary (ni el nombre de la raid): un
+// escaneo lo refresca una vez y queda al día.
+export function needsRaidLogRefresh(log: RaidLog): boolean {
+  return (
+    !log.zoneName ||
+    (log.summary?.fights ?? []).some((fight) => fight.start === undefined)
   );
 }
 

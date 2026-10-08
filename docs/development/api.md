@@ -153,28 +153,35 @@ son:
 El escaneo se inicia desde Raids → Logs. Publicar, actualizar, ocultar o
 restaurar una entrada también requiere una acción explícita.
 
-El tablero muestra la **progresión** de la guild por dificultad (N / H / M) a
-partir del `difficulty` de cada fight del `summary`: bosses distintos matados
-sobre bosses distintos enfrentados, y el total sale del mayor número de bosses
-vistos en una dificultad (Warcraft Logs no dice cuántos tiene la banda, y los que
-todavía no se intentaron no pueden contar). Delante de esos chips va el de
-**Total**, que es la **suma** de las dificultades jugadas (kills de todas sobre
-bosses enfrentados en todas): suma y no unión porque un boss matado en Normal y
-en Heroico es progreso en las dos, y con la unión "todo lo visto murió" pasaría
-por limpieza total con una sola dificultad terminada.
+El tablero muestra la **progresión por raid**: una fila por raid que aparece en los
+logs (la que más noches tiene, primero), con el nombre de la raid y los chips por
+dificultad (N / H / M). Antes se sumaban los bosses de todas las raids juntas, así
+que una legacy (u otra instancia) inflaba el tier: un boss de más y "10/10" en una
+raid de 9. La raid se agrupa por **nombre de zona** (el id puede cambiar para la
+misma instancia) y ese nombre sale de `zoneName`, que llena el refresh con el
+catálogo de zonas de Warcraft Logs. Un fight sin zona (log viejo sin refrescar) cae
+en su propio grupo; una noche de otra raid se sigue listando en el tablero y cuenta
+en su propio día, con sus chips aparte.
 
-Los chips son de **una sola raid**: la zona con más noches cargadas (una legacy
-suelta no le gana al tier) y, si hay empate, la más reciente. El nombre se muestra
-en la etiqueta ("Progresión · Nerub'ar Palace"), sale de `zoneName` y lo llena el
-refresh con el catálogo de zonas de Warcraft Logs. Sin esto, la progresión sumaba
-los bosses de **todas** las raids juntas: con una legacy loggeada el mismo día, el
-tier mostraba un boss de más (y "10/10" donde la raid tiene 9). Un fight sin zona
-(log viejo) se cuenta con la raid actual; una noche de otra raid se sigue listando
-en el tablero y cuenta en su propio día, pero no en la progresión del tier. Las
-listas largas del análisis (DPS, muertes, consumibles, por pull) se cortan **a la
-misma altura en las dos columnas** — la de la lista más corta de la fila, con
-320px de techo — y se abren con el triángulo del pie de la lista; el triángulo
-aparece solo si hay algo tapado.
+Cada chip es bosses distintos matados sobre bosses distintos enfrentados en esa
+dificultad, y el denominador sale del mayor número de bosses vistos en una
+dificultad (Warcraft Logs no dice cuántos tiene la banda, y los que todavía no se
+intentaron no pueden contar como "vistos"). El chip de **Total** es de la raid:
+bosses matados **al menos una vez** sobre bosses vistos, sin importar la dificultad
+("la raid está limpia" cuando cayeron todos). Las listas largas del análisis (DPS,
+muertes, consumibles, por pull) se cortan **a la misma altura en las dos columnas**
+— la de la lista más corta de la fila, con 320px de techo — y se abren con el
+triángulo del pie de la lista; el triángulo aparece solo si hay algo tapado.
+
+**La identidad de un boss es su id de encuentro, no su nombre**: el nombre cambia
+con el idioma del cliente que subió el log ("The Coiled Altar" vs "El Altar
+Serpenteante"), así que contar por nombre daba un boss de más — el mismo problema
+que producía el "10/10". Un **pull** se identifica por boss + hora absoluta del
+fight (`start` en el `summary`, con 15 s de tolerancia): los pulls que traen dos
+reports de la misma noche se cuentan una sola vez (en la tarjeta y en el análisis) y
+los pulls distintos del mismo boss (un wipe y su kill) siguen contando los dos. Un
+log guardado antes de esto no tiene `boss`/`start` en el summary ni `zoneName`: el
+escaneo manual lo refresca una vez (`needsRaidLogRefresh`) y queda al día.
 
 Los reports de la **misma fecha** se agrupan en una sola entrada
 (`raidLogGroupKey`, con la fecha corrida 6 h para que una raid que cruza la
@@ -213,10 +220,11 @@ Sin esto, dos personas pegando el mismo link dejaban dos filas que caían en la
 misma entrada y el análisis bajaba el report una vez por fila: cada pull, muerte
 y consumible contaba al doble. En el mismo sentido, cuando dos reports
 **distintos** de la misma noche traen los mismos pulls (dos personas loggeando la
-misma raid), el análisis los compara por boss + **hora absoluta** (`report.start`
-+ `start_time`, con 15 s de tolerancia) y analiza cada pull una sola vez; los
-pulls nuevos de cada parte sí se suman, así que una raid partida en dos sigue
-contando completa.
+misma raid), el análisis los compara por **id de encuentro** + hora absoluta
+(`report.start` + `start_time`, con 15 s de tolerancia) y analiza cada pull una
+sola vez; los pulls nuevos de cada parte sí se suman, así que una raid partida en
+dos sigue contando completa. El nombre del boss no sirve como identidad: cambia con
+el idioma del cliente que subió el log.
 
 Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
 Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
@@ -460,7 +468,7 @@ Tablas:
 6. `discord_sessions` / `oauth_states` — OAuth
 7. `communications` / `communication_instances` — comunicados y sus publicaciones
 8. `daily_messages` — frases del loro de Karpindomo
-9. `raid_logs` — logs de raid sincronizados con Warcraft Logs (`zone`/`zoneName` son la raid a la que pertenece el report, para la progresión)
+9. `raid_logs` — logs de raid sincronizados con Warcraft Logs (`zone`/`zoneName` son la raid a la que pertenece el report y el `summary` guarda `boss`/`start` por fight para identificar cada pull)
 10. `karuta_cards` — posesión de cartas raras (print/wishlist/dueño)
 11. `karuta_albums` — álbumes (`ka`) de cada usuario, con puntero al mensaje
 12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)

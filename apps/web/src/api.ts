@@ -55,10 +55,15 @@ export type DailyMessage = {
 };
 
 export type RaidFightSummary = {
+  // Id de encuentro: identidad del boss (el nombre cambia con el idioma del
+  // cliente que subió el log).
+  boss?: number;
   difficulty?: number;
   fightPercentage?: number;
   kill?: boolean;
   name?: string;
+  // Hora absoluta del pull (epoch ms): identifica el pull entre reports.
+  start?: number;
 };
 
 export type RaidLog = {

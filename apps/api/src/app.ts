@@ -51,6 +51,7 @@ import {
   hideRaidLog,
   listHiddenRaidLogs,
   listRaidLogs,
+  needsRaidLogRefresh,
   refreshRaidLog,
   showRaidLog,
   syncGuildWatch,
@@ -4875,8 +4876,11 @@ export function buildApp() {
     // los reports repetidos que quedaron guardados de antes.
     const repeated = await hideDuplicateRaidLogs(params.guildId);
 
-    const drafts = (await listRaidLogs(params.guildId)).filter(
-      (log) => !log.discordPosted,
+    const logs = await listRaidLogs(params.guildId);
+    // Los borradores se refrescan siempre; los logs viejos que todavía no tienen
+    // con qué identificar un pull (ni el nombre de la raid) se refrescan una vez.
+    const drafts = logs.filter(
+      (log) => !log.discordPosted || needsRaidLogRefresh(log),
     );
     for (const draft of drafts) {
       await refreshRaidLog(draft.id);
