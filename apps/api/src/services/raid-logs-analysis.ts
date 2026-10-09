@@ -46,6 +46,10 @@ export type RaidLogConsumables = {
     used: Partial<Record<RaidConsumableKey, number>>;
     usedNames: Partial<Record<RaidConsumableKey, string[]>>;
   }>;
+  // Categorías de "control" que este log no permitió medir (los nombres de las
+  // pociones o de las auras no matchearon, o la tabla de casts no las trajo): la
+  // web lo aclara en vez de dar a entender que nadie las usó.
+  unmeasured: RaidConsumableKey[];
 };
 
 export type RaidLogAnalysis = {
@@ -172,6 +176,7 @@ type WclSummary = {
 type WclAbilityRow = {
   guid?: number | string;
   name?: string;
+  total?: number;
 };
 
 type WclCastsTableEntry = {
@@ -468,26 +473,35 @@ function foldAbilityName(name: string): string {
 
 // Los nombres de pociones y piedras cambian en cada parche, así que se
 // identifican por nombre (en la tabla de casts) en vez de por id fijo. La guild
-// sube logs en inglés, español y portugués, así que se comparan raíces (sin
-// acentos) en vez de nombres completos: "Well Fed" / "Bien alimentado" /
-// "Bem Alimentado" caen todas en "alimentad".
+// sube logs en inglés, español y portugués, y de yapa los de otros clientes que
+// aparezcan, así que se comparan raíces (sin acentos) en varios idiomas.
 const HEALTHSTONE_NAMES = [
   "healthstone",
+  "piedra de salud",
   "piedra de brujo",
+  "pedra de saude",
   "pedra de bruxo",
+  "pierre de soin",
+  "gesundheitsstein",
+  "pietra di salute",
 ];
 const HEALTH_POTION_NAMES = [
   "health potion",
   "healing potion",
   "pocion de vida",
+  "pocion de salud",
   "pocion de curacion",
   "pocion de sanacion",
   "pocao de vida",
+  "pocao de cura",
+  "potion de soin",
+  "heiltrank",
+  "pozione di cura",
 ];
 const MANA_POTION_NAMES = ["mana potion", "pocion de mana", "pocao de mana"];
-const POTION_NAMES = ["potion", "pocion", "pocima", "pocao"];
+const POTION_NAMES = ["potion", "pocion", "pocima", "pocao", "pozione", "trank"];
 // "Create Healthstone" / "Crear piedra de brujo" es crear la piedra, no usarla.
-const CREATE_NAMES = ["create ", "crear ", "criar "];
+const CREATE_NAMES = ["create", "crear", "criar", "craft", "erstellen"];
 // Los frascos se llaman "flask"/"phial" en inglés y "frasco"/"vial" en
 // español y portugués.
 const FLASK_NAMES = ["flask", "phial", "frasco", "vial"];
@@ -521,6 +535,35 @@ function logUnrecognizedAuras(
       `[raid-logs] ${code}: auras sin clasificar en casi todos los pulls: ${common.join(", ")}`,
     );
   }
+}
+
+// Cuando NINGUNA categoría de cast se reconoció, hay que poder ver con qué
+// nombres vienen las pociones y las piedras en ese log, así que se listan los
+// casts más usados de la noche que suenen a consumible.
+const CONSUMABLE_HINT = /potion|pocion|pocao|pozione|trank|stone|stein|piedra|pedra|pierre|pietra|flask|frasco|phial|vial/;
+
+function logUnrecognizedCasts(
+  code: string,
+  names: Map<string, number>,
+): void {
+  const likely = [...names.entries()]
+    .filter(([name]) => CONSUMABLE_HINT.test(foldAbilityName(name)))
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 10)
+    .map(([name, count]) => `${name} (${count})`);
+  if (likely.length > 0) {
+    console.log(
+      `[raid-logs] ${code}: ningún consumible reconocido; casts que suenan a consumible: ${likely.join(", ")}`,
+    );
+    return;
+  }
+  const top = [...names.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 10)
+    .map(([name, count]) => `${name} (${count})`);
+  console.log(
+    `[raid-logs] ${code}: ningún consumible reconocido; casts más usados: ${top.join(", ")}`,
+  );
 }
 
 function castConsumableCategory(
@@ -559,12 +602,21 @@ function auraConsumableCategory(
 
 function collectConsumableAbilityIds(
   table: WclCastsTable,
+  nameCounts: Map<string, number>,
 ): Map<number, RaidConsumableKey> {
   const categories = new Map<number, RaidConsumableKey>();
   for (const entry of table.entries ?? []) {
     for (const row of entry.abilities ?? entry.entries ?? entry.sources ?? []) {
       const guid = Number(row?.guid);
-      const category = row?.name ? castConsumableCategory(row.name) : undefined;
+      const name = row?.name;
+      if (!name) {
+        continue;
+      }
+      nameCounts.set(
+        name,
+        (nameCounts.get(name) ?? 0) + (Number(row?.total) || 1),
+      );
+      const category = castConsumableCategory(name);
       if (Number.isFinite(guid) && guid > 0 && category) {
         categories.set(guid, category);
       }
@@ -670,8 +722,12 @@ async function collectFightConsumables(input: {
       { by: "source", end: String(end), start: String(start) },
     ).toString()}`,
   )) as WclCastsTable;
-  const abilityCategories = collectConsumableAbilityIds(table);
+  const castNameCounts = new Map<string, number>();
+  const abilityCategories = collectConsumableAbilityIds(table, castNameCounts);
   const castCategories = new Set(abilityCategories.values());
+  if (castCategories.size === 0) {
+    logUnrecognizedCasts(input.code, castNameCounts);
+  }
 
   if (castCategories.size > 0) {
     const casts = await fetchEventPages<WclRawEvent>(input.code, "casts", {
@@ -1043,6 +1099,12 @@ async function buildRaidLogNightAnalysis(
     ...expectedCategories,
     ...reactiveCategories,
   ];
+  // Lo que se esperaba medir y no se pudo: si no se reconoció ninguna poción o
+  // piedra (nombres nuevos, otro idioma), la noche no puede decir "nadie usó"
+  // sin avisar.
+  const unmeasured = (
+    ["flask", "food", "potions", "healthstones", "healthPotions"] as RaidConsumableKey[]
+  ).filter((category) => !consumableCategories.includes(category));
 
   const playerDeaths = new Map<string, number>();
   const abilityDeaths = new Map<string, number>();
@@ -1265,6 +1327,7 @@ async function buildRaidLogNightAnalysis(
                 return score(a) - score(b) || a.name.localeCompare(b.name);
               }),
             pulls: consumablePulls,
+            unmeasured,
           }
         : undefined,
     deathsByAbility: [...abilityDeaths.entries()]

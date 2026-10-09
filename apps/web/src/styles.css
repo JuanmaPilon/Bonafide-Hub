@@ -2202,6 +2202,16 @@ a:hover {
   pointer-events: none;
 }
 
+/* Aclaración al pie de una lista de consumibles (lo que el log no permitió
+   medir). */
+.rlb-consumable-note {
+  display: block;
+  margin-top: 6px;
+  color: #ffb570;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 /* Totales por jugador de un consumible: chips compactos. */
 .rlb-consumable-total-list {
   display: flex;
@@ -2407,6 +2417,14 @@ a:hover {
   display: grid;
 }
 
+/* Las listas del cruce van en columnas: a lo ancho del modal, el nombre quedaba
+   en una punta y el número en la otra. */
+.rlb-attendance-lists {
+  display: grid;
+  gap: 6px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
 .rlb-analysis-list-row {
   display: flex;
   align-items: center;
@@ -2573,16 +2591,20 @@ a:hover {
   margin-bottom: 2px;
 }
 
+/* Los contadores del cruce, agrupados: con `1fr` cada caja se estiraba a lo ancho
+   y los datos quedaban lejos unos de otros. */
 .rlb-attendance-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
 .rlb-attendance-stats > div {
   display: grid;
+  flex: 0 1 auto;
   gap: 4px;
   min-width: 0;
+  max-width: 320px;
   padding: 10px 12px;
   border: 1px solid var(--panel-border);
   border-radius: 9px;

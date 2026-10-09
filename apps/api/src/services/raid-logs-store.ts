@@ -144,11 +144,38 @@ function toRaidLog(record: {
           zone: summary.zone,
         }
       : undefined,
-    title: record.title ?? undefined,
+    title: raidTitleWithDate(record.title, record.firstFightAt),
     updatedAt: record.updatedAt,
     zone: record.zone,
     zoneName: record.zoneName ?? undefined,
   };
+}
+
+// Título de una noche de raid tal como lo sube Warcraft Logs ("Raid H", "Raid
+// Hero", "Raid Mitico"): la fecha del primer pull se agrega sola, así no hay que
+// escribirla a mano en el log.
+const RAID_TITLE_HINT = /\braid\b|\bmitic|\bmythic|\bheroic|\bhm\b|\bnm\b/i;
+// Fechas ya escritas: dd/mm, con o sin año.
+const TITLE_HAS_DATE = /\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b|\b20\d{2}\b/;
+
+export function raidTitleWithDate(
+  title: string | null | undefined,
+  firstFightAt: Date | null | undefined,
+): string | undefined {
+  const clean = title?.trim();
+  if (!clean || !firstFightAt || !RAID_TITLE_HINT.test(clean)) {
+    return clean || undefined;
+  }
+  if (TITLE_HAS_DATE.test(clean)) {
+    return clean;
+  }
+  const date = firstFightAt.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+  });
+  return `${clean} · ${date}`;
 }
 
 // Clave de "noche de raid": la fecha, sin el título. El título lo escribe quien

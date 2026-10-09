@@ -278,6 +278,12 @@ Devuelve:
    no es lo mismo que tres): la web lo muestra en **Usos totales** con el total
    de la raid. El detalle por pull no se muestra: con qué pull fue cada falta
    alcanza en el chip.
+   `unmeasured` lista las categorías de control que ese log **no permitió medir**
+   (los nombres de las pociones o de las auras no matchearon): la web lo aclara
+   al pie de Consumibles en vez de dar a entender que nadie las usó. Cuando
+   ninguna categoría de cast se reconoce, el API deja en el log los casts que
+   suenan a consumible (o los más usados), que es la única forma de ver con qué
+   nombre vienen en ese log.
 6. `defensives` — muertes sin haber usado **piedra ni poción de vida** en los
    12 s previos (`windowSeconds`). Por jugador: `deaths`, `without` y `used`
    (murió igual, pero la usó). Solo aparece si en la noche se pudieron medir esas
@@ -293,9 +299,9 @@ Devuelve:
    "tentativo" es anotarse, así que no aparecen ahí. `partial` avisa cuando no se
    pudo leer la presencia por pull (CombatantInfo) y los participantes salieron
    de la tabla de daño: ahí un "no vino" puede ser un heal que no hizo daño.
-   La web muestra la **fecha del evento primero** y después el título: el título
-   lo escribe quien crea el evento ("Raid MIERCOLES - JUEVES 08/10/2026") y no
-   dice cuál se usó para el cruce.
+   La web muestra la **fecha del evento** (sin el título, que queda en el
+   tooltip): el título lo escribe quien crea el evento ("Raid MIERCOLES - JUEVES
+   08/10/2026") y hacía parecer que el cruce usaba otro día.
 6. `source` — de dónde salió el análisis: el report **más completo** de la
    noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
    cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que
@@ -303,6 +309,12 @@ Devuelve:
    muestra en la web: es para que el análisis y la tarjeta digan lo mismo.
 
 ### Análisis de la noche desde el mensaje
+
+El **título de la noche** sale del report de Warcraft Logs ("Raid H", "Raid
+Hero", "Raid Mitico") y el API le **agrega la fecha del primer pull**
+(`raidTitleWithDate`: "Raid Hero · 07/10/2026"), salvo que ya traiga una fecha,
+para no tener que escribirla a mano al subir el log. La fecha va en hora
+argentina.
 
 El mensaje que se publica a mano ("Publicar en Discord") lleva los links de los
 reports de Warcraft Logs y, además, un link al **análisis en el Hub**
@@ -366,12 +378,13 @@ distintivo—. Los cortes viven en la web (`GAME_HOT_COUNT` /
 
 La agregación agrupa por **nombre base**, no por id de aplicación ni por nombre
 exacto: Discord tiene más de un id para el mismo juego (ids viejos y nuevos, una
-beta aparte) y también más de un nombre ("Path of Exile", "Path of Exile 2",
-"Skyrim Special Edition"), y agrupando por id o por nombre exacto el carrusel
-mostraba la misma tarjeta dos veces. El nombre base es el nombre sin el sufijo de
-edición/secuela (`gameBaseKey`: números romanos o arábigos, "classic", "special
-edition", "early access", …), aplicado en cadena y solo si queda un nombre con
-sentido: el carrusel mide a qué juega la guild, no el título exacto de la tienda.
+beta aparte) y también más de un nombre ("Path of Exile", "Path of Exile 2: Dawn
+of the Hunt", "Skyrim Special Edition"), y agrupando por id o por nombre exacto el
+carrusel mostraba la misma tarjeta dos veces. El nombre base es el nombre sin el
+subtítulo (`gameBaseKey` corta en `:` o ` - `) ni el sufijo de edición/secuela
+(números romanos o arábigos, "classic", "special edition", "early access", …),
+aplicado en cadena y solo si queda un nombre con sentido: el carrusel mide a qué
+juega la guild, no el título exacto de la tienda.
 Los jugadores y los días de esas variantes se **unen** (no se pierde nada), el
 nombre visible es el de más filas y, a igualdad, el más corto. La portada se busca
 empezando por el id con más actividad y probando todos los nombres vistos, para

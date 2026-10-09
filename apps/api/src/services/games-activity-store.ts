@@ -80,9 +80,14 @@ export function activityDay(now = new Date()): string {
 }
 
 // El nombre es lo único que tenemos de la app que no está en la lista de
-// Discord, así que la blacklist compara normalizado (espacios dobles, mayúsculas).
+// Discord, así que la blacklist compara normalizado (espacios dobles, mayúsculas
+// y los caracteres invisibles que a veces traen los nombres).
 function normalizeName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
+  return name
+    .replace(/[\u200b-\u200d\ufeff]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 // Sufijos de edición/secuela: "Path of Exile 2", "Path of Exile II", "Wow
@@ -94,10 +99,14 @@ function normalizeName(name: string): string {
 const GAME_EDITION_SUFFIX =
   /[\s:_-]*(?:\d+|ii|iii|iv|v|vi|early access|beta|alpha|classic|remastered|remake|reforged|definitive|enhanced|complete|deluxe|goty|edition|special|legendary|ultimate|premium|platinum|anniversary|hd|relaunch|predecessor)\s*$/i;
 
-// Clave de agrupado: el nombre sin el sufijo de edición/secuela. "Left 4 Dead 2"
-// → "left 4 dead"; "1943 Marvel" no se toca (el número no está al final).
+// Clave de agrupado: el nombre del juego, sin el subtítulo ("Path of Exile 2:
+// Dawn of the Hunt" es Path of Exile 2) ni el sufijo de edición/secuela. "Left 4
+// Dead 2" → "left 4 dead"; "1943 Marvel" no se toca (el número no está al final).
 function gameBaseKey(name: string): string {
-  let base = normalizeName(name);
+  const normalized = normalizeName(name);
+  // Corta el subtítulo solo si queda un nombre con sentido a la izquierda.
+  const head = normalized.split(/\s*[:|]\s*|\s+[-–—]\s+/)[0]?.trim() ?? "";
+  let base = head.length >= 4 ? head : normalized;
   for (let guard = 0; guard < 4; guard += 1) {
     const next = base.replace(GAME_EDITION_SUFFIX, "").trim();
     if (next === base || next.length < 4) {

@@ -159,6 +159,8 @@ export type RaidLogConsumables = {
     used: Partial<Record<RaidConsumableKey, number>>;
     usedNames?: Partial<Record<RaidConsumableKey, string[]>>;
   }>;
+  // Categorías que este log no permitió medir (nombres que no matchearon).
+  unmeasured?: RaidConsumableKey[];
 };
 
 export type RaidLogAnalysis = {

@@ -1090,7 +1090,7 @@ export function RaidLogsBoard({
                             </h4>
                             <span>
                               {selected.title}
-                              {selected.date
+                              {selected.date && !/\d{1,2}[/-]\d{1,2}/.test(selected.title)
                                 ? ` · ${selected.date.toLocaleDateString("es-AR")}`
                                 : ""}
                             </span>
@@ -1302,6 +1302,23 @@ export function RaidLogsBoard({
                                     muestra quién faltó, en cuántos pulls y (si
                                     son pocos) en cuáles. */}
                                 <ClampedSection
+                                  footer={
+                                    (consumables.unmeasured ?? []).length > 0 ? (
+                                      <span className="rlb-consumable-note">
+                                        No se pudieron medir en este log:{" "}
+                                        {(consumables.unmeasured ?? [])
+                                          .map(
+                                            (category) =>
+                                              CONSUMABLE_LABEL[
+                                                category
+                                              ].toLowerCase(),
+                                          )
+                                          .join(", ")}
+                                        . Los nombres del log no coinciden con
+                                        los conocidos.
+                                      </span>
+                                    ) : null
+                                  }
                                   icon={<Flask weight="fill" aria-hidden="true" />}
                                   title="Consumibles"
                                 >
@@ -1478,11 +1495,12 @@ export function RaidLogsBoard({
                                   </div>
                                   {attendance.event ? (
                                     <div>
-                                      <span>Evento</span>
-                                      <strong>
-                                        {/* La fecha del evento va primero: el
-                                            título lo escribe quien lo crea y
-                                            puede decir cualquier cosa. */}
+                                      <span>Evento del cruce</span>
+                                      {/* Solo la fecha: el título lo escribe
+                                          quien crea el evento (y a veces trae
+                                          días o fechas que no son las de esta
+                                          noche), así que queda en el tooltip. */}
+                                      <strong title={attendance.event.title}>
                                         {new Date(
                                           attendance.event.startsAt,
                                         ).toLocaleDateString("es-AR", {
@@ -1490,8 +1508,6 @@ export function RaidLogsBoard({
                                           month: "2-digit",
                                           weekday: "short",
                                         })}
-                                        {" · "}
-                                        {attendance.event.title}
                                       </strong>
                                     </div>
                                   ) : null}
@@ -1504,6 +1520,7 @@ export function RaidLogsBoard({
                                 ) : null}
                                 {/* Nombres que se parecen al de la inscripción:
                                     no se cuentan hasta que el staff confirma. */}
+                                <div className="rlb-attendance-lists">
                                 {attendance.likelyPresent.length > 0 ? (
                                   <div className="rlb-analysis-list">
                                     <span className="rlb-label">
@@ -1661,6 +1678,7 @@ export function RaidLogsBoard({
                                     ) : null}
                                   </div>
                                 ) : null}
+                                </div>
                               </div>
                             ) : null}
 
