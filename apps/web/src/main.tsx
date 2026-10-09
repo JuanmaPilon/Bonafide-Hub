@@ -21,6 +21,13 @@ import {
   Sword,
 } from "@phosphor-icons/react";
 import { RaidLogsBoard } from "./RaidLogsBoard";
+import {
+  roleChipClass,
+  roleChipStyle,
+  roleColorHex,
+  roleNameStyle as levelColorsStyle,
+} from "./roles";
+import { XpSection } from "./XpSection";
 import { copyToClipboard } from "./clipboard";
 import { hoursFromMinutes, minutesFromHours } from "./duration";
 import { createMarquee } from "./marquee";
@@ -142,7 +149,6 @@ import {
   type KarutaAlbum,
   type XpConfig,
   type XpImportEntry,
-  type XpRoleMultiplier,
   type XpRoleRule,
   type RaidSpec,
   type EventGameOption,
@@ -1202,32 +1208,9 @@ function tagTint(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// ── Colores de roles de Discord (chips del perfil) ──────────────────
-// Un rol puede venir sin color (0), con un color pleno o con DOS colores:
-// los degradados de Discord llegan en `colors` y el legacy `color` solo trae
-// el principal (y en algunos roles viene en 0).
-function roleColorHex(value: number | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return `#${(value & 0xffffff).toString(16).padStart(6, "0")}`;
-}
-
-// ¿El color es tan claro que sobre el fondo claro no se leería (blanco,
-// amarillo pálido)? El JS solo marca el caso; el tema lo resuelve el CSS
-// (.profile-role--pale). El umbral es alto a propósito: los colores vivos
-// (el verde de Rank 5, el dorado de Gold) se dejan tal cual.
-function isPaleRoleColor(hex: string): boolean {
-  const [r, g, b] = tagRgb(hex);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 190;
-}
-
-// El caso simétrico: un color casi negro (los grises de Discord, ej. Unrank)
-// desaparece sobre el fondo oscuro del tema dark.
-function isDarkRoleColor(hex: string): boolean {
-  const [r, g, b] = tagRgb(hex);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 60;
-}
+// ── Colores de roles de Discord ─────────────────────────────────────
+// Los chips (roleChipClass / roleChipStyle / roleColorHex) salen de roles.ts: la
+// misma pieza la usan el perfil, el ranking y el editor de XP.
 
 // Color de TEXTO de un rango (título de tarjeta, nombre en la plaquita): el
 // color del rol, ajustado para que se lea sobre el fondo del tema en uso — es
@@ -1258,45 +1241,6 @@ function tierTextColor(hex: string, theme: "dark" | "light"): string {
     .join("")}`;
 }
 
-function roleChipClass(role: {
-  color?: number;
-  secondaryColor?: number;
-}): string {
-  const primary = roleColorHex(role.color);
-  if (!primary) {
-    return "role-chip";
-  }
-  const secondary = roleColorHex(role.secondaryColor);
-  return [
-    "role-chip",
-    "role-chip--colored",
-    secondary && secondary !== primary ? "role-chip--gradient" : null,
-    isPaleRoleColor(primary) ? "role-chip--pale" : null,
-    isDarkRoleColor(primary) ? "role-chip--dark" : null,
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join(" ");
-}
-
-function roleChipStyle(role: {
-  color?: number;
-  secondaryColor?: number;
-}): CSSProperties | undefined {
-  const primary = roleColorHex(role.color);
-  if (!primary) {
-    return undefined;
-  }
-  const secondaryRaw = roleColorHex(role.secondaryColor);
-  const secondary =
-    secondaryRaw && secondaryRaw !== primary ? secondaryRaw : null;
-  return {
-    "--role-border": tagTint(primary, 0.5),
-    "--role-color": primary,
-    "--role-color-2": secondary ?? primary,
-    "--role-tint": tagTint(primary, 0.16),
-    "--role-tint-2": tagTint(secondary ?? primary, 0.16),
-  } as CSSProperties;
-}
 
 // Chip del tag: si no hay etiqueta no renderiza nada (uso seguro en cards).
 function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
@@ -6374,10 +6318,6 @@ function App() {
   const [sendingSuggestion, setSendingSuggestion] = useState(false);
   const [suggestionTitle, setSuggestionTitle] = useState("");
   const [suggestionText, setSuggestionText] = useState("");
-  const [roleModal, setRoleModal] = useState<{
-    kind: "add" | "remove";
-    level: number;
-  } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
@@ -9130,8 +9070,7 @@ function App() {
 
   function levelColorFor(
     level: number,
-  ): { color: string; secondary?: string } | undefined {
-    if (!xpConfig) {
+  ): { color: string; secondary?: string } | undefined {    if (!xpConfig) {
       return undefined;
     }
 
@@ -9150,38 +9089,6 @@ function App() {
     return colors.color
       ? { color: colors.color, secondary: colors.secondary }
       : undefined;
-  }
-
-  // El nombre del miembro según el color de su rango: un color pleno con
-  // brillo, o un DEGRADADO si el rango tiene segundo color (el mismo efecto
-  // que los roles con degradado de Discord). Se aplica al elemento que
-  // contiene el texto, así el caso degradado puede recortarlo con
-  // background-clip (el relleno transparente se hereda a los hijos).
-  function levelColorsStyle(
-    color: string | undefined,
-    secondary: string | undefined,
-    glow = true,
-  ): CSSProperties | undefined {
-    if (!color) {
-      return undefined;
-    }
-    if (secondary && secondary !== color) {
-      return {
-        backgroundClip: "text",
-        backgroundImage: `linear-gradient(90deg, ${color}, ${secondary})`,
-        color: "transparent",
-        // Con el relleno transparente, text-shadow no se ve: el brillo va con
-        // drop-shadow, que sigue la forma del degradado.
-        filter: glow
-          ? `drop-shadow(0 0 3px ${tagTint(color, 0.7)}) drop-shadow(0 0 9px ${tagTint(color, 0.35)})`
-          : undefined,
-        WebkitBackgroundClip: "text",
-        WebkitTextFillColor: "transparent",
-      };
-    }
-    return glow
-      ? { color, textShadow: `0 0 6px ${color}, 0 0 14px ${color}66` }
-      : { color };
   }
 
   function levelStyleFor(
@@ -9227,156 +9134,6 @@ function App() {
     } catch {
       // silencioso: puede fallar si el usuario no es owner
     }
-  }
-
-  function updateXpRole(level: number, patch: Partial<XpRoleRule>): void {
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        levelRoles: current.levelRoles.map((rule) =>
-          rule.level === level ? { ...rule, ...patch } : rule,
-        ),
-      };
-    });
-  }
-
-  function changeXpRoleLevel(currentLevel: number, rawValue: number): void {
-    if (!Number.isFinite(rawValue)) {
-      return;
-    }
-
-    const nextLevel = Math.floor(rawValue);
-    if (nextLevel < 0) {
-      return;
-    }
-
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      if (nextLevel === currentLevel) {
-        return { ...current };
-      }
-
-      const alreadyExists = current.levelRoles.some(
-        (rule) => rule.level === nextLevel && rule.level !== currentLevel,
-      );
-      if (alreadyExists) {
-        pushToast("Ese nivel ya está asignado a otro rol.", "error");
-        return { ...current };
-      }
-
-      return {
-        ...current,
-        levelRoles: current.levelRoles.map((rule) =>
-          rule.level === currentLevel ? { ...rule, level: nextLevel } : rule,
-        ),
-      };
-    });
-  }
-
-  function addXpRole(): void {
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const nextLevel =
-        current.levelRoles.reduce((max, rule) => Math.max(max, rule.level), 0) +
-        1;
-
-      return {
-        ...current,
-        levelRoles: [
-          ...current.levelRoles,
-          {
-            addRoleIds: [],
-            level: nextLevel,
-            nicknamePrefix: "",
-            removeRoleIds: [],
-            roleId: "",
-            stacking: "stack",
-          },
-        ],
-      };
-    });
-  }
-
-  function removeXpRole(level: number): void {
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        levelRoles: current.levelRoles.filter((rule) => rule.level !== level),
-      };
-    });
-  }
-
-  function updateXpMultiplier(
-    roleId: string,
-    patch: Partial<XpRoleMultiplier>,
-  ): void {
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        roleMultipliers: current.roleMultipliers.map((entry) =>
-          entry.roleId === roleId ? { ...entry, ...patch } : entry,
-        ),
-      };
-    });
-  }
-
-  function addXpMultiplier(): void {
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      const usedRoleIds = new Set(
-        current.roleMultipliers.map((entry) => entry.roleId),
-      );
-      const availableRole = guildRoles.find(
-        (role) => !usedRoleIds.has(role.id),
-      );
-
-      return {
-        ...current,
-        roleMultipliers: [
-          ...current.roleMultipliers,
-          {
-            multiplier: 2,
-            roleId: availableRole?.id ?? "",
-          },
-        ],
-      };
-    });
-  }
-
-  function removeXpMultiplier(roleId: string): void {
-    setXpConfig((current) => {
-      if (!current) {
-        return current;
-      }
-
-      return {
-        ...current,
-        roleMultipliers: current.roleMultipliers.filter(
-          (entry) => entry.roleId !== roleId,
-        ),
-      };
-    });
   }
 
   async function handleLogout(): Promise<void> {
@@ -9831,11 +9588,6 @@ function App() {
     );
   }
 
-  const roleModalTarget =
-    roleModal != null
-      ? (xpConfig?.levelRoles.find((rule) => rule.level === roleModal.level) ??
-        null)
-      : null;
   const activeAdminSection = TAB_SECTIONS.admin?.find(
     (section) => section.key === sectionFor("admin"),
   );
@@ -11176,398 +10928,35 @@ function App() {
                         </span>
                       </summary>
                       {xpConfig ? (
-                        <>
-                          <div className="admin-card-body">
-                            <div className="form-grid">
-                              <label>
-                                <span>XP por mensaje</span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={xpConfig.messageXp}
-                                  onChange={(event) =>
-                                    setXpConfig((current) =>
-                                      current
-                                        ? {
-                                            ...current,
-                                            messageXp:
-                                              Number(event.target.value) || 0,
-                                          }
-                                        : current,
-                                    )
-                                  }
-                                />
-                              </label>
-
-                              <label>
-                                <span>XP por minuto en voz</span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={xpConfig.voiceXpPerMinute}
-                                  onChange={(event) =>
-                                    setXpConfig((current) =>
-                                      current
-                                        ? {
-                                            ...current,
-                                            voiceXpPerMinute:
-                                              Number(event.target.value) || 0,
-                                          }
-                                        : current,
-                                    )
-                                  }
-                                />
-                              </label>
-
-                              <label>
-                                <span>Cooldown anti-spam (segundos)</span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={xpConfig.cooldownSeconds}
-                                  onChange={(event) =>
-                                    setXpConfig((current) =>
-                                      current
-                                        ? {
-                                            ...current,
-                                            cooldownSeconds:
-                                              Number(event.target.value) || 0,
-                                          }
-                                        : current,
-                                    )
-                                  }
-                                />
-                              </label>
-
-                              <label>
-                                <span>XP base por nivel</span>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={xpConfig.levelBaseXp}
-                                  onChange={(event) =>
-                                    setXpConfig((current) =>
-                                      current
-                                        ? {
-                                            ...current,
-                                            levelBaseXp:
-                                              Number(event.target.value) || 0,
-                                          }
-                                        : current,
-                                    )
-                                  }
-                                />
-                              </label>
-
-                              <label>
-                                <span>Cap de nivel (0 = sin límite)</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={xpConfig.maxLevel}
-                                  onChange={(event) =>
-                                    setXpConfig((current) =>
-                                      current
-                                        ? {
-                                            ...current,
-                                            maxLevel:
-                                              Math.max(
-                                                0,
-                                                Number(event.target.value),
-                                              ) || 0,
-                                          }
-                                        : current,
-                                    )
-                                  }
-                                />
-                              </label>
-                            </div>
-
-                            <h4>Roles por nivel</h4>
-                            <div className="xp-roles">
-                              {xpConfig.levelRoles.length === 0 ? (
-                                <div className="empty-state">
-                                  Aún no hay roles por nivel configurados.
-                                </div>
-                              ) : (
-                                xpConfig.levelRoles.map((rule, index) => (
-                                  <div className="xp-role-row" key={index}>
-                                    <label className="xp-role-level-input">
-                                      <span>Nivel</span>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        value={rule.level}
-                                        onChange={(event) =>
-                                          changeXpRoleLevel(
-                                            rule.level,
-                                            Number(event.target.value),
-                                          )
-                                        }
-                                      />
-                                    </label>
-                                    <select
-                                      className="select"
-                                      value={rule.roleId}
-                                      onChange={(event) =>
-                                        updateXpRole(rule.level, {
-                                          roleId: event.target.value,
-                                        })
-                                      }
-                                    >
-                                      <option value="">Sin rol</option>
-                                      {guildRoles.map((role) => (
-                                        <option key={role.id} value={role.id}>
-                                          {role.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {/* El rol con SU color de Discord (el
-                                        mismo chip que el perfil). */}
-                                    {(() => {
-                                      const role = guildRoles.find(
-                                        (entry) => entry.id === rule.roleId,
-                                      );
-                                      return role ? (
-                                        <span
-                                          className={roleChipClass(role)}
-                                          style={roleChipStyle(role)}
-                                        >
-                                          <span className="role-chip-name">
-                                            {role.name}
-                                          </span>
-                                        </span>
-                                      ) : null;
-                                    })()}
-                                    <label className="xp-nickname-prefix">
-                                      <span>Prefijo de nombre</span>
-                                      <input
-                                        type="text"
-                                        maxLength={8}
-                                        placeholder="🔵"
-                                        value={rule.nicknamePrefix ?? ""}
-                                        onChange={(event) =>
-                                          updateXpRole(rule.level, {
-                                            nicknamePrefix: event.target.value,
-                                          })
-                                        }
-                                      />
-                                    </label>
-                                    <div
-                                      className="xp-color-preview"
-                                      title="Así se ve el nombre del rango"
-                                    >
-                                      <span
-                                        style={levelColorsStyle(
-                                          ruleColorsFor(rule).color,
-                                          ruleColorsFor(rule).secondary,
-                                        )}
-                                      >
-                                        {rule.nicknamePrefix ?? ""}
-                                        {guildRoles.find(
-                                          (role) => role.id === rule.roleId,
-                                        )?.name ?? "Nombre"}
-                                      </span>
-                                    </div>
-                                    <div
-                                      className="xp-mode-toggle"
-                                      title="Comportamiento al alcanzar este nivel"
-                                    >
-                                      <button
-                                        type="button"
-                                        className={
-                                          rule.stacking !== "replace"
-                                            ? "active"
-                                            : ""
-                                        }
-                                        onClick={() =>
-                                          updateXpRole(rule.level, {
-                                            stacking: "stack",
-                                          })
-                                        }
-                                      >
-                                        Acumular
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={
-                                          rule.stacking === "replace"
-                                            ? "active"
-                                            : ""
-                                        }
-                                        onClick={() =>
-                                          updateXpRole(rule.level, {
-                                            stacking: "replace",
-                                          })
-                                        }
-                                      >
-                                        Reemplazar
-                                      </button>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="ghost-button xp-remove-trigger"
-                                      onClick={() =>
-                                        setRoleModal({
-                                          kind: "add",
-                                          level: rule.level,
-                                        })
-                                      }
-                                    >
-                                      Dar roles extra ({rule.addRoleIds.length})
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="ghost-button xp-remove-trigger"
-                                      onClick={() =>
-                                        setRoleModal({
-                                          kind: "remove",
-                                          level: rule.level,
-                                        })
-                                      }
-                                    >
-                                      Quitar roles extra (
-                                      {rule.removeRoleIds.length})
-                                    </button>
-                                    <button
-                                      className="ghost-button danger"
-                                      onClick={() => removeXpRole(rule.level)}
-                                      type="button"
-                                    >
-                                      Borrar
-                                    </button>
-                                  </div>
-                                ))
-                              )}
-
-                              <button
-                                className="primary-button"
-                                onClick={addXpRole}
-                                type="button"
-                              >
-                                + Agregar rol de nivel
-                              </button>
-                            </div>
-
-                            <h4>Multiplicadores de XP por rol</h4>
-                            <div className="xp-roles">
-                              {xpConfig.roleMultipliers.length === 0 ? (
-                                <div className="empty-state">
-                                  Aún no hay roles con multiplicador de XP.
-                                </div>
-                              ) : (
-                                xpConfig.roleMultipliers.map((entry) => (
-                                  <div
-                                    className="xp-role-row xp-multiplier-row"
-                                    key={entry.roleId}
-                                  >
-                                    <select
-                                      className="select"
-                                      value={entry.roleId}
-                                      onChange={(event) =>
-                                        updateXpMultiplier(entry.roleId, {
-                                          roleId: event.target.value,
-                                        })
-                                      }
-                                    >
-                                      <option value="">Sin rol</option>
-                                      {guildRoles.map((role) => (
-                                        <option key={role.id} value={role.id}>
-                                          {role.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <label className="xp-multiplier">
-                                      <span>Multiplicador (x)</span>
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        step="0.5"
-                                        value={entry.multiplier}
-                                        onChange={(event) =>
-                                          updateXpMultiplier(entry.roleId, {
-                                            multiplier:
-                                              Number(event.target.value) || 1,
-                                          })
-                                        }
-                                      />
-                                    </label>
-                                    <button
-                                      className="ghost-button danger"
-                                      onClick={() =>
-                                        removeXpMultiplier(entry.roleId)
-                                      }
-                                      type="button"
-                                    >
-                                      Borrar
-                                    </button>
-                                  </div>
-                                ))
-                              )}
-
-                              <button
-                                className="primary-button"
-                                onClick={addXpMultiplier}
-                                type="button"
-                              >
-                                + Agregar multiplicador
-                              </button>
-                            </div>
-
-                            <div className="import-export">
-                              <button
-                                className="primary-button"
-                                onClick={() => void handleExportXp()}
-                                type="button"
-                              >
-                                Exportar XP
-                              </button>
-                              <button
-                                className="primary-button"
-                                onClick={() => importFileRef.current?.click()}
-                                type="button"
-                              >
-                                Importar XP
-                              </button>
-                              <input
-                                ref={importFileRef}
-                                type="file"
-                                accept="application/json,.json"
-                                hidden
-                                onChange={(event) =>
-                                  void handleImportXpFile(event)
-                                }
-                              />
-                              <button
-                                className="primary-button"
-                                onClick={requestSyncRoles}
-                                type="button"
-                              >
-                                Sincronizar todo
-                              </button>
-                              <button
-                                className="ghost-button danger"
-                                onClick={requestResetAllXp}
-                                type="button"
-                              >
-                                Resetear niveles de todos
-                              </button>
-                            </div>
-                          </div>
-                          {xpDirty ? (
-                            <div className="admin-card-footer">
-                              <button
-                                className="primary-button"
-                                onClick={() => void handleSaveXp()}
-                                disabled={savingAction !== null}
-                              >
-                                {savingAction === "xp"
-                                  ? "Guardando…"
-                                  : "Guardar configuración de XP"}
-                              </button>
-                            </div>
-                          ) : null}
-                        </>
+                        <div className="admin-card-body">
+                          <XpSection
+                            config={xpConfig}
+                            dirty={xpDirty}
+                            guildRoles={guildRoles}
+                            notify={pushToast}
+                            onChange={(updater) =>
+                              setXpConfig((current) =>
+                                current ? updater(current) : current,
+                              )
+                            }
+                            onExport={() => void handleExportXp()}
+                            onImport={() => importFileRef.current?.click()}
+                            onResetAll={requestResetAllXp}
+                            onSave={() => void handleSaveXp()}
+                            onSyncRoles={requestSyncRoles}
+                            saving={savingAction === "xp"}
+                            savingAny={savingAction !== null}
+                          />
+                          <input
+                            ref={importFileRef}
+                            type="file"
+                            accept="application/json,.json"
+                            hidden
+                            onChange={(event) =>
+                              void handleImportXpFile(event)
+                            }
+                          />
+                        </div>
                       ) : (
                         <div className="admin-card-body">
                           <p className="admin-card-loading">
@@ -13534,66 +12923,6 @@ function App() {
                   </button>
                 </>
               ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {roleModal != null ? (
-        <div className="modal-overlay" onClick={() => setRoleModal(null)}>
-          <div
-            className="modal"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <h4>
-              {roleModal.kind === "add"
-                ? `Roles extra que se dan al ganar el nivel ${roleModal.level}`
-                : `Roles extra que se quitan al ganar el nivel ${roleModal.level}`}
-            </h4>
-            {roleModalTarget ? (
-              <div className="modal-role-list">
-                {guildRoles.map((role) => {
-                  const currentIds =
-                    roleModal.kind === "add"
-                      ? roleModalTarget.addRoleIds
-                      : roleModalTarget.removeRoleIds;
-                  const checked = currentIds.includes(role.id);
-                  return (
-                    <label className="xp-remove-check" key={role.id}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const nextIds = event.target.checked
-                            ? [...currentIds, role.id]
-                            : currentIds.filter((id) => id !== role.id);
-                          updateXpRole(roleModal.level, {
-                            ...(roleModal.kind === "add"
-                              ? { addRoleIds: nextIds }
-                              : { removeRoleIds: nextIds }),
-                          });
-                        }}
-                      />
-                      {role.name}
-                    </label>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-state">
-                No se encontró el rol de nivel configurado.
-              </div>
-            )}
-            <div className="form-actions">
-              <button
-                className="primary-button"
-                onClick={() => setRoleModal(null)}
-                type="button"
-              >
-                Listo
-              </button>
             </div>
           </div>
         </div>

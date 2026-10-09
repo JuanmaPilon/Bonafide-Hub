@@ -431,6 +431,20 @@ XP:
 6. `POST /guilds/:guildId/xp/reset-all`
 7. `POST /guilds/:guildId/xp/sync`
 
+El **editor de XP** (Admin → XP) vive en
+`apps/web/src/XpSection.tsx` y no guarda nada por su cuenta: recibe la config y
+devuelve los cambios al App, que es el que sabe si quedó sucia (`dirty`) para
+ofrecer "Guardar configuración". La página es una lista de niveles —una fila por
+nivel, con el rol, el prefijo, el modo (acumular/reemplazar) y cuántos roles
+extra da o quita— y todo el detalle se edita en una **ventana emergente** por
+nivel, con la búsqueda de roles adentro; así el módulo no se vuelve una página
+larga con ocho controles por regla. Los números de configuración van en tres
+columnas, y exportar/importar/sincronizar/resetear quedan en un grupo "Datos"
+con botones chicos.
+Los colores de rol (chip y nombre con degradado) salen de
+`apps/web/src/roles.ts`, compartidos con el perfil y el ranking: un rol se ve
+igual en todos lados.
+
 Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`

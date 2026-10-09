@@ -787,82 +787,242 @@ a:hover {
   font-weight: 700;
 }
 
-.xp-panel {
-  margin-top: 24px;
+/* ── Módulo de XP (Admin) ──────────────────────────────────────────
+   La página son grupos separados por una línea, sin cajas adentro de cajas:
+   los números arriba, los roles por nivel como lista compacta (el detalle de
+   cada nivel se edita en una ventana emergente) y los multiplicadores. */
+.xp-section {
+  display: grid;
+  gap: 18px;
+}
+
+.xp-group {
+  display: grid;
+  gap: 10px;
+}
+
+.xp-group--sep {
+  padding-top: 18px;
   border-top: 1px solid var(--panel-border);
-  padding-top: 20px;
 }
 
-.xp-panel h3 {
-  margin: 0 0 14px;
-}
-
-.xp-panel h4 {
-  margin: 20px 0 12px;
-  color: var(--muted);
-}
-
-.xp-roles {
-  display: grid;
-  gap: 12px;
-}
-
-.xp-role-row {
+.xp-label {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: end;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.xp-role-row > .select {
-  flex: 1;
-  min-width: 150px;
-}
-
-.xp-role-level {
-  font-weight: 700;
-  white-space: nowrap;
-  padding-bottom: 10px;
-}
-
-.xp-role-level-input {
-  display: grid;
-  gap: 6px;
-}
-
-.xp-role-level-input span {
+  align-items: center;
+  gap: 7px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.xp-role-level-input input {
-  width: 76px;
+.xp-label svg {
+  width: 16px;
+  height: 16px;
 }
 
-.xp-remove-roles {
-  grid-column: 1 / -1;
+/* Los campos chicos (números de configuración) no necesitan media pantalla: con
+   tres columnas entran los cinco de un vistazo. */
+.xp-group .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.xp-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.xp-rule-list {
   display: grid;
   gap: 6px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(6, 16, 24, 0.5);
-  border: 1px dashed rgba(134, 158, 214, 0.2);
 }
 
-.xp-remove-check {
+.xp-rule-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.88rem;
-  color: var(--text);
 }
 
-.xp-remove-check input {
-  width: auto;
+/* Caja de una fila: la comparten la regla (que es un botón para abrir el editor)
+   y la fila del multiplicador (que tiene los campos adentro). */
+.xp-rule-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(12, 19, 37, 0.45);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.xp-rule-open {
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.xp-rule-open:hover {
+  border-color: rgba(148, 172, 228, 0.5);
+  background: rgba(22, 32, 58, 0.9);
+}
+
+.xp-rule-level {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.xp-rule-level b {
+  margin-left: 4px;
+  color: var(--text);
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+.xp-rule-none {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.xp-rule-prefix {
+  font-size: 0.95rem;
+}
+
+.xp-rule-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.xp-rule-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Roles extra de un nivel: se dan (+ verde suave) o se quitan (− rojo suave). */
+.xp-rule-tag--add {
+  border-color: rgba(46, 204, 113, 0.45);
+  color: #6fd39a;
+}
+
+.xp-rule-tag--remove {
+  border-color: rgba(229, 72, 77, 0.45);
+  color: #ff9a9a;
+}
+
+/* En claro los verdes y rojos suaves de arriba no se leen sobre blanco. */
+:root[data-theme="light"] .xp-rule-tag--add {
+  color: #1d7a4a;
+}
+
+:root[data-theme="light"] .xp-rule-tag--remove {
+  color: #b3261e;
+}
+
+.xp-rule-pencil {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.xp-rule-open:hover .xp-rule-pencil {
+  color: var(--accent);
+}
+
+/* Los botones de la sección: chicos, como el resto de las acciones del panel. */
+.xp-section .ghost-button svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+
+.xp-add {
+  justify-self: start;
+}
+
+.xp-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xp-save {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+}
+
+/* ── Editor de un nivel (ventana emergente) ──────────────────────── */
+/* El ancho va con `.modal` adelante para ganarle al ancho base del modal. */
+.modal.xp-rule-modal {
+  width: min(620px, 96vw);
+}
+
+.xp-rule-modal .xp-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.xp-modal-head h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.xp-modal-head h4 svg {
+  width: 20px;
+  height: 20px;
+}
+
+.xp-modal-head > .icon-button {
+  margin-left: auto;
+}
+
+.xp-rule-modal .form-grid {
+  gap: 12px;
+}
+
+.xp-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(134, 158, 214, 0.25);
+  border-radius: 10px;
+}
+
+.xp-preview-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.xp-inline-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .xp-mode-toggle {
@@ -877,7 +1037,7 @@ a:hover {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  padding: 10px 13px;
+  padding: 7px 13px;
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
@@ -888,8 +1048,102 @@ a:hover {
   color: #0b1020;
 }
 
-.xp-remove-trigger {
-  white-space: nowrap;
+.xp-mode-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.xp-extras {
+  display: grid;
+  gap: 10px;
+}
+
+.xp-extras-heads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xp-extras-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: rgba(12, 19, 37, 0.45);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.xp-extras-head.active {
+  border-color: rgba(var(--tier-admin-rgb), 0.6);
+  color: var(--accent);
+}
+
+.xp-extras-head svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 160ms ease;
+}
+
+.xp-extras-head.active svg {
+  transform: rotate(180deg);
+}
+
+.xp-extras-body {
+  display: grid;
+  gap: 8px;
+}
+
+.xp-role-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(12, 19, 37, 0.45);
+}
+
+.xp-role-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+}
+
+.xp-role-search input:focus {
+  outline: none;
+}
+
+.xp-role-options {
+  max-height: 220px;
+  padding: 4px 6px 4px 0;
+}
+
+.xp-role-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.xp-role-option input {
+  width: auto;
+}
+
+.xp-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
 }
 
 .modal-overlay {
@@ -3938,27 +4192,6 @@ a:hover {
   background: rgba(229, 72, 77, 0.12);
 }
 
-.xp-color-input {
-  display: grid;
-  gap: 6px;
-}
-
-.xp-color-input > span:first-child {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-/* Vista previa del color del rango: el nombre tal como se ve en el ranking
-   (con degradado, si el rango tiene segundo color). */
-.xp-color-preview {
-  align-self: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px dashed rgba(134, 158, 214, 0.35);
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
 /* Nivel del ranking. Antes todos llevaban un circulito con `currentColor`:
    se veía en los rangos SIN color y desaparecía en los que tienen degradado
    (el relleno es transparente), justo al revés de lo que importa. Ahora la
@@ -4342,51 +4575,21 @@ a:hover {
   padding-right: 6px;
 }
 
+/* Multiplicador de XP de un rol: el "x" y el número al lado del select. */
 .xp-multiplier {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .xp-multiplier span {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .xp-multiplier input {
-  width: 90px;
-}
-
-.xp-nickname-prefix {
-  display: grid;
-  gap: 6px;
-}
-
-.xp-nickname-prefix span {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.xp-nickname-prefix input {
-  width: 110px;
-}
-
-.xp-hint {
-  color: var(--muted);
-  font-size: 0.85rem;
-  line-height: 1.5;
-  margin: 0 0 16px;
-}
-
-.xp-multiplier-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px;
-}
-
-.xp-multiplier-row > .select {
-  flex: 1;
-  min-width: 180px;
+  width: 84px;
 }
 
 .toast-viewport {
@@ -4998,16 +5201,6 @@ a:hover {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.import-export {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 26px;
-  margin-bottom: 18px;
-  padding-top: 18px;
-  border-top: 1px solid var(--panel-border);
 }
 
 .form-actions {
@@ -9108,7 +9301,8 @@ select.list-order {
 :root[data-theme="light"] .home-hero,
 :root[data-theme="light"] .podium-item,
 :root[data-theme="light"] .stat-tile,
-:root[data-theme="light"] .xp-remove-roles,
+:root[data-theme="light"] .xp-rule-box,
+:root[data-theme="light"] .xp-role-search,
 :root[data-theme="light"] .rr-rule,
 :root[data-theme="light"] .rr-preview,
 :root[data-theme="light"] .admin-card-footer {
