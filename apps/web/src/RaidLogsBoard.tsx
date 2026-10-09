@@ -25,10 +25,18 @@ import {
 } from "@phosphor-icons/react";
 import {
   classColor,
-  type RaidConsumableKey,
   type RaidLog,
   type RaidLogAnalysis,
 } from "./api";
+import {
+  buildRaidLogReport,
+  CONSUMABLE_LABEL,
+  downloadRaidLogReportPdf,
+  downloadTextFile,
+  raidLogReportCsv,
+  raidLogReportFileName,
+  SIGNUP_STATUS_LABEL,
+} from "./raidLogsReport";
 
 type Fight = {
   // Id de encuentro: la identidad del boss. El nombre cambia con el idioma del
@@ -155,24 +163,6 @@ type Night = {
   parts: RaidLog[];
   state: NightState;
   title: string;
-};
-
-const SIGNUP_STATUS_LABEL: Record<string, string> = {
-  bench: "Bench",
-  late: "Tarde",
-  no: "No va",
-  tentative: "Tentativo",
-  yes: "Voy",
-};
-
-// Solo etiquetas: el orden de las categorías lo define el API.
-const CONSUMABLE_LABEL: Record<RaidConsumableKey, string> = {
-  flask: "Flask",
-  food: "Comida",
-  healthPotions: "Vida",
-  healthstones: "Piedra",
-  potions: "Pota",
-  prepot: "Prepot",
 };
 
 // El título de una noche lo pone el report más completo: cuando dos personas
@@ -488,6 +478,8 @@ export function RaidLogsBoard({
   // Confirmación de un PJ parecido: qué fila se está guardando y qué falló.
   const [aliasBusy, setAliasBusy] = useState<string | null>(null);
   const [aliasError, setAliasError] = useState<string | null>(null);
+  // A qué miembro se va a linkear cada nombre que vino sin anotarse.
+  const [linkPick, setLinkPick] = useState<Record<string, string>>({});
 
   const nights = useMemo(
     () =>
@@ -622,6 +614,28 @@ export function RaidLogsBoard({
       ]
     : [];
   const attendanceUnsigned = attendance?.unsignedPresent ?? [];
+  // Miembros que no aparecieron en el log: son los candidatos para linkear un
+  // nombre que vino sin anotarse (queda guardado como PJ confirmado del miembro
+  // y el cruce lo reconoce solo la próxima vez).
+  const linkTargets = attendance
+    ? [
+        ...attendance.signedAbsent,
+        ...attendance.unmatchedSignups.map((signup) => ({
+          name: signup.name,
+          status: signup.status,
+          userId: signup.userId,
+        })),
+      ]
+    : [];
+  const raidReport =
+    selectedAnalysis && selected
+      ? buildRaidLogReport({
+          analysis: selectedAnalysis,
+          players: dpsRows,
+          subtitle: (selected.date ?? new Date()).toLocaleDateString("es-AR"),
+          title: selected.title,
+        })
+      : undefined;
   const selectedDpsColor = classColor(dpsRows[0]?.class);
   const lowestDpsColor = classColor(lowestDpsPlayer?.class);
   const selectedAnalysisError =
@@ -997,8 +1011,40 @@ export function RaidLogsBoard({
                                   })}
                                 </span>
                               </div>
-                              <span>
-                                {selectedAnalysis.encounters.length} pulls
+                              <span className="rlb-analysis-head-side">
+                                <span>
+                                  {selectedAnalysis.encounters.length} pulls
+                                </span>
+                                {raidReport ? (
+                                  <>
+                                    <button
+                                      className="csv-button"
+                                      onClick={() =>
+                                        downloadTextFile(
+                                          raidLogReportFileName(
+                                            raidReport,
+                                            "csv",
+                                          ),
+                                          raidLogReportCsv(raidReport),
+                                        )
+                                      }
+                                      type="button"
+                                    >
+                                      CSV
+                                    </button>
+                                    <button
+                                      className="ghost-button"
+                                      onClick={() =>
+                                        void downloadRaidLogReportPdf(
+                                          raidReport,
+                                        )
+                                      }
+                                      type="button"
+                                    >
+                                      PDF
+                                    </button>
+                                  </>
+                                ) : null}
                               </span>
                             </div>
 
@@ -1432,16 +1478,85 @@ export function RaidLogsBoard({
                                         className="rlb-analysis-list-row"
                                         key={player.name}
                                       >
-                                        <span>{player.name}</span>
-                                        <strong>
-                                          {player.status
-                                            ? (SIGNUP_STATUS_LABEL[
-                                                player.status
-                                              ] ?? player.status)
-                                            : `${player.pulls} pulls`}
-                                        </strong>
+                                        <span>
+                                          {player.name}{" "}
+                                          <b>{player.pulls} pulls</b>
+                                        </span>
+                                        <span className="rlb-likely-side">
+                                          {linkTargets.length > 0 &&
+                                          onConfirmAlias ? (
+                                            <>
+                                              <select
+                                                aria-label={`Linkear ${player.name}`}
+                                                className="rlb-link-select"
+                                                disabled={aliasBusy !== null}
+                                                onChange={(event) =>
+                                                  setLinkPick((current) => ({
+                                                    ...current,
+                                                    [player.name]:
+                                                      event.target.value,
+                                                  }))
+                                                }
+                                                value={
+                                                  linkPick[player.name] ?? ""
+                                                }
+                                              >
+                                                <option value="">
+                                                  Linkear con…
+                                                </option>
+                                                {linkTargets.map((target) => (
+                                                  <option
+                                                    key={target.userId}
+                                                    value={target.userId}
+                                                  >
+                                                    {target.name} ·{" "}
+                                                    {SIGNUP_STATUS_LABEL[
+                                                      target.status
+                                                    ] ?? target.status}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                              {linkPick[player.name] ? (
+                                                <button
+                                                  className="ghost-button rlb-likely-confirm"
+                                                  disabled={aliasBusy !== null}
+                                                  onClick={() =>
+                                                    void confirmAlias(
+                                                      selected,
+                                                      linkPick[player.name],
+                                                      player.name,
+                                                    )
+                                                  }
+                                                  type="button"
+                                                >
+                                                  {aliasBusy ===
+                                                  `${linkPick[player.name]}:${player.name}`
+                                                    ? "Guardando…"
+                                                    : "Linkear"}
+                                                </button>
+                                              ) : null}
+                                            </>
+                                          ) : (
+                                            <strong>
+                                              {player.status
+                                                ? (SIGNUP_STATUS_LABEL[
+                                                    player.status
+                                                  ] ?? player.status)
+                                                : `${player.pulls} pulls`}
+                                            </strong>
+                                          )}
+                                        </span>
                                       </div>
                                     ))}
+                                    {aliasError ? (
+                                      <div className="rlb-error">
+                                        <Warning
+                                          weight="fill"
+                                          aria-hidden="true"
+                                        />
+                                        {aliasError}
+                                      </div>
+                                    ) : null}
                                   </div>
                                 ) : null}
                               </div>

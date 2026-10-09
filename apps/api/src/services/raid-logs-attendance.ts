@@ -30,11 +30,11 @@ export type RaidLogAttendance = {
     pulls: number;
     role?: PlayerRole;
   }>;
-  signedAbsent: Array<{ name: string; status: string }>;
+  signedAbsent: Array<{ name: string; status: string; userId: string }>;
   signedPresent: number;
   signedTotal: number;
   totalPulls: number;
-  unmatchedSignups: Array<{ name: string; status: string }>;
+  unmatchedSignups: Array<{ name: string; status: string; userId: string }>;
   unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
 };
 
@@ -210,11 +210,13 @@ export async function crossRaidAttendance(input: {
       result.signedAbsent.push({
         name: entry.characters[0].split("-")[0],
         status: signup.status,
+        userId: signup.userId,
       });
     } else {
       result.unmatchedSignups.push({
         name: signup.username,
         status: signup.status,
+        userId: signup.userId,
       });
     }
   }

@@ -2168,6 +2168,30 @@ a:hover {
   font-size: 0.78rem;
 }
 
+/* Conteo de pulls + botones del informe (CSV / PDF), chicos al lado. */
+.rlb-analysis-head-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rlb-analysis-head-side .csv-button,
+.rlb-analysis-head-side .ghost-button {
+  padding: 5px 12px;
+  font-size: 0.78rem;
+}
+
+/* Member con el que se linkea un nombre que vino sin anotarse. */
+.rlb-link-select {
+  max-width: 200px;
+  padding: 3px 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
 .rlb-analysis-spotlights,
 .rlb-analysis-grid {
   display: grid;

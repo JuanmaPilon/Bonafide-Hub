@@ -123,11 +123,11 @@ export type RaidLogAttendance = {
   }>;
   partial: boolean;
   players: RaidLogAttendancePlayer[];
-  signedAbsent: Array<{ name: string; status: string }>;
+  signedAbsent: Array<{ name: string; status: string; userId: string }>;
   signedPresent: number;
   signedTotal: number;
   totalPulls: number;
-  unmatchedSignups: Array<{ name: string; status: string }>;
+  unmatchedSignups: Array<{ name: string; status: string; userId: string }>;
   unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
 };
 
