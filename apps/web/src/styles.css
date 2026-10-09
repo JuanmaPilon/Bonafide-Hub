@@ -2137,10 +2137,11 @@ a:hover {
 }
 
 /* El análisis va en ventana emergente (como el resto de los modales): el marco
-   del panel inline no hace falta adentro. */
+   del panel inline no hace falta adentro. Usa bastante pantalla porque adentro
+   hay dos columnas de listas. */
 .rlb-analysis-modal {
-  width: min(1120px, 100%);
-  max-height: 88vh;
+  width: min(1400px, 96vw);
+  max-height: 92vh;
   gap: 12px;
 }
 

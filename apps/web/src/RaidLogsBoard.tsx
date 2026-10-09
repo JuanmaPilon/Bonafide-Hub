@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   CaretDown,
   ChartLine,
@@ -288,8 +289,10 @@ function ListToggleIcon({ up }: { up: boolean }) {
 }
 
 // Alto máximo al que se corta una lista larga: techo para que una fila con dos
-// listas enormes no se coma la pantalla.
+// listas enormes no se coma la pantalla. En la ventana del análisis hay lugar de
+// sobra, así que ahí las listas pueden ser más altas.
 const LIST_MAX_PX = 320;
+const MODAL_LIST_MAX_PX = 440;
 
 type RowClamp = {
   registrar: (el: HTMLDivElement | null) => void;
@@ -301,9 +304,15 @@ const RowClampContext = createContext<RowClamp | null>(null);
 // Fila del análisis: las listas de las DOS columnas se cortan a la misma altura,
 // y esa altura es donde termina la más corta. Así las dos columnas cierran en la
 // misma línea y el botón de la larga arranca justo ahí.
-function AnalysisRow({ children }: { children: ReactNode }) {
+function AnalysisRow({
+  children,
+  max = LIST_MAX_PX,
+}: {
+  children: ReactNode;
+  max?: number;
+}) {
   const cuerpos = useRef<HTMLDivElement[]>([]);
-  const [tope, setTope] = useState(LIST_MAX_PX);
+  const [tope, setTope] = useState(max);
 
   const registrar = useCallback((el: HTMLDivElement | null): void => {
     if (el && !cuerpos.current.includes(el)) {
@@ -314,12 +323,14 @@ function AnalysisRow({ children }: { children: ReactNode }) {
   useEffect(() => {
     const medir = (): void => {
       // `scrollHeight` es el alto natural del contenido: no cambia al recortarlo,
-      // así que abrir una lista no mueve el corte de la otra.
+      // así que abrir una lista no mueve el corte de la otra. Las secciones sin
+      // contenido no cuentan: si no, dejarían la otra columna cortada a cero.
       const altos = cuerpos.current
         .filter((el) => Boolean(el))
-        .map((el) => el.scrollHeight);
+        .map((el) => el.scrollHeight)
+        .filter((alto) => alto > 8);
       if (altos.length > 0) {
-        setTope(Math.min(LIST_MAX_PX, ...altos));
+        setTope(Math.min(max, ...altos));
       }
     };
     medir();
@@ -328,7 +339,7 @@ function AnalysisRow({ children }: { children: ReactNode }) {
       observador.observe(el);
     }
     return () => observador.disconnect();
-  }, [children]);
+  }, [children, max]);
 
   return (
     <RowClampContext.Provider value={{ registrar, tope }}>
@@ -1074,16 +1085,17 @@ export function RaidLogsBoard({
                         ? "Analizando…"
                         : "Ver análisis"}
                     </button>
-                    {analysisOpenKey === selected.key ? (
-                      <div
-                        className="modal-overlay"
-                        onClick={(event) => {
-                          if (event.target === event.currentTarget) {
-                            setAnalysisOpenKey(null);
-                          }
-                        }}
-                        role="presentation"
-                      >
+                    {analysisOpenKey === selected.key
+                      ? createPortal(
+                          <div
+                            className="modal-overlay"
+                            onClick={(event) => {
+                              if (event.target === event.currentTarget) {
+                                setAnalysisOpenKey(null);
+                              }
+                            }}
+                            role="presentation"
+                          >
                         <div
                           aria-label={`Análisis de la raid · ${selected.title}`}
                           aria-modal="true"
@@ -1205,7 +1217,7 @@ export function RaidLogsBoard({
                             </div>
 
                             <div className="rlb-analysis-grid">
-                              <AnalysisRow>
+                              <AnalysisRow max={MODAL_LIST_MAX_PX}>
                               <ClampedSection
                                 icon={<Sword weight="fill" aria-hidden="true" />}
                                 title="DPS promedio por encuentro"
@@ -1304,7 +1316,7 @@ export function RaidLogsBoard({
 
                             {consumables ? (
                               <div className="rlb-analysis-grid">
-                                <AnalysisRow>
+                                <AnalysisRow max={MODAL_LIST_MAX_PX}>
                                 {/* Dos listas: las categorías que se esperan en
                                     cada pull muestran quién faltó (es lo que se
                                     puede accionar); la piedra y la poción de
@@ -1700,8 +1712,10 @@ export function RaidLogsBoard({
                         ) : null}
                            </section>
                          </div>
-                       </div>
-                     ) : null}
+                       </div>,
+                           document.body,
+                         )
+                       : null}
                    </div>
                  ) : null}
 
