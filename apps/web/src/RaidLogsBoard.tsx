@@ -11,13 +11,14 @@ import {
 import { createPortal } from "react-dom";
 import {
   ChartLine,
-  Ghost,
   Files,
   Flask,
   GearSix,
+  Ghost,
   ListNumbers,
   MagnifyingGlass,
   ArrowsClockwise,
+  Pill,
   Skull,
   Sword,
   Target,
@@ -508,19 +509,15 @@ export function RaidLogsBoard({
 
   const progress = useMemo(() => progression(nights), [nights]);
 
-  // Aprovecha el espacio de arriba: noches loggeadas, en cuántas semanas y en
-  // cuántos días de la semana (la guild raidea miércoles y jueves, así que da 2).
+  // Aprovecha el espacio de arriba: noches loggeadas y en cuántas semanas.
   const raidStats = useMemo(() => {
     const weeks = new Set<string>();
-    const weekdays = new Set<number>();
     for (const night of nights) {
-      if (!night.date) {
-        continue;
+      if (night.date) {
+        weeks.add(weekKey(night.date));
       }
-      weeks.add(weekKey(night.date));
-      weekdays.add(night.date.getDay());
     }
-    return { days: weekdays.size, nights: nights.length, weeks: weeks.size };
+    return { nights: nights.length, weeks: weeks.size };
   }, [nights]);
 
   const visible = useMemo(() => {
@@ -804,10 +801,6 @@ export function RaidLogsBoard({
           <div className="rlb-stat">
             <strong>{raidStats.weeks}</strong>
             <span>Semanas</span>
-          </div>
-          <div className="rlb-stat">
-            <strong>{raidStats.days}</strong>
-            <span>Días/sem</span>
           </div>
           <div className="rlb-stat">
             {/* Progresión de la guild: un chip por dificultad jugada. */}
@@ -1370,21 +1363,6 @@ export function RaidLogsBoard({
                                             right.used - left.used ||
                                             left.name.localeCompare(right.name),
                                         );
-                                      const totals = consumables.players
-                                        .map((player) => ({
-                                          name: player.name,
-                                          times: player.uses?.[category] ?? 0,
-                                        }))
-                                        .filter((entry) => entry.times > 0)
-                                        .sort(
-                                          (left, right) =>
-                                            right.times - left.times ||
-                                            left.name.localeCompare(right.name),
-                                        );
-                                      const total = totals.reduce(
-                                        (sum, entry) => sum + entry.times,
-                                        0,
-                                      );
                                       return (
                                         <div className="rlb-consumable-row" key={category}>
                                           <span className="rlb-label">
@@ -1409,25 +1387,6 @@ export function RaidLogsBoard({
                                           {users.length === 0
                                             ? "Nadie la usó."
                                             : null}
-                                          {totals.length > 0 ? (
-                                            <details className="rlb-consumable-total">
-                                              <summary>
-                                                Total: {total}{" "}
-                                                {total === 1
-                                                  ? "uso"
-                                                  : "usos"}{" "}
-                                                entre {totals.length}
-                                              </summary>
-                                              <div className="rlb-consumable-total-list">
-                                                {totals.map((entry) => (
-                                                  <span key={entry.name}>
-                                                    {entry.name}{" "}
-                                                    <b>{entry.times}</b>
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            </details>
-                                          ) : null}
                                         </div>
                                       );
                                     })}
@@ -1694,39 +1653,99 @@ export function RaidLogsBoard({
                               </div>
                             ) : null}
 
-                            {selectedAnalysis.encounters.length > 0 ? (
-                              <ClampedSection
-                                icon={<Ghost weight="fill" aria-hidden="true" />}
-                                max={MODAL_LIST_MAX_PX}
-                                title="Resumen por boss"
-                              >
-                                  {selectedAnalysis.encounters.map(
-                                    (encounter, index) => (
-                                      <div
-                                        className="rlb-encounter"
-                                        key={`${index}:${encounter.boss ?? encounter.name}`}
-                                      >
-                                        <span
-                                          className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
-                                        >
-                                          {encounter.kill ? "Kill" : "Wipe"}
-                                        </span>
-                                        <strong>
-                                          {bossLabel(
-                                            encounter.boss,
-                                            encounter.name,
-                                          )}
-                                        </strong>
-                                        <span>{encounter.deaths} muertes</span>
-                                        <span>
-                                          {encounter.topDps
-                                            ? `Top DPS: ${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
-                                            : "Top DPS: sin datos"}
-                                        </span>
-                                      </div>
-                                    ),
-                                  )}
-                              </ClampedSection>
+                            {consumables && reactiveConsumables.length > 0 ? (
+                              <div className="rlb-analysis-grid">
+                                <AnalysisRow max={MODAL_LIST_MAX_PX}>
+                                  <ClampedSection
+                                    icon={<Pill weight="fill" aria-hidden="true" />}
+                                    title="Usos totales"
+                                  >
+                                    <div className="rlb-consumable-pulls">
+                                      {reactiveConsumables.map((category) => {
+                                        const totals = consumables.players
+                                          .map((player) => ({
+                                            name: player.name,
+                                            times: player.uses?.[category] ?? 0,
+                                          }))
+                                          .filter((entry) => entry.times > 0)
+                                          .sort(
+                                            (left, right) =>
+                                              right.times - left.times ||
+                                              left.name.localeCompare(
+                                                right.name,
+                                              ),
+                                          );
+                                        const total = totals.reduce(
+                                          (sum, entry) => sum + entry.times,
+                                          0,
+                                        );
+                                        return (
+                                          <div
+                                            className="rlb-consumable-row"
+                                            key={category}
+                                          >
+                                            <span className="rlb-label">
+                                              {CONSUMABLE_LABEL[category]}:{" "}
+                                              {total}{" "}
+                                              {total === 1 ? "uso" : "usos"}
+                                            </span>
+                                            {totals.map((entry) => (
+                                              <span
+                                                className="rlb-used-name"
+                                                key={entry.name}
+                                                title={`${entry.times} en la noche`}
+                                              >
+                                                {entry.name}{" "}
+                                                <b>{entry.times}</b>
+                                              </span>
+                                            ))}
+                                            {totals.length === 0
+                                                ? "Nadie la usó."
+                                                : null}
+                                            </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </ClampedSection>
+                                  {selectedAnalysis.encounters.length > 0 ? (
+                                    <ClampedSection
+                                      icon={
+                                        <Ghost weight="fill" aria-hidden="true" />
+                                      }
+                                      title="Resumen por boss"
+                                    >
+                                        {selectedAnalysis.encounters.map(
+                                          (encounter, index) => (
+                                            <div
+                                              className="rlb-encounter"
+                                              key={`${index}:${encounter.boss ?? encounter.name}`}
+                                            >
+                                              <span
+                                                className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
+                                              >
+                                                {encounter.kill ? "Kill" : "Wipe"}
+                                              </span>
+                                              <strong>
+                                                {bossLabel(
+                                                  encounter.boss,
+                                                  encounter.name,
+                                                )}
+                                              </strong>
+                                              <span>
+                                                {encounter.deaths} muertes
+                                              </span>
+                                              <span>
+                                                {encounter.topDps
+                                                  ? `Top DPS: ${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
+                                                  : "Top DPS: sin datos"}
+                                              </span>
+                                            </div>
+                                          ),
+                                        )}
+                                    </ClampedSection>
+                                  ) : null}
+                                </AnalysisRow>
+                              </div>
                             ) : null}
                           </>
                         ) : null}

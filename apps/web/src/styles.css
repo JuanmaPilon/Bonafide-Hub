@@ -2166,6 +2166,9 @@ a:hover {
 
 .rlb-list-wrap .rlb-list-body {
   height: 100%;
+  /* El espacio a la derecha es para que los números de cada fila no queden
+     debajo de la barra de scroll. */
+  padding-right: 12px;
   overflow-y: auto;
   scrollbar-color: var(--rlb-scroll-thumb) transparent;
   scrollbar-width: thin;
@@ -2196,30 +2199,12 @@ a:hover {
   pointer-events: none;
 }
 
-/* Totales de un consumible reaccional: desplegable corto con quién y cuántas
-   veces. Cerrado es una línea. */
-.rlb-consumable-total {
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 0.76rem;
-}
-
-.rlb-consumable-total > summary {
-  cursor: pointer;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
+/* Totales por jugador de un consumible: chips compactos. */
 .rlb-consumable-total-list {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
   padding: 6px 0 2px;
-}
-
-.rlb-consumable-total-list b {
-  color: var(--text);
 }
 
 .rlb-analysis-loading,
