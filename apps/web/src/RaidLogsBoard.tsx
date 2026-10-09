@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   CaretDown,
+  ChartLine,
   Ghost,
   Files,
   Flask,
@@ -22,6 +23,7 @@ import {
   Target,
   Users,
   Warning,
+  X,
 } from "@phosphor-icons/react";
 import {
   classColor,
@@ -249,8 +251,15 @@ function toNights(logs: RaidLog[]): Night[] {
   });
 }
 
-function monthOf(date: Date | null): { key: string; label: string } {
-  if (!date) {
+// Clave de la semana (lunes): sirve para contar cuántas semanas distintas se
+// raideó, sin depender de la numeración ISO.
+function weekKey(date: Date): string {
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return `${monday.getFullYear()}-${monday.getMonth()}-${monday.getDate()}`;
+}
+
+function monthOf(date: Date | null): { key: string; label: string } {  if (!date) {
     return { key: "none", label: "Sin fecha" };
   }
   const label = date.toLocaleDateString("es-AR", {
@@ -506,6 +515,21 @@ export function RaidLogsBoard({
 
   const progress = useMemo(() => progression(nights), [nights]);
 
+  // Aprovecha el espacio de arriba: noches loggeadas, en cuántas semanas y en
+  // cuántos días de la semana (la guild raidea miércoles y jueves, así que da 2).
+  const raidStats = useMemo(() => {
+    const weeks = new Set<string>();
+    const weekdays = new Set<number>();
+    for (const night of nights) {
+      if (!night.date) {
+        continue;
+      }
+      weeks.add(weekKey(night.date));
+      weekdays.add(night.date.getDay());
+    }
+    return { days: weekdays.size, nights: nights.length, weeks: weeks.size };
+  }, [nights]);
+
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return nights.filter((night) => {
@@ -696,6 +720,20 @@ export function RaidLogsBoard({
   }, []);
   const deepLinkOpenDone = useRef(false);
 
+  // Escape cierra el análisis, como en el resto de los modales.
+  useEffect(() => {
+    if (!analysisOpenKey) {
+      return undefined;
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setAnalysisOpenKey(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [analysisOpenKey]);
+
   useEffect(() => {
     if (!deepLink || deepLinkOpenDone.current) {
       return;
@@ -761,8 +799,16 @@ export function RaidLogsBoard({
       <div className="rlb-top">
         <div className="rlb-stats">
           <div className="rlb-stat">
-            <strong>{nights.length}</strong>
+            <strong>{raidStats.nights}</strong>
             <span>Noches</span>
+          </div>
+          <div className="rlb-stat">
+            <strong>{raidStats.weeks}</strong>
+            <span>Semanas</span>
+          </div>
+          <div className="rlb-stat">
+            <strong>{raidStats.days}</strong>
+            <span>Días/sem</span>
           </div>
           <div className="rlb-stat">
             {/* Progresión de la guild: un chip por dificultad jugada. */}
@@ -1023,35 +1069,73 @@ export function RaidLogsBoard({
                       onClick={() => void toggleAnalysis(selected)}
                       type="button"
                     >
+                      <ChartLine weight="fill" aria-hidden="true" />
                       {analysisLoadingKey === selected.key
                         ? "Analizando…"
-                        : analysisOpenKey === selected.key
-                          ? "Ocultar análisis"
-                          : "Ver análisis"}
+                        : "Ver análisis"}
                     </button>
                     {analysisOpenKey === selected.key ? (
-                      <section aria-live="polite" className="rlb-analysis">
-                        {analysisLoadingKey === selected.key ? (
-                          <div className="rlb-analysis-loading">
-                            Consultando Warcraft Logs…
-                          </div>
-                        ) : selectedAnalysisError ? (
-                          <div className="rlb-error">
-                            <Warning weight="fill" aria-hidden="true" />
-                            {selectedAnalysisError}
-                          </div>
-                        ) : selectedAnalysis ? (
-                          <>
-                            <div className="rlb-analysis-head">
-                              <div>
-                                <h4>Análisis de la raid</h4>
-                                <span>
-                                  Actualizado{" "}
-                                  {new Date(
-                                    selectedAnalysis.generatedAt,
-                                  ).toLocaleTimeString("es-AR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
+                      <div
+                        className="modal-overlay"
+                        onClick={(event) => {
+                          if (event.target === event.currentTarget) {
+                            setAnalysisOpenKey(null);
+                          }
+                        }}
+                        role="presentation"
+                      >
+                        <div
+                          aria-label={`Análisis de la raid · ${selected.title}`}
+                          aria-modal="true"
+                          className="modal rlb-analysis-modal"
+                          role="dialog"
+                        >
+                          <header className="rlb-analysis-modal-head">
+                            <h4>
+                              <ChartLine weight="fill" aria-hidden="true" />
+                              Análisis de la raid
+                            </h4>
+                            <span>
+                              {selected.title}
+                              {selected.date
+                                ? ` · ${selected.date.toLocaleDateString("es-AR")}`
+                                : ""}
+                            </span>
+                            <button
+                              aria-label="Cerrar"
+                              className="icon-button"
+                              onClick={() => setAnalysisOpenKey(null)}
+                              title="Cerrar"
+                              type="button"
+                            >
+                              <X
+                                weight="bold"
+                                aria-hidden="true"
+                                className="icon-button-icon"
+                              />
+                            </button>
+                          </header>
+                          <section aria-live="polite" className="rlb-analysis">
+                            {analysisLoadingKey === selected.key ? (
+                              <div className="rlb-analysis-loading">
+                                Consultando Warcraft Logs…
+                              </div>
+                            ) : selectedAnalysisError ? (
+                              <div className="rlb-error">
+                                <Warning weight="fill" aria-hidden="true" />
+                                {selectedAnalysisError}
+                              </div>
+                            ) : selectedAnalysis ? (
+                              <>
+                                <div className="rlb-analysis-head">
+                                  <div>
+                                    <span>
+                                      Actualizado{" "}
+                                      {new Date(
+                                        selectedAnalysis.generatedAt,
+                                      ).toLocaleTimeString("es-AR", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
                                   })}
                                 </span>
                               </div>
@@ -1614,10 +1698,12 @@ export function RaidLogsBoard({
                             ) : null}
                           </>
                         ) : null}
-                      </section>
-                    ) : null}
-                  </div>
-                ) : null}
+                           </section>
+                         </div>
+                       </div>
+                     ) : null}
+                   </div>
+                 ) : null}
 
                 {onPublish || onUpdate || onHide ? (
                   <div className="rlb-detail-actions">

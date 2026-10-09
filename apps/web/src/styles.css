@@ -1606,7 +1606,9 @@ a:hover {
 .rlb-stats {
   display: grid;
   flex: 1 1 420px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Los contadores (noches, semanas, días) entran en una fila cuando hay ancho y
+     se acomodan solos cuando no. */
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 10px;
 }
 
@@ -1824,19 +1826,19 @@ a:hover {
 .rlb-progress-chip {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 4px 9px;
+  gap: 4px;
+  padding: 2px 7px;
   border: 1px solid var(--panel-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: rgba(148, 172, 228, 0.08);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 800;
 }
 
 .rlb-progress-chip i {
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   font-style: normal;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -2132,6 +2134,52 @@ a:hover {
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   background: rgba(7, 13, 24, 0.38);
+}
+
+/* El análisis va en ventana emergente (como el resto de los modales): el marco
+   del panel inline no hace falta adentro. */
+.rlb-analysis-modal {
+  width: min(1120px, 100%);
+  max-height: 88vh;
+  gap: 12px;
+}
+
+.rlb-analysis-modal .rlb-analysis {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+.rlb-analysis-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlb-analysis-modal-head h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.rlb-analysis-modal-head h4 svg {
+  width: 20px;
+  height: 20px;
+}
+
+.rlb-analysis-modal-head > span {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.rlb-analysis-control .ghost-button svg {
+  width: 18px;
+  height: 18px;
+  margin-right: 7px;
+  vertical-align: -3px;
 }
 
 .rlb-analysis-loading,

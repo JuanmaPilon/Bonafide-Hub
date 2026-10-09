@@ -162,7 +162,11 @@ cuando **todos** los logs son de la misma; con más de una, la etiqueta mentirí
 omite. Las listas largas del análisis (DPS, muertes, consumibles, por pull) se
 cortan **a la misma altura en las dos columnas** — la de la lista más corta de la
 fila, con 320px de techo — y se abren con el triángulo del pie de la lista; el
-triángulo aparece solo si hay algo tapado.
+triángulo aparece solo si hay algo tapado. El análisis se abre en una **ventana
+emergente** (el mismo modal que el resto de los módulos: cierra con la X, con
+Escape o clickeando afuera), así no empuja la ficha de la noche, y arriba a la
+izquierda los contadores muestran noches, semanas distintas y días de la semana
+en los que se raideó (2 con miércoles y jueves).
 
 **La identidad de un boss es su id de encuentro, no su nombre**: el nombre cambia
 con el idioma del cliente que subió el log ("The Coiled Altar" vs "El Altar
