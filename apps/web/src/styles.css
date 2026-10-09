@@ -2122,6 +2122,9 @@ a:hover {
   border: 0;
   background: none;
   padding: 0;
+  /* Sin esto el grid reparte el alto que sobra entre las filas y quedan huecos
+     cuando la noche tiene pocas listas. */
+  align-content: start;
 }
 
 .rlb-analysis-modal-head {
@@ -2512,6 +2515,14 @@ a:hover {
 .rlb-consumable-pulls .rlb-used-name b {
   color: var(--muted);
   font-weight: 700;
+}
+
+/* Número de pull dentro del chip ("1/19 · pull 2"). */
+.rlb-chip-pulls {
+  margin-left: 5px;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-style: normal;
 }
 
 .rlb-consumable-pull {

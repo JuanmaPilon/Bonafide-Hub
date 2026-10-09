@@ -91,6 +91,9 @@ export async function crossRaidAttendance(input: {
       type: "raid",
     },
   });
+  // El evento de ESA noche: el más cercano al primer pull dentro de la ventana.
+  // La fecha se muestra primero en la web porque el título lo escribe quien crea
+  // el evento ("Raid MIERCOLES - JUEVES 08/10/2026") y puede decir cualquier cosa.
   const event = candidates.sort(
     (a, b) =>
       Math.abs(a.startsAt.getTime() - nightMs) -

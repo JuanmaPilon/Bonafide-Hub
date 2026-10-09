@@ -1298,11 +1298,9 @@ export function RaidLogsBoard({
                             {consumables ? (
                               <div className="rlb-analysis-grid">
                                 <AnalysisRow max={MODAL_LIST_MAX_PX}>
-                                {/* Dos listas: las categorías que se esperan en
-                                    cada pull muestran quién faltó (es lo que se
-                                    puede accionar); la piedra y la poción de
-                                    vida se usan cuando la pelea lo pide, así
-                                    que ahí se muestra quién las usó. */}
+                                {/* Categorías que se esperan en cada pull: se
+                                    muestra quién faltó, en cuántos pulls y (si
+                                    son pocos) en cuáles. */}
                                 <ClampedSection
                                   icon={<Flask weight="fill" aria-hidden="true" />}
                                   title="Consumibles"
@@ -1310,13 +1308,26 @@ export function RaidLogsBoard({
                                   <div className="rlb-consumable-pulls">
                                     {expectedConsumables.map((category) => {
                                       const missing = consumables.players
-                                        .map((player) => ({
-                                          absent:
-                                            player.pulls -
-                                            (player.counts[category] ?? 0),
-                                          name: player.name,
-                                          pulls: player.pulls,
-                                        }))
+                                        .map((player) => {
+                                          // En qué pull/s faltó: el índice de la
+                                          // lista es el número de pull.
+                                          const pulls = consumables.pulls
+                                            .map((pull, index) => ({ index, pull }))
+                                            .filter(({ pull }) =>
+                                              (
+                                                pull.missing[category] ?? []
+                                              ).includes(player.name),
+                                            )
+                                            .map(({ index }) => index + 1);
+                                          return {
+                                            absent:
+                                              player.pulls -
+                                              (player.counts[category] ?? 0),
+                                            name: player.name,
+                                            pulls,
+                                            totalPulls: player.pulls,
+                                          };
+                                        })
                                         .filter((entry) => entry.absent > 0)
                                         .sort(
                                           (left, right) =>
@@ -1336,12 +1347,21 @@ export function RaidLogsBoard({
                                             <span
                                               className="rlb-missing-name"
                                               key={entry.name}
-                                              title={`Faltó en ${entry.absent} de ${entry.pulls} pulls`}
+                                              title={`Faltó en ${entry.absent} de ${entry.totalPulls} pulls${entry.pulls.length > 0 ? `: pull ${entry.pulls.join(", ")}` : ""}`}
                                             >
                                               {entry.name}{" "}
                                               <b>
-                                                {entry.absent}/{entry.pulls}
+                                                {entry.absent}/
+                                                {entry.totalPulls}
                                               </b>
+                                              {entry.pulls.length > 0 &&
+                                              entry.pulls.length <= 4 ? (
+                                                <i className="rlb-chip-pulls">
+                                                  {entry.pulls.length === 1
+                                                    ? `pull ${entry.pulls[0]}`
+                                                    : `pulls ${entry.pulls.join("/")}`}
+                                                </i>
+                                              ) : null}
                                             </span>
                                           ))}
                                           {missing.length === 0
@@ -1393,64 +1413,47 @@ export function RaidLogsBoard({
                                   </div>
                                 </ClampedSection>
 
-                                <ClampedSection
-                                  icon={<Target weight="fill" aria-hidden="true" />}
-                                  title="Por pull"
-                                >
-                                  <div className="rlb-consumable-pulls">
-                                    {consumables.pulls.map(
-                                      (pull, index) => (
-                                        <details
-                                          className="rlb-consumable-pull"
-                                          key={`${pull.boss ?? pull.name}:${index}`}
-                                        >
-                                          <summary>
-                                            <span className="rlb-consumable-pull-head">
-                                              <strong>
-                                                {bossLabel(pull.boss, pull.name)}
-                                              </strong>
-                                              <span>
-                                                {pull.participants} jugadores
-                                              </span>
+                                {/* Muertes sin piedra ni poción: en el hueco que
+                                    dejó el detalle por pull, que era demasiado
+                                    para lo que aportaba. */}
+                                {selectedAnalysis.defensives &&
+                                selectedAnalysis.defensives.players.length > 0 ? (
+                                  <ClampedSection
+                                    icon={<Pill weight="fill" aria-hidden="true" />}
+                                    title="Muertes sin piedra ni poción"
+                                  >
+                                    <div className="rlb-consumable-pulls">
+                                      <p>
+                                        <span className="rlb-label">
+                                          {selectedAnalysis.defensives.without} de{" "}
+                                          {selectedAnalysis.defensives.totalDeaths}{" "}
+                                          muertes, sin usarlas en los{" "}
+                                          {
+                                            selectedAnalysis.defensives
+                                              .windowSeconds
+                                          }{" "}
+                                          s previos
+                                        </span>
+                                      </p>
+                                      <div className="rlb-consumable-row">
+                                        {selectedAnalysis.defensives.players
+                                          .filter((player) => player.without > 0)
+                                          .map((player) => (
+                                            <span
+                                              className="rlb-missing-name"
+                                              key={player.name}
+                                              title={`${player.without} de ${player.deaths} muertes sin piedra ni poción (las usó en las otras)`}
+                                            >
+                                              {player.name}{" "}
+                                              <b>
+                                                {player.without}/{player.deaths}
+                                              </b>
                                             </span>
-                                          </summary>
-                                          {consumables.categories.map(
-                                            (category) => {
-                                              const isExpected =
-                                                expectedConsumables.includes(
-                                                  category,
-                                                );
-                                              const names =
-                                                (isExpected
-                                                  ? pull.missing[category]
-                                                  : pull.usedNames?.[
-                                                      category
-                                                    ]) ?? [];
-                                              return (
-                                                <p key={category}>
-                                                  <span className="rlb-label">
-                                                    {isExpected
-                                                      ? "Sin"
-                                                      : "Usaron"}{" "}
-                                                    {CONSUMABLE_LABEL[
-                                                      category
-                                                    ].toLowerCase()}{" "}
-                                                    ({names.length})
-                                                  </span>
-                                                  {names.length > 0
-                                                    ? names.join(", ")
-                                                    : isExpected
-                                                      ? "Todos usaron."
-                                                      : "Nadie la usó."}
-                                                </p>
-                                              );
-                                            },
-                                          )}
-                                        </details>
-                                      ),
-                                    )}
-                                  </div>
-                                </ClampedSection>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  </ClampedSection>
+                                ) : null}
                                 </AnalysisRow>
                               </div>
                             ) : null}
@@ -1477,10 +1480,18 @@ export function RaidLogsBoard({
                                     <div>
                                       <span>Evento</span>
                                       <strong>
-                                        {attendance.event.title} ·{" "}
+                                        {/* La fecha del evento va primero: el
+                                            título lo escribe quien lo crea y
+                                            puede decir cualquier cosa. */}
                                         {new Date(
                                           attendance.event.startsAt,
-                                        ).toLocaleDateString("es-AR")}
+                                        ).toLocaleDateString("es-AR", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          weekday: "short",
+                                        })}
+                                        {" · "}
+                                        {attendance.event.title}
                                       </strong>
                                     </div>
                                   ) : null}

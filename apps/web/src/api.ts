@@ -174,6 +174,17 @@ export type RaidLogAnalysis = {
   consumables?: RaidLogConsumables;
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
+  defensives?: {
+    players: Array<{
+      deaths: number;
+      name: string;
+      used: number;
+      without: number;
+    }>;
+    totalDeaths: number;
+    windowSeconds: number;
+    without: number;
+  };
   encounters: Array<{
     boss?: number;
     deaths: number;

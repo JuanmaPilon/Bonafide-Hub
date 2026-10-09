@@ -61,6 +61,16 @@ export type RaidLogAnalysis = {
   consumables?: RaidLogConsumables;
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
+  // Muertes sin haber usado piedra ni poción de vida en los segundos previos.
+  // Es lo único que el log permite saber: si la usó y murió igual, la usó.
+  defensives?: {
+    // Muertes por jugador, con cuántas fueron sin defensivo.
+    players: Array<{ deaths: number; name: string; used: number; without: number }>;
+    totalDeaths: number;
+    // Cuántos segundos antes de morir se busca el cast.
+    windowSeconds: number;
+    without: number;
+  };
   encounters: Array<{
     boss?: number;
     deaths: number;
@@ -193,6 +203,9 @@ type WclBuffTable = {
 // (una piedra por pull no es lo mismo que tres). Se arma aparte del análisis de
 // daño porque necesita los eventos de CombatantInfo.
 type FightExtras = {
+  // Momento (relativo al report) de cada cast de piedra o poción de vida, que es
+  // lo que permite saber si la usó ANTES de morir.
+  defensives: Map<string, number[]>;
   participants: string[];
   used: Map<string, Map<RaidConsumableKey, number>>;
 };
@@ -223,7 +236,7 @@ type RaidReportPart = {
 };
 
 type FightResult = {
-  deaths: Array<{ ability?: string; player: string }>;
+  deaths: Array<{ ability?: string; player: string; timestamp?: number }>;
   durationSeconds: number;
   fight: WclAnalysisFight;
   damage: Array<{
@@ -435,6 +448,9 @@ async function fetchReportRoles(
 }
 
 const CONSUMABLE_PREPULL_MS = 30 * 1000;
+// Ventana antes de morir en la que se busca una piedra o poción de vida: más
+// atrás que esto, el cast no tiene que ver con esa muerte.
+const DEFENSIVE_WINDOW_MS = 12 * 1000;
 // Una poción usada hasta este límite antes del pull es la prepot.
 const PREPOT_WINDOW_MS = CONSUMABLE_PREPULL_MS;
 
@@ -624,16 +640,29 @@ async function collectFightConsumables(input: {
   const used = input.fights.map(
     () => new Map<string, Map<RaidConsumableKey, number>>(),
   );
+  const defensives = input.fights.map(() => new Map<string, number[]>());
+  // Piedra y poción de vida son las que se usan cuando la pelea lo pide: si no
+  // aparecen antes de una muerte, se murió sin defensivo.
+  const DEFENSIVE_CATEGORIES = new Set<RaidConsumableKey>([
+    "healthstones",
+    "healthPotions",
+  ]);
   const participants = input.fights.map(() => new Set<string>());
   const addUse = (
     index: number,
     name: string,
     category: RaidConsumableKey,
+    timestamp?: number,
   ): void => {
     const categories =
       used[index].get(name) ?? new Map<RaidConsumableKey, number>();
     categories.set(category, (categories.get(category) ?? 0) + 1);
     used[index].set(name, categories);
+    if (timestamp !== undefined && DEFENSIVE_CATEGORIES.has(category)) {
+      const times = defensives[index].get(name) ?? [];
+      times.push(timestamp);
+      defensives[index].set(name, times);
+    }
   };
 
   const table = (await fetchWarcraftLogsV1Json(
@@ -664,13 +693,13 @@ async function collectFightConsumables(input: {
       }
       const inside = fightIndexAt(input.fights, timestamp);
       if (inside !== -1) {
-        addUse(inside, name, category);
+        addUse(inside, name, category, timestamp);
         continue;
       }
       if (category === "potions") {
         const before = prepullFightIndex(input.fights, timestamp);
         if (before !== -1) {
-          addUse(before, name, "prepot");
+          addUse(before, name, "prepot", timestamp);
         }
       }
     }
@@ -782,6 +811,7 @@ async function collectFightConsumables(input: {
     auraCategories,
     castCategories,
     fights: input.fights.map((_, index) => ({
+      defensives: defensives[index],
       participants: [...participants[index]].sort((a, b) => a.localeCompare(b)),
       used: used[index],
     })),
@@ -836,6 +866,7 @@ async function analyzeFight(job: FightJob): Promise<FightResult> {
     deaths: events.map((event) => ({
       ability: deathAbility(event),
       player: deathPlayer(event, job.actors),
+      timestamp: event.timestamp,
     })),
     durationSeconds,
     fight: job.fight,
@@ -1033,6 +1064,10 @@ async function buildRaidLogNightAnalysis(
     }
   >();
   const consumablePulls: RaidLogConsumables["pulls"] = [];
+  const defensiveDeaths = new Map<
+    string,
+    { deaths: number; used: number; without: number }
+  >();
   const encounters: RaidLogAnalysis["encounters"] = [];
   const playerClasses = new Map<string, string>();
   for (const report of ordered) {
@@ -1125,6 +1160,32 @@ async function buildRaidLogNightAnalysis(
       });
     }
 
+    // Muerte sin defensivo: el jugador no usó piedra ni poción de vida en los
+    // segundos previos (el cast queda en el mismo timestamp relativo al report).
+    for (const death of result.deaths) {
+      if (death.timestamp === undefined) {
+        continue;
+      }
+      const aggregate = defensiveDeaths.get(death.player) ?? {
+        deaths: 0,
+        used: 0,
+        without: 0,
+      };
+      aggregate.deaths += 1;
+      const casts = extras?.defensives.get(death.player) ?? [];
+      const usedBefore = casts.some(
+        (cast) =>
+          cast <= death.timestamp! &&
+          death.timestamp! - cast <= DEFENSIVE_WINDOW_MS,
+      );
+      if (usedBefore) {
+        aggregate.used += 1;
+      } else {
+        aggregate.without += 1;
+      }
+      defensiveDeaths.set(death.player, aggregate);
+    }
+
     // El "top DPS" del pull tiene que ser DPS: un heal o un tank con burst no
     // representa el daño de la raid.
     const pullDamage = result.damage.filter(
@@ -1212,6 +1273,30 @@ async function buildRaidLogNightAnalysis(
     deathsByPlayer: [...playerDeaths.entries()]
       .map(([name, deaths]) => ({ deaths, name }))
       .sort((a, b) => b.deaths - a.deaths),
+    // Solo aparece si se pudieron medir los defensivos (piedra o poción de vida
+    // reconocidas en la noche): sin eso, todo el mundo parecería morir sin usar.
+    defensives:
+      castCategories.has("healthstones") || castCategories.has("healthPotions")
+        ? {
+            players: [...defensiveDeaths.entries()]
+              .map(([name, totals]) => ({ name, ...totals }))
+              .sort(
+                (a, b) =>
+                  b.without - a.without ||
+                  b.deaths - a.deaths ||
+                  a.name.localeCompare(b.name),
+              ),
+            totalDeaths: [...defensiveDeaths.values()].reduce(
+              (sum, totals) => sum + totals.deaths,
+              0,
+            ),
+            windowSeconds: Math.round(DEFENSIVE_WINDOW_MS / 1000),
+            without: [...defensiveDeaths.values()].reduce(
+              (sum, totals) => sum + totals.without,
+              0,
+            ),
+          }
+        : undefined,
     encounters,
     generatedAt: new Date().toISOString(),
     source,

@@ -177,7 +177,7 @@ pulls que traen dos reports de la misma noche se cuentan una sola vez (en la
 tarjeta y en el análisis) y los pulls distintos del mismo boss (un wipe y su kill)
 siguen contando los dos. Para mostrar, el análisis usa **un solo nombre por boss**:
 el del report más completo de la noche, así el mismo boss no aparece con dos
-nombres ("Por boss" y "Por pull" dicen lo mismo que la tarjeta). Los logs
+nombres ("Resumen por boss" dice lo mismo que la tarjeta). Los logs
 guardados antes de esto no tienen `boss`/`start`
 ni `zoneName`: `backfillRaidLogDetails` los refresca una vez al arrancar el API
 (fire & forget, como las otras migraciones) y el escaneo manual hace lo mismo, así
@@ -272,22 +272,30 @@ Devuelve:
    `expected` separa las categorías que corresponden a cada pull (flask, comida,
    pota, prepot) de las de **uso reaccional** (piedra y poción de vida), donde
    no hay un "debería" por pull: la web muestra faltantes de las primeras
-   (`pulls[].missing` / `players[].counts`) y **quién las usó** en las segundas
-   (`pulls[].usedNames`), con el detalle por pull. `players[].uses` cuenta
-   **cuántas veces** usó cada consumible en la noche (una piedra por pull no es
-   lo mismo que tres): la web lo muestra en un desplegable corto por categoría
-   con el total de la raid.
+   (`pulls[].missing` / `players[].counts`, indicando en qué pull/s faltó) y
+   **quién las usó** en las segundas (`pulls[].usedNames`). `players[].uses`
+   cuenta **cuántas veces** usó cada consumible en la noche (una piedra por pull
+   no es lo mismo que tres): la web lo muestra en **Usos totales** con el total
+   de la raid. El detalle por pull no se muestra: con qué pull fue cada falta
+   alcanza en el chip.
+6. `defensives` — muertes sin haber usado **piedra ni poción de vida** en los
+   12 s previos (`windowSeconds`). Por jugador: `deaths`, `without` y `used`
+   (murió igual, pero la usó). Solo aparece si en la noche se pudieron medir esas
+   categorías; si no, todos parecerían morir sin usarlas.
 5. `attendance` — cruce entre los que aparecen en el log y los anotados al
-   evento de raid más cercano (±14 h, `type: raid`). El evento se elige por
-   cercanía y se toman los anotados: "voy" y "tarde" son el compromiso que mide
-   `signedPresent` / `signedTotal`, y los que faltaron van a `signedAbsent` (o a
-   `unmatchedSignups` si no dejaron PJ escrito). En `unsignedPresent` ("vinieron
-   sin anotarse") entran solo los que **no tenían anotación válida**: los que
-   dijeron "no voy" (aunque figuren en el evento) y los que no figuran en la
-   lista. Estar en bench, anotarse tarde o haber puesto "tentativo" es anotarse,
-   así que no aparecen ahí. `partial` avisa cuando no se pudo leer la presencia
-   por pull (CombatantInfo) y los participantes salieron de la tabla de daño:
-   ahí un "no vino" puede ser un heal que no hizo daño.
+   evento de raid más cercano al primer pull (±14 h, `type: raid`). El evento se
+   elige por cercanía y se toman los anotados: "voy" y "tarde" son el compromiso
+   que mide `signedPresent` / `signedTotal`, y los que faltaron van a
+   `signedAbsent` (o a `unmatchedSignups` si no dejaron PJ escrito). En
+   `unsignedPresent` ("vinieron sin anotarse") entran solo los que **no tenían
+   anotación válida**: los que dijeron "no voy" (aunque figuren en el evento) y
+   los que no figuran en la lista. Estar en bench, anotarse tarde o haber puesto
+   "tentativo" es anotarse, así que no aparecen ahí. `partial` avisa cuando no se
+   pudo leer la presencia por pull (CombatantInfo) y los participantes salieron
+   de la tabla de daño: ahí un "no vino" puede ser un heal que no hizo daño.
+   La web muestra la **fecha del evento primero** y después el título: el título
+   lo escribe quien crea el evento ("Raid MIERCOLES - JUEVES 08/10/2026") y no
+   dice cuál se usó para el cruce.
 6. `source` — de dónde salió el análisis: el report **más completo** de la
    noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
    cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que
