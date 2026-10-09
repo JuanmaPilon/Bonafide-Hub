@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
@@ -106,17 +105,7 @@ function progression(nights: Night[]): {
     short: string;
     total: number;
   }>;
-  zoneName?: string;
 } {
-  const zoneNames = new Set<string>();
-  for (const night of nights) {
-    for (const fight of night.fights) {
-      const zoneName = fight.zoneName?.trim();
-      if (zoneName) {
-        zoneNames.add(zoneName);
-      }
-    }
-  }
   const porDificultad = DIFFICULTIES
     .map((difficulty) => {
       const seen = new Set<string>();
@@ -152,9 +141,6 @@ function progression(nights: Night[]): {
       short: entry.short,
       total,
     })),
-    // El nombre de la raid solo se muestra cuando todos los logs son de una
-    // misma: si hay más de una, la etiqueta mentiría.
-    zoneName: zoneNames.size === 1 ? [...zoneNames][0] : undefined,
   };
 }
 
@@ -670,14 +656,7 @@ export function RaidLogsBoard({
           </div>
           <div className="rlb-stat">
             {/* Progresión de la guild: un chip por dificultad jugada. */}
-            <strong
-              className="rlb-progress"
-              title={
-                progress.zoneName
-                  ? `Progresión en ${progress.zoneName}`
-                  : "Progresión de la guild"
-              }
-            >
+            <strong className="rlb-progress">
               {progress.difficulties.length > 0
                 ? progress.difficulties.map((entry) => (
                     <span
@@ -685,8 +664,8 @@ export function RaidLogsBoard({
                       key={entry.short}
                       title={`${entry.label}: ${entry.killed} de ${entry.total} bosses`}
                     >
+                      <i>{entry.label}</i>
                       {entry.killed}/{entry.total}
-                      <i>{entry.short}</i>
                     </span>
                   ))
                 : "—"}
@@ -1050,18 +1029,6 @@ export function RaidLogsBoard({
                                           </span>
                                           <span className="rlb-analysis-player">
                                             <span className="rlb-analysis-player-name">
-                                              {color ? (
-                                                <i
-                                                  aria-label={player.class}
-                                                  className="rlb-class-dot"
-                                                  style={
-                                                    {
-                                                      "--dot-color": color,
-                                                    } as CSSProperties
-                                                  }
-                                                  title={player.class}
-                                                />
-                                              ) : null}
                                               {player.name}
                                             </span>
                                             <span className="rlb-bar-track">
