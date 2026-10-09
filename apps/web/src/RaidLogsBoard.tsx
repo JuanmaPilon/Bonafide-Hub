@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
@@ -16,7 +17,7 @@ import {
   GearSix,
   ListNumbers,
   MagnifyingGlass,
-  CloudArrowDown,
+  ArrowsClockwise,
   Skull,
   Sword,
   Target,
@@ -703,7 +704,7 @@ export function RaidLogsBoard({
                 title={scanning ? "Escaneando…" : "Escanear ahora"}
                 type="button"
               >
-                <CloudArrowDown weight="fill" aria-hidden="true" className="icon-button-icon" />
+                <ArrowsClockwise weight="fill" aria-hidden="true" className="icon-button-icon" />
               </button>
             ) : null}
             {manage ? (
@@ -1053,9 +1054,12 @@ export function RaidLogsBoard({
                                                 <i
                                                   aria-label={player.class}
                                                   className="rlb-class-dot"
-                                                  style={{
-                                                    backgroundColor: color,
-                                                  }}
+                                                  style={
+                                                    {
+                                                      "--dot-color": color,
+                                                    } as CSSProperties
+                                                  }
+                                                  title={player.class}
                                                 />
                                               ) : null}
                                               {player.name}

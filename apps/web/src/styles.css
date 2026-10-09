@@ -2262,11 +2262,16 @@ a:hover {
   gap: 7px;
 }
 
+/* Punto de clase (la "profesión") al lado del nombre: un LED con halo en el
+   color de la clase, en vez de un puntito plano. */
 .rlb-class-dot {
-  flex: 0 0 8px;
-  width: 8px;
-  height: 8px;
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
+  background: var(--dot-color);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--dot-color) 22%, transparent);
 }
 
 .rlb-bar-track {
