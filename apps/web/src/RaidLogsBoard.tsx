@@ -18,7 +18,6 @@ import {
   ListNumbers,
   MagnifyingGlass,
   ArrowsClockwise,
-  Pill,
   Skull,
   Sword,
   Target,
@@ -172,10 +171,6 @@ const SIGNUP_STATUS_LABEL: Record<string, string> = {
 const CONSUMABLE_LABEL: Record<RaidConsumableKey, string> = {
   flask: "Flask",
   food: "Comida",
-  healthPotions: "Vida",
-  healthstones: "Piedra",
-  potions: "Pota",
-  prepot: "Prepot",
 };
 
 // El título de una noche lo pone el report más completo: cuando dos personas
@@ -385,7 +380,7 @@ function ClampedSection({
         {icon}
         {title}
       </h5>
-      <div className="rlb-list-wrap" style={{ height: tope }}>
+      <div className="rlb-list-wrap" style={{ maxHeight: tope }}>
         <div
           className="rlb-list-body"
           onScroll={medir}
@@ -581,13 +576,7 @@ export function RaidLogsBoard({
   );
   const attendance = selectedAnalysis?.attendance;
   const consumables = selectedAnalysis?.consumables;
-  // El API marca cuáles categorías se esperan en cada pull; si no las manda
-  // (API vieja) se tratan todas como esperadas.
-  const expectedConsumables =
-    consumables?.expected ?? consumables?.categories ?? [];
-  const reactiveConsumables = (consumables?.categories ?? []).filter(
-    (category) => !expectedConsumables.includes(category),
-  );
+  const expectedConsumables = consumables?.categories ?? [];
   // El nombre del boss cambia con el idioma del log ("The Coiled Altar" vs
   // "El Altar Serpenteante"): manda el del report base y, si no aparece, el que
   // más veces figura en la noche, así el mismo boss no se muestra con dos
@@ -1295,181 +1284,116 @@ export function RaidLogsBoard({
                               </AnalysisRow>
                             </div>
 
-                            {consumables ? (
+                            {consumables || selectedAnalysis.encounters.length > 0 ? (
                               <div className="rlb-analysis-grid">
                                 <AnalysisRow max={MODAL_LIST_MAX_PX}>
-                                {/* Categorías que se esperan en cada pull: se
-                                    muestra quién faltó, en cuántos pulls y (si
-                                    son pocos) en cuáles. */}
-                                <ClampedSection
-                                  footer={
-                                    (consumables.unmeasured ?? []).length > 0 ? (
-                                      <span className="rlb-consumable-note">
-                                        No se pudieron medir en este log:{" "}
-                                        {(consumables.unmeasured ?? [])
-                                          .map(
-                                            (category) =>
-                                              CONSUMABLE_LABEL[
-                                                category
-                                              ].toLowerCase(),
-                                          )
-                                          .join(", ")}
-                                        . Los nombres del log no coinciden con
-                                        los conocidos.
-                                      </span>
-                                    ) : null
-                                  }
-                                  icon={<Flask weight="fill" aria-hidden="true" />}
-                                  title="Consumibles"
-                                >
-                                  <div className="rlb-consumable-pulls">
-                                    {expectedConsumables.map((category) => {
-                                      const missing = consumables.players
-                                        .map((player) => {
-                                          // En qué pull/s faltó: el índice de la
-                                          // lista es el número de pull.
-                                          const pulls = consumables.pulls
-                                            .map((pull, index) => ({ index, pull }))
-                                            .filter(({ pull }) =>
-                                              (
-                                                pull.missing[category] ?? []
-                                              ).includes(player.name),
-                                            )
-                                            .map(({ index }) => index + 1);
-                                          return {
-                                            absent:
-                                              player.pulls -
-                                              (player.counts[category] ?? 0),
-                                            name: player.name,
-                                            pulls,
-                                            totalPulls: player.pulls,
-                                          };
-                                        })
-                                        .filter((entry) => entry.absent > 0)
-                                        .sort(
-                                          (left, right) =>
-                                            right.absent - left.absent ||
-                                            left.name.localeCompare(right.name),
-                                        );
-                                      return (
-                                        <p key={category}>
-                                          <span className="rlb-label">
-                                            Sin{" "}
-                                            {CONSUMABLE_LABEL[
-                                              category
-                                            ].toLowerCase()}{" "}
-                                            ({missing.length})
-                                          </span>
-                                          {missing.map((entry) => (
-                                            <span
-                                              className="rlb-missing-name"
-                                              key={entry.name}
-                                              title={`Faltó en ${entry.absent} de ${entry.totalPulls} pulls${entry.pulls.length > 0 ? `: pull ${entry.pulls.join(", ")}` : ""}`}
-                                            >
-                                              {entry.name}{" "}
-                                              <b>
-                                                {entry.absent}/
-                                                {entry.totalPulls}
-                                              </b>
-                                              {entry.pulls.length > 0 &&
-                                              entry.pulls.length <= 4 ? (
-                                                <i className="rlb-chip-pulls">
-                                                  {entry.pulls.length === 1
-                                                    ? `pull ${entry.pulls[0]}`
-                                                    : `pulls ${entry.pulls.join("/")}`}
-                                                </i>
-                                              ) : null}
-                                            </span>
-                                          ))}
-                                          {missing.length === 0
-                                            ? "Todos usaron."
-                                            : null}
-                                        </p>
-                                      );
-                                    })}
-                                    {reactiveConsumables.map((category) => {
-                                      const users = consumables.players
-                                        .map((player) => ({
-                                          name: player.name,
-                                          pulls: player.pulls,
-                                          used: player.counts[category] ?? 0,
-                                        }))
-                                        .filter((entry) => entry.used > 0)
-                                        .sort(
-                                          (left, right) =>
-                                            right.used - left.used ||
-                                            left.name.localeCompare(right.name),
-                                        );
-                                      return (
-                                        <div className="rlb-consumable-row" key={category}>
-                                          <span className="rlb-label">
-                                            Usaron{" "}
-                                            {CONSUMABLE_LABEL[
-                                              category
-                                            ].toLowerCase()}{" "}
-                                            ({users.length})
-                                          </span>
-                                          {users.map((entry) => (
-                                            <span
-                                              className="rlb-used-name"
-                                              key={entry.name}
-                                              title={`La usó en ${entry.used} de ${entry.pulls} pulls`}
-                                            >
-                                              {entry.name}{" "}
-                                              <b>
-                                                {entry.used}/{entry.pulls}
-                                              </b>
-                                            </span>
-                                          ))}
-                                          {users.length === 0
-                                            ? "Nadie la usó."
-                                            : null}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </ClampedSection>
-
-                                {/* Muertes sin piedra ni poción: en el hueco que
-                                    dejó el detalle por pull, que era demasiado
-                                    para lo que aportaba. */}
-                                {selectedAnalysis.defensives &&
-                                selectedAnalysis.defensives.players.length > 0 ? (
-                                  <ClampedSection
-                                    icon={<Pill weight="fill" aria-hidden="true" />}
-                                    title="Muertes sin piedra ni poción"
-                                  >
-                                    <div className="rlb-consumable-pulls">
-                                      <p>
-                                        <span className="rlb-label">
-                                          {selectedAnalysis.defensives.without} de{" "}
-                                          {selectedAnalysis.defensives.totalDeaths}{" "}
-                                          muertes, sin usarlas en los{" "}
-                                          {
-                                            selectedAnalysis.defensives
-                                              .windowSeconds
-                                          }{" "}
-                                          s previos
-                                        </span>
-                                      </p>
-                                      <div className="rlb-consumable-row">
-                                        {selectedAnalysis.defensives.players
-                                          .filter((player) => player.without > 0)
-                                          .map((player) => (
-                                            <span
-                                              className="rlb-missing-name"
-                                              key={player.name}
-                                              title={`${player.without} de ${player.deaths} muertes sin piedra ni poción (las usó en las otras)`}
-                                            >
-                                              {player.name}{" "}
-                                              <b>
-                                                {player.without}/{player.deaths}
-                                              </b>
-                                            </span>
-                                          ))}
+                                  {consumables ? (
+                                    <ClampedSection
+                                      icon={<Flask weight="fill" aria-hidden="true" />}
+                                      title="Consumibles"
+                                    >
+                                      <div className="rlb-consumable-pulls">
+                                        {expectedConsumables.map((category) => {
+                                          const missing = consumables.players
+                                            .map((player) => {
+                                              // En qué pull/s faltó: el índice de la
+                                              // lista es el número de pull.
+                                              const pulls = consumables.pulls
+                                                .map((pull, index) => ({ index, pull }))
+                                                .filter(({ pull }) =>
+                                                  (
+                                                    pull.missing[category] ?? []
+                                                  ).includes(player.name),
+                                                )
+                                                .map(({ index }) => index + 1);
+                                              return {
+                                                absent:
+                                                  player.pulls -
+                                                  (player.counts[category] ?? 0),
+                                                name: player.name,
+                                                pulls,
+                                                totalPulls: player.pulls,
+                                              };
+                                            })
+                                            .filter((entry) => entry.absent > 0)
+                                            .sort(
+                                              (left, right) =>
+                                                right.absent - left.absent ||
+                                                left.name.localeCompare(right.name),
+                                            );
+                                          return (
+                                            <p key={category}>
+                                              <span className="rlb-label">
+                                                Sin{" "}
+                                                {CONSUMABLE_LABEL[
+                                                  category
+                                                ].toLowerCase()}{" "}
+                                                ({missing.length})
+                                              </span>
+                                              {missing.map((entry) => (
+                                                <span
+                                                  className="rlb-missing-name"
+                                                  key={entry.name}
+                                                  title={`Faltó en ${entry.absent} de ${entry.totalPulls} pulls${entry.pulls.length > 0 ? `: pull ${entry.pulls.join(", ")}` : ""}`}
+                                                >
+                                                  {entry.name}{" "}
+                                                  <b>
+                                                    {entry.absent}/
+                                                    {entry.totalPulls}
+                                                  </b>
+                                                  {entry.pulls.length > 0 &&
+                                                  entry.pulls.length <= 4 ? (
+                                                    <i className="rlb-chip-pulls">
+                                                      {entry.pulls.length === 1
+                                                        ? `pull ${entry.pulls[0]}`
+                                                        : `pulls ${entry.pulls.join("/")}`}
+                                                    </i>
+                                                  ) : null}
+                                                </span>
+                                              ))}
+                                              {missing.length === 0
+                                                ? "Todos usaron."
+                                                : null}
+                                            </p>
+                                          );
+                                        })}
                                       </div>
-                                    </div>
-                                  </ClampedSection>
+                                    </ClampedSection>
+                                  ) : null}
+                                  {selectedAnalysis.encounters.length > 0 ? (
+                                    <ClampedSection
+                                      icon={
+                                        <Ghost weight="fill" aria-hidden="true" />
+                                      }
+                                      title="Resumen por boss"
+                                    >
+                                      {selectedAnalysis.encounters.map(
+                                        (encounter, index) => (
+                                          <div
+                                            className="rlb-encounter"
+                                            key={`${index}:${encounter.boss ?? encounter.name}`}
+                                          >
+                                            <span
+                                              className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
+                                            >
+                                              {encounter.kill ? "Kill" : "Wipe"}
+                                            </span>
+                                            <strong>
+                                              {bossLabel(
+                                                encounter.boss,
+                                                encounter.name,
+                                              )}
+                                            </strong>
+                                            <span>{encounter.deaths} muertes</span>
+                                            <span>
+                                              {encounter.topDps
+                                                ? `Top DPS: ${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
+                                                : "Top DPS: sin datos"}
+                                            </span>
+                                          </div>
+                                        ),
+                                      )}
+                                    </ClampedSection>
                                 ) : null}
                                 </AnalysisRow>
                               </div>
@@ -1496,10 +1420,6 @@ export function RaidLogsBoard({
                                   {attendance.event ? (
                                     <div>
                                       <span>Evento del cruce</span>
-                                      {/* Solo la fecha: el título lo escribe
-                                          quien crea el evento (y a veces trae
-                                          días o fechas que no son las de esta
-                                          noche), así que queda en el tooltip. */}
                                       <strong title={attendance.event.title}>
                                         {new Date(
                                           attendance.event.startsAt,
@@ -1508,6 +1428,7 @@ export function RaidLogsBoard({
                                           month: "2-digit",
                                           weekday: "short",
                                         })}
+                                        {` · ${attendance.event.title}`}
                                       </strong>
                                     </div>
                                   ) : null}
@@ -1655,15 +1576,13 @@ export function RaidLogsBoard({
                                                 </button>
                                               ) : null}
                                             </>
-                                          ) : (
+                                          ) : player.status ? (
                                             <strong>
-                                              {player.status
-                                                ? (SIGNUP_STATUS_LABEL[
-                                                    player.status
-                                                  ] ?? player.status)
-                                                : `${player.pulls} pulls`}
+                                              {SIGNUP_STATUS_LABEL[
+                                                player.status
+                                              ] ?? player.status}
                                             </strong>
-                                          )}
+                                          ) : null}
                                         </span>
                                       </div>
                                     ))}
@@ -1679,101 +1598,6 @@ export function RaidLogsBoard({
                                   </div>
                                 ) : null}
                                 </div>
-                              </div>
-                            ) : null}
-
-                            {consumables && reactiveConsumables.length > 0 ? (
-                              <div className="rlb-analysis-grid">
-                                <AnalysisRow max={MODAL_LIST_MAX_PX}>
-                                  <ClampedSection
-                                    icon={<Pill weight="fill" aria-hidden="true" />}
-                                    title="Usos totales"
-                                  >
-                                    <div className="rlb-consumable-pulls">
-                                      {reactiveConsumables.map((category) => {
-                                        const totals = consumables.players
-                                          .map((player) => ({
-                                            name: player.name,
-                                            times: player.uses?.[category] ?? 0,
-                                          }))
-                                          .filter((entry) => entry.times > 0)
-                                          .sort(
-                                            (left, right) =>
-                                              right.times - left.times ||
-                                              left.name.localeCompare(
-                                                right.name,
-                                              ),
-                                          );
-                                        const total = totals.reduce(
-                                          (sum, entry) => sum + entry.times,
-                                          0,
-                                        );
-                                        return (
-                                          <div
-                                            className="rlb-consumable-row"
-                                            key={category}
-                                          >
-                                            <span className="rlb-label">
-                                              {CONSUMABLE_LABEL[category]}:{" "}
-                                              {total}{" "}
-                                              {total === 1 ? "uso" : "usos"}
-                                            </span>
-                                            {totals.map((entry) => (
-                                              <span
-                                                className="rlb-used-name"
-                                                key={entry.name}
-                                                title={`${entry.times} en la noche`}
-                                              >
-                                                {entry.name}{" "}
-                                                <b>{entry.times}</b>
-                                              </span>
-                                            ))}
-                                            {totals.length === 0
-                                                ? "Nadie la usó."
-                                                : null}
-                                            </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </ClampedSection>
-                                  {selectedAnalysis.encounters.length > 0 ? (
-                                    <ClampedSection
-                                      icon={
-                                        <Ghost weight="fill" aria-hidden="true" />
-                                      }
-                                      title="Resumen por boss"
-                                    >
-                                        {selectedAnalysis.encounters.map(
-                                          (encounter, index) => (
-                                            <div
-                                              className="rlb-encounter"
-                                              key={`${index}:${encounter.boss ?? encounter.name}`}
-                                            >
-                                              <span
-                                                className={`rlb-encounter-result ${encounter.kill ? "kill" : "wipe"}`}
-                                              >
-                                                {encounter.kill ? "Kill" : "Wipe"}
-                                              </span>
-                                              <strong>
-                                                {bossLabel(
-                                                  encounter.boss,
-                                                  encounter.name,
-                                                )}
-                                              </strong>
-                                              <span>
-                                                {encounter.deaths} muertes
-                                              </span>
-                                              <span>
-                                                {encounter.topDps
-                                                  ? `Top DPS: ${encounter.topDps.name} · ${compactNumber(encounter.topDps.dps)} DPS`
-                                                  : "Top DPS: sin datos"}
-                                              </span>
-                                            </div>
-                                          ),
-                                        )}
-                                    </ClampedSection>
-                                  ) : null}
-                                </AnalysisRow>
                               </div>
                             ) : null}
                           </>

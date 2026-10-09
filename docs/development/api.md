@@ -236,9 +236,9 @@ cambia con el idioma del cliente que subió el log.
 
 Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
 Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
-minutos por entrada y se apoya en tres consultas a la API v1 de Warcraft Logs:
-`tables/summary` (roles), `tables/casts` + `events/casts` (consumibles) y
-`events` con `filter=type in ('combatantinfo')` (quién estaba en cada pull).
+minutos por entrada y se apoya en dos consultas a la API v1 de Warcraft Logs:
+`tables/summary` (roles) y `events` con `filter=type in ('combatantinfo')`
+(quién estaba en cada pull y qué auras tenía activas).
 
 Devuelve:
 
@@ -247,47 +247,29 @@ Devuelve:
    "top DPS" por pull. Si WCL no devuelve roles, se muestran todos.
 2. `deathsByPlayer` / `deathsByAbility` / `encounters` — muertes y detalle por
    pull (todos los roles cuentan acá).
-3. `consumables` — poción, prepot, piedra de brujo, poción de vida, flask y
-   comida. `categories` lista lo que se pudo medir en la noche (y su
-   orden es el que usa la web); `players[].counts` y `pulls[].used/missing`
-   usan esas mismas claves, así que una categoría que no se pudo medir no
-   aparece y la web no inventa faltantes. Pociones y piedras se identifican por
-   NOMBRE en `tables/casts` (sin ids por expansión) y su uso real sale de
-   `events/casts` filtrado por esos ids; la **prepot** es la poción usada en los
-   30 s previos al pull, contada aparte de las de la pelea. Flask y comida
-   salen de las auras de CombatantInfo (activas al empezar el pull): en la v1
-   cada aura trae el id, así que cuando no viene el nombre se resuelve con
-   `tables/buffs`. **Cada categoría se mide por separado**: una noche con flask
-   reconocido y comida sin reconocer muestra flask y no comida, porque listar a
-   toda la raid como si no hubiera comido es peor que no informarlo (el log de
-   un idioma o un nombre de buff que no matchea se veía exactamente así).
-   Los nombres de los consumibles se comparan **sin acentos y por raíz, en
-   inglés, español y portugués** ("Healthstone" / "Piedra de brujo" / "Pedra de
-   bruxo", "Well Fed" / "Bien alimentado" / "Bem Alimentado" caen en
-   `alimentad`): Warcraft Logs devuelve los nombres como los tenía el cliente
-   que subió el log, y comparar nombres completos dejaba a todo un report sin
-   consumibles. Los nombres que no se reconocen y estaban en casi todos los
-   pulls quedan en el log (`auras sin clasificar`), que es la única forma de
-   saber con qué nombre viene un consumible nuevo.
-   `expected` separa las categorías que corresponden a cada pull (flask, comida,
-   pota, prepot) de las de **uso reaccional** (piedra y poción de vida), donde
-   no hay un "debería" por pull: la web muestra faltantes de las primeras
-   (`pulls[].missing` / `players[].counts`, indicando en qué pull/s faltó) y
-   **quién las usó** en las segundas (`pulls[].usedNames`). `players[].uses`
-   cuenta **cuántas veces** usó cada consumible en la noche (una piedra por pull
-   no es lo mismo que tres): la web lo muestra en **Usos totales** con el total
-   de la raid. El detalle por pull no se muestra: con qué pull fue cada falta
-   alcanza en el chip.
-   `unmeasured` lista las categorías de control que ese log **no permitió medir**
-   (los nombres de las pociones o de las auras no matchearon): la web lo aclara
-   al pie de Consumibles en vez de dar a entender que nadie las usó. Cuando
-   ninguna categoría de cast se reconoce, el API deja en el log los casts que
-   suenan a consumible (o los más usados), que es la única forma de ver con qué
-   nombre vienen en ese log.
-6. `defensives` — muertes sin haber usado **piedra ni poción de vida** en los
-   12 s previos (`windowSeconds`). Por jugador: `deaths`, `without` y `used`
-   (murió igual, pero la usó). Solo aparece si en la noche se pudieron medir esas
-   categorías; si no, todos parecerían morir sin usarlas.
+3. `consumables` — **flask y comida**. `categories` lista lo que se pudo medir
+   en la noche (y su orden es el que usa la web); `players[].counts` y
+   `pulls[].missing` usan esas mismas claves, así que una categoría que no se
+   pudo medir no aparece y la web no inventa faltantes. Las dos salen de las
+   auras de CombatantInfo (activas al empezar el pull): en la v1 cada aura trae
+   el id, así que cuando no viene el nombre se resuelve con `tables/buffs`.
+   **Cada categoría se mide por separado**: una noche con flask reconocido y
+   comida sin reconocer muestra flask y no comida, porque listar a toda la raid
+   como si no hubiera comido es peor que no informarlo (el log de un idioma o un
+   nombre de buff que no matchea se veía exactamente así).
+   Los nombres se comparan **sin acentos y por raíz, en inglés, español y
+   portugués** ("Well Fed" / "Bien alimentado" / "Bem Alimentado" caen en
+   `alimentad`, "Flask" / "Phial" / "Frasco" / "Vial" en flask): Warcraft Logs
+   devuelve los nombres como los tenía el cliente que subió el log, y comparar
+   nombres completos dejaba a todo un report sin consumibles. Los nombres que no
+   se reconocen y estaban en casi todos los pulls quedan en el log (`auras sin
+   clasificar`), que es la única forma de saber con qué nombre viene un
+   consumible nuevo.
+   Flask y comida se esperan en **cada pull**, así que la web muestra quién
+   faltó (`players[].counts` y `pulls[].missing`, con el número de pull en el
+   chip). **Pociones y piedras no se reportan**: se identifican por nombre en la
+   tabla de casts y en los logs de la guild eso no se pudo medir de forma
+   confiable, así que mostrar "nadie la usó" era peor que no mostrarlo.
 5. `attendance` — cruce entre los que aparecen en el log y los anotados al
    evento de raid más cercano al primer pull (±14 h, `type: raid`). El evento se
    elige por cercanía y se toman los anotados: "voy" y "tarde" son el compromiso
@@ -299,14 +281,16 @@ Devuelve:
    "tentativo" es anotarse, así que no aparecen ahí. `partial` avisa cuando no se
    pudo leer la presencia por pull (CombatantInfo) y los participantes salieron
    de la tabla de daño: ahí un "no vino" puede ser un heal que no hizo daño.
-   La web muestra la **fecha del evento** (sin el título, que queda en el
-   tooltip): el título lo escribe quien crea el evento ("Raid MIERCOLES - JUEVES
-   08/10/2026") y hacía parecer que el cruce usaba otro día.
 6. `source` — de dónde salió el análisis: el report **más completo** de la
    noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
    cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que
    solo están en otro report y `repeatedPulls` los que se contaron una vez. No se
    muestra en la web: es para que el análisis y la tarjeta digan lo mismo.
+
+En la web cada listado se corta a la altura de la columna más corta y lo que
+sobra se scrollea adentro (con un degradado que avisa que hay más), así las dos
+columnas cierran en la misma línea. Las grillas usan `auto-fit`, así que una
+sección sola ocupa el ancho completo.
 
 ### Análisis de la noche desde el mensaje
 

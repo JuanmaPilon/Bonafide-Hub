@@ -2164,11 +2164,15 @@ a:hover {
    más contenido y desaparece al llegar al final. */
 .rlb-list-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 
+/* La caja se limita con `max-height` (no `height`): así, cuando el contenido es
+   más corto que el tope, la sección mide lo que mide y no queda el hueco. */
 .rlb-list-wrap .rlb-list-body {
-  height: 100%;
+  min-height: 0;
   /* El espacio a la derecha es para que los números de cada fila no queden
      debajo de la barra de scroll. */
   padding-right: 12px;
@@ -2200,16 +2204,6 @@ a:hover {
     var(--rlb-list-fade, rgba(7, 13, 24, 0.92))
   );
   pointer-events: none;
-}
-
-/* Aclaración al pie de una lista de consumibles (lo que el log no permitió
-   medir). */
-.rlb-consumable-note {
-  display: block;
-  margin-top: 6px;
-  color: #ffb570;
-  font-size: 0.76rem;
-  line-height: 1.45;
 }
 
 /* Totales por jugador de un consumible: chips compactos. */
@@ -2281,7 +2275,9 @@ a:hover {
 .rlb-analysis-spotlights,
 .rlb-analysis-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* `auto-fit`: si queda una sola sección ocupa las dos columnas en vez de
+     dejar la otra mitad vacía. */
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
   gap: 12px;
 }
 
@@ -2422,7 +2418,10 @@ a:hover {
 .rlb-attendance-lists {
   display: grid;
   gap: 6px 18px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /* `auto-fill` (no `auto-fit`) y tope de ancho: con dos o tres listas cada una
+     mide lo suyo, y con una sola no se estira a todo lo ancho de la ventana. */
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 460px));
+  justify-content: start;
 }
 
 .rlb-analysis-list-row {

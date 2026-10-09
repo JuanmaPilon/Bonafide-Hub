@@ -131,36 +131,23 @@ export type RaidLogAttendance = {
   unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
 };
 
-export type RaidConsumableKey =
-  | "flask"
-  | "food"
-  | "healthPotions"
-  | "healthstones"
-  | "potions"
-  | "prepot";
+export type RaidConsumableKey = "flask" | "food";
 
 export type RaidLogConsumables = {
   categories: RaidConsumableKey[];
-  expected?: RaidConsumableKey[];
   players: Array<{
     class?: string;
     counts: Partial<Record<RaidConsumableKey, number>>;
     name: string;
     pulls: number;
     role?: RaidRole;
-    // Cuántas veces usó cada consumible en toda la noche (no en cuántos pulls).
-    uses?: Partial<Record<RaidConsumableKey, number>>;
   }>;
   pulls: Array<{
     boss?: number;
     missing: Partial<Record<RaidConsumableKey, string[]>>;
     name: string;
     participants: number;
-    used: Partial<Record<RaidConsumableKey, number>>;
-    usedNames?: Partial<Record<RaidConsumableKey, string[]>>;
   }>;
-  // Categorías que este log no permitió medir (nombres que no matchearon).
-  unmeasured?: RaidConsumableKey[];
 };
 
 export type RaidLogAnalysis = {
@@ -176,17 +163,6 @@ export type RaidLogAnalysis = {
   consumables?: RaidLogConsumables;
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
-  defensives?: {
-    players: Array<{
-      deaths: number;
-      name: string;
-      used: number;
-      without: number;
-    }>;
-    totalDeaths: number;
-    windowSeconds: number;
-    without: number;
-  };
   encounters: Array<{
     boss?: number;
     deaths: number;

@@ -9,47 +9,33 @@ import {
 
 export type RaidRole = "dps" | "healer" | "tank";
 
-// prepot = la misma poción, usada en los segundos previos al pull: se mide
-// aparte para distinguirla de la que se usa durante la pelea.
-export type RaidConsumableKey =
-  | "flask"
-  | "food"
-  | "potions"
-  | "prepot"
-  | "healthstones"
-  | "healthPotions";
+// Consumibles que el log deja medir de forma confiable: flask y comida salen de
+// las auras activas al empezar el pull (CombatantInfo), con el id de la habilidad
+// como respaldo. Las pociones y las piedras se identifican por NOMBRE en la tabla
+// de casts, y con logs de clientes que no reconocemos eso no se puede medir.
+export type RaidConsumableKey = "flask" | "food";
 
 export type RaidLogConsumables = {
   // Solo las categorías que se pudieron medir en esta noche: si WCL no expone
-  // la tabla de casts o no se pueden resolver los nombres de las auras, esas
-  // categorías no aparecen y la web no inventa faltantes.
+  // las auras o no se pueden resolver sus nombres, esa categoría no aparece y la
+  // web no inventa faltantes. Son además las que se esperan en cada pull, así que
+  // "faltó" es un dato útil y la web muestra faltantes.
   categories: RaidConsumableKey[];
-  // Categorías que corresponden a cada pull (flask, comida, pota y prepot): ahí
-  // "faltó" es un dato útil. Las de uso reaccional (piedra y poción de vida) no
-  // se esperan por pull, así que lo que se informa es quién las usó.
-  expected: RaidConsumableKey[];
-  // Consumo agregado por jugador: en cuántos pulls participó, en cuántos usó cada
-  // consumible (un pull cuenta una vez) y cuántas veces lo usó en total.
+  // Consumo agregado por jugador: en cuántos pulls participó y en cuántos tenía
+  // cada consumible (un pull cuenta una vez, aunque lo tenga de antes).
   players: Array<{
     class?: string;
     counts: Partial<Record<RaidConsumableKey, number>>;
     name: string;
     pulls: number;
     role?: RaidRole;
-    uses: Partial<Record<RaidConsumableKey, number>>;
   }>;
   pulls: Array<{
     boss?: number;
     missing: Partial<Record<RaidConsumableKey, string[]>>;
     name: string;
     participants: number;
-    used: Partial<Record<RaidConsumableKey, number>>;
-    usedNames: Partial<Record<RaidConsumableKey, string[]>>;
   }>;
-  // Categorías de "control" que este log no permitió medir (los nombres de las
-  // pociones o de las auras no matchearon, o la tabla de casts no las trajo): la
-  // web lo aclara en vez de dar a entender que nadie las usó.
-  unmeasured: RaidConsumableKey[];
 };
 
 export type RaidLogAnalysis = {
@@ -65,16 +51,6 @@ export type RaidLogAnalysis = {
   consumables?: RaidLogConsumables;
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
-  // Muertes sin haber usado piedra ni poción de vida en los segundos previos.
-  // Es lo único que el log permite saber: si la usó y murió igual, la usó.
-  defensives?: {
-    // Muertes por jugador, con cuántas fueron sin defensivo.
-    players: Array<{ deaths: number; name: string; used: number; without: number }>;
-    totalDeaths: number;
-    // Cuántos segundos antes de morir se busca el cast.
-    windowSeconds: number;
-    without: number;
-  };
   encounters: Array<{
     boss?: number;
     deaths: number;
@@ -179,16 +155,6 @@ type WclAbilityRow = {
   total?: number;
 };
 
-type WclCastsTableEntry = {
-  abilities?: WclAbilityRow[];
-  entries?: WclAbilityRow[];
-  sources?: WclAbilityRow[];
-};
-
-type WclCastsTable = {
-  entries?: WclCastsTableEntry[];
-};
-
 type WclRawEvent = {
   ability?: { guid?: number | string; name?: string } | string;
   auras?: unknown[];
@@ -204,22 +170,18 @@ type WclBuffTable = {
   }>;
 };
 
-// Consumo de un pull: quiénes estaban y qué usó cada uno, con CUÁNTAS veces
-// (una piedra por pull no es lo mismo que tres). Se arma aparte del análisis de
-// daño porque necesita los eventos de CombatantInfo.
+// Consumo de un pull: quiénes estaban (CombatantInfo) y qué consumible tenía
+// cada uno activo al empezar la pelea. Las flask y la comida son auras, así que
+// no hacen falta los eventos de cast.
 type FightExtras = {
-  // Momento (relativo al report) de cada cast de piedra o poción de vida, que es
-  // lo que permite saber si la usó ANTES de morir.
-  defensives: Map<string, number[]>;
   participants: string[];
-  used: Map<string, Map<RaidConsumableKey, number>>;
+  used: Map<string, Set<RaidConsumableKey>>;
 };
 
 // Resultado por report: el consumo de cada pull más qué categorías se pudieron
 // medir (si algo no se pudo, la categoría no se reporta).
 type PartConsumables = {
-  auraCategories: Set<RaidConsumableKey>;
-  castCategories: Set<RaidConsumableKey>;
+  categories: Set<RaidConsumableKey>;
   fights: FightExtras[];
 };
 
@@ -241,7 +203,7 @@ type RaidReportPart = {
 };
 
 type FightResult = {
-  deaths: Array<{ ability?: string; player: string; timestamp?: number }>;
+  deaths: Array<{ ability?: string; player: string }>;
   durationSeconds: number;
   fight: WclAnalysisFight;
   damage: Array<{
@@ -452,12 +414,9 @@ async function fetchReportRoles(
   return roles;
 }
 
+// Ventana antes del primer pull que se pide a WCL para no perder el
+// CombatantInfo del pull (llega con el arranque de la pelea, no después).
 const CONSUMABLE_PREPULL_MS = 30 * 1000;
-// Ventana antes de morir en la que se busca una piedra o poción de vida: más
-// atrás que esto, el cast no tiene que ver con esa muerte.
-const DEFENSIVE_WINDOW_MS = 12 * 1000;
-// Una poción usada hasta este límite antes del pull es la prepot.
-const PREPOT_WINDOW_MS = CONSUMABLE_PREPULL_MS;
 
 // Warcraft Logs devuelve los nombres de habilidades como los tenía el cliente
 // que subió el log, así que el mismo pull llega en inglés o en español
@@ -471,40 +430,13 @@ function foldAbilityName(name: string): string {
     .toLowerCase();
 }
 
-// Los nombres de pociones y piedras cambian en cada parche, así que se
-// identifican por nombre (en la tabla de casts) en vez de por id fijo. La guild
-// sube logs en inglés, español y portugués, y de yapa los de otros clientes que
-// aparezcan, así que se comparan raíces (sin acentos) en varios idiomas.
-const HEALTHSTONE_NAMES = [
-  "healthstone",
-  "piedra de salud",
-  "piedra de brujo",
-  "pedra de saude",
-  "pedra de bruxo",
-  "pierre de soin",
-  "gesundheitsstein",
-  "pietra di salute",
-];
-const HEALTH_POTION_NAMES = [
-  "health potion",
-  "healing potion",
-  "pocion de vida",
-  "pocion de salud",
-  "pocion de curacion",
-  "pocion de sanacion",
-  "pocao de vida",
-  "pocao de cura",
-  "potion de soin",
-  "heiltrank",
-  "pozione di cura",
-];
-const MANA_POTION_NAMES = ["mana potion", "pocion de mana", "pocao de mana"];
-const POTION_NAMES = ["potion", "pocion", "pocima", "pocao", "pozione", "trank"];
-// "Create Healthstone" / "Crear piedra de brujo" es crear la piedra, no usarla.
-const CREATE_NAMES = ["create", "crear", "criar", "craft", "erstellen"];
-// Los frascos se llaman "flask"/"phial" en inglés y "frasco"/"vial" en
-// español y portugués.
+// Los nombres de frascos y de comida cambian en cada parche, así que se
+// identifican por nombre. La guild sube logs en inglés, español y portugués, y
+// de yapa los de otros clientes que aparezcan, así que se comparan raíces (sin
+// acentos) en varios idiomas. Los frascos se llaman "flask"/"phial" en inglés y
+// "frasco"/"vial" en español y portugués.
 const FLASK_NAMES = ["flask", "phial", "frasco", "vial"];
+// "Bien alimentado" (es), "Bem Alimentado" (pt), "Well Fed" (en).
 const FOOD_NAMES = ["well fed", "alimentad"];
 
 function nameHasAny(name: string, patterns: string[]): boolean {
@@ -537,54 +469,6 @@ function logUnrecognizedAuras(
   }
 }
 
-// Cuando NINGUNA categoría de cast se reconoció, hay que poder ver con qué
-// nombres vienen las pociones y las piedras en ese log, así que se listan los
-// casts más usados de la noche que suenen a consumible.
-const CONSUMABLE_HINT = /potion|pocion|pocao|pozione|trank|stone|stein|piedra|pedra|pierre|pietra|flask|frasco|phial|vial/;
-
-function logUnrecognizedCasts(
-  code: string,
-  names: Map<string, number>,
-): void {
-  const likely = [...names.entries()]
-    .filter(([name]) => CONSUMABLE_HINT.test(foldAbilityName(name)))
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, 10)
-    .map(([name, count]) => `${name} (${count})`);
-  if (likely.length > 0) {
-    console.log(
-      `[raid-logs] ${code}: ningún consumible reconocido; casts que suenan a consumible: ${likely.join(", ")}`,
-    );
-    return;
-  }
-  const top = [...names.entries()]
-    .sort((left, right) => right[1] - left[1])
-    .slice(0, 10)
-    .map(([name, count]) => `${name} (${count})`);
-  console.log(
-    `[raid-logs] ${code}: ningún consumible reconocido; casts más usados: ${top.join(", ")}`,
-  );
-}
-
-function castConsumableCategory(
-  name: string,
-): RaidConsumableKey | undefined {
-  const normalized = foldAbilityName(name);
-  if (nameHasAny(normalized, CREATE_NAMES)) {
-    return undefined;
-  }
-  if (nameHasAny(normalized, HEALTHSTONE_NAMES)) {
-    return "healthstones";
-  }
-  if (nameHasAny(normalized, HEALTH_POTION_NAMES)) {
-    return "healthPotions";
-  }
-  if (nameHasAny(normalized, MANA_POTION_NAMES)) {
-    return undefined;
-  }
-  return nameHasAny(normalized, POTION_NAMES) ? "potions" : undefined;
-}
-
 // Flask y comida se leen de las auras activas al empezar el pull, así que no
 // hace falta castear nada: alcanza con el nombre del aura.
 function auraConsumableCategory(
@@ -598,31 +482,6 @@ function auraConsumableCategory(
     return "food";
   }
   return nameHasAny(normalized, FLASK_NAMES) ? "flask" : undefined;
-}
-
-function collectConsumableAbilityIds(
-  table: WclCastsTable,
-  nameCounts: Map<string, number>,
-): Map<number, RaidConsumableKey> {
-  const categories = new Map<number, RaidConsumableKey>();
-  for (const entry of table.entries ?? []) {
-    for (const row of entry.abilities ?? entry.entries ?? entry.sources ?? []) {
-      const guid = Number(row?.guid);
-      const name = row?.name;
-      if (!name) {
-        continue;
-      }
-      nameCounts.set(
-        name,
-        (nameCounts.get(name) ?? 0) + (Number(row?.total) || 1),
-      );
-      const category = castConsumableCategory(name);
-      if (Number.isFinite(guid) && guid > 0 && category) {
-        categories.set(guid, category);
-      }
-    }
-  }
-  return categories;
 }
 
 // En la v1 cada aura viene como { ability } (a veces con nombre); si solo hay
@@ -664,22 +523,8 @@ function fightIndexAt(
   );
 }
 
-// Pull al que corresponde una prepot: el próximo que arranca después del cast.
-function prepullFightIndex(
-  fights: WclAnalysisFight[],
-  timestamp: number,
-): number {
-  return fights.findIndex(
-    (fight) =>
-      typeof fight.start_time === "number" &&
-      fight.start_time >= timestamp &&
-      fight.start_time - timestamp <= PREPOT_WINDOW_MS,
-  );
-}
-
-// Consumo y participantes por pull. Los ids de consumible salen de la tabla de
-// casts, el uso real de los eventos de cast filtrados, quiénes estaban en el
-// pull de CombatantInfo, y flask/comida/runa de las auras de esos eventos.
+// Consumo y participantes por pull: los consumibles salen de las auras activas
+// al empezar el pull y quiénes estaban de CombatantInfo.
 async function collectFightConsumables(input: {
   actors: Map<number, WclActor>;
   code: string;
@@ -690,76 +535,18 @@ async function collectFightConsumables(input: {
   const start = Math.max(0, Math.min(...starts) - CONSUMABLE_PREPULL_MS);
   const end = Math.max(...ends);
   const used = input.fights.map(
-    () => new Map<string, Map<RaidConsumableKey, number>>(),
+    () => new Map<string, Set<RaidConsumableKey>>(),
   );
-  const defensives = input.fights.map(() => new Map<string, number[]>());
-  // Piedra y poción de vida son las que se usan cuando la pelea lo pide: si no
-  // aparecen antes de una muerte, se murió sin defensivo.
-  const DEFENSIVE_CATEGORIES = new Set<RaidConsumableKey>([
-    "healthstones",
-    "healthPotions",
-  ]);
   const participants = input.fights.map(() => new Set<string>());
   const addUse = (
     index: number,
     name: string,
     category: RaidConsumableKey,
-    timestamp?: number,
   ): void => {
-    const categories =
-      used[index].get(name) ?? new Map<RaidConsumableKey, number>();
-    categories.set(category, (categories.get(category) ?? 0) + 1);
+    const categories = used[index].get(name) ?? new Set<RaidConsumableKey>();
+    categories.add(category);
     used[index].set(name, categories);
-    if (timestamp !== undefined && DEFENSIVE_CATEGORIES.has(category)) {
-      const times = defensives[index].get(name) ?? [];
-      times.push(timestamp);
-      defensives[index].set(name, times);
-    }
   };
-
-  const table = (await fetchWarcraftLogsV1Json(
-    `/report/tables/casts/${encodeURIComponent(input.code)}?${new URLSearchParams(
-      { by: "source", end: String(end), start: String(start) },
-    ).toString()}`,
-  )) as WclCastsTable;
-  const castNameCounts = new Map<string, number>();
-  const abilityCategories = collectConsumableAbilityIds(table, castNameCounts);
-  const castCategories = new Set(abilityCategories.values());
-  if (castCategories.size === 0) {
-    logUnrecognizedCasts(input.code, castNameCounts);
-  }
-
-  if (castCategories.size > 0) {
-    const casts = await fetchEventPages<WclRawEvent>(input.code, "casts", {
-      end,
-      filter: `ability.id IN (${[...abilityCategories.keys()].join(",")})`,
-      start,
-    });
-    for (const event of casts) {
-      const ability =
-        typeof event.ability === "object" ? event.ability : undefined;
-      const category = abilityCategories.get(Number(ability?.guid));
-      const timestamp = event.timestamp;
-      if (!category || typeof timestamp !== "number") {
-        continue;
-      }
-      const name = actorName(event.sourceID, input.actors);
-      if (!name) {
-        continue;
-      }
-      const inside = fightIndexAt(input.fights, timestamp);
-      if (inside !== -1) {
-        addUse(inside, name, category, timestamp);
-        continue;
-      }
-      if (category === "potions") {
-        const before = prepullFightIndex(input.fights, timestamp);
-        if (before !== -1) {
-          addUse(before, name, "prepot", timestamp);
-        }
-      }
-    }
-  }
 
   // Si CombatantInfo falla, el pull queda sin participantes y el armado del
   // análisis cae a los que aparecen en la tabla de daño.
@@ -836,7 +623,7 @@ async function collectFightConsumables(input: {
       // Sin nombres de aura flask/comida/runa quedan sin medir.
     }
   }
-  const auraCategories = new Set<RaidConsumableKey>();
+  const categories = new Set<RaidConsumableKey>();
   const unrecognized = new Map<string, number>();
   for (const aura of pendingAuras) {
     let category: RaidConsumableKey | null | undefined;
@@ -858,16 +645,14 @@ async function collectFightConsumables(input: {
     // idioma (o un nombre) que no reconocíamos.
     if (category) {
       addUse(aura.fight, aura.player, category);
-      auraCategories.add(category);
+      categories.add(category);
     }
   }
   logUnrecognizedAuras(input.code, unrecognized, snapshots);
 
   return {
-    auraCategories,
-    castCategories,
+    categories,
     fights: input.fights.map((_, index) => ({
-      defensives: defensives[index],
       participants: [...participants[index]].sort((a, b) => a.localeCompare(b)),
       used: used[index],
     })),
@@ -922,7 +707,6 @@ async function analyzeFight(job: FightJob): Promise<FightResult> {
     deaths: events.map((event) => ({
       ability: deathAbility(event),
       player: deathPlayer(event, job.actors),
-      timestamp: event.timestamp,
     })),
     durationSeconds,
     fight: job.fight,
@@ -1061,50 +845,16 @@ async function buildRaidLogNightAnalysis(
   }
   const roleOf = (name: string): RaidRole | undefined => roles.get(playerKey(name));
 
-  // Categorías que se pudieron medir: el orden es el de la UI.
-  const castCategories = new Set<RaidConsumableKey>();
-  const auraCategories = new Set<RaidConsumableKey>();
-  for (const report of ordered) {
-    for (const category of report.consumables?.castCategories ?? []) {
-      castCategories.add(category);
+  // Categorías que se pudieron medir: solo flask y comida, que salen de las
+  // auras activas al empezar el pull. Si en la noche no se reconoció ninguna
+  // aura suya (idioma del log, nombre nuevo), esa fila no se muestra en vez de
+  // listar a toda la raid como faltante.
+  const consumableCategories: RaidConsumableKey[] = [];
+  for (const category of ["flask", "food"] as RaidConsumableKey[]) {
+    if (ordered.some((report) => report.consumables?.categories.has(category))) {
+      consumableCategories.push(category);
     }
-    for (const category of report.consumables?.auraCategories ?? []) {
-      auraCategories.add(category);
-    }
   }
-  // Flask, comida, pota y prepot se esperan en cada pull: ahí "faltó" es un dato.
-  // Flask y comida van por separado: si en la noche no se reconoció ningún aura
-  // de comida (idioma del log, nombre nuevo), esa fila no se muestra en vez de
-  // listar a toda la raid como si no hubiera comido.
-  const expectedCategories: RaidConsumableKey[] = [];
-  if (auraCategories.has("flask")) {
-    expectedCategories.push("flask");
-  }
-  if (auraCategories.has("food")) {
-    expectedCategories.push("food");
-  }
-  if (castCategories.has("potions")) {
-    expectedCategories.push("potions", "prepot");
-  }
-  // Piedra y poción de vida se usan cuando la pelea lo pide, así que no hay un
-  // "debería" por pull: solo se informa quién las usó.
-  const reactiveCategories: RaidConsumableKey[] = [];
-  if (castCategories.has("healthstones")) {
-    reactiveCategories.push("healthstones");
-  }
-  if (castCategories.has("healthPotions")) {
-    reactiveCategories.push("healthPotions");
-  }
-  const consumableCategories: RaidConsumableKey[] = [
-    ...expectedCategories,
-    ...reactiveCategories,
-  ];
-  // Lo que se esperaba medir y no se pudo: si no se reconoció ninguna poción o
-  // piedra (nombres nuevos, otro idioma), la noche no puede decir "nadie usó"
-  // sin avisar.
-  const unmeasured = (
-    ["flask", "food", "potions", "healthstones", "healthPotions"] as RaidConsumableKey[]
-  ).filter((category) => !consumableCategories.includes(category));
 
   const playerDeaths = new Map<string, number>();
   const abilityDeaths = new Map<string, number>();
@@ -1122,14 +872,9 @@ async function buildRaidLogNightAnalysis(
     {
       counts: Map<RaidConsumableKey, number>;
       pulls: number;
-      uses: Map<RaidConsumableKey, number>;
     }
   >();
   const consumablePulls: RaidLogConsumables["pulls"] = [];
-  const defensiveDeaths = new Map<
-    string,
-    { deaths: number; used: number; without: number }
-  >();
   const encounters: RaidLogAnalysis["encounters"] = [];
   const playerClasses = new Map<string, string>();
   for (const report of ordered) {
@@ -1185,29 +930,20 @@ async function buildRaidLogNightAnalysis(
         const aggregate = consumablePlayers.get(name) ?? {
           counts: new Map<RaidConsumableKey, number>(),
           pulls: 0,
-          uses: new Map<RaidConsumableKey, number>(),
         };
         aggregate.pulls += 1;
-        for (const [category, times] of extras.used.get(name) ?? []) {
+        for (const category of extras.used.get(name) ?? []) {
           aggregate.counts.set(
             category,
             (aggregate.counts.get(category) ?? 0) + 1,
           );
-          aggregate.uses.set(category, (aggregate.uses.get(category) ?? 0) + times);
         }
         consumablePlayers.set(name, aggregate);
       }
-      const usedByPull: Partial<Record<RaidConsumableKey, number>> = {};
-      const usedNamesByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
       const missingByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
       const usedCategory = (name: string, category: RaidConsumableKey): boolean =>
-        (extras.used.get(name)?.get(category) ?? 0) > 0;
+        extras.used.get(name)?.has(category) ?? false;
       for (const category of consumableCategories) {
-        const users = participants.filter((name) =>
-          usedCategory(name, category),
-        );
-        usedByPull[category] = users.length;
-        usedNamesByPull[category] = users;
         missingByPull[category] = participants.filter(
           (name) => !usedCategory(name, category),
         );
@@ -1217,35 +953,7 @@ async function buildRaidLogNightAnalysis(
         missing: missingByPull,
         name: result.fight.name ?? "Boss",
         participants: participants.length,
-        used: usedByPull,
-        usedNames: usedNamesByPull,
       });
-    }
-
-    // Muerte sin defensivo: el jugador no usó piedra ni poción de vida en los
-    // segundos previos (el cast queda en el mismo timestamp relativo al report).
-    for (const death of result.deaths) {
-      if (death.timestamp === undefined) {
-        continue;
-      }
-      const aggregate = defensiveDeaths.get(death.player) ?? {
-        deaths: 0,
-        used: 0,
-        without: 0,
-      };
-      aggregate.deaths += 1;
-      const casts = extras?.defensives.get(death.player) ?? [];
-      const usedBefore = casts.some(
-        (cast) =>
-          cast <= death.timestamp! &&
-          death.timestamp! - cast <= DEFENSIVE_WINDOW_MS,
-      );
-      if (usedBefore) {
-        aggregate.used += 1;
-      } else {
-        aggregate.without += 1;
-      }
-      defensiveDeaths.set(death.player, aggregate);
     }
 
     // El "top DPS" del pull tiene que ser DPS: un heal o un tank con burst no
@@ -1285,7 +993,6 @@ async function buildRaidLogNightAnalysis(
       consumableCategories.length > 0
         ? {
             categories: consumableCategories,
-            expected: expectedCategories,
             players: [...consumablePlayers.entries()]
               .map(([name, totals]) => ({
                 class: playerDps.get(name)?.className ?? playerClasses.get(name),
@@ -1298,27 +1005,15 @@ async function buildRaidLogNightAnalysis(
                 name,
                 pulls: totals.pulls,
                 role: roleOf(name),
-                uses: Object.fromEntries(
-                  consumableCategories.map((category) => [
-                    category,
-                    totals.uses.get(category) ?? 0,
-                  ]),
-                ),
               }))
               // Primero los que menos cumplieron, en proporción a sus pulls.
               .sort((a, b) => {
-                // Solo cuentan las categorías que se esperan por pull: no usar
-                // una piedra no es incumplir nada.
-                const scored =
-                  expectedCategories.length > 0
-                    ? expectedCategories
-                    : consumableCategories;
                 const score = (player: (typeof a)): number => {
-                  const total = scored.length * player.pulls;
+                  const total = consumableCategories.length * player.pulls;
                   if (total === 0) {
                     return 0;
                   }
-                  const hits = scored.reduce(
+                  const hits = consumableCategories.reduce(
                     (sum, category) => sum + (player.counts[category] ?? 0),
                     0,
                   );
@@ -1327,7 +1022,6 @@ async function buildRaidLogNightAnalysis(
                 return score(a) - score(b) || a.name.localeCompare(b.name);
               }),
             pulls: consumablePulls,
-            unmeasured,
           }
         : undefined,
     deathsByAbility: [...abilityDeaths.entries()]
@@ -1336,30 +1030,6 @@ async function buildRaidLogNightAnalysis(
     deathsByPlayer: [...playerDeaths.entries()]
       .map(([name, deaths]) => ({ deaths, name }))
       .sort((a, b) => b.deaths - a.deaths),
-    // Solo aparece si se pudieron medir los defensivos (piedra o poción de vida
-    // reconocidas en la noche): sin eso, todo el mundo parecería morir sin usar.
-    defensives:
-      castCategories.has("healthstones") || castCategories.has("healthPotions")
-        ? {
-            players: [...defensiveDeaths.entries()]
-              .map(([name, totals]) => ({ name, ...totals }))
-              .sort(
-                (a, b) =>
-                  b.without - a.without ||
-                  b.deaths - a.deaths ||
-                  a.name.localeCompare(b.name),
-              ),
-            totalDeaths: [...defensiveDeaths.values()].reduce(
-              (sum, totals) => sum + totals.deaths,
-              0,
-            ),
-            windowSeconds: Math.round(DEFENSIVE_WINDOW_MS / 1000),
-            without: [...defensiveDeaths.values()].reduce(
-              (sum, totals) => sum + totals.without,
-              0,
-            ),
-          }
-        : undefined,
     encounters,
     generatedAt: new Date().toISOString(),
     source,
