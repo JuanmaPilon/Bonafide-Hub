@@ -10,7 +10,7 @@ import {
 } from "react";
 import {
   CaretDown,
-  Crown,
+  Ghost,
   Files,
   Flask,
   GearSix,
@@ -846,7 +846,7 @@ export function RaidLogsBoard({
                   <div className="rlb-metric">
                     <strong>{bosses.length}</strong>
                     <span className="rlb-metric-label">
-                      <Crown weight="fill" aria-hidden="true" />
+                      <Ghost weight="fill" aria-hidden="true" />
                       Bosses
                     </span>
                   </div>
@@ -872,7 +872,7 @@ export function RaidLogsBoard({
                 {bosses.length > 0 ? (
                   <div className="rlb-block">
                     <span className="rlb-label">
-                      <Crown weight="fill" aria-hidden="true" />
+                      <Ghost weight="fill" aria-hidden="true" />
                       Por boss
                     </span>
                     <div className="rlb-bosses">
@@ -1371,7 +1371,7 @@ export function RaidLogsBoard({
                             {selectedAnalysis.encounters.length > 0 ? (
                               <div className="rlb-analysis-section">
                                 <h5>
-                                <Crown weight="fill" aria-hidden="true" />
+                                <Ghost weight="fill" aria-hidden="true" />
                                 Por boss
                               </h5>
                                 <div className="rlb-encounters">
