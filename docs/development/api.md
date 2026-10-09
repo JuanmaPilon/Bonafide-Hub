@@ -159,14 +159,14 @@ denominador sale del mayor número de bosses vistos en una dificultad (Warcraft
 Logs no dice cuántos tiene la banda, y los que todavía no se intentaron no pueden
 contar como "vistos"). La etiqueta muestra el nombre de la raid (`zoneName`) solo
 cuando **todos** los logs son de la misma; con más de una, la etiqueta mentiría y se
-omite. Las listas largas del análisis (DPS, muertes, consumibles, por pull) se
-cortan **a la misma altura en las dos columnas** — la de la lista más corta de la
-fila, con 320px de techo — y se abren con el triángulo del pie de la lista; el
-triángulo aparece solo si hay algo tapado. El análisis se abre en una **ventana
-emergente** (el mismo modal que el resto de los módulos: cierra con la X, con
-Escape o clickeando afuera), así no empuja la ficha de la noche, y arriba a la
-izquierda los contadores muestran noches, semanas distintas y días de la semana
-en los que se raideó (2 con miércoles y jueves).
+omite. Las listas del análisis **mantienen el alto de la fila** (el de la lista
+más corta de las dos columnas) y lo que sobra se scrollea adentro, con un
+scrollbar fino y un degradado abajo que avisa que hay más (desaparece al llegar
+al final). El análisis se abre en una **ventana emergente** (el mismo modal que
+el resto de los módulos: cierra con la X, con Escape o clickeando afuera, y
+mientras está abierto la página de atrás no scrollea), así no empuja la ficha de
+la noche. Arriba a la izquierda los contadores muestran noches, semanas distintas
+y días de la semana en los que se raideó (2 con miércoles y jueves).
 
 **La identidad de un boss es su id de encuentro, no su nombre**: el nombre cambia
 con el idioma del cliente que subió el log ("The Coiled Altar" vs "El Altar
@@ -273,7 +273,10 @@ Devuelve:
    pota, prepot) de las de **uso reaccional** (piedra y poción de vida), donde
    no hay un "debería" por pull: la web muestra faltantes de las primeras
    (`pulls[].missing` / `players[].counts`) y **quién las usó** en las segundas
-   (`pulls[].usedNames`), con el detalle por pull.
+   (`pulls[].usedNames`), con el detalle por pull. `players[].uses` cuenta
+   **cuántas veces** usó cada consumible en la noche (una piedra por pull no es
+   lo mismo que tres): la web lo muestra en un desplegable corto por categoría
+   con el total de la raid.
 5. `attendance` — cruce entre los que aparecen en el log y los anotados al
    evento de raid más cercano (±14 h, `type: raid`). El evento se elige por
    cercanía y se toman los anotados: "voy" y "tarde" son el compromiso que mide

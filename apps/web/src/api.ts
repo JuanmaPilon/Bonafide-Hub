@@ -148,6 +148,8 @@ export type RaidLogConsumables = {
     name: string;
     pulls: number;
     role?: RaidRole;
+    // Cuántas veces usó cada consumible en toda la noche (no en cuántos pulls).
+    uses?: Partial<Record<RaidConsumableKey, number>>;
   }>;
   pulls: Array<{
     boss?: number;

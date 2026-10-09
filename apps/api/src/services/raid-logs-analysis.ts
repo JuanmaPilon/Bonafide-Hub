@@ -28,14 +28,15 @@ export type RaidLogConsumables = {
   // "faltó" es un dato útil. Las de uso reaccional (piedra y poción de vida) no
   // se esperan por pull, así que lo que se informa es quién las usó.
   expected: RaidConsumableKey[];
-  // Consumo agregado por jugador: en cuántos pulls participó y en cuántos usó
-  // cada consumible (un pull cuenta una vez, aunque use dos pociones).
+  // Consumo agregado por jugador: en cuántos pulls participó, en cuántos usó cada
+  // consumible (un pull cuenta una vez) y cuántas veces lo usó en total.
   players: Array<{
     class?: string;
     counts: Partial<Record<RaidConsumableKey, number>>;
     name: string;
     pulls: number;
     role?: RaidRole;
+    uses: Partial<Record<RaidConsumableKey, number>>;
   }>;
   pulls: Array<{
     boss?: number;
@@ -188,11 +189,12 @@ type WclBuffTable = {
   }>;
 };
 
-// Consumo de un pull: quiénes estaban y qué usó cada uno. Se arma aparte del
-// análisis de daño porque necesita los eventos de CombatantInfo.
+// Consumo de un pull: quiénes estaban y qué usó cada uno, con CUÁNTAS veces
+// (una piedra por pull no es lo mismo que tres). Se arma aparte del análisis de
+// daño porque necesita los eventos de CombatantInfo.
 type FightExtras = {
   participants: string[];
-  used: Map<string, Set<RaidConsumableKey>>;
+  used: Map<string, Map<RaidConsumableKey, number>>;
 };
 
 // Resultado por report: el consumo de cada pull más qué categorías se pudieron
@@ -620,7 +622,7 @@ async function collectFightConsumables(input: {
   const start = Math.max(0, Math.min(...starts) - CONSUMABLE_PREPULL_MS);
   const end = Math.max(...ends);
   const used = input.fights.map(
-    () => new Map<string, Set<RaidConsumableKey>>(),
+    () => new Map<string, Map<RaidConsumableKey, number>>(),
   );
   const participants = input.fights.map(() => new Set<string>());
   const addUse = (
@@ -628,8 +630,9 @@ async function collectFightConsumables(input: {
     name: string,
     category: RaidConsumableKey,
   ): void => {
-    const categories = used[index].get(name) ?? new Set<RaidConsumableKey>();
-    categories.add(category);
+    const categories =
+      used[index].get(name) ?? new Map<RaidConsumableKey, number>();
+    categories.set(category, (categories.get(category) ?? 0) + 1);
     used[index].set(name, categories);
   };
 
@@ -1023,7 +1026,11 @@ async function buildRaidLogNightAnalysis(
   >();
   const consumablePlayers = new Map<
     string,
-    { counts: Map<RaidConsumableKey, number>; pulls: number }
+    {
+      counts: Map<RaidConsumableKey, number>;
+      pulls: number;
+      uses: Map<RaidConsumableKey, number>;
+    }
   >();
   const consumablePulls: RaidLogConsumables["pulls"] = [];
   const encounters: RaidLogAnalysis["encounters"] = [];
@@ -1081,27 +1088,31 @@ async function buildRaidLogNightAnalysis(
         const aggregate = consumablePlayers.get(name) ?? {
           counts: new Map<RaidConsumableKey, number>(),
           pulls: 0,
+          uses: new Map<RaidConsumableKey, number>(),
         };
         aggregate.pulls += 1;
-        for (const category of extras.used.get(name) ?? []) {
+        for (const [category, times] of extras.used.get(name) ?? []) {
           aggregate.counts.set(
             category,
             (aggregate.counts.get(category) ?? 0) + 1,
           );
+          aggregate.uses.set(category, (aggregate.uses.get(category) ?? 0) + times);
         }
         consumablePlayers.set(name, aggregate);
       }
       const usedByPull: Partial<Record<RaidConsumableKey, number>> = {};
       const usedNamesByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
       const missingByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
+      const usedCategory = (name: string, category: RaidConsumableKey): boolean =>
+        (extras.used.get(name)?.get(category) ?? 0) > 0;
       for (const category of consumableCategories) {
         const users = participants.filter((name) =>
-          extras.used.get(name)?.has(category),
+          usedCategory(name, category),
         );
         usedByPull[category] = users.length;
         usedNamesByPull[category] = users;
         missingByPull[category] = participants.filter(
-          (name) => !extras.used.get(name)?.has(category),
+          (name) => !usedCategory(name, category),
         );
       }
       consumablePulls.push({
@@ -1164,6 +1175,12 @@ async function buildRaidLogNightAnalysis(
                 name,
                 pulls: totals.pulls,
                 role: roleOf(name),
+                uses: Object.fromEntries(
+                  consumableCategories.map((category) => [
+                    category,
+                    totals.uses.get(category) ?? 0,
+                  ]),
+                ),
               }))
               // Primero los que menos cumplieron, en proporción a sus pulls.
               .sort((a, b) => {

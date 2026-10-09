@@ -10,7 +10,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  CaretDown,
   ChartLine,
   Ghost,
   Files,
@@ -277,17 +276,6 @@ function compactNumber(value: number): string {
   return Math.round(value).toLocaleString("es-AR");
 }
 
-// Triángulo del botón de las listas largas: apunta abajo cuando la lista está
-// cortada y arriba (rotado por CSS) cuando está abierta.
-function ListToggleIcon({ up }: { up: boolean }) {
-  return (
-    <CaretDown weight="fill"
-      aria-hidden="true"
-      className={`rlb-list-toggle-icon${up ? " rlb-list-toggle-icon--up" : ""}`}
-    />
-  );
-}
-
 // Alto máximo al que se corta una lista larga: techo para que una fila con dos
 // listas enormes no se coma la pantalla. En la ventana del análisis hay lugar de
 // sobra, así que ahí las listas pueden ser más altas.
@@ -348,44 +336,47 @@ function AnalysisRow({
   );
 }
 
-// Sección del análisis con lista: se corta al tope de la fila y se abre con el
-// triángulo de abajo (que por eso queda en la misma línea en las dos columnas).
-// El triángulo aparece solo si hay algo tapado: con pocos nombres sería ruido.
-// `footer` va afuera del corte, para lo que tiene que verse siempre (las causas
+// Sección del análisis con lista: la caja mantiene el alto de la fila (el de la
+// lista más corta de las dos columnas) y lo que sobra se scrollea adentro. Un
+// degradado abajo avisa que hay más, y desaparece al llegar al final.
+// `footer` va afuera del scroll, para lo que tiene que verse siempre (las causas
 // de muerte, que son pocas).
 function ClampedSection({
   children,
   footer,
   icon,
+  max,
   title,
 }: {
   children: ReactNode;
   footer?: ReactNode;
   icon?: ReactNode;
+  max?: number;
   title: string;
 }) {
   const fila = useContext(RowClampContext);
-  const [open, setOpen] = useState(false);
-  const [recortable, setRecortable] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const caja = useRef<HTMLDivElement | null>(null);
-  const tope = fila?.tope ?? LIST_MAX_PX;
+  const tope = fila?.tope ?? max ?? LIST_MAX_PX;
+
+  const medir = useCallback((): void => {
+    const el = caja.current;
+    if (!el) {
+      return;
+    }
+    setHasMore(el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+  }, []);
 
   useEffect(() => {
     const el = caja.current;
     if (!el) {
       return undefined;
     }
-    const medir = (): void => {
-      // Abierta entra siempre: si no, el botón de cerrar desaparecería.
-      if (!open) {
-        setRecortable(el.scrollHeight > tope + 1);
-      }
-    };
     medir();
     const observador = new ResizeObserver(medir);
     observador.observe(el);
     return () => observador.disconnect();
-  }, [children, open, tope]);
+  }, [children, medir, tope]);
 
   return (
     <div className="rlb-analysis-section">
@@ -393,28 +384,19 @@ function ClampedSection({
         {icon}
         {title}
       </h5>
-      <div
-        className="rlb-list-body"
-        ref={(el) => {
-          caja.current = el;
-          fila?.registrar(el);
-        }}
-        style={{ maxHeight: open ? undefined : tope }}
-      >
-        {children}
-      </div>
-      {open || recortable ? (
-        <button
-          aria-expanded={open}
-          aria-label={open ? "Ver menos" : "Ver todo"}
-          className="rlb-list-toggle"
-          onClick={() => setOpen((current) => !current)}
-          title={open ? "Ver menos" : "Ver todo"}
-          type="button"
+      <div className="rlb-list-wrap" style={{ height: tope }}>
+        <div
+          className="rlb-list-body"
+          onScroll={medir}
+          ref={(el) => {
+            caja.current = el;
+            fila?.registrar(el);
+          }}
         >
-          <ListToggleIcon up={open} />
-        </button>
-      ) : null}
+          {children}
+        </div>
+        {hasMore ? <span aria-hidden="true" className="rlb-list-fade" /> : null}
+      </div>
       {footer}
     </div>
   );
@@ -731,18 +713,24 @@ export function RaidLogsBoard({
   }, []);
   const deepLinkOpenDone = useRef(false);
 
-  // Escape cierra el análisis, como en el resto de los modales.
+  // Escape cierra el análisis, como en el resto de los modales, y mientras está
+  // abierto la página de atrás no scrollea.
   useEffect(() => {
     if (!analysisOpenKey) {
       return undefined;
     }
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         setAnalysisOpenKey(null);
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [analysisOpenKey]);
 
   useEffect(() => {
@@ -1382,8 +1370,23 @@ export function RaidLogsBoard({
                                             right.used - left.used ||
                                             left.name.localeCompare(right.name),
                                         );
+                                      const totals = consumables.players
+                                        .map((player) => ({
+                                          name: player.name,
+                                          times: player.uses?.[category] ?? 0,
+                                        }))
+                                        .filter((entry) => entry.times > 0)
+                                        .sort(
+                                          (left, right) =>
+                                            right.times - left.times ||
+                                            left.name.localeCompare(right.name),
+                                        );
+                                      const total = totals.reduce(
+                                        (sum, entry) => sum + entry.times,
+                                        0,
+                                      );
                                       return (
-                                        <p key={category}>
+                                        <div className="rlb-consumable-row" key={category}>
                                           <span className="rlb-label">
                                             Usaron{" "}
                                             {CONSUMABLE_LABEL[
@@ -1406,7 +1409,26 @@ export function RaidLogsBoard({
                                           {users.length === 0
                                             ? "Nadie la usó."
                                             : null}
-                                        </p>
+                                          {totals.length > 0 ? (
+                                            <details className="rlb-consumable-total">
+                                              <summary>
+                                                Total: {total}{" "}
+                                                {total === 1
+                                                  ? "uso"
+                                                  : "usos"}{" "}
+                                                entre {totals.length}
+                                              </summary>
+                                              <div className="rlb-consumable-total-list">
+                                                {totals.map((entry) => (
+                                                  <span key={entry.name}>
+                                                    {entry.name}{" "}
+                                                    <b>{entry.times}</b>
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </details>
+                                          ) : null}
+                                        </div>
                                       );
                                     })}
                                   </div>
@@ -1673,12 +1695,11 @@ export function RaidLogsBoard({
                             ) : null}
 
                             {selectedAnalysis.encounters.length > 0 ? (
-                              <div className="rlb-analysis-section">
-                                <h5>
-                                <Ghost weight="fill" aria-hidden="true" />
-                                Por boss
-                              </h5>
-                                <div className="rlb-encounters">
+                              <ClampedSection
+                                icon={<Ghost weight="fill" aria-hidden="true" />}
+                                max={MODAL_LIST_MAX_PX}
+                                title="Resumen por boss"
+                              >
                                   {selectedAnalysis.encounters.map(
                                     (encounter, index) => (
                                       <div
@@ -1705,8 +1726,7 @@ export function RaidLogsBoard({
                                       </div>
                                     ),
                                   )}
-                                </div>
-                              </div>
+                              </ClampedSection>
                             ) : null}
                           </>
                         ) : null}

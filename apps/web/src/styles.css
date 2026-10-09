@@ -9,6 +9,9 @@
   /* Version opaca de --panel, para las cajas donde el texto de atras se
      transparenta y estorba la lectura (ej. el modal de un comunicado). */
   --panel-solid: #0f0f1c;
+  /* Scroll de las listas del análisis y el degradado que avisa que hay más. */
+  --rlb-list-fade: rgba(7, 13, 24, 0.92);
+  --rlb-scroll-thumb: rgba(148, 172, 228, 0.38);
   --panel-border: rgba(124, 152, 216, 0.24);
   --text: #edf2ff;
   --muted: #b2bdd8;
@@ -1786,36 +1789,6 @@ a:hover {
   overflow: hidden;
 }
 
-/* Triángulo al pie de la lista: ancho completo y área de click generosa, con el
-   triángulo centrado (es la única pieza de la sección que se ve "plegable"). */
-.rlb-list-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 6px 0;
-  border: 0;
-  border-top: 1px solid var(--panel-border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.rlb-list-toggle:hover {
-  color: var(--accent);
-}
-
-.rlb-list-toggle-icon {
-  width: 14px;
-  height: 14px;
-  transition: transform 150ms ease;
-}
-
-/* El chevron apunta arriba cuando la lista está abierta ("ver menos"). */
-.rlb-list-toggle-icon--up {
-  transform: rotate(180deg);
-}
-
 /* Progresión de la guild: un chip por dificultad, como los badges del resto. */
 .rlb-progress {
   display: flex;
@@ -2183,6 +2156,72 @@ a:hover {
   vertical-align: -3px;
 }
 
+/* Lista con scroll propio: la caja tiene el alto de la fila (las dos columnas
+   cierran parejas) y adentro se scrollea. El degradado de abajo avisa que hay
+   más contenido y desaparece al llegar al final. */
+.rlb-list-wrap {
+  position: relative;
+  min-height: 0;
+}
+
+.rlb-list-wrap .rlb-list-body {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-color: var(--rlb-scroll-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+.rlb-list-wrap .rlb-list-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rlb-list-wrap .rlb-list-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--rlb-scroll-thumb);
+}
+
+.rlb-list-wrap .rlb-list-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rlb-list-fade {
+  position: absolute;
+  inset: auto 8px 0 0;
+  height: 26px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    var(--rlb-list-fade, rgba(7, 13, 24, 0.92))
+  );
+  pointer-events: none;
+}
+
+/* Totales de un consumible reaccional: desplegable corto con quién y cuántas
+   veces. Cerrado es una línea. */
+.rlb-consumable-total {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.rlb-consumable-total > summary {
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rlb-consumable-total-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 0 2px;
+}
+
+.rlb-consumable-total-list b {
+  color: var(--text);
+}
+
 .rlb-analysis-loading,
 .rlb-analysis-empty {
   margin: 0;
@@ -2520,13 +2559,15 @@ a:hover {
 
 /* El bloque de "Sin <consumible>" de la noche usa el mismo formato que el de
    cada pull: la etiqueta arriba y los nombres abajo. */
-.rlb-consumable-pulls > p {
+.rlb-consumable-pulls > p,
+.rlb-consumable-pulls > .rlb-consumable-row {
   margin: 0;
   color: var(--muted);
   line-height: 1.5;
 }
 
-.rlb-consumable-pulls > p .rlb-label {
+.rlb-consumable-pulls > p .rlb-label,
+.rlb-consumable-pulls > .rlb-consumable-row .rlb-label {
   display: block;
   margin-bottom: 2px;
 }
@@ -8908,6 +8949,9 @@ select.list-order {
   /* Superficies claras reutilizables */
   --surface-card: rgba(255, 255, 255, 0.92);
   --surface-input: #ffffff;
+  /* Scroll de las listas del análisis y su degradado, en tema claro. */
+  --rlb-list-fade: rgba(255, 255, 255, 0.92);
+  --rlb-scroll-thumb: rgba(60, 85, 130, 0.35);
 }
 
 /* Canvas claro: fondo más profundo y glow más tenues para que el contenido
