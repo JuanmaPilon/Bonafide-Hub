@@ -2168,21 +2168,6 @@ a:hover {
   font-size: 0.78rem;
 }
 
-/* De dónde salió el análisis: el report más completo de la noche. */
-.rlb-analysis-source {
-  display: block;
-  margin: 7px 0 0;
-}
-
-.rlb-analysis-source a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.rlb-analysis-source a:hover {
-  text-decoration: underline;
-}
-
 .rlb-analysis-spotlights,
 .rlb-analysis-grid {
   display: grid;

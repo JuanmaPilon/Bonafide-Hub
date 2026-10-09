@@ -39,10 +39,15 @@ export type RaidLogAttendance = {
 };
 
 const EVENT_WINDOW_MS = 14 * 60 * 60 * 1000;
-// Solo "voy" y "tarde" son un compromiso de asistir. "Bench" es estar
-// disponible por si hace falta y "tentativo" no confirma nada: si vienen, se
-// muestran como "vinieron sin confirmar" en vez de sumar asistencia esperada.
+// Solo "voy" y "tarde" son un compromiso de asistir: son los que se cuentan como
+// "anotados que vinieron". "Bench" es estar disponible por si hace falta y
+// "tentativo" no confirma nada, así que no se les exige asistencia.
 const EXPECTED_STATUSES = new Set(["yes", "late"]);
+// Para el listado de "vinieron sin anotarse" alcanza con haberse anotado de
+// cualquier forma válida: estar en bench o anotarse más tarde es una forma de
+// anotarse. Solo los que dijeron "no voy" (y los que no figuran) cuentan como
+// que entraron sin estar anotados.
+const SIGNED_STATUSES = new Set(["yes", "late", "bench", "tentative"]);
 
 function hasText(value: string | null | undefined): value is string {
   return Boolean(value?.trim());
@@ -216,7 +221,7 @@ export async function crossRaidAttendance(input: {
 
   for (const [key, player] of presentByKey) {
     const status = statusByKey.get(key);
-    if (status && EXPECTED_STATUSES.has(status)) {
+    if (status && SIGNED_STATUSES.has(status)) {
       continue;
     }
     result.unsignedPresent.push({

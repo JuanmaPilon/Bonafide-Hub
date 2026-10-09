@@ -612,23 +612,6 @@ export function RaidLogsBoard({
   }
   const bossLabel = (boss: number | undefined, name: string): string =>
     boss === undefined ? name : (bossLabels.get(boss) ?? name);
-  const sourceNotes = (() => {
-    const source = selectedAnalysis?.source;
-    if (!source) {
-      return "";
-    }
-    const notes: string[] = [];
-    if (source.extraPulls > 0) {
-      notes.push(`+${source.extraPulls} de otro report`);
-    }
-    if (source.repeatedPulls > 0) {
-      const plural = source.repeatedPulls === 1 ? "" : "s";
-      notes.push(
-        `${source.repeatedPulls} repetido${plural} contado${plural} una vez`,
-      );
-    }
-    return notes.length > 0 ? ` · ${notes.join(" · ")}` : "";
-  })();
   const attendanceNoShows = attendance
     ? [
         ...attendance.signedAbsent,
@@ -1018,27 +1001,6 @@ export function RaidLogsBoard({
                                 {selectedAnalysis.encounters.length} pulls
                               </span>
                             </div>
-
-                            {selectedAnalysis.source ? (
-                              <p className="rlb-label rlb-analysis-source">
-                                <Files weight="fill" aria-hidden="true" />
-                                Report base{" "}
-                                {baseReportPart ? (
-                                  <a
-                                    href={baseReportPart.reportUrl}
-                                    rel="noreferrer"
-                                    target="_blank"
-                                  >
-                                    {selectedAnalysis.source.baseReport}
-                                  </a>
-                                ) : (
-                                  selectedAnalysis.source.baseReport
-                                )}
-                                {" · "}
-                                {selectedAnalysis.source.basePulls} pulls
-                                {sourceNotes}
-                              </p>
-                            ) : null}
 
                             <div className="rlb-analysis-spotlights">
                               <div

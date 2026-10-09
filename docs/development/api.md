@@ -253,31 +253,39 @@ Devuelve:
    30 s previos al pull, contada aparte de las de la pelea. Flask y comida
    salen de las auras de CombatantInfo (activas al empezar el pull): en la v1
    cada aura trae el id, así que cuando no viene el nombre se resuelve con
-   `tables/buffs`. Una noche cuenta como medible solo si se reconoció al menos un
-   aura: con nombres que no matchean (idioma desconocido) marcar a todos como
-   faltantes es peor que no informar la categoría.
-   Los nombres de los consumibles se comparan **sin acentos y en inglés y
-   español** ("Healthstone" / "Piedra de brujo", "Well Fed" / "Bien
-   alimentado"): Warcraft Logs devuelve los nombres como los tenía el cliente
-   que subió el log, y una comparación solo en inglés dejaba a todo un report
-   sin consumibles.
+   `tables/buffs`. **Cada categoría se mide por separado**: una noche con flask
+   reconocido y comida sin reconocer muestra flask y no comida, porque listar a
+   toda la raid como si no hubiera comido es peor que no informarlo (el log de
+   un idioma o un nombre de buff que no matchea se veía exactamente así).
+   Los nombres de los consumibles se comparan **sin acentos y por raíz, en
+   inglés, español y portugués** ("Healthstone" / "Piedra de brujo" / "Pedra de
+   bruxo", "Well Fed" / "Bien alimentado" / "Bem Alimentado" caen en
+   `alimentad`): Warcraft Logs devuelve los nombres como los tenía el cliente
+   que subió el log, y comparar nombres completos dejaba a todo un report sin
+   consumibles. Los nombres que no se reconocen y estaban en casi todos los
+   pulls quedan en el log (`auras sin clasificar`), que es la única forma de
+   saber con qué nombre viene un consumible nuevo.
    `expected` separa las categorías que corresponden a cada pull (flask, comida,
    pota, prepot) de las de **uso reaccional** (piedra y poción de vida), donde
    no hay un "debería" por pull: la web muestra faltantes de las primeras
    (`pulls[].missing` / `players[].counts`) y **quién las usó** en las segundas
    (`pulls[].usedNames`), con el detalle por pull.
 5. `attendance` — cruce entre los que aparecen en el log y los anotados al
-   evento de raid más cercano (±14 h, `type: raid`). Cuenta "voy" y "tarde"
-   como compromiso; bench y tentativo, si vienen, caen en `unsignedPresent`.
-   `partial` avisa cuando no se pudo leer la presencia por pull (CombatantInfo)
-   y los participantes salieron de la tabla de daño: ahí un "no vino" puede ser
-   un heal que no hizo daño.
+   evento de raid más cercano (±14 h, `type: raid`). El evento se elige por
+   cercanía y se toman los anotados: "voy" y "tarde" son el compromiso que mide
+   `signedPresent` / `signedTotal`, y los que faltaron van a `signedAbsent` (o a
+   `unmatchedSignups` si no dejaron PJ escrito). En `unsignedPresent` ("vinieron
+   sin anotarse") entran solo los que **no tenían anotación válida**: los que
+   dijeron "no voy" (aunque figuren en el evento) y los que no figuran en la
+   lista. Estar en bench, anotarse tarde o haber puesto "tentativo" es anotarse,
+   así que no aparecen ahí. `partial` avisa cuando no se pudo leer la presencia
+   por pull (CombatantInfo) y los participantes salieron de la tabla de daño:
+   ahí un "no vino" puede ser un heal que no hizo daño.
 6. `source` — de dónde salió el análisis: el report **más completo** de la
    noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
    cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que
-   solo están en otro report y `repeatedPulls` los que se contaron una vez. La
-   web lo muestra arriba del análisis, así un número que no coincide con el
-   report que el usuario tiene abierto se explica solo.
+   solo están en otro report y `repeatedPulls` los que se contaron una vez. No se
+   muestra en la web: es para que el análisis y la tarjeta digan lo mismo.
 
 El emparejamiento por nombre tiene dos pasos:
 

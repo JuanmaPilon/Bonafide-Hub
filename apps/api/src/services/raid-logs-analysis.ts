@@ -198,7 +198,7 @@ type FightExtras = {
 // Resultado por report: el consumo de cada pull más qué categorías se pudieron
 // medir (si algo no se pudo, la categoría no se reporta).
 type PartConsumables = {
-  auraReadable: boolean;
+  auraCategories: Set<RaidConsumableKey>;
   castCategories: Set<RaidConsumableKey>;
   fights: FightExtras[];
 };
@@ -449,25 +449,60 @@ function foldAbilityName(name: string): string {
 }
 
 // Los nombres de pociones y piedras cambian en cada parche, así que se
-// identifican por nombre (en la tabla de casts) en vez de por id fijo.
-const HEALTHSTONE_NAMES = ["healthstone", "piedra de brujo"];
+// identifican por nombre (en la tabla de casts) en vez de por id fijo. La guild
+// sube logs en inglés, español y portugués, así que se comparan raíces (sin
+// acentos) en vez de nombres completos: "Well Fed" / "Bien alimentado" /
+// "Bem Alimentado" caen todas en "alimentad".
+const HEALTHSTONE_NAMES = [
+  "healthstone",
+  "piedra de brujo",
+  "pedra de bruxo",
+];
 const HEALTH_POTION_NAMES = [
   "health potion",
   "healing potion",
   "pocion de vida",
   "pocion de curacion",
   "pocion de sanacion",
+  "pocao de vida",
 ];
-const MANA_POTION_NAMES = ["mana potion", "pocion de mana"];
-const POTION_NAMES = ["potion", "pocion", "pocima"];
+const MANA_POTION_NAMES = ["mana potion", "pocion de mana", "pocao de mana"];
+const POTION_NAMES = ["potion", "pocion", "pocima", "pocao"];
 // "Create Healthstone" / "Crear piedra de brujo" es crear la piedra, no usarla.
-const CREATE_NAMES = ["create ", "crear "];
-// Los frascos se llaman "flask"/"phial" en inglés y "frasco"/"vial" en español.
+const CREATE_NAMES = ["create ", "crear ", "criar "];
+// Los frascos se llaman "flask"/"phial" en inglés y "frasco"/"vial" en
+// español y portugués.
 const FLASK_NAMES = ["flask", "phial", "frasco", "vial"];
-const FOOD_NAMES = ["well fed", "bien alimentado"];
+const FOOD_NAMES = ["well fed", "alimentad"];
 
 function nameHasAny(name: string, patterns: string[]): boolean {
   return patterns.some((pattern) => name.includes(pattern));
+}
+
+// Un consumible que no reconocemos se ve como "todos faltaron" y desde afuera no
+// hay forma de saber con qué nombre viene en ese log, así que quedan en el log
+// los buffs que estaban en casi todos los pulls (los de raid) y no se pudieron
+// clasificar.
+const UNRECOGNIZED_AURA_RATIO = 0.5;
+
+function logUnrecognizedAuras(
+  code: string,
+  counts: Map<string, number>,
+  snapshots: number,
+): void {
+  if (snapshots === 0) {
+    return;
+  }
+  const common = [...counts.entries()]
+    .filter(([, count]) => count >= snapshots * UNRECOGNIZED_AURA_RATIO)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 8)
+    .map(([name, count]) => `${name} (${count})`);
+  if (common.length > 0) {
+    console.log(
+      `[raid-logs] ${code}: auras sin clasificar en casi todos los pulls: ${common.join(", ")}`,
+    );
+  }
 }
 
 function castConsumableCategory(
@@ -646,6 +681,7 @@ async function collectFightConsumables(input: {
     name?: string;
     player: string;
   }> = [];
+  let snapshots = 0;
   try {
     const info = await fetchEventPages<WclRawEvent>(input.code, "", {
       end,
@@ -672,6 +708,7 @@ async function collectFightConsumables(input: {
         continue;
       }
       participants[index].add(name);
+      snapshots += 1;
       for (const aura of event.auras ?? []) {
         const parsed = parseAura(aura);
         if (parsed) {
@@ -711,7 +748,8 @@ async function collectFightConsumables(input: {
       // Sin nombres de aura flask/comida/runa quedan sin medir.
     }
   }
-  let resolvedAura = false;
+  const auraCategories = new Set<RaidConsumableKey>();
+  const unrecognized = new Map<string, number>();
   for (const aura of pendingAuras) {
     let category: RaidConsumableKey | null | undefined;
     if (aura.name !== undefined) {
@@ -719,21 +757,26 @@ async function collectFightConsumables(input: {
       if (aura.id !== undefined) {
         categoryByAuraId.set(aura.id, category);
       }
+      if (!category) {
+        const label = foldAbilityName(aura.name);
+        unrecognized.set(label, (unrecognized.get(label) ?? 0) + 1);
+      }
     } else if (aura.id !== undefined) {
       category = categoryByAuraId.get(aura.id) ?? null;
     }
-    // Basta con reconocer un aura de consumible en toda la noche para dar por
-    // medibles flask/comida. Al revés (dar la noche por medible porque hay
-    // auras con nombre) un log en un idioma que no reconocemos marcaba a todos
-    // como faltantes.
+    // Cada categoría se da por medible solo si se reconoció al menos un aura
+    // suya en la noche: dar la noche por medible porque "hay auras con nombre"
+    // marcaba a los 24 como faltantes de comida cuando el log venía en un
+    // idioma (o un nombre) que no reconocíamos.
     if (category) {
       addUse(aura.fight, aura.player, category);
-      resolvedAura = true;
+      auraCategories.add(category);
     }
   }
+  logUnrecognizedAuras(input.code, unrecognized, snapshots);
 
   return {
-    auraReadable: resolvedAura,
+    auraCategories,
     castCategories,
     fights: input.fights.map((_, index) => ({
       participants: [...participants[index]].sort((a, b) => a.localeCompare(b)),
@@ -930,17 +973,25 @@ async function buildRaidLogNightAnalysis(
 
   // Categorías que se pudieron medir: el orden es el de la UI.
   const castCategories = new Set<RaidConsumableKey>();
-  let auraReadable = false;
+  const auraCategories = new Set<RaidConsumableKey>();
   for (const report of ordered) {
     for (const category of report.consumables?.castCategories ?? []) {
       castCategories.add(category);
     }
-    auraReadable ||= Boolean(report.consumables?.auraReadable);
+    for (const category of report.consumables?.auraCategories ?? []) {
+      auraCategories.add(category);
+    }
   }
   // Flask, comida, pota y prepot se esperan en cada pull: ahí "faltó" es un dato.
+  // Flask y comida van por separado: si en la noche no se reconoció ningún aura
+  // de comida (idioma del log, nombre nuevo), esa fila no se muestra en vez de
+  // listar a toda la raid como si no hubiera comido.
   const expectedCategories: RaidConsumableKey[] = [];
-  if (auraReadable) {
-    expectedCategories.push("flask", "food");
+  if (auraCategories.has("flask")) {
+    expectedCategories.push("flask");
+  }
+  if (auraCategories.has("food")) {
+    expectedCategories.push("food");
   }
   if (castCategories.has("potions")) {
     expectedCategories.push("potions", "prepot");
