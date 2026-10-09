@@ -141,6 +141,7 @@ export type RaidConsumableKey =
 
 export type RaidLogConsumables = {
   categories: RaidConsumableKey[];
+  expected?: RaidConsumableKey[];
   players: Array<{
     class?: string;
     counts: Partial<Record<RaidConsumableKey, number>>;
@@ -149,10 +150,12 @@ export type RaidLogConsumables = {
     role?: RaidRole;
   }>;
   pulls: Array<{
+    boss?: number;
     missing: Partial<Record<RaidConsumableKey, string[]>>;
     name: string;
     participants: number;
     used: Partial<Record<RaidConsumableKey, number>>;
+    usedNames?: Partial<Record<RaidConsumableKey, string[]>>;
   }>;
 };
 
@@ -170,6 +173,7 @@ export type RaidLogAnalysis = {
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
   encounters: Array<{
+    boss?: number;
     deaths: number;
     durationSeconds: number;
     kill: boolean;
@@ -177,6 +181,12 @@ export type RaidLogAnalysis = {
     topDps?: { dps: number; name: string };
   }>;
   generatedAt: string;
+  source?: {
+    basePulls: number;
+    baseReport: string;
+    extraPulls: number;
+    repeatedPulls: number;
+  };
 };
 
 export type KarutaCard = {

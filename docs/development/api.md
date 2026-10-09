@@ -171,7 +171,10 @@ que producía el "10/10" en una raid de 9 bosses. Un **pull** se identifica por 
 + hora absoluta del fight (`start` en el `summary`, con 15 s de tolerancia): los
 pulls que traen dos reports de la misma noche se cuentan una sola vez (en la
 tarjeta y en el análisis) y los pulls distintos del mismo boss (un wipe y su kill)
-siguen contando los dos. Los logs guardados antes de esto no tienen `boss`/`start`
+siguen contando los dos. Para mostrar, el análisis usa **un solo nombre por boss**:
+el del report más completo de la noche, así el mismo boss no aparece con dos
+nombres ("Por boss" y "Por pull" dicen lo mismo que la tarjeta). Los logs
+guardados antes de esto no tienen `boss`/`start`
 ni `zoneName`: `backfillRaidLogDetails` los refresca una vez al arrancar el API
 (fire & forget, como las otras migraciones) y el escaneo manual hace lo mismo, así
 las noches viejas también dejan de contar los pulls repetidos.
@@ -221,8 +224,11 @@ y consumible contaba al doble. En el mismo sentido, cuando dos reports
 misma raid), el análisis los compara por **id de encuentro** + hora absoluta
 (`report.start` + `start_time`, con 15 s de tolerancia) y analiza cada pull una
 sola vez; los pulls nuevos de cada parte sí se suman, así que una raid partida en
-dos sigue contando completa. El nombre del boss no sirve como identidad: cambia con
-el idioma del cliente que subió el log.
+dos sigue contando completa. El report más completo es la **base** del análisis
+(el que se analiza primero): define los nombres de los bosses y el detalle de los
+pulls repetidos, y lo que se suma de los otros queda informado en `source`
+(`extraPulls` / `repeatedPulls`). El nombre del boss no sirve como identidad:
+cambia con el idioma del cliente que subió el log.
 
 Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
 Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
@@ -247,15 +253,31 @@ Devuelve:
    30 s previos al pull, contada aparte de las de la pelea. Flask y comida
    salen de las auras de CombatantInfo (activas al empezar el pull): en la v1
    cada aura trae el id, así que cuando no viene el nombre se resuelve con
-   `tables/buffs`. La web muestra esto al revés del conteo: por consumible, la
-   lista de quién **no** lo tenía (con en cuántos pulls faltó), que es lo que se
-   puede accionar, y el detalle por pull.
-4. `attendance` — cruce entre los que aparecen en el log y los anotados al
+   `tables/buffs`. Una noche cuenta como medible solo si se reconoció al menos un
+   aura: con nombres que no matchean (idioma desconocido) marcar a todos como
+   faltantes es peor que no informar la categoría.
+   Los nombres de los consumibles se comparan **sin acentos y en inglés y
+   español** ("Healthstone" / "Piedra de brujo", "Well Fed" / "Bien
+   alimentado"): Warcraft Logs devuelve los nombres como los tenía el cliente
+   que subió el log, y una comparación solo en inglés dejaba a todo un report
+   sin consumibles.
+   `expected` separa las categorías que corresponden a cada pull (flask, comida,
+   pota, prepot) de las de **uso reaccional** (piedra y poción de vida), donde
+   no hay un "debería" por pull: la web muestra faltantes de las primeras
+   (`pulls[].missing` / `players[].counts`) y **quién las usó** en las segundas
+   (`pulls[].usedNames`), con el detalle por pull.
+5. `attendance` — cruce entre los que aparecen en el log y los anotados al
    evento de raid más cercano (±14 h, `type: raid`). Cuenta "voy" y "tarde"
    como compromiso; bench y tentativo, si vienen, caen en `unsignedPresent`.
    `partial` avisa cuando no se pudo leer la presencia por pull (CombatantInfo)
    y los participantes salieron de la tabla de daño: ahí un "no vino" puede ser
    un heal que no hizo daño.
+6. `source` — de dónde salió el análisis: el report **más completo** de la
+   noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
+   cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que
+   solo están en otro report y `repeatedPulls` los que se contaron una vez. La
+   web lo muestra arriba del análisis, así un número que no coincide con el
+   report que el usuario tiene abierto se explica solo.
 
 El emparejamiento por nombre tiene dos pasos:
 

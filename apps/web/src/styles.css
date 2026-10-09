@@ -2168,6 +2168,21 @@ a:hover {
   font-size: 0.78rem;
 }
 
+/* De dónde salió el análisis: el report más completo de la noche. */
+.rlb-analysis-source {
+  display: block;
+  margin: 7px 0 0;
+}
+
+.rlb-analysis-source a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.rlb-analysis-source a:hover {
+  text-decoration: underline;
+}
+
 .rlb-analysis-spotlights,
 .rlb-analysis-grid {
   display: grid;
@@ -2397,9 +2412,11 @@ a:hover {
   gap: 6px;
 }
 
-/* Cada persona que no usó ese consumible: "Roco 5/7" = faltó en 5 de 7 pulls.
-   Píldoras grises, sin color: acá no hay nada que destacar en verde. */
-.rlb-consumable-pulls .rlb-missing-name {
+/* Cada persona que no usó ese consumible: "Roco 5/7" = faltó en 5 de 7 pulls,
+   y en las de uso reaccional "Roco 5/7" = la usó en 5 de 7. Píldoras grises,
+   sin color: acá no hay nada que destacar en verde. */
+.rlb-consumable-pulls .rlb-missing-name,
+.rlb-consumable-pulls .rlb-used-name {
   display: inline-block;
   margin: 2px 4px 2px 0;
   padding: 2px 8px;
@@ -2409,7 +2426,8 @@ a:hover {
   font-size: 0.76rem;
 }
 
-.rlb-consumable-pulls .rlb-missing-name b {
+.rlb-consumable-pulls .rlb-missing-name b,
+.rlb-consumable-pulls .rlb-used-name b {
   color: var(--muted);
   font-weight: 700;
 }

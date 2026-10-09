@@ -24,6 +24,10 @@ export type RaidLogConsumables = {
   // la tabla de casts o no se pueden resolver los nombres de las auras, esas
   // categorías no aparecen y la web no inventa faltantes.
   categories: RaidConsumableKey[];
+  // Categorías que corresponden a cada pull (flask, comida, pota y prepot): ahí
+  // "faltó" es un dato útil. Las de uso reaccional (piedra y poción de vida) no
+  // se esperan por pull, así que lo que se informa es quién las usó.
+  expected: RaidConsumableKey[];
   // Consumo agregado por jugador: en cuántos pulls participó y en cuántos usó
   // cada consumible (un pull cuenta una vez, aunque use dos pociones).
   players: Array<{
@@ -34,10 +38,12 @@ export type RaidLogConsumables = {
     role?: RaidRole;
   }>;
   pulls: Array<{
+    boss?: number;
     missing: Partial<Record<RaidConsumableKey, string[]>>;
     name: string;
     participants: number;
     used: Partial<Record<RaidConsumableKey, number>>;
+    usedNames: Partial<Record<RaidConsumableKey, string[]>>;
   }>;
 };
 
@@ -55,6 +61,7 @@ export type RaidLogAnalysis = {
   deathsByAbility: Array<{ ability: string; deaths: number }>;
   deathsByPlayer: Array<{ deaths: number; name: string }>;
   encounters: Array<{
+    boss?: number;
     deaths: number;
     durationSeconds: number;
     kill: boolean;
@@ -62,6 +69,14 @@ export type RaidLogAnalysis = {
     topDps?: { dps: number; name: string };
   }>;
   generatedAt: string;
+  // Fuente del análisis: el report más completo de la noche es la base y los
+  // otros reports solo suman los pulls que no están en la base.
+  source?: {
+    basePulls: number;
+    baseReport: string;
+    extraPulls: number;
+    repeatedPulls: number;
+  };
 };
 
 const WOW_CLASSES = [
@@ -421,29 +436,57 @@ const CONSUMABLE_PREPULL_MS = 30 * 1000;
 // Una poción usada hasta este límite antes del pull es la prepot.
 const PREPOT_WINDOW_MS = CONSUMABLE_PREPULL_MS;
 
+// Warcraft Logs devuelve los nombres de habilidades como los tenía el cliente
+// que subió el log, así que el mismo pull llega en inglés o en español
+// ("The Coiled Altar" / "El Altar Serpenteante"). Los consumibles se buscan sin
+// acentos y en los dos idiomas.
+function foldAbilityName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 // Los nombres de pociones y piedras cambian en cada parche, así que se
 // identifican por nombre (en la tabla de casts) en vez de por id fijo.
+const HEALTHSTONE_NAMES = ["healthstone", "piedra de brujo"];
+const HEALTH_POTION_NAMES = [
+  "health potion",
+  "healing potion",
+  "pocion de vida",
+  "pocion de curacion",
+  "pocion de sanacion",
+];
+const MANA_POTION_NAMES = ["mana potion", "pocion de mana"];
+const POTION_NAMES = ["potion", "pocion", "pocima"];
+// "Create Healthstone" / "Crear piedra de brujo" es crear la piedra, no usarla.
+const CREATE_NAMES = ["create ", "crear "];
+// Los frascos se llaman "flask"/"phial" en inglés y "frasco"/"vial" en español.
+const FLASK_NAMES = ["flask", "phial", "frasco", "vial"];
+const FOOD_NAMES = ["well fed", "bien alimentado"];
+
+function nameHasAny(name: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => name.includes(pattern));
+}
+
 function castConsumableCategory(
   name: string,
 ): RaidConsumableKey | undefined {
-  const normalized = name.trim().toLowerCase();
-  // "Create Healthstone" es crear la piedra, no usarla.
-  if (normalized.startsWith("create")) {
+  const normalized = foldAbilityName(name);
+  if (nameHasAny(normalized, CREATE_NAMES)) {
     return undefined;
   }
-  if (normalized.includes("healthstone")) {
+  if (nameHasAny(normalized, HEALTHSTONE_NAMES)) {
     return "healthstones";
   }
-  if (
-    normalized.includes("health potion") ||
-    normalized.includes("healing potion")
-  ) {
+  if (nameHasAny(normalized, HEALTH_POTION_NAMES)) {
     return "healthPotions";
   }
-  if (normalized.includes("mana potion")) {
+  if (nameHasAny(normalized, MANA_POTION_NAMES)) {
     return undefined;
   }
-  return normalized.includes("potion") ? "potions" : undefined;
+  return nameHasAny(normalized, POTION_NAMES) ? "potions" : undefined;
 }
 
 // Flask y comida se leen de las auras activas al empezar el pull, así que no
@@ -451,16 +494,14 @@ function castConsumableCategory(
 function auraConsumableCategory(
   name: string,
 ): RaidConsumableKey | undefined {
-  const normalized = name.trim().toLowerCase();
+  const normalized = foldAbilityName(name);
   if (!normalized) {
     return undefined;
   }
-  if (normalized.includes("well fed")) {
+  if (nameHasAny(normalized, FOOD_NAMES)) {
     return "food";
   }
-  return normalized.includes("flask") || normalized.includes("phial")
-    ? "flask"
-    : undefined;
+  return nameHasAny(normalized, FLASK_NAMES) ? "flask" : undefined;
 }
 
 function collectConsumableAbilityIds(
@@ -681,16 +722,13 @@ async function collectFightConsumables(input: {
     } else if (aura.id !== undefined) {
       category = categoryByAuraId.get(aura.id) ?? null;
     }
-    // Alcanza con poder identificar un aura (por nombre o por id resuelto)
-    // para dar por medibles flask/comida/runa de toda la noche.
-    if (
-      aura.name !== undefined ||
-      (aura.id !== undefined && categoryByAuraId.has(aura.id))
-    ) {
-      resolvedAura = true;
-    }
+    // Basta con reconocer un aura de consumible en toda la noche para dar por
+    // medibles flask/comida. Al revés (dar la noche por medible porque hay
+    // auras con nombre) un log en un idioma que no reconocemos marcaba a todos
+    // como faltantes.
     if (category) {
       addUse(aura.fight, aura.player, category);
+      resolvedAura = true;
     }
   }
 
@@ -814,13 +852,25 @@ async function buildRaidLogNightAnalysis(
       };
     }),
   );
+  // El report más completo es la base del análisis: define los nombres de los
+  // bosses y gana cuando un pull figura en los dos. Los demás reports solo
+  // aportan los pulls que no están en la base.
+  const base = reports.reduce(
+    (best, report) =>
+      report.fights.length > best.fights.length ? report : best,
+    reports[0],
+  );
+  const ordered = [...reports].sort(
+    (left, right) => right.fights.length - left.fights.length,
+  );
   // Dos reports distintos de la misma noche (dos personas loggeando la misma
   // raid) traen los MISMOS pulls duplicados: se comparan por boss + hora
   // absoluta y se analiza cada pull una sola vez.
   const jobs: FightJob[] = [];
   const fightStarts = new Map<string, number[]>();
   let repeatedFights = 0;
-  for (const report of reports) {
+  let extraPulls = 0;
+  for (const report of ordered) {
     report.fights.forEach((fight, index) => {
       const absoluteStart =
         report.start !== undefined && typeof fight.start_time === "number"
@@ -845,6 +895,9 @@ async function buildRaidLogNightAnalysis(
         extras: report.consumables?.fights[index],
         fight,
       });
+      if (report.code !== base.code) {
+        extraPulls += 1;
+      }
     });
   }
   if (repeatedFights > 0) {
@@ -852,6 +905,12 @@ async function buildRaidLogNightAnalysis(
       `[raid-logs] ${selected.reportCode}: ${repeatedFights} pull/s repetidos entre los reports de la noche (se contaron una sola vez)`,
     );
   }
+  const source: NonNullable<RaidLogAnalysis["source"]> = {
+    basePulls: base.fights.length,
+    baseReport: base.code,
+    extraPulls,
+    repeatedPulls: repeatedFights,
+  };
 
   const fightResults = await mapWithConcurrency(
     jobs,
@@ -859,9 +918,12 @@ async function buildRaidLogNightAnalysis(
     analyzeFight,
   );
   const roles = new Map<string, RaidRole>();
-  for (const report of reports) {
+  for (const report of ordered) {
     for (const [name, role] of report.roles ?? []) {
-      roles.set(name, role);
+      // Si los dos reports traen el rol, manda el del report base.
+      if (!roles.has(name)) {
+        roles.set(name, role);
+      }
     }
   }
   const roleOf = (name: string): RaidRole | undefined => roles.get(playerKey(name));
@@ -869,25 +931,33 @@ async function buildRaidLogNightAnalysis(
   // Categorías que se pudieron medir: el orden es el de la UI.
   const castCategories = new Set<RaidConsumableKey>();
   let auraReadable = false;
-  for (const report of reports) {
+  for (const report of ordered) {
     for (const category of report.consumables?.castCategories ?? []) {
       castCategories.add(category);
     }
     auraReadable ||= Boolean(report.consumables?.auraReadable);
   }
-  const consumableCategories: RaidConsumableKey[] = [];
+  // Flask, comida, pota y prepot se esperan en cada pull: ahí "faltó" es un dato.
+  const expectedCategories: RaidConsumableKey[] = [];
   if (auraReadable) {
-    consumableCategories.push("flask", "food");
+    expectedCategories.push("flask", "food");
   }
   if (castCategories.has("potions")) {
-    consumableCategories.push("potions", "prepot");
+    expectedCategories.push("potions", "prepot");
   }
+  // Piedra y poción de vida se usan cuando la pelea lo pide, así que no hay un
+  // "debería" por pull: solo se informa quién las usó.
+  const reactiveCategories: RaidConsumableKey[] = [];
   if (castCategories.has("healthstones")) {
-    consumableCategories.push("healthstones");
+    reactiveCategories.push("healthstones");
   }
   if (castCategories.has("healthPotions")) {
-    consumableCategories.push("healthPotions");
+    reactiveCategories.push("healthPotions");
   }
+  const consumableCategories: RaidConsumableKey[] = [
+    ...expectedCategories,
+    ...reactiveCategories,
+  ];
 
   const playerDeaths = new Map<string, number>();
   const abilityDeaths = new Map<string, number>();
@@ -907,14 +977,16 @@ async function buildRaidLogNightAnalysis(
   const consumablePulls: RaidLogConsumables["pulls"] = [];
   const encounters: RaidLogAnalysis["encounters"] = [];
   const playerClasses = new Map<string, string>();
-  for (const report of reports) {
+  for (const report of ordered) {
     for (const actor of report.friendlies) {
       if (actor.petOwner || actor.type?.toLowerCase() === "pet") {
         continue;
       }
       const playerClass = normalizeClass(actor.class ?? actor.type);
       if (actor.name && playerClass) {
-        playerClasses.set(actor.name, playerClass);
+        if (!playerClasses.has(actor.name)) {
+          playerClasses.set(actor.name, playerClass);
+        }
         playerDeaths.set(actor.name, playerDeaths.get(actor.name) ?? 0);
       }
     }
@@ -969,21 +1041,25 @@ async function buildRaidLogNightAnalysis(
         consumablePlayers.set(name, aggregate);
       }
       const usedByPull: Partial<Record<RaidConsumableKey, number>> = {};
+      const usedNamesByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
       const missingByPull: Partial<Record<RaidConsumableKey, string[]>> = {};
       for (const category of consumableCategories) {
         const users = participants.filter((name) =>
           extras.used.get(name)?.has(category),
         );
         usedByPull[category] = users.length;
+        usedNamesByPull[category] = users;
         missingByPull[category] = participants.filter(
           (name) => !extras.used.get(name)?.has(category),
         );
       }
       consumablePulls.push({
+        boss: result.fight.boss,
         missing: missingByPull,
         name: result.fight.name ?? "Boss",
         participants: participants.length,
         used: usedByPull,
+        usedNames: usedNamesByPull,
       });
     }
 
@@ -996,6 +1072,7 @@ async function buildRaidLogNightAnalysis(
       (a, b) => b.dps - a.dps,
     )[0];
     encounters.push({
+      boss: result.fight.boss,
       deaths: result.deaths.length,
       durationSeconds: Math.round(result.durationSeconds),
       kill: Boolean(result.fight.kill),
@@ -1023,6 +1100,7 @@ async function buildRaidLogNightAnalysis(
       consumableCategories.length > 0
         ? {
             categories: consumableCategories,
+            expected: expectedCategories,
             players: [...consumablePlayers.entries()]
               .map(([name, totals]) => ({
                 class: playerDps.get(name)?.className ?? playerClasses.get(name),
@@ -1038,12 +1116,18 @@ async function buildRaidLogNightAnalysis(
               }))
               // Primero los que menos cumplieron, en proporción a sus pulls.
               .sort((a, b) => {
+                // Solo cuentan las categorías que se esperan por pull: no usar
+                // una piedra no es incumplir nada.
+                const scored =
+                  expectedCategories.length > 0
+                    ? expectedCategories
+                    : consumableCategories;
                 const score = (player: (typeof a)): number => {
-                  const total = consumableCategories.length * player.pulls;
+                  const total = scored.length * player.pulls;
                   if (total === 0) {
                     return 0;
                   }
-                  const hits = consumableCategories.reduce(
+                  const hits = scored.reduce(
                     (sum, category) => sum + (player.counts[category] ?? 0),
                     0,
                   );
@@ -1062,6 +1146,7 @@ async function buildRaidLogNightAnalysis(
       .sort((a, b) => b.deaths - a.deaths),
     encounters,
     generatedAt: new Date().toISOString(),
+    source,
   };
 
   const attendancePlayers = new Map<
