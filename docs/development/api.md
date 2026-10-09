@@ -287,8 +287,27 @@ Devuelve:
    solo están en otro report y `repeatedPulls` los que se contaron una vez. No se
    muestra en la web: es para que el análisis y la tarjeta digan lo mismo.
 
-El emparejamiento por nombre tiene dos pasos:
+### Informe de la noche (automático)
 
+`syncRaidLogsAndPublishReports` (cada 5 min) refresca los reports que siguen
+creciendo y publica el informe de las noches **terminadas** en el canal
+configurado (`GuildConfig.logsChannelId`): resumen de pulls/kills/wipes/bosses,
+DPS promedio, muertes, consumibles (quién faltó y quién usó piedra o poción de
+vida) y el cruce de asistencia, con listas recortadas a 6 nombres. Es el mismo
+contenido que el CSV/PDF de la web, así que el mensaje lleva dos **botones link**
+(`/?log=<logId>&report=csv#/raids/logs`) que abren esa noche y bajan el informe
+en el formato pedido; los componentes se mandan solo en el último mensaje
+(`postMessages(..., { components })`).
+
+Una noche se considera terminada cuando ninguna parte está `live` y la última vez
+que cambió algo (`fightsStableSince`) pasó el umbral de 45 min; si esa fecha no
+está (un report viejo agregado después), vale la regla de la noche: 6 h desde el
+primer pull. Se publica **una sola vez**: queda `raid_logs.reportPostedAt` en las
+partes del grupo (columna nueva, el deploy necesita sincronizar la base) y el
+barrido solo mira los grupos sin publicar. Sin canal configurado, sin token del
+bot o si Discord falla, se loguea el error y se reintenta en el próximo barrido.
+
+El emparejamiento por nombre tiene dos pasos:
 1. **Exacto**: el nombre normalizado (sin reino, sin acentos, minúsculas) del
    personaje de la inscripción, el recordado en `event_player_profiles` o
    cualquiera de los PJ ya **confirmados** del miembro

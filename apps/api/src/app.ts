@@ -61,6 +61,7 @@ import {
   publishRaidLogEntry,
   updateRaidLogEntry,
 } from "./services/raid-logs-publisher.js";
+import { startRaidLogReportSync } from "./services/raid-logs-report.js";
 import {
   analyzeRaidLogNight,
   invalidateRaidLogAnalysis,
@@ -9421,6 +9422,7 @@ export function buildApp() {
   startEventAutoCompleteSync();
   startKarutaAlbumImageSync();
   startKarutaCardImageSync();
+  startRaidLogReportSync();
   startXpExMemberCleanup();
 
   return app;

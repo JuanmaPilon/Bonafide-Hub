@@ -39,10 +39,10 @@ export type RaidLog = {
   // Texto que se publicó en Discord: se compara con el recién generado para
   // editar el mensaje SOLO si cambió.
   postedMessageText?: string;
-  // Fights de la consulta ANTERIOR: si no coincide con el actual, el report
-  // todavía está creciendo (y la cuenta de estabilidad se reinicia).
   previousFightCount?: number;
   reportCode: string;
+  // Cuándo se publicó el informe de la noche en Discord (undefined = falta).
+  reportPostedAt?: Date;
   reportUrl: string;
   status: string;
   summary?: {
@@ -97,6 +97,7 @@ function toRaidLog(record: {
   postedMessageText: string | null;
   previousFightCount: number;
   reportCode: string;
+  reportPostedAt: Date | null;
   reportUrl: string;
   status: string;
   summary: unknown;
@@ -137,6 +138,7 @@ function toRaidLog(record: {
     postedMessageText: record.postedMessageText ?? undefined,
     previousFightCount: record.previousFightCount,
     reportCode: record.reportCode,
+    reportPostedAt: record.reportPostedAt ?? undefined,
     reportUrl: record.reportUrl,
     status: record.status,
     summary: summary
@@ -573,6 +575,21 @@ export async function markRaidLogsPosted(
       discordPosted: true,
       postedMessageText: input.content,
     },
+    where: { id: { in: ids } },
+  });
+}
+
+// El informe de la noche se manda una sola vez: cuándo se publicó queda en las
+// partes del grupo, así un reinicio del API no lo manda de nuevo.
+export async function markRaidLogReportPosted(
+  ids: string[],
+  postedAt: Date,
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+  await prisma.raidLog.updateMany({
+    data: { reportPostedAt: postedAt },
     where: { id: { in: ids } },
   });
 }

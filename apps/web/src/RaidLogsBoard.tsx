@@ -679,6 +679,59 @@ export function RaidLogsBoard({
     }
   };
 
+  // Link del informe que manda Discord (?log=<id>&report=csv|pdf#/raids/logs):
+  // abre esa noche, carga el análisis y baja el informe en el formato pedido.
+  const deepLink = useMemo(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const logId = params.get("log");
+    const report = params.get("report");
+    if (!logId || (report !== "csv" && report !== "pdf")) {
+      return undefined;
+    }
+    return { format: report, logId } as const;
+  }, []);
+  const deepLinkOpenDone = useRef(false);
+  const deepLinkDownloadDone = useRef(false);
+
+  useEffect(() => {
+    if (!deepLink || deepLinkOpenDone.current) {
+      return;
+    }
+    const night = nights.find((entry) =>
+      entry.parts.some((part) => part.id === deepLink.logId),
+    );
+    if (!night) {
+      return;
+    }
+    deepLinkOpenDone.current = true;
+    setSelectedKey(night.key);
+    void toggleAnalysis(night);
+  });
+
+  useEffect(() => {
+    if (!deepLink || !raidReport || deepLinkDownloadDone.current) {
+      return;
+    }
+    deepLinkDownloadDone.current = true;
+    if (deepLink.format === "csv") {
+      downloadTextFile(
+        raidLogReportFileName(raidReport, "csv"),
+        raidLogReportCsv(raidReport),
+      );
+    } else {
+      void downloadRaidLogReportPdf(raidReport);
+    }
+    // El link ya cumplió: al recargar la página no vuelve a bajar el archivo.
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.hash || "#/raids/logs"}`,
+    );
+  });
+
   // Confirmar un parecido: se guarda el PJ y se vuelve a armar el análisis (en
   // la API el cache de esa noche se invalida al confirmar), así el nombre deja
   // de figurar como posible y pasa a contar como asistencia.
