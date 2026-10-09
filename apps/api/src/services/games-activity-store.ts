@@ -99,11 +99,29 @@ function normalizeName(name: string): string {
 const GAME_EDITION_SUFFIX =
   /[\s:_-]*(?:\d+|ii|iii|iv|v|vi|early access|beta|alpha|classic|remastered|remake|reforged|definitive|enhanced|complete|deluxe|goty|edition|special|legendary|ultimate|premium|platinum|anniversary|hd|relaunch|predecessor)\s*$/i;
 
+// Adorno al final del nombre que no es el título: PoE Overlay II reporta
+// "Path of Exile 2 <PoE Overlay II>". Se corta el segmento entre corchetes
+// (de cualquier tipo) y se repite por si hay más de uno.
+const GAME_TRAILING_TAG = /\s*[<([{«‹【"']+[^)\]}>»›】"']*[)\]}>»›】"']+\s*$/;
+
+function stripTrailingTags(name: string): string {
+  let value = name.trim();
+  for (let guard = 0; guard < 3; guard += 1) {
+    const next = value.replace(GAME_TRAILING_TAG, "").trim();
+    if (next === value || next.length < 3) {
+      break;
+    }
+    value = next;
+  }
+  return value;
+}
+
 // Clave de agrupado: el nombre del juego, sin el subtítulo ("Path of Exile 2:
-// Dawn of the Hunt" es Path of Exile 2) ni el sufijo de edición/secuela. "Left 4
-// Dead 2" → "left 4 dead"; "1943 Marvel" no se toca (el número no está al final).
+// Dawn of the Hunt" es Path of Exile 2), sin el adorno entre corchetes del final
+// ni el sufijo de edición/secuela. "Left 4 Dead 2" → "left 4 dead"; "1943 Marvel"
+// no se toca (el número no está al final).
 function gameBaseKey(name: string): string {
-  const normalized = normalizeName(name);
+  const normalized = normalizeName(stripTrailingTags(name));
   // Corta el subtítulo solo si queda un nombre con sentido a la izquierda.
   const head = normalized.split(/\s*[:|]\s*|\s+[-–—]\s+/)[0]?.trim() ?? "";
   let base = head.length >= 4 ? head : normalized;
@@ -316,8 +334,13 @@ export async function listGuildGameActivity(input: {
       // Ids que reportaron ese juego, con cuántas filas: el que más aparece es
       // el que se usa para la portada.
       byApplication: Map<string, number>;
-      // Nombres vistos, con cuántas filas: se muestra el más frecuente.
+      // Nombres vistos, con cuántas filas: se muestra el más frecuente. Van
+      // limpios (sin el adorno entre corchetes) para que "Path of Exile 2" y
+      // "Path of Exile 2 <PoE Overlay II>" no sean dos nombres distintos.
       nameCounts: Map<string, number>;
+      // Nombres tal cual llegaron: la portada puede estar cargada en Discord con
+      // el nombre original, así que se buscan los dos.
+      rawNames: Set<string>;
       players: Set<string>;
     }
   >();
@@ -331,12 +354,16 @@ export async function listGuildGameActivity(input: {
       activeDays: new Set<string>(),
       byApplication: new Map<string, number>(),
       nameCounts: new Map<string, number>(),
+      rawNames: new Set<string>(),
       players: new Set<string>(),
     };
+    const cleanName =
+      stripTrailingTags(row.applicationName) || row.applicationName;
     entry.nameCounts.set(
-      row.applicationName,
-      (entry.nameCounts.get(row.applicationName) ?? 0) + 1,
+      cleanName,
+      (entry.nameCounts.get(cleanName) ?? 0) + 1,
     );
+    entry.rawNames.add(row.applicationName);
     entry.activeDays.add(row.day);
     entry.players.add(row.userId);
     entry.byApplication.set(
@@ -369,7 +396,11 @@ export async function listGuildGameActivity(input: {
       const applicationId = ids[0];
       let coverUrl: string | undefined;
       for (const id of ids) {
-        coverUrl = resolveApplicationImage(id, names, index);
+        coverUrl = resolveApplicationImage(
+          id,
+          [...names, ...entry.rawNames],
+          index,
+        );
         if (coverUrl) {
           break;
         }

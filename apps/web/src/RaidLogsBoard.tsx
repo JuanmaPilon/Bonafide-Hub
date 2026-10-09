@@ -924,15 +924,81 @@ export function RaidLogsBoard({
                         : "Sin fecha"}
                     </span>
                   </div>
-                  <div className="rlb-detail-badges">
-                    {selected.live ? (
-                      <span
-                        className="raid-log-badge raid-log-live"
-                        title="Todavía se están subiendo fights a Warcraft Logs"
-                      >
-                        ● En vivo
-                      </span>
-                    ) : null}
+                  <div className="rlb-detail-tools">
+                    <div className="rlb-detail-badges">
+                      {selected.live ? (
+                        <span
+                          className="raid-log-badge raid-log-live"
+                          title="Todavía se están subiendo fights a Warcraft Logs"
+                        >
+                          ● En vivo
+                        </span>
+                      ) : null}
+                      {selected.state === "pending" ? (
+                        <span
+                          className="raid-log-badge raid-log-stale"
+                          title="El report creció después de publicar el mensaje en Discord"
+                        >
+                          Mensaje desactualizado
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="rlb-detail-actions">
+                      {onAnalyze ? (
+                        <button
+                          aria-expanded={analysisOpenKey === selected.key}
+                          className="ghost-button"
+                          disabled={analysisLoadingKey === selected.key}
+                          onClick={() => void toggleAnalysis(selected)}
+                          type="button"
+                        >
+                          <ChartLine weight="fill" aria-hidden="true" />
+                          {analysisLoadingKey === selected.key
+                            ? "Analizando…"
+                            : "Ver análisis"}
+                        </button>
+                      ) : null}
+                      {selected.state === "draft" ||
+                      selected.state === "failed"
+                        ? onPublish && (
+                            <button
+                              className="primary-button"
+                              disabled={busyKey === selected.key}
+                              onClick={() => runAction(selected, onPublish)}
+                              type="button"
+                            >
+                              {busyKey === selected.key
+                                ? "Publicando…"
+                                : "Publicar en Discord"}
+                            </button>
+                          )
+                        : onUpdate && (
+                            <button
+                              className={
+                                selected.state === "pending"
+                                  ? "primary-button"
+                                  : "ghost-button"
+                              }
+                              disabled={busyKey === selected.key}
+                              onClick={() => runAction(selected, onUpdate)}
+                              title="Vuelve a leer el report en Warcraft Logs y edita el mensaje publicado si cambió"
+                              type="button"
+                            >
+                              {busyKey === selected.key
+                                ? "Actualizando…"
+                                : "Actualizar mensaje"}
+                            </button>
+                          )}
+                      {onHide ? (
+                        <button
+                          className="ghost-button danger"
+                          onClick={() => onHide(selected.parts)}
+                          type="button"
+                        >
+                          Eliminar
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
@@ -1042,19 +1108,7 @@ export function RaidLogsBoard({
                 </div>
 
                 {onAnalyze ? (
-                  <div className="rlb-analysis-control">
-                    <button
-                      aria-expanded={analysisOpenKey === selected.key}
-                      className="ghost-button"
-                      disabled={analysisLoadingKey === selected.key}
-                      onClick={() => void toggleAnalysis(selected)}
-                      type="button"
-                    >
-                      <ChartLine weight="fill" aria-hidden="true" />
-                      {analysisLoadingKey === selected.key
-                        ? "Analizando…"
-                        : "Ver análisis"}
-                    </button>
+                  <>
                     {analysisOpenKey === selected.key
                       ? createPortal(
                           <div
@@ -1608,50 +1662,7 @@ export function RaidLogsBoard({
                            document.body,
                          )
                        : null}
-                   </div>
-                 ) : null}
-
-                {onPublish || onUpdate || onHide ? (
-                  <div className="rlb-detail-actions">
-                    {selected.state === "draft" || selected.state === "failed"
-                      ? onPublish && (
-                          <button
-                            className="primary-button"
-                            disabled={busyKey === selected.key}
-                            onClick={() => runAction(selected, onPublish)}
-                            type="button"
-                          >
-                            {busyKey === selected.key
-                              ? "Publicando…"
-                              : "Publicar en Discord"}
-                          </button>
-                        )
-                      : onUpdate && (
-                          <button
-                            className={
-                              selected.state === "pending"
-                                ? "primary-button"
-                                : "ghost-button"
-                            }
-                            disabled={busyKey === selected.key}
-                            onClick={() => runAction(selected, onUpdate)}
-                            type="button"
-                          >
-                            {busyKey === selected.key
-                              ? "Actualizando…"
-                              : "Actualizar mensaje"}
-                          </button>
-                        )}
-                    {onHide ? (
-                      <button
-                        className="ghost-button danger"
-                        onClick={() => onHide(selected.parts)}
-                        type="button"
-                      >
-                        Eliminar
-                      </button>
-                    ) : null}
-                  </div>
+                  </>
                 ) : null}
               </section>
             ) : null}

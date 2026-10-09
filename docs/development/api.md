@@ -200,10 +200,16 @@ refrescó (sin fecha) queda solo hasta que el refresh le traiga la fecha. El est
 sale del mismo cálculo de estabilidad; la web solo muestra `live` ("En vivo",
 la subida sigue en curso), porque publicar o no es cosa de quien lo maneja: la
 acción aparece en la ficha ("Publicar en Discord" / "Actualizar mensaje") según
-el estado, pero el estado en sí no se muestra. La web además marca
-**"Actualizando…"** cuando la entrada está publicada pero el mensaje quedó viejo
+el estado, pero el estado en sí no se muestra. Las acciones de la noche
+—**Ver análisis**, publicar/actualizar y **Eliminar**— están arriba, al lado del
+título, y arriba de ellas van los avisos: "● En vivo" y **"Mensaje
+desactualizado"** cuando la entrada está publicada pero el mensaje quedó viejo
 (`needsUpdate`, que calcula el API comparando el texto guardado con el que
 generaría ahora).
+**Actualizar mensaje** vuelve a leer el report en Warcraft Logs y edita el
+mensaje ya publicado **solo si el texto cambió** (si no, avisa "sin cambios"); no
+toca el análisis, que se recalcula al abrirlo. El refresco automático cada 5 min
+solo baja los datos del report: el mensaje de Discord se actualiza a mano.
 
 **Un report se guarda una sola vez** (`reportCode` por guild):
 
@@ -365,14 +371,17 @@ exacto: Discord tiene más de un id para el mismo juego (ids viejos y nuevos, un
 beta aparte) y también más de un nombre ("Path of Exile", "Path of Exile 2: Dawn
 of the Hunt", "Skyrim Special Edition"), y agrupando por id o por nombre exacto el
 carrusel mostraba la misma tarjeta dos veces. El nombre base es el nombre sin el
-subtítulo (`gameBaseKey` corta en `:` o ` - `) ni el sufijo de edición/secuela
-(números romanos o arábigos, "classic", "special edition", "early access", …),
-aplicado en cadena y solo si queda un nombre con sentido: el carrusel mide a qué
-juega la guild, no el título exacto de la tienda.
-Los jugadores y los días de esas variantes se **unen** (no se pierde nada), el
-nombre visible es el de más filas y, a igualdad, el más corto. La portada se busca
-empezando por el id con más actividad y probando todos los nombres vistos, para
-que un id viejo sin portada no deje la tarjeta vacía.
+subtítulo (`gameBaseKey` corta en `:` o ` - `), sin el adorno entre corchetes del
+final (PoE Overlay II reporta "Path of Exile 2 <PoE Overlay II>") ni el sufijo de
+edición/secuela (números romanos o arábigos, "classic", "special edition", "early
+access", …), aplicado en cadena y solo si queda un nombre con sentido: el carrusel
+mide a qué juega la guild, no el título exacto de la tienda.
+Los jugadores y los días de esas variantes se **unen** (no se pierde nada) y el
+nombre visible es el de más filas y, a igualdad, el más corto, también sin el
+adorno (el carrusel no muestra "Path of Exile 2 <PoE Overlay II>"). La portada se
+busca empezando por el id con más actividad y probando todos los nombres vistos
+—los limpios y los originales—, para que un id viejo sin portada no deje la
+tarjeta vacía.
 
 La portada (`coverUrl`) es la que Discord muestra en su panel de "Juegos
 jugados". No se puede pedir por app: `GET /applications/{id}` está cerrado (401
