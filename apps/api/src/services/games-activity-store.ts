@@ -85,6 +85,29 @@ function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// Sufijos de edición/secuela: "Path of Exile 2", "Path of Exile II", "Wow
+// Classic", "Skyrim Special Edition" y compañía son el MISMO juego para el
+// carrusel (que mide a qué juega la guild, no el título exacto de la tienda).
+// El ranking del carrusel suma los jugadores de todas las variantes, así que no
+// se pierde nada al juntarlas. Se aplica en cadena ("special edition" son dos
+// palabras) y solo si queda algo con sentido.
+const GAME_EDITION_SUFFIX =
+  /[\s:_-]*(?:\d+|ii|iii|iv|v|vi|early access|beta|alpha|classic|remastered|remake|reforged|definitive|enhanced|complete|deluxe|goty|edition|special|legendary|ultimate|premium|platinum|anniversary|hd|relaunch|predecessor)\s*$/i;
+
+// Clave de agrupado: el nombre sin el sufijo de edición/secuela. "Left 4 Dead 2"
+// → "left 4 dead"; "1943 Marvel" no se toca (el número no está al final).
+function gameBaseKey(name: string): string {
+  let base = normalizeName(name);
+  for (let guard = 0; guard < 4; guard += 1) {
+    const next = base.replace(GAME_EDITION_SUFFIX, "").trim();
+    if (next === base || next.length < 4) {
+      break;
+    }
+    base = next;
+  }
+  return base;
+}
+
 // Guarda el lote que manda el bot. El upsert por (guild, persona, app, día) es
 // lo que mantiene la tabla chica: un juego visto 200 veces en un día es 1 fila.
 export async function recordGameActivity(
@@ -228,9 +251,11 @@ function loadCoverHashes(): Promise<CoverHashes> {
 
 // Portada de la app; si Discord no le cargó ninguna, cae al icono (antes que
 // dejar la tarjeta vacía). Devuelve undefined si la app no está en la lista.
+// Prueba todos los nombres con los que se vio el juego: el que trae la portada
+// puede ser el de otra variante del mismo título.
 function resolveApplicationImage(
   applicationId: string,
-  applicationName: string,
+  applicationNames: string[],
   index: CoverHashes,
 ): string | undefined {
   const imageUrl = (id: string, hash: string): string =>
@@ -242,9 +267,11 @@ function resolveApplicationImage(
   }
   // La app de la presencia no está en la lista (Discord tiene ids viejos y
   // nuevos del mismo juego): sirve la portada de la que sí está.
-  const byName = index.byName.get(normalizeName(applicationName));
-  if (byName) {
-    return imageUrl(byName.id, byName.hash);
+  for (const applicationName of applicationNames) {
+    const byName = index.byName.get(normalizeName(applicationName));
+    if (byName) {
+      return imageUrl(byName.id, byName.hash);
+    }
   }
   const icon = index.iconsById.get(applicationId);
   return icon ? imageUrl(applicationId, icon) : undefined;
@@ -267,37 +294,40 @@ export async function listGuildGameActivity(input: {
     where: { day: { gte: since }, guildId: input.guildId },
   })) as ActivityRow[];
 
-  // Se agrupa por NOMBRE normalizado y no por id de aplicación: Discord tiene
-  // más de un id para el mismo juego (ids viejos/nuevos, una beta aparte), y
-  // agrupando por id el carrusel mostraba la misma tarjeta dos veces (con la
-  // misma portada, porque se resuelve por nombre). Los jugadores y los días se
-  // unen entre esos ids: es el mismo juego para la guild.
+  // Se agrupa por NOMBRE BASE y no por id de aplicación: Discord tiene más de un
+  // id para el mismo juego (ids viejos/nuevos, una beta aparte) y también más de
+  // un nombre ("Path of Exile" y "Path of Exile 2" llegaban como dos tarjetas),
+  // así que agrupar por id o por nombre exacto mostraba la misma tarjeta dos
+  // veces. Los jugadores y los días se unen entre esas variantes: es el mismo
+  // juego para la guild.
   const byGame = new Map<
     string,
     {
       activeDays: Set<string>;
-      // Ids que reportaron ese nombre, con cuántas filas: el que más aparece es
+      // Ids que reportaron ese juego, con cuántas filas: el que más aparece es
       // el que se usa para la portada.
       byApplication: Map<string, number>;
-      name: string;
+      // Nombres vistos, con cuántas filas: se muestra el más frecuente.
+      nameCounts: Map<string, number>;
       players: Set<string>;
     }
   >();
   for (const row of rows) {
     const applicationId = row.applicationId;
-    const key = normalizeName(row.applicationName);
+    const key = gameBaseKey(row.applicationName);
     if (!applicationId || !key) {
       continue;
     }
     const entry = byGame.get(key) ?? {
       activeDays: new Set<string>(),
       byApplication: new Map<string, number>(),
-      name: row.applicationName,
+      nameCounts: new Map<string, number>(),
       players: new Set<string>(),
     };
-    // El nombre de Discord puede cambiar (mayúsculas, un ":" de más): vale el
-    // último visto, así la tarjeta muestra el más reciente.
-    entry.name = row.applicationName;
+    entry.nameCounts.set(
+      row.applicationName,
+      (entry.nameCounts.get(row.applicationName) ?? 0) + 1,
+    );
     entry.activeDays.add(row.day);
     entry.players.add(row.userId);
     entry.byApplication.set(
@@ -317,10 +347,20 @@ export async function listGuildGameActivity(input: {
       const ids = [...entry.byApplication.entries()]
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([id]) => id);
+      // Nombre visible: el que más filas tiene (el más usado) y, a igualdad, el
+      // más corto, que suele ser el nombre del juego sin la edición.
+      const names = [...entry.nameCounts.entries()]
+        .sort(
+          (a, b) =>
+            b[1] - a[1] ||
+            a[0].length - b[0].length ||
+            a[0].localeCompare(b[0]),
+        )
+        .map(([name]) => name);
       const applicationId = ids[0];
       let coverUrl: string | undefined;
       for (const id of ids) {
-        coverUrl = resolveApplicationImage(id, entry.name, index);
+        coverUrl = resolveApplicationImage(id, names, index);
         if (coverUrl) {
           break;
         }
@@ -329,7 +369,7 @@ export async function listGuildGameActivity(input: {
         applicationId,
         coverUrl,
         days: entry.activeDays.size,
-        name: entry.name,
+        name: names[0] ?? applicationId,
         players: entry.players.size,
       };
     })

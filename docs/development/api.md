@@ -364,12 +364,18 @@ distinguir, y `source: "configured"` viene con todo en cero, o sea sin
 distintivo—. Los cortes viven en la web (`GAME_HOT_COUNT` /
 `GAME_HOT_MIN_PLAYERS`, `apps/web/src/main.tsx`): el API no sabe de presentación.
 
-La agregación agrupa por **nombre normalizado**, no por id de aplicación: Discord
-tiene más de un id para el mismo juego (ids viejos y nuevos, una beta aparte) y
-agrupando por id el carrusel mostraba la misma tarjeta dos veces (con la misma
-portada, porque se resuelve por nombre). Los jugadores y los días de esos ids se
-**unen**, y la portada se busca empezando por el id con más actividad, para que un
-id viejo sin portada no deje la tarjeta vacía.
+La agregación agrupa por **nombre base**, no por id de aplicación ni por nombre
+exacto: Discord tiene más de un id para el mismo juego (ids viejos y nuevos, una
+beta aparte) y también más de un nombre ("Path of Exile", "Path of Exile 2",
+"Skyrim Special Edition"), y agrupando por id o por nombre exacto el carrusel
+mostraba la misma tarjeta dos veces. El nombre base es el nombre sin el sufijo de
+edición/secuela (`gameBaseKey`: números romanos o arábigos, "classic", "special
+edition", "early access", …), aplicado en cadena y solo si queda un nombre con
+sentido: el carrusel mide a qué juega la guild, no el título exacto de la tienda.
+Los jugadores y los días de esas variantes se **unen** (no se pierde nada), el
+nombre visible es el de más filas y, a igualdad, el más corto. La portada se busca
+empezando por el id con más actividad y probando todos los nombres vistos, para
+que un id viejo sin portada no deje la tarjeta vacía.
 
 La portada (`coverUrl`) es la que Discord muestra en su panel de "Juegos
 jugados". No se puede pedir por app: `GET /applications/{id}` está cerrado (401
