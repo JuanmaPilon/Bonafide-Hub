@@ -4918,7 +4918,11 @@ export function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const body = (request.body ?? {}) as { name?: string; userId?: string };
+    const body = (request.body ?? {}) as {
+      eventId?: string;
+      name?: string;
+      userId?: string;
+    };
     const userId = body.userId?.trim();
     const name = body.name?.trim();
     if (!userId || !name) {
@@ -4928,6 +4932,7 @@ export function buildApp() {
     }
 
     const alias = await saveRaidLogAlias({
+      eventId: body.eventId?.trim() || undefined,
       guildId: params.guildId,
       name,
       userId,
@@ -4937,7 +4942,7 @@ export function buildApp() {
     invalidateRaidLogAnalysis(params.guildId);
 
     await logAdminAction(session, params.guildId, "raid-log:alias", {
-      details: `PJ confirmado en los logs: ${alias.name} → miembro ${userId}`,
+      details: `PJ confirmado en los logs: ${alias.name} → miembro ${userId}${alias.character ? " (y corregido en su inscripción)" : ""}`,
       targetId: userId,
       targetType: "raid-log-alias",
     });

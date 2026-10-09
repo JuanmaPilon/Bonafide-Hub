@@ -451,8 +451,13 @@ export function RaidLogsBoard({
   logs: RaidLog[];
   manage?: ReactNode;
   onAnalyze?: (log: RaidLog) => Promise<RaidLogAnalysis>;
-  // Confirmar que un nombre del log es el PJ de un miembro (queda exacto).
-  onConfirmAlias?: (userId: string, name: string) => Promise<void>;
+  // Confirmar que un nombre del log es el PJ de un miembro (y corregirlo en el
+  // evento de esa noche).
+  onConfirmAlias?: (
+    userId: string,
+    name: string,
+    eventId?: string,
+  ) => Promise<void>;
   onHide?: (parts: RaidLog[]) => void;
   onPublish?: (log: RaidLog) => Promise<void>;
   onScan?: () => void;
@@ -746,7 +751,13 @@ export function RaidLogsBoard({
     setAliasBusy(`${userId}:${name}`);
     setAliasError(null);
     try {
-      await onConfirmAlias(userId, name);
+      // El evento de la noche va con el link: el API corrige también el PJ de
+      // esa inscripción (no solo lo memoriza para el próximo cruce).
+      await onConfirmAlias(
+        userId,
+        name,
+        analysisByNight[night.key]?.attendance?.event?.id,
+      );
       if (onAnalyze) {
         const analysis = await onAnalyze(night.parts[0]);
         setAnalysisByNight((current) => ({

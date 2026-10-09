@@ -8668,13 +8668,24 @@ function App() {
   async function handleConfirmRaidLogAlias(
     userId: string,
     name: string,
+    eventId?: string,
   ): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
     try {
-      await saveRaidLogAlias(selectedGuildId, userId, name);
-      pushToast(`Listo: ${name} queda asociado a ese miembro.`, "success");
+      const alias = await saveRaidLogAlias(
+        selectedGuildId,
+        userId,
+        name,
+        eventId,
+      );
+      pushToast(
+        alias.character
+          ? `Listo: el PJ de ese miembro pasa a ser ${name}.`
+          : `Listo: ${name} queda asociado a ese miembro.`,
+        "success",
+      );
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "No se pudo confirmar el PJ.",

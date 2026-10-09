@@ -324,12 +324,20 @@ El emparejamiento por nombre tiene dos pasos:
 Los parecidos no se cuentan como asistencia: salen en `likelyPresent`
 (`name` de la inscripción, `logName` del log, `pulls`, `similarity`) y la web los
 muestra aparte con el % y un botón **Confirmar**, que llama a
-`POST /guilds/:g/:raid-logs/aliases` con `{ userId, name }`. Eso guarda el PJ en
-`event_player_characters` (clave normalizada) y **invalida el cache** de la
-noche, así que el mismo caso no se vuelve a preguntar nunca: pasa a ser un
+`POST /guilds/:g/:raid-logs/aliases` con `{ userId, name, eventId? }`. Eso guarda
+el PJ en `event_player_characters` (clave normalizada) y **invalida el cache** de
+la noche, así que el mismo caso no se vuelve a preguntar nunca: pasa a ser un
 exacto. Los nombres que se parecen pero pertenecen a un bench o a un tentativo no
 se atribuyen (no se inventa una identidad que nadie confirmó) y siguen
 apareciendo en `unsignedPresent`.
+
+Lo mismo se usa para **linkear a mano** ("Vinieron sin anotarse" ↔ "Anotados que
+no aparecieron"): el nombre del log se asocia al miembro elegido y, como el
+nombre del log es el PJ real, también se **corrige** el PJ de ese miembro —
+`event_player_profiles.character` (memoria: los próximos signups ya lo traen) y,
+si viene `eventId`, la inscripción de ese evento (`event_signups.character`), así
+el roster de la noche deja de mostrar el nombre mal escrito. La respuesta devuelve
+`alias.character` para avisar en pantalla si hubo corrección.
 
 Juegos que se juegan en el server:
 

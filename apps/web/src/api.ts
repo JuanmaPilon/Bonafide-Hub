@@ -1059,14 +1059,14 @@ export async function saveRaidLogAlias(
   guildId: string,
   userId: string,
   name: string,
-): Promise<{ name: string; userId: string }> {
-  const data = await requestJson<{ alias: { name: string; userId: string } }>(
-    `/guilds/${guildId}/raid-logs/aliases`,
-    {
-      method: "POST",
-      body: JSON.stringify({ name, userId }),
-    },
-  );
+  eventId?: string,
+): Promise<{ character: boolean; name: string; userId: string }> {
+  const data = await requestJson<{
+    alias: { character: boolean; name: string; userId: string };
+  }>(`/guilds/${guildId}/raid-logs/aliases`, {
+    method: "POST",
+    body: JSON.stringify({ eventId, name, userId }),
+  });
   return data.alias;
 }
 
