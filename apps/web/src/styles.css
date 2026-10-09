@@ -1443,8 +1443,6 @@ a:hover {
 .hidden-raid-logs {
   display: grid;
   gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid var(--panel-border);
 }
 
 /* Logs de Raid (Warcraft Logs) */
@@ -1646,15 +1644,6 @@ a:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-}
-
-.rlb-manage {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  background: var(--panel);
 }
 
 .rlb-toolbar {
@@ -2627,6 +2616,25 @@ a:hover {
   text-overflow: ellipsis;
 }
 
+/* La fecha del evento del cruce manda: el título lo escribe quien crea el
+   evento y puede nombrar los dos días de la raid. La tarjeta es más ancha que
+   las otras para que el título se lea entero. */
+.rlb-attendance-stats > .rlb-attendance-event {
+  max-width: 460px;
+}
+
+.rlb-attendance-event-date {
+  text-transform: capitalize;
+}
+
+.rlb-attendance-event-title {
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 :root[data-theme="light"] .rlb-analysis {
   background: rgba(230, 237, 247, 0.58);
 }
@@ -2686,28 +2694,51 @@ a:hover {
   color: #9b1c16;
 }
 
-.raid-logs-settings h3 {
-  margin: 0;
-}
-
-.raid-logs-settings {
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid rgba(var(--tier-subofficer-rgb), 0.35);
-  border-radius: 14px;
-  background: linear-gradient(
-    160deg,
-    rgba(var(--tier-subofficer-rgb), 0.12),
-    rgba(13, 20, 38, 0.3)
-  );
-}
-
-.raid-logs-settings h3 {
+.raid-logs-settings h3,
+.raid-logs-settings > .rlb-label {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin: 0;
+}
+
+.rlb-settings-modal {
+  width: min(760px, 96vw);
+  max-height: 90vh;
+}
+
+.rlb-settings-body {
+  display: grid;
+  gap: 16px;
+}
+
+.rlb-settings-body > * + * {
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.rlb-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rlb-modal-head h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.rlb-modal-head h4 svg {
+  width: 20px;
+  height: 20px;
+}
+
+.rlb-modal-head > .icon-button {
+  margin-left: auto;
 }
 
 .raid-logs-settings .form-grid {
@@ -2731,19 +2762,6 @@ a:hover {
 .raid-logs-add label span {
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-.rlb-manage .hidden-raid-logs {
-  border-top: 1px solid var(--panel-border);
-  padding-top: 12px;
-}
-
-:root[data-theme="light"] .raid-logs-settings {
-  background: linear-gradient(
-    160deg,
-    rgba(var(--tier-subofficer-rgb), 0.1),
-    rgba(255, 255, 255, 0.4)
-  );
 }
 
 @media (max-width: 960px) {

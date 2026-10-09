@@ -287,6 +287,10 @@ Devuelve:
    "tentativo" es anotarse, así que no aparecen ahí. `partial` avisa cuando no se
    pudo leer la presencia por pull (CombatantInfo) y los participantes salieron
    de la tabla de daño: ahí un "no vino" puede ser un heal que no hizo daño.
+   La tarjeta del evento muestra **su fecha completa** ("miércoles, 07/10/2026")
+   y, abajo, el título tal cual lo escribió quien creó el evento: el título suele
+   nombrar los dos días de la raid ("Raid MIERCOLES - JUEVES 08/10/2026"), así
+   que la fecha en grande es la que dice de qué noche es el cruce.
 6. `source` — de dónde salió el análisis: el report **más completo** de la
    noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
    cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que
@@ -311,6 +315,14 @@ reports de Warcraft Logs y, además, un link al **análisis en el Hub**
 (`/?log=<logId>#/raids/logs`): la web lee `log`, selecciona esa noche y abre el
 análisis solo. No hay publicación automática: el mensaje de la noche se manda
 desde la ficha y se actualiza con "Actualizar mensaje" (ver abajo).
+
+La **configuración del módulo** (canal de publicación, guild/realm/región de
+Warcraft Logs, alta por URL y logs ocultos) vive en un modal que abre el botón de
+engranaje del encabezado, en vez de un panel fijo arriba de la lista: no compite
+con las noches y sólo aparece cuando alguien la necesita. El modal se abre solo si
+la guild todavía no tiene logs (es lo primero que hay que configurar) y no lleva
+caja ni color propio: el modal ya es la caja y los grupos se separan con una
+línea.
 
 En segundo plano, `startRaidLogSync` (cada 5 min) refresca los reports que siguen
 creciendo, así el estado ("En vivo" / terminado) y el aviso de "Actualizar…" no

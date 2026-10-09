@@ -11923,12 +11923,12 @@ function App() {
                             canManageRaidLogs ? (
                               <>
                                 <section className="raid-logs-settings">
-                                  <h3>
-                                    Configuración{" "}
+                                  <span className="rlb-label">
+                                    Canal y fuente de los logs{" "}
                                     <span className="admin-tier-badge tier-subofficer">
                                       Sub Officer
                                     </span>
-                                  </h3>
+                                  </span>
                                   <div className="form-grid">
                                     <label>
                                       <span>Canal de publicación</span>

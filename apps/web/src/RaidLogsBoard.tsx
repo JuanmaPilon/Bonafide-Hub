@@ -476,6 +476,9 @@ export function RaidLogsBoard({
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [showManage, setShowManage] = useState(false);
+  // El modal de configuración se abre solo cuando todavía no hay noches (es lo
+  // primero que hay que configurar) y, si lo cierran, no vuelve a aparecer.
+  const [manageDismissed, setManageDismissed] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [analysisByNight, setAnalysisByNight] = useState<
     Record<string, RaidLogAnalysis>
@@ -546,7 +549,23 @@ export function RaidLogsBoard({
     () => (selected ? bossBreakdown(selected.fights) : []),
     [selected],
   );
-  const manageOpen = Boolean(manage) && (showManage || nights.length === 0);
+  const manageOpen =
+    Boolean(manage) && (showManage || (nights.length === 0 && !manageDismissed));
+  // Abrir/cerrar la configuración. Con la lista vacía el modal se abre solo (es
+  // lo primero que hay que configurar), y cerrarlo tiene que quedarse cerrado.
+  const toggleManage = (): void => {
+    if (manageOpen) {
+      setShowManage(false);
+      setManageDismissed(true);
+      return;
+    }
+    setShowManage(true);
+    setManageDismissed(false);
+  };
+  const closeManage = (): void => {
+    setShowManage(false);
+    setManageDismissed(true);
+  };
   const selectedAnalysis = selected ? analysisByNight[selected.key] : undefined;
   // Con los roles de WCL, healers y tanks quedan afuera de la tabla de DPS: su
   // daño no compite con el de un DPS. Si WCL no devolvió roles, se muestran todos.
@@ -699,25 +718,32 @@ export function RaidLogsBoard({
   }, []);
   const deepLinkOpenDone = useRef(false);
 
-  // Escape cierra el análisis, como en el resto de los modales, y mientras está
-  // abierto la página de atrás no scrollea.
+  // Escape cierra el modal que esté arriba (el análisis manda sobre la
+  // configuración) y mientras hay uno abierto la página de atrás no scrollea.
+  const modalOpen = Boolean(analysisOpenKey) || manageOpen;
   useEffect(() => {
-    if (!analysisOpenKey) {
+    if (!modalOpen) {
       return undefined;
     }
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        setAnalysisOpenKey(null);
+      if (event.key !== "Escape") {
+        return;
       }
+      if (analysisOpenKey) {
+        setAnalysisOpenKey(null);
+        return;
+      }
+      setShowManage(false);
+      setManageDismissed(true);
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", onKey);
     };
-  }, [analysisOpenKey]);
+  }, [analysisOpenKey, modalOpen]);
 
   useEffect(() => {
     if (!deepLink || deepLinkOpenDone.current) {
@@ -828,7 +854,7 @@ export function RaidLogsBoard({
                 aria-expanded={manageOpen}
                 aria-label="Configuración"
                 className={`icon-button${manageOpen ? " active" : ""}`}
-                onClick={() => setShowManage((current) => !current)}
+                onClick={toggleManage}
                 title="Configuración"
                 type="button"
               >
@@ -839,7 +865,44 @@ export function RaidLogsBoard({
         ) : null}
       </div>
 
-      {manageOpen ? <section className="rlb-manage">{manage}</section> : null}
+      {manageOpen && manage
+        ? createPortal(
+            <div
+              className="modal-overlay"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  closeManage();
+                }
+              }}
+              role="presentation"
+            >
+              <div
+                aria-label="Configuración de los logs de raid"
+                aria-modal="true"
+                className="modal rlb-settings-modal"
+                role="dialog"
+              >
+                <header className="rlb-modal-head">
+                  <h4>
+                    <GearSix weight="fill" aria-hidden="true" />
+                    Configuración
+                  </h4>
+                  <button
+                    aria-label="Cerrar"
+                    className="icon-button"
+                    onClick={closeManage}
+                    title="Cerrar"
+                    type="button"
+                  >
+                    <X weight="bold" aria-hidden="true" className="icon-button-icon" />
+                  </button>
+                </header>
+                <div className="rlb-settings-body">{manage}</div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {nights.length === 0 ? (
         <div className="empty-state">Todavía no hay logs de raid.</div>
@@ -1472,18 +1535,27 @@ export function RaidLogsBoard({
                                     <strong>{attendance.players.length}</strong>
                                   </div>
                                   {attendance.event ? (
-                                    <div>
+                                    <div className="rlb-attendance-event">
                                       <span>Evento del cruce</span>
-                                      <strong title={attendance.event.title}>
+                                      <strong className="rlb-attendance-event-date">
                                         {new Date(
                                           attendance.event.startsAt,
                                         ).toLocaleDateString("es-AR", {
                                           day: "2-digit",
                                           month: "2-digit",
-                                          weekday: "short",
+                                          weekday: "long",
+                                          year: "numeric",
                                         })}
-                                        {` · ${attendance.event.title}`}
                                       </strong>
+                                      {/* El título lo escribe quien crea el
+                                          evento ("Raid MIERCOLES - JUEVES
+                                          08/10/2026") y puede nombrar días que
+                                          no son los de esta noche: va completo
+                                          abajo, chico, para poder verlo entero
+                                          sin que compita con la fecha. */}
+                                      <span className="rlb-attendance-event-title">
+                                        {attendance.event.title}
+                                      </span>
                                     </div>
                                   ) : null}
                                 </div>
