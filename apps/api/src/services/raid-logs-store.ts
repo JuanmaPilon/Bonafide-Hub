@@ -41,8 +41,6 @@ export type RaidLog = {
   postedMessageText?: string;
   previousFightCount?: number;
   reportCode: string;
-  // Cuándo se publicó el informe de la noche en Discord (undefined = falta).
-  reportPostedAt?: Date;
   reportUrl: string;
   status: string;
   summary?: {
@@ -97,7 +95,6 @@ function toRaidLog(record: {
   postedMessageText: string | null;
   previousFightCount: number;
   reportCode: string;
-  reportPostedAt: Date | null;
   reportUrl: string;
   status: string;
   summary: unknown;
@@ -138,7 +135,6 @@ function toRaidLog(record: {
     postedMessageText: record.postedMessageText ?? undefined,
     previousFightCount: record.previousFightCount,
     reportCode: record.reportCode,
-    reportPostedAt: record.reportPostedAt ?? undefined,
     reportUrl: record.reportUrl,
     status: record.status,
     summary: summary
@@ -579,21 +575,6 @@ export async function markRaidLogsPosted(
   });
 }
 
-// El informe de la noche se manda una sola vez: cuándo se publicó queda en las
-// partes del grupo, así un reinicio del API no lo manda de nuevo.
-export async function markRaidLogReportPosted(
-  ids: string[],
-  postedAt: Date,
-): Promise<void> {
-  if (ids.length === 0) {
-    return;
-  }
-  await prisma.raidLog.updateMany({
-    data: { reportPostedAt: postedAt },
-    where: { id: { in: ids } },
-  });
-}
-
 // Guarda el texto que quedó en el mensaje después de editarlo.
 export async function updateRaidLogsPostedText(
   ids: string[],
@@ -671,7 +652,20 @@ export function buildRaidLogMessage(logs: RaidLog[]): string {
   for (const part of parts) {
     lines.push(part.reportUrl);
   }
+  // Link al análisis de esa noche en el Hub (pulls, DPS, muertes, consumibles y
+  // el cruce con los anotados): es la otra cosa que se mira junto al log.
+  const primary = primaryPart(parts);
+  if (primary) {
+    lines.push(`🔎 [Análisis de la noche](${analysisUrl(primary)})`);
+  }
   return lines.join("\n");
+}
+
+// URL del análisis de la noche en la web: la clave, porque los reports de una
+// misma noche son una sola entrada.
+export function analysisUrl(log: RaidLog): string {
+  const base = env.FRONTEND_APP_URL.replace(/\/$/, "");
+  return `${base}/?log=${encodeURIComponent(log.id)}#/raids/logs`;
 }
 
 // ── Vigilado de perfil (API v1 de Warcraft Logs) ───────────────────

@@ -266,7 +266,6 @@ async function postMessage(
   token: string,
   channelId: string,
   content: string,
-  components?: unknown[],
 ): Promise<string | null> {
   const response = await discordRequest(
     token,
@@ -274,11 +273,7 @@ async function postMessage(
     {
       method: "POST",
       // allowed_mentions: solo usuarios y roles (nunca @everyone/@here).
-      body: {
-        allowed_mentions: { parse: ["users", "roles"] },
-        components,
-        content,
-      },
+      body: { content, allowed_mentions: { parse: ["users", "roles"] } },
     },
   );
   if (!response.ok) {
@@ -318,23 +313,15 @@ async function editMessage(
   return response.ok;
 }
 
-// Publica mensajes nuevos y devuelve sus IDs en orden. Los componentes (botones)
-// van en el último: son los que cierran el mensaje.
+// Publica mensajes nuevos y devuelve sus IDs en orden.
 export async function postMessages(
   token: string,
   channelId: string,
   chunks: string[],
-  options?: { components?: unknown[] },
 ): Promise<string[]> {
   const ids: string[] = [];
-  for (const [index, chunk] of chunks.entries()) {
-    const isLast = index === chunks.length - 1;
-    const id = await postMessage(
-      token,
-      channelId,
-      chunk,
-      isLast ? options?.components : undefined,
-    );
+  for (const chunk of chunks) {
+    const id = await postMessage(token, channelId, chunk);
     if (id) {
       ids.push(id);
     }

@@ -25,18 +25,10 @@ import {
 } from "@phosphor-icons/react";
 import {
   classColor,
+  type RaidConsumableKey,
   type RaidLog,
   type RaidLogAnalysis,
 } from "./api";
-import {
-  buildRaidLogReport,
-  CONSUMABLE_LABEL,
-  downloadRaidLogReportPdf,
-  downloadTextFile,
-  raidLogReportCsv,
-  raidLogReportFileName,
-  SIGNUP_STATUS_LABEL,
-} from "./raidLogsReport";
 
 type Fight = {
   // Id de encuentro: la identidad del boss. El nombre cambia con el idioma del
@@ -163,6 +155,24 @@ type Night = {
   parts: RaidLog[];
   state: NightState;
   title: string;
+};
+
+const SIGNUP_STATUS_LABEL: Record<string, string> = {
+  bench: "Bench",
+  late: "Tarde",
+  no: "No va",
+  tentative: "Tentativo",
+  yes: "Voy",
+};
+
+// Solo etiquetas: el orden de las categorías lo define el API.
+const CONSUMABLE_LABEL: Record<RaidConsumableKey, string> = {
+  flask: "Flask",
+  food: "Comida",
+  healthPotions: "Vida",
+  healthstones: "Piedra",
+  potions: "Pota",
+  prepot: "Prepot",
 };
 
 // El título de una noche lo pone el report más completo: cuando dos personas
@@ -632,15 +642,6 @@ export function RaidLogsBoard({
         })),
       ]
     : [];
-  const raidReport =
-    selectedAnalysis && selected
-      ? buildRaidLogReport({
-          analysis: selectedAnalysis,
-          players: dpsRows,
-          subtitle: (selected.date ?? new Date()).toLocaleDateString("es-AR"),
-          title: selected.title,
-        })
-      : undefined;
   const selectedDpsColor = classColor(dpsRows[0]?.class);
   const lowestDpsColor = classColor(lowestDpsPlayer?.class);
   const selectedAnalysisError =
@@ -684,22 +685,16 @@ export function RaidLogsBoard({
     }
   };
 
-  // Link del informe que manda Discord (?log=<id>&report=csv|pdf#/raids/logs):
-  // abre esa noche, carga el análisis y baja el informe en el formato pedido.
+  // Link del análisis que se publica en Discord (?log=<id>#/raids/logs): abre esa
+  // noche y carga el análisis.
   const deepLink = useMemo(() => {
     if (typeof window === "undefined") {
       return undefined;
     }
-    const params = new URLSearchParams(window.location.search);
-    const logId = params.get("log");
-    const report = params.get("report");
-    if (!logId || (report !== "csv" && report !== "pdf")) {
-      return undefined;
-    }
-    return { format: report, logId } as const;
+    const logId = new URLSearchParams(window.location.search).get("log");
+    return logId ? { logId } : undefined;
   }, []);
   const deepLinkOpenDone = useRef(false);
-  const deepLinkDownloadDone = useRef(false);
 
   useEffect(() => {
     if (!deepLink || deepLinkOpenDone.current) {
@@ -714,22 +709,7 @@ export function RaidLogsBoard({
     deepLinkOpenDone.current = true;
     setSelectedKey(night.key);
     void toggleAnalysis(night);
-  });
-
-  useEffect(() => {
-    if (!deepLink || !raidReport || deepLinkDownloadDone.current) {
-      return;
-    }
-    deepLinkDownloadDone.current = true;
-    if (deepLink.format === "csv") {
-      downloadTextFile(
-        raidLogReportFileName(raidReport, "csv"),
-        raidLogReportCsv(raidReport),
-      );
-    } else {
-      void downloadRaidLogReportPdf(raidReport);
-    }
-    // El link ya cumplió: al recargar la página no vuelve a bajar el archivo.
+    // El link ya cumplió: al recargar no vuelve a abrir el análisis solo.
     window.history.replaceState(
       null,
       "",
@@ -1079,36 +1059,6 @@ export function RaidLogsBoard({
                                 <span>
                                   {selectedAnalysis.encounters.length} pulls
                                 </span>
-                                {raidReport ? (
-                                  <>
-                                    <button
-                                      className="csv-button"
-                                      onClick={() =>
-                                        downloadTextFile(
-                                          raidLogReportFileName(
-                                            raidReport,
-                                            "csv",
-                                          ),
-                                          raidLogReportCsv(raidReport),
-                                        )
-                                      }
-                                      type="button"
-                                    >
-                                      CSV
-                                    </button>
-                                    <button
-                                      className="ghost-button"
-                                      onClick={() =>
-                                        void downloadRaidLogReportPdf(
-                                          raidReport,
-                                        )
-                                      }
-                                      type="button"
-                                    >
-                                      PDF
-                                    </button>
-                                  </>
-                                ) : null}
                               </span>
                             </div>
 

@@ -257,9 +257,6 @@ model RaidLog {
   // crecer, se considera terminado y recién ahí se publica.
   previousFightCount Int       @default(0)
   fightsStableSince  DateTime?
-  // Cuándo se publicó el informe de la noche (análisis + cruce de asistencia).
-  // Null = todavía no: el informe se manda solo cuando la noche terminó.
-  reportPostedAt     DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

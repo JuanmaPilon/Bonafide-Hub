@@ -287,25 +287,17 @@ Devuelve:
    solo están en otro report y `repeatedPulls` los que se contaron una vez. No se
    muestra en la web: es para que el análisis y la tarjeta digan lo mismo.
 
-### Informe de la noche (automático)
+### Análisis de la noche desde el mensaje
 
-`syncRaidLogsAndPublishReports` (cada 5 min) refresca los reports que siguen
-creciendo y publica el informe de las noches **terminadas** en el canal
-configurado (`GuildConfig.logsChannelId`): resumen de pulls/kills/wipes/bosses,
-DPS promedio, muertes, consumibles (quién faltó y quién usó piedra o poción de
-vida) y el cruce de asistencia, con listas recortadas a 6 nombres. Es el mismo
-contenido que el CSV/PDF de la web, así que el mensaje lleva dos **botones link**
-(`/?log=<logId>&report=csv#/raids/logs`) que abren esa noche y bajan el informe
-en el formato pedido; los componentes se mandan solo en el último mensaje
-(`postMessages(..., { components })`).
+El mensaje que se publica a mano ("Publicar en Discord") lleva los links de los
+reports de Warcraft Logs y, además, un link al **análisis en el Hub**
+(`/?log=<logId>#/raids/logs`): la web lee `log`, selecciona esa noche y abre el
+análisis solo. No hay publicación automática: el mensaje de la noche se manda
+desde la ficha y se actualiza con "Actualizar mensaje" (ver abajo).
 
-Una noche se considera terminada cuando ninguna parte está `live` y la última vez
-que cambió algo (`fightsStableSince`) pasó el umbral de 45 min; si esa fecha no
-está (un report viejo agregado después), vale la regla de la noche: 6 h desde el
-primer pull. Se publica **una sola vez**: queda `raid_logs.reportPostedAt` en las
-partes del grupo (columna nueva, el deploy necesita sincronizar la base) y el
-barrido solo mira los grupos sin publicar. Sin canal configurado, sin token del
-bot o si Discord falla, se loguea el error y se reintenta en el próximo barrido.
+En segundo plano, `startRaidLogSync` (cada 5 min) refresca los reports que siguen
+creciendo, así el estado ("En vivo" / terminado) y el aviso de "Actualizar…" no
+dependen de que alguien apriete Escanear. No publica nada en Discord.
 
 El emparejamiento por nombre tiene dos pasos:
 1. **Exacto**: el nombre normalizado (sin reino, sin acentos, minúsculas) del
