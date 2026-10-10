@@ -3,7 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta id="theme-color-meta" name="theme-color" content="#040711" />
+    <!-- La app tiene su propio tema (claro/oscuro) y lo aplica antes del primer
+         pintado. Dark Reader, la extensión que reescribe colores, no puede
+         convivir con eso: sus reglas le ganan a las nuestras y dejan la paleta
+         mezclada (el fondo de un tema con los paneles del otro). Este meta es el
+         mecanismo oficial para que no toque la página. -->
+    <meta name="darkreader-lock" />
+    <script>
+      // El tema se aplica ACÁ, antes del primer pintado, y no en un efecto de
+      // React: el efecto corre después de montar, así que al recargar se veía un
+      // frame con la paleta por defecto y recién después la elegida. Lee la
+      // misma clave que la app ("bonafide-theme").
+      (() => {
+        let theme = "dark";
+        try {
+          const stored = localStorage.getItem("bonafide-theme");
+          if (stored === "light" || stored === "dark") {
+            theme = stored;
+          }
+        } catch {
+          // Sin almacenamiento disponible queda el tema por defecto.
+        }
+        document.documentElement.dataset.theme = theme;
+        const meta = document.getElementById("theme-color-meta");
+        if (meta) {
+          meta.setAttribute("content", theme === "light" ? "#dbe5f1" : "#040711");
+        }
+      })();
+    </script>
     <!-- /favicon.svg se declara a proposito: esa ruta ya existia antes y el navegador
          guarda su propio registro de iconos. Si la ruta no devuelve una imagen real
          (aqui el SPA responde HTML en rutas inexistentes), el navegador no puede

@@ -9484,6 +9484,38 @@ select.list-order {
   background: rgba(226, 234, 246, 0.95);
 }
 
+/* Variantes del botón fantasma y superficies chicas que quedaban con el fondo
+   oscuro del tema dark: en claro se veían como manchas. Se listan con las
+   MISMAS medidas que el tema oscuro, solo cambia el color. */
+:root[data-theme="light"] .ghost-button.cancel-button,
+:root[data-theme="light"] .comunicado-back,
+:root[data-theme="light"] .event-filter-chip,
+:root[data-theme="light"] .raid-log-part,
+:root[data-theme="light"] .role-permission-compare-column,
+:root[data-theme="light"] .xp-extras-head {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(60, 85, 130, 0.28);
+}
+
+:root[data-theme="light"] .ghost-button.cancel-button:hover:not(:disabled),
+:root[data-theme="light"] .comunicado-back:hover,
+:root[data-theme="light"] .admin-row-main:hover {
+  background: rgba(226, 234, 246, 0.95);
+}
+
+:root[data-theme="light"] .role-permission-check input {
+  background: #ffffff;
+  border-color: rgba(60, 85, 130, 0.4);
+}
+
+/* Las cajas que esperan una imagen (álbum, drop, biblioteca) son oscuras a
+   propósito en dark; en claro van casi blancas para no cortar el fondo. */
+:root[data-theme="light"] .karuta-album-image,
+:root[data-theme="light"] .karuta-album-image-empty,
+:root[data-theme="light"] .karuta-drop-image {
+  background: rgba(214, 224, 240, 0.5);
+}
+
 /* Comunicados: tarjeta y bloques admin */
 :root[data-theme="light"] .comunicado-card {
   background: linear-gradient(

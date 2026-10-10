@@ -6505,8 +6505,15 @@ function App() {
     setTabSections((current) => ({ ...current, [tab]: section }));
     setActiveTab(tab);
   }
-  // Tema visual: oscuro por defecto, con persistencia en localStorage.
+  // Tema visual: oscuro por defecto, con persistencia en localStorage. El
+  // atributo ya viene puesto desde index.html (script previo al primer pintado):
+  // leerlo evita que React y el documento queden en desacuerdo, y cubre el caso
+  // en que localStorage no esté disponible.
   const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const applied = document.documentElement.dataset.theme;
+    if (applied === "light" || applied === "dark") {
+      return applied;
+    }
     try {
       const stored = window.localStorage.getItem("bonafide-theme");
       return stored === "light" ? "light" : "dark";
@@ -6743,15 +6750,39 @@ function App() {
     void refreshSession();
   }, []);
 
-  // Aplica el tema elegido al documento y lo persiste.
+  // Aplica el tema elegido al documento y lo persiste. El color de la barra del
+  // navegador sale de la propia variable del tema (--bg-1): una sola fuente de
+  // verdad en vez de repetir los hex acá.
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    const background = getComputedStyle(document.documentElement)
+      .getPropertyValue("--bg-1")
+      .trim();
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && background) {
+      meta.setAttribute("content", background);
+    }
     try {
       window.localStorage.setItem("bonafide-theme", theme);
     } catch {
       // Almacenamiento no disponible: el tema solo vale para esta sesión.
     }
   }, [theme]);
+
+  // Otra pestaña puede cambiar el tema: sin esto una queda en claro y la otra en
+  // oscuro hasta que se recargue.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent): void => {
+      if (
+        event.key === "bonafide-theme" &&
+        (event.newValue === "light" || event.newValue === "dark")
+      ) {
+        setTheme(event.newValue);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // La config de XP tiene muchos campos: en lugar de marcar cada editor,
   // comparamos el estado actual contra el último guardado.
