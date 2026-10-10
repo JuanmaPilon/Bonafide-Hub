@@ -14,11 +14,21 @@ import {
 import {
   ArrowsClockwise,
   Calendar,
+  ClockCounterClockwise,
+  DownloadSimple,
   Fire,
+  Lightning,
+  ListChecks,
   Moon,
+  MusicNotes,
+  PencilSimple,
+  ShieldCheck,
   Skull,
+  Sliders,
   Sun,
   Sword,
+  Trash,
+  Users,
 } from "@phosphor-icons/react";
 import { RaidLogsBoard } from "./RaidLogsBoard";
 import {
@@ -2350,12 +2360,17 @@ function AdminMappingsSection({
         </span>
       </summary>
       <div className="admin-card-body">
-        {groups.map((group) => (
-          // Mismos sub-cards que usa el módulo de Eventos (`.event-template-picker`):
-          // antes eran filas planas separadas por una línea y se veían como otra UI.
+        <section className="admin-group">
+          <span className="admin-group-head">
+            <Sliders weight="fill" aria-hidden="true" />
+            Catálogos del servidor
+          </span>
+          {groups.map((group) => (
+          // Mismos sub-cards que usa el módulo de Eventos (`.admin-sub`): antes
+          // eran filas planas separadas por una línea y se veían como otra UI.
           // Todos arrancan colapsados: son 4 catálogos y abrirlos todos deja el
           // panel larguísimo.
-          <details className="event-template-picker mapping-group" key={group.key}>
+          <details className="admin-sub mapping-group" key={group.key}>
             <summary>
               <strong>{group.label}</strong>
               <span className="sub-card-count">
@@ -2456,10 +2471,11 @@ function AdminMappingsSection({
             </div>
           </details>
         ))}
+        </section>
       </div>
-      <div className="admin-card-footer">
+      <div className="admin-save">
         {loadFailed ? (
-          <p className="mapping-warning">
+          <p className="admin-note">
             El catálogo no cargó: guardar en este estado borra los mapeos.
             Recargá la página.
           </p>
@@ -5323,7 +5339,12 @@ function RolesCard({
           <p className="admin-card-loading">Cargando roles…</p>
         ) : (
           <>
-            <div className="role-editor">
+            <section className="admin-group">
+              <span className="admin-group-head">
+                <PencilSimple weight="fill" aria-hidden="true" />
+                Editor de rol
+              </span>
+              <div className="role-editor">
               <div className="role-editor-head">
                 <strong>
                   {editingId
@@ -5609,7 +5630,7 @@ function RolesCard({
               </div>
             </div>
 
-            <details className="role-list-panel">
+            <details className="admin-sub role-list-panel">
               <summary className="role-list-summary">
                 <span>Roles del servidor</span>
                 <span className="role-list-summary-meta">
@@ -5675,6 +5696,7 @@ function RolesCard({
                 ))}
               </div>
             </details>
+            </section>
           </>
         )}
       </div>
@@ -10021,7 +10043,12 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="form-grid">
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Users weight="fill" aria-hidden="true" />
+                            Miembros y accesos
+                          </span>
+                          <div className="form-grid">
                           <label>
                             <span>Canal de Karpindomo</span>
                             <select
@@ -10065,7 +10092,15 @@ function App() {
                               ))}
                             </select>
                           </label>
+                          </div>
+                        </section>
 
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <MusicNotes weight="fill" aria-hidden="true" />
+                            Voz y música
+                          </span>
+                          <div className="form-grid">
                           <label>
                             <span>Rol DJ</span>
                             <select
@@ -10123,7 +10158,15 @@ function App() {
                               ))}
                             </select>
                           </label>
+                          </div>
+                        </section>
 
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Lightning weight="fill" aria-hidden="true" />
+                            Sugerencias e informes
+                          </span>
+                          <div className="form-grid">
                           <label>
                             <span>Rangos que reciben sugerencias</span>
                             <div className="suggestion-tier-chips">
@@ -10198,33 +10241,37 @@ function App() {
                               ))}
                             </select>
                           </label>
-                          {isDirty("eventReport") ? (
-                            <button
-                              className="primary-button"
-                              disabled={savingAction !== null}
-                              onClick={() => void handleSaveEventReport()}
-                              type="button"
-                            >
-                              {savingAction === "config"
-                                ? "Guardando…"
-                                : "Guardar configuración"}
-                            </button>
-                          ) : null}
-                        </div>
+                          </div>
+                        </section>
+
+                        {isDirty("eventReport") || configDirty ? (
+                          <div className="admin-save">
+                            {isDirty("eventReport") ? (
+                              <button
+                                className="primary-button"
+                                disabled={savingAction !== null}
+                                onClick={() => void handleSaveEventReport()}
+                                type="button"
+                              >
+                                {savingAction === "config"
+                                  ? "Guardando…"
+                                  : "Guardar informe"}
+                              </button>
+                            ) : null}
+                            {configDirty ? (
+                              <button
+                                className="primary-button"
+                                onClick={() => void handleSave()}
+                                disabled={savingAction !== null}
+                              >
+                                {savingAction === "config"
+                                  ? "Guardando…"
+                                  : "Guardar"}
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                      {configDirty ? (
-                        <div className="admin-card-footer">
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSave()}
-                            disabled={savingAction !== null}
-                          >
-                            {savingAction === "config"
-                              ? "Guardando…"
-                              : "Guardar"}
-                          </button>
-                        </div>
-                      ) : null}
                     </details>
                   ) : null}
 
@@ -10453,16 +10500,18 @@ function App() {
                         </div>
                       </div>
                       {isDirty("karuta") ? (
-                        <div className="admin-card-footer">
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSaveKarutaConfig()}
-                            disabled={savingAction !== null}
-                          >
-                            {savingAction === "karuta"
-                              ? "Guardando…"
-                              : "Guardar configuración"}
-                          </button>
+                        <div className="admin-card-body">
+                          <div className="admin-save">
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleSaveKarutaConfig()}
+                              disabled={savingAction !== null}
+                            >
+                              {savingAction === "karuta"
+                                ? "Guardando…"
+                                : "Guardar configuración"}
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </details>
@@ -10487,48 +10536,58 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="modules-grid">
-                          {HUB_MODULES.map((mod) => {
-                            const checked = isModuleEnabled(config, mod.key);
-                            return (
-                              <label
-                                className={`module-toggle${checked ? " checked" : ""}`}
-                                key={mod.key}
-                              >
-                                <span className="module-toggle-text">
-                                  <strong>{mod.label}</strong>
-                                </span>
-                                <span className="module-switch">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => toggleModule(mod.key)}
-                                  />
-                                  <span
-                                    className="module-switch-track"
-                                    aria-hidden="true"
-                                  >
-                                    <span className="module-switch-thumb" />
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <ListChecks weight="fill" aria-hidden="true" />
+                            Módulos del hub
+                          </span>
+                          <div className="module-list">
+                            {HUB_MODULES.map((mod) => {
+                              const checked = isModuleEnabled(config, mod.key);
+                              return (
+                                <label
+                                  className={`module-toggle${checked ? " checked" : ""}`}
+                                  key={mod.key}
+                                >
+                                  <span className="module-toggle-text">
+                                    <strong>{mod.label}</strong>
                                   </span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
+                                  <span className="admin-row-spacer" />
+                                  <span className="admin-row-tag">
+                                    {checked ? "Activo" : "Apagado"}
+                                  </span>
+                                  <span className="module-switch">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => toggleModule(mod.key)}
+                                    />
+                                    <span
+                                      className="module-switch-track"
+                                      aria-hidden="true"
+                                    >
+                                      <span className="module-switch-thumb" />
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </section>
+                        {isDirty("modules") ? (
+                          <div className="admin-save">
+                            <button
+                              className="primary-button"
+                              onClick={() => void handleSaveModules()}
+                              disabled={savingAction !== null}
+                            >
+                              {savingAction === "modules"
+                                ? "Guardando…"
+                                : "Guardar módulos"}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                      {isDirty("modules") ? (
-                        <div className="admin-card-footer">
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleSaveModules()}
-                            disabled={savingAction !== null}
-                          >
-                            {savingAction === "modules"
-                              ? "Guardando…"
-                              : "Guardar módulos"}
-                          </button>
-                        </div>
-                      ) : null}
                     </details>
                   ) : null}
 
@@ -10561,7 +10620,12 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="staff-hierarchy">
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <ShieldCheck weight="fill" aria-hidden="true" />
+                            Rangos del staff
+                          </span>
+                          <div className="staff-hierarchy">
                           <div className="staff-hierarchy-tier owner">
                             <span
                               className="staff-hierarchy-icon"
@@ -10689,7 +10753,8 @@ function App() {
                               <small>El hub normal, sin panel Admin.</small>
                             </div>
                           </div>
-                        </div>
+                          </div>
+                        </section>
                       </div>
                     </details>
                   ) : null}
@@ -10986,48 +11051,56 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="audit-body-actions">
-                          <span className="audit-count">
-                            {auditLogs.length} registro
-                            {auditLogs.length === 1 ? "" : "s"}
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <ShieldCheck weight="fill" aria-hidden="true" />
+                            Cambios en el panel
                           </span>
-                          <button
-                            className="icon-button"
-                            onClick={() => void refreshAuditLogs()}
-                            title="Refrescar registro"
-                            aria-label="Refrescar registro"
-                            type="button"
-                          >
-                            <ArrowsClockwise weight="fill"
-                              aria-hidden="true"
-                              className="icon-button-icon"
+                          <div className="admin-actions">
+                            <span className="audit-count">
+                              {auditLogs.length} registro
+                              {auditLogs.length === 1 ? "" : "s"}
+                            </span>
+                            <button
+                              className="icon-button"
+                              onClick={() => void refreshAuditLogs()}
+                              title="Refrescar registro"
+                              aria-label="Refrescar registro"
+                              type="button"
+                            >
+                              <ArrowsClockwise weight="fill"
+                                aria-hidden="true"
+                                className="icon-button-icon"
+                              />
+                            </button>
+                          </div>
+                          {selectedGuild?.owner && auditLogs.length > 0 ? (
+                            <ListFilterBar
+                              onOrderChange={setAuditOrder}
+                              onSearchChange={setAuditSearch}
+                              order={auditOrder}
+                              placeholder="Buscar en el registro…"
+                              search={auditSearch}
                             />
-                          </button>
-                        </div>
-                        {selectedGuild?.owner && auditLogs.length > 0 ? (
-                          <ListFilterBar
-                            onOrderChange={setAuditOrder}
-                            onSearchChange={setAuditSearch}
-                            order={auditOrder}
-                            placeholder="Buscar en el registro…"
-                            search={auditSearch}
-                          />
-                        ) : null}
-                        {selectedGuild?.owner ? (
-                          auditLogs.length === 0 ? (
-                            <div className="empty-state">
-                              Aún no hay cambios registrados. Se anota cada
-                              cambio real hecho desde el panel Admin, con qué
-                              campo se tocó y de qué valor a cuál.
-                            </div>
-                          ) : visibleAuditLogs.length === 0 ? (
-                            <div className="empty-state">
-                              Ningún registro coincide con la búsqueda.
-                            </div>
-                          ) : (
-                            <div className="audit-list">
+                          ) : null}
+                          {selectedGuild?.owner ? (
+                            auditLogs.length === 0 ? (
+                              <p className="admin-empty">
+                                Aún no hay cambios registrados. Se anota cada
+                                cambio real hecho desde el panel Admin, con qué
+                                campo se tocó y de qué valor a cuál.
+                              </p>
+                            ) : visibleAuditLogs.length === 0 ? (
+                              <p className="admin-empty">
+                                Ningún registro coincide con la búsqueda.
+                              </p>
+                            ) : (
+                            <div className="admin-list">
                               {visibleAuditLogs.map((entry) => (
-                                <div className="audit-row" key={entry.id}>
+                                <div
+                                  className="admin-row-box audit-row"
+                                  key={entry.id}
+                                >
                                   <span className="audit-time">
                                     {formatDateTime24(entry.createdAt)}
                                   </span>
@@ -11052,10 +11125,11 @@ function App() {
                             </div>
                           )
                         ) : (
-                          <div className="empty-state">
+                          <p className="admin-empty">
                             Solo el owner puede ver este registro.
-                          </div>
+                          </p>
                         )}
+                        </section>
                       </div>
                     </details>
                   ) : null}
@@ -11079,49 +11153,55 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        {eventTemplates.length === 0 ? (
-                          <p className="admin-card-loading">
-                            Cargando tipos de evento…
-                          </p>
-                        ) : (
-                          eventTemplates.map((template) => (
-                            <details
-                              className="event-template-picker"
-                              key={template.key}
-                            >
-                              <summary>
-                                <strong>{template.label}</strong>
-                                {/* Mismo conteo que los grupos del Mapeo: cuántas
-                                    respuestas (roles) trae el tipo de evento. */}
-                                <span className="sub-card-count">
-                                  {template.roles.length} respuesta
-                                  {template.roles.length === 1 ? "" : "s"}
-                                </span>
-                                <span
-                                  className="admin-acc-chevron"
-                                  aria-hidden="true"
-                                >
-                                  ▸
-                                </span>
-                              </summary>
-                              <div className="event-template-roles">
-                                {template.roles.map((role) => (
-                                  <span
-                                    className="event-template-role"
-                                    key={role.key}
-                                  >
-                                    <EventRoleEmoji
-                                      role={role.key}
-                                      roles={template.roles}
-                                      size={18}
-                                    />
-                                    {role.label}
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Calendar weight="fill" aria-hidden="true" />
+                            Tipos de evento
+                          </span>
+                          {eventTemplates.length === 0 ? (
+                            <p className="admin-card-loading">
+                              Cargando tipos de evento…
+                            </p>
+                          ) : (
+                            eventTemplates.map((template) => (
+                              <details
+                                className="admin-sub"
+                                key={template.key}
+                              >
+                                <summary>
+                                  <strong>{template.label}</strong>
+                                  {/* Mismo conteo que los grupos del Mapeo: cuántas
+                                      respuestas (roles) trae el tipo de evento. */}
+                                  <span className="sub-card-count">
+                                    {template.roles.length} respuesta
+                                    {template.roles.length === 1 ? "" : "s"}
                                   </span>
-                                ))}
-                              </div>
-                            </details>
-                          ))
-                        )}
+                                  <span
+                                    className="admin-acc-chevron"
+                                    aria-hidden="true"
+                                  >
+                                    ▸
+                                  </span>
+                                </summary>
+                                <div className="event-template-roles">
+                                  {template.roles.map((role) => (
+                                    <span
+                                      className="event-template-role"
+                                      key={role.key}
+                                    >
+                                      <EventRoleEmoji
+                                        role={role.key}
+                                        roles={template.roles}
+                                        size={18}
+                                      />
+                                      {role.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              </details>
+                            ))
+                          )}
+                        </section>
                       </div>
                     </details>
                   ) : null}
@@ -11146,7 +11226,11 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <>
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <ClockCounterClockwise weight="fill" aria-hidden="true" />
+                            Eventos terminados
+                          </span>
                           <ListFilterBar
                             onOrderChange={setEventHistoryOrder}
                             onSearchChange={setEventHistorySearch}
@@ -11155,14 +11239,14 @@ function App() {
                             search={eventHistorySearch}
                           />
                           {visibleEventHistory.length === 0 ? (
-                            <p className="muted-text">
+                            <p className="admin-empty">
                               Ningún evento coincide con la búsqueda.
                             </p>
                           ) : (
-                            <div className="event-history-list">
+                            <div className="admin-list">
                               {visibleEventHistory.map((finished) => (
                                 <details
-                                  className="event-history-item"
+                                  className="admin-sub event-history-item"
                                   key={finished.id}
                                 >
                                   <summary className="event-history-head">
@@ -11218,7 +11302,7 @@ function App() {
                                     )}
                                     <div className="event-history-actions">
                                       <button
-                                        className="csv-button"
+                                        className="ghost-button small"
                                         disabled={
                                           reportBusyEventId === finished.id
                                         }
@@ -11227,18 +11311,26 @@ function App() {
                                         }
                                         type="button"
                                       >
+                                        <DownloadSimple
+                                          weight="fill"
+                                          aria-hidden="true"
+                                        />
                                         {reportBusyEventId === finished.id
                                           ? "Generando…"
-                                          : "⬇️ Descargar informe"}
+                                          : "Descargar informe"}
                                       </button>
                                       <button
-                                        className="danger-button"
+                                        className="ghost-button small danger"
                                         onClick={() =>
                                           handleDeleteEvent(finished)
                                         }
                                         type="button"
                                       >
-                                        🗑️ Eliminar evento
+                                        <Trash
+                                          weight="fill"
+                                          aria-hidden="true"
+                                        />
+                                        Eliminar evento
                                       </button>
                                     </div>
                                   </div>
@@ -11246,7 +11338,7 @@ function App() {
                               ))}
                             </div>
                           )}
-                        </>
+                        </section>
                       </div>
                     </details>
                   ) : null}

@@ -252,8 +252,8 @@ export function XpSection({
 
   return (
     <div className="xp-section">
-      <section className="xp-group">
-        <span className="xp-label">
+      <section className="admin-group">
+        <span className="admin-group-head">
           <Lightning weight="fill" aria-hidden="true" />
           Cómo se gana XP
         </span>
@@ -282,8 +282,8 @@ export function XpSection({
         </div>
       </section>
 
-      <section className="xp-group">
-        <span className="xp-label">
+      <section className="admin-group">
+        <span className="admin-group-head">
           <TrendUp weight="fill" aria-hidden="true" />
           Progresión
         </span>
@@ -306,23 +306,23 @@ export function XpSection({
         </div>
       </section>
 
-      <section className="xp-group xp-group--sep">
-        <span className="xp-label">Roles por nivel</span>
+      <section className="admin-group admin-group--sep">
+        <span className="admin-group-head">Roles por nivel</span>
         {rules.length === 0 ? (
-          <p className="xp-empty">Aún no hay roles por nivel configurados.</p>
+          <p className="admin-empty">Aún no hay roles por nivel configurados.</p>
         ) : (
-          <div className="xp-rule-list">
+          <div className="admin-list">
             {rules.map((rule) => {
               const role = guildRoles.find((entry) => entry.id === rule.roleId);
               return (
-                <div className="xp-rule-row" key={rule.level}>
+                <div className="admin-row" key={rule.level}>
                   <button
-                    className="xp-rule-box xp-rule-open"
+                    className="admin-row-box admin-row-main"
                     onClick={() => openEditor(rule.level)}
                     title={`Editar el nivel ${rule.level}`}
                     type="button"
                   >
-                    <span className="xp-rule-level">
+                    <span className="admin-row-label">
                       Nivel <b>{rule.level}</b>
                     </span>
                     {role ? (
@@ -333,17 +333,17 @@ export function XpSection({
                         <span className="role-chip-name">{role.name}</span>
                       </span>
                     ) : (
-                      <span className="xp-rule-none">Sin rol</span>
+                      <span className="admin-row-none">Sin rol</span>
                     )}
                     {rule.nicknamePrefix ? (
                       <span className="xp-rule-prefix" title="Prefijo de nombre">
                         {rule.nicknamePrefix}
                       </span>
                     ) : null}
-                    <span className="xp-rule-spacer" />
+                    <span className="admin-row-spacer" />
                     {rule.addRoleIds.length > 0 ? (
                       <span
-                        className="xp-rule-tag xp-rule-tag--add"
+                        className="admin-row-tag admin-row-tag--add"
                         title={`Al llegar al nivel se da${rule.addRoleIds.length === 1 ? "" : "n"} ${rule.addRoleIds.length} rol${rule.addRoleIds.length === 1 ? "" : "es"}`}
                       >
                         +{rule.addRoleIds.length}
@@ -351,18 +351,18 @@ export function XpSection({
                     ) : null}
                     {rule.removeRoleIds.length > 0 ? (
                       <span
-                        className="xp-rule-tag xp-rule-tag--remove"
+                        className="admin-row-tag admin-row-tag--remove"
                         title={`Al llegar al nivel se quita${rule.removeRoleIds.length === 1 ? "" : "n"} ${rule.removeRoleIds.length} rol${rule.removeRoleIds.length === 1 ? "" : "es"}`}
                       >
                         −{rule.removeRoleIds.length}
                       </span>
                     ) : null}
-                    <span className="xp-rule-tag">
+                    <span className="admin-row-tag">
                       {rule.stacking === "replace" ? "Reemplaza" : "Acumula"}
                     </span>
                     <PencilSimple
                       aria-hidden="true"
-                      className="xp-rule-pencil"
+                      className="admin-row-action"
                       weight="fill"
                     />
                   </button>
@@ -385,7 +385,7 @@ export function XpSection({
           </div>
         )}
         <button
-          className="ghost-button small xp-add"
+          className="ghost-button small admin-add"
           onClick={addRule}
           type="button"
         >
@@ -394,15 +394,15 @@ export function XpSection({
         </button>
       </section>
 
-      <section className="xp-group xp-group--sep">
-        <span className="xp-label">Multiplicadores por rol</span>
+      <section className="admin-group admin-group--sep">
+        <span className="admin-group-head">Multiplicadores por rol</span>
         {config.roleMultipliers.length === 0 ? (
-          <p className="xp-empty">Ningún rol multiplica la XP.</p>
+          <p className="admin-empty">Ningún rol multiplica la XP.</p>
         ) : (
-          <div className="xp-rule-list">
+          <div className="admin-list">
             {config.roleMultipliers.map((entry) => (
-              <div className="xp-rule-row" key={entry.roleId}>
-                <div className="xp-rule-box">
+              <div className="admin-row" key={entry.roleId}>
+                <div className="admin-row-box">
                   <select
                     aria-label="Rol con multiplicador"
                     className="select"
@@ -452,7 +452,7 @@ export function XpSection({
           </div>
         )}
         <button
-          className="ghost-button small xp-add"
+          className="ghost-button small admin-add"
           onClick={addMultiplier}
           type="button"
         >
@@ -461,9 +461,9 @@ export function XpSection({
         </button>
       </section>
 
-      <section className="xp-group xp-group--sep">
-        <span className="xp-label">Datos</span>
-        <div className="xp-data-actions">
+      <section className="admin-group admin-group--sep">
+        <span className="admin-group-head">Datos</span>
+        <div className="admin-actions">
           <button
             className="ghost-button small"
             onClick={onExport}
@@ -500,7 +500,7 @@ export function XpSection({
       </section>
 
       {dirty ? (
-        <div className="xp-save">
+        <div className="admin-save">
           <button
             className="primary-button"
             disabled={savingAny}
@@ -592,7 +592,7 @@ export function XpSection({
                 </div>
 
                 <div className="xp-preview">
-                  <span className="xp-label">Así se ve el nombre</span>
+                  <span className="admin-group-head">Así se ve el nombre</span>
                   <span
                     className="xp-preview-name"
                     style={previewStyle}
@@ -600,7 +600,7 @@ export function XpSection({
                 </div>
 
                 <div className="xp-inline-row">
-                  <span className="xp-label">Al llegar al nivel</span>
+                  <span className="admin-group-head">Al llegar al nivel</span>
                   <div className="xp-mode-toggle" role="group">
                     <button
                       className={editing.stacking !== "replace" ? "active" : ""}
@@ -710,7 +710,7 @@ export function XpSection({
                           );
                         })}
                         {extrasRoles.length === 0 ? (
-                          <p className="xp-empty">Ningún rol coincide.</p>
+                          <p className="admin-empty">Ningún rol coincide.</p>
                         ) : null}
                       </div>
                     </div>

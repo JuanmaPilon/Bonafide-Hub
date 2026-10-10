@@ -788,187 +788,28 @@ a:hover {
 }
 
 /* ── Módulo de XP (Admin) ──────────────────────────────────────────
-   La página son grupos separados por una línea, sin cajas adentro de cajas:
-   los números arriba, los roles por nivel como lista compacta (el detalle de
-   cada nivel se edita en una ventana emergente) y los multiplicadores. */
+   Los números de configuración, los roles por nivel como lista compacta (el
+   detalle de cada nivel se edita en una ventana emergente) y los
+   multiplicadores. Las piezas del interior —grupos, rótulos, filas, acciones y
+   la fila de guardado— son las compartidas del panel (`.admin-*`). */
 .xp-section {
   display: grid;
   gap: 18px;
 }
 
-.xp-group {
-  display: grid;
-  gap: 10px;
-}
-
-.xp-group--sep {
-  padding-top: 18px;
-  border-top: 1px solid var(--panel-border);
-}
-
-.xp-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.xp-label svg {
-  width: 16px;
-  height: 16px;
-}
-
 /* Los campos chicos (números de configuración) no necesitan media pantalla: con
    tres columnas entran los cinco de un vistazo. */
-.xp-group .form-grid {
+.xp-section .form-grid {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
-.xp-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.86rem;
-}
-
-.xp-rule-list {
-  display: grid;
-  gap: 6px;
-}
-
-.xp-rule-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Caja de una fila: la comparten la regla (que es un botón para abrir el editor)
-   y la fila del multiplicador (que tiene los campos adentro). */
-.xp-rule-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  background: rgba(12, 19, 37, 0.45);
-  color: var(--text);
-  font-size: 0.86rem;
-}
-
-.xp-rule-open {
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.xp-rule-open:hover {
-  border-color: rgba(148, 172, 228, 0.5);
-  background: rgba(22, 32, 58, 0.9);
-}
-
-.xp-rule-level {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.xp-rule-level b {
-  margin-left: 4px;
-  color: var(--text);
-  font-size: 0.95rem;
-  letter-spacing: 0;
-}
-
-.xp-rule-none {
-  color: var(--muted);
-  font-style: italic;
+.admin-add {
+  justify-self: start;
 }
 
 .xp-rule-prefix {
   font-size: 0.95rem;
-}
-
-.xp-rule-spacer {
-  flex: 1;
-  min-width: 0;
-}
-
-.xp-rule-tag {
-  padding: 2px 8px;
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* Roles extra de un nivel: se dan (+ verde suave) o se quitan (− rojo suave). */
-.xp-rule-tag--add {
-  border-color: rgba(46, 204, 113, 0.45);
-  color: #6fd39a;
-}
-
-.xp-rule-tag--remove {
-  border-color: rgba(229, 72, 77, 0.45);
-  color: #ff9a9a;
-}
-
-/* En claro los verdes y rojos suaves de arriba no se leen sobre blanco. */
-:root[data-theme="light"] .xp-rule-tag--add {
-  color: #1d7a4a;
-}
-
-:root[data-theme="light"] .xp-rule-tag--remove {
-  color: #b3261e;
-}
-
-.xp-rule-pencil {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  color: var(--muted);
-}
-
-.xp-rule-open:hover .xp-rule-pencil {
-  color: var(--accent);
-}
-
-/* Los botones de la sección: chicos, como el resto de las acciones del panel. */
-.xp-section .ghost-button svg {
-  width: 16px;
-  height: 16px;
-  margin-right: 6px;
-  vertical-align: -3px;
-}
-
-.xp-add {
-  justify-self: start;
-}
-
-.xp-data-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.xp-save {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 14px;
-  border-top: 1px solid var(--panel-border);
 }
 
 /* ── Editor de un nivel (ventana emergente) ──────────────────────── */
@@ -1257,17 +1098,6 @@ a:hover {
   font-size: 0.9rem;
 }
 
-.admin-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 14px 20px;
-  border-top: 1px solid var(--panel-border);
-  background: rgba(8, 12, 22, 0.5);
-}
-
 /* Acordeón de cards del admin (estilo comunicados) */
 .admin-card-acc > .admin-acc-header {
   cursor: pointer;
@@ -1386,18 +1216,244 @@ a:hover {
   padding: 0;
 }
 
-.admin-page-stack > .admin-card > .admin-card-footer {
-  margin-top: 18px;
-  padding: 14px 0 0;
-  border-top: 1px solid var(--panel-border);
-  background: transparent;
-}
 .content-panel-admin .admin-page-stack[class*="admin-tier-page-"] {
   padding: 0 24px 24px;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+/* ── Interior de las cards del Admin (piezas compartidas) ─────────────
+   Todas las páginas del panel usan el mismo vocabulario: grupos (rótulo chico
+   en mayúsculas + contenido) separados por una línea, listas de filas
+   compactas y una fila de acciones al pie. Es el mismo UI que el editor de XP:
+   así una sección no se ve distinta de la otra. */
+.admin-group {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-group + .admin-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.admin-group-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-group-head svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Aclaración en el rótulo (para lo que no entra en una palabra). */
+.admin-group-head small {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.admin-list {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-row-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(12, 19, 37, 0.45);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+/* Fila que se abre (el detalle va en una ventana emergente). */
+.admin-row-main {
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.admin-row-main:hover {
+  border-color: rgba(148, 172, 228, 0.5);
+  background: rgba(22, 32, 58, 0.9);
+}
+
+.admin-row-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-row-label b {
+  margin-left: 4px;
+  color: var(--text);
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+.admin-row-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-row-none {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.admin-row-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-row-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Roles extra de un nivel del XP: se dan (+ verde suave) o se quitan
+   (− rojo suave). */
+.admin-row-tag--add {
+  border-color: rgba(46, 204, 113, 0.45);
+  color: #6fd39a;
+}
+
+.admin-row-tag--remove {
+  border-color: rgba(229, 72, 77, 0.45);
+  color: #ff9a9a;
+}
+
+/* En claro los verdes y rojos suaves de arriba no se leen sobre blanco. */
+:root[data-theme="light"] .admin-row-tag--add {
+  color: #1d7a4a;
+}
+
+:root[data-theme="light"] .admin-row-tag--remove {
+  color: #b3261e;
+}
+
+.admin-row-action {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.admin-row-main:hover .admin-row-action {
+  color: var(--accent);
+}
+
+/* Fila de acciones (botones chicos, como el resto del panel). */
+.admin-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-actions svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+
+/* Guardar: la misma fila al pie de todas las secciones, solo si hay cambios. */
+.admin-save {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.admin-note {
+  margin: 0;
+  color: #ffb570;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.admin-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+/* Sub-card plegable adentro de una sección (grupos del Mapeo, tipos de evento,
+   lista de roles): mismas medidas que una fila, para que no parezca otra UI. */
+.admin-sub {
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(12, 19, 37, 0.45);
+}
+
+.admin-sub > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.admin-sub > summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-sub > summary .admin-acc-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.admin-sub[open] > summary .admin-acc-chevron {
+  transform: rotate(90deg);
+}
+
+.admin-sub + .admin-sub {
+  margin-top: 6px;
+}
+
+:root[data-theme="light"] .admin-row-box,
+:root[data-theme="light"] .admin-sub {
+  background: var(--surface-card);
 }
 
 /* Colores de tarjetas del Admin por rango: los DOS colores del rol del rango
@@ -1590,10 +1646,11 @@ a:hover {
   -webkit-text-fill-color: currentColor;
 }
 
-.audit-body-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.audit-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  margin-right: auto;
 }
 
 .rr-panel-actions {
@@ -3423,13 +3480,8 @@ a:hover {
   position: relative;
 }
 
-/* Los grupos del catálogo de Mapeo usan el mismo sub-card que los tipos de
-   evento (`.event-template-picker`), así las dos secciones se leen igual. */
-.mapping-group[open] > summary .admin-acc-chevron {
-  transform: rotate(90deg);
-}
-
-/* El resumen de Mapeo suma el contador, que Eventos no tiene. */
+/* Los grupos del catálogo de Mapeo son sub-cards (`.admin-sub`), igual que los
+   tipos de evento: las dos secciones se leen igual. */
 .mapping-group > summary {
   flex-wrap: wrap;
 }
@@ -3463,7 +3515,7 @@ a:hover {
 
 /* El aviso de "no cargó el catálogo" va al lado izquierdo del pie, lejos del
    botón de guardar (que es justo el que no hay que tocar). */
-.admin-card-footer .mapping-warning {
+.admin-save .admin-note {
   margin: 0 auto 0 0;
   max-width: 42ch;
 }
@@ -3496,9 +3548,11 @@ a:hover {
   color: var(--text);
 }
 
+/* Aviso de un mapeo que el bot no podría aplicar (rol de integración, rol por
+   encima del bot): mismo tono que las notas del panel. */
 .mapping-warning {
   margin: 4px 0 0;
-  color: #ffd477;
+  color: #ffb570;
   font-size: 0.74rem;
   line-height: 1.3;
 }
@@ -4241,21 +4295,20 @@ a:hover {
   box-shadow: 0 0 10px rgba(var(--podium-rgb), 0.25);
 }
 
-.audit-list {
-  display: grid;
-  gap: 8px;
-}
-
+/* Fila del registro de auditoría: cuatro columnas (cuándo, quién, qué y el
+   detalle), con la caja y el padding de `.admin-row-box`. */
 .audit-row {
   display: grid;
   grid-template-columns: 130px 140px 210px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
+  border-radius: 10px;
   font-size: 0.86rem;
+}
+
+.audit-list {
+  display: grid;
+  gap: 6px;
 }
 
 .audit-time {
@@ -6785,42 +6838,13 @@ select.list-order {
   margin-bottom: 16px;
 }
 
-/* Tipos de evento disponibles. */
-.event-template-picker {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  background: rgba(12, 19, 37, 0.35);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.event-template-picker > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.event-template-picker > summary::-webkit-details-marker {
-  display: none;
-}
-
-.event-template-picker > summary .admin-acc-chevron {
-  margin-left: auto;
-  transition: transform 0.15s ease;
-}
-
-.event-template-picker[open] > summary .admin-acc-chevron {
-  transform: rotate(90deg);
-}
-
+/* Tipos de evento disponibles: sub-card igual que los grupos del Mapeo
+   (`.admin-sub`), que ya trae la caja, el resumen y el chevron. */
 .event-template-roles {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 10px;
 }
 
 .event-template-role {
@@ -6831,11 +6855,6 @@ select.list-order {
   border-radius: 999px;
   border: 1px solid rgba(134, 158, 214, 0.3);
   font-size: 0.85rem;
-}
-
-:root[data-theme="light"] .event-template-picker {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(67, 81, 109, 0.18);
 }
 
 .spec-emoji-grid {
@@ -7536,21 +7555,21 @@ select.list-order {
 
 /* ---------- Módulos activos (toggles del panel Admin) ---------- */
 
-.modules-grid {
+.module-list {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .module-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(133, 156, 212, 0.18);
-  background: rgba(10, 16, 31, 0.6);
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: rgba(12, 19, 37, 0.45);
   cursor: pointer;
+  font-size: 0.86rem;
   transition:
     border-color 160ms ease,
     background-color 160ms ease;
@@ -7573,13 +7592,7 @@ select.list-order {
 
 .module-toggle-text strong {
   color: var(--text);
-  font-size: 0.95rem;
-}
-
-.module-toggle-text small {
-  color: var(--muted);
-  font-size: 0.78rem;
-  line-height: 1.35;
+  font-size: 0.86rem;
 }
 
 .module-switch {
@@ -8166,9 +8179,7 @@ select.list-order {
 }
 
 .role-list-panel {
-  margin-top: 18px;
-  border-top: 1px solid var(--panel-border);
-  padding-top: 14px;
+  margin-top: 10px;
 }
 
 .role-list-summary {
@@ -8176,7 +8187,6 @@ select.list-order {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
   cursor: pointer;
   list-style: none;
   color: var(--text);
@@ -9301,11 +9311,11 @@ select.list-order {
 :root[data-theme="light"] .home-hero,
 :root[data-theme="light"] .podium-item,
 :root[data-theme="light"] .stat-tile,
-:root[data-theme="light"] .xp-rule-box,
+:root[data-theme="light"] .admin-row-box,
+:root[data-theme="light"] .admin-sub,
 :root[data-theme="light"] .xp-role-search,
 :root[data-theme="light"] .rr-rule,
-:root[data-theme="light"] .rr-preview,
-:root[data-theme="light"] .admin-card-footer {
+:root[data-theme="light"] .rr-preview {
   background: var(--surface-card);
 }
 
@@ -9599,17 +9609,8 @@ select.list-order {
 }
 
 /* Historial de eventos (Admin) */
-.event-history-list {
-  display: grid;
-  gap: 8px;
-}
-
-.event-history-item {
-  border: 1px solid rgba(134, 158, 214, 0.18);
-  border-radius: 10px;
-  background: rgba(12, 19, 37, 0.35);
-}
-
+/* Evento terminado del Historial: sub-card (`.admin-sub`) con el título y la
+   fecha en el resumen; el detalle (asistentes y acciones) va adentro. */
 .event-history-item > summary {
   list-style: none;
   cursor: pointer;
@@ -9624,7 +9625,6 @@ select.list-order {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 12px;
 }
 
 .event-history-head strong {
@@ -9640,14 +9640,14 @@ select.list-order {
 .event-history-body {
   display: grid;
   gap: 6px;
-  padding: 0 12px 10px;
+  padding: 10px 0 0;
 }
 
 .event-history-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 4px;
 }
 

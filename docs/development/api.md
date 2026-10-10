@@ -431,16 +431,31 @@ XP:
 6. `POST /guilds/:guildId/xp/reset-all`
 7. `POST /guilds/:guildId/xp/sync`
 
-El **editor de XP** (Admin → XP) vive en
-`apps/web/src/XpSection.tsx` y no guarda nada por su cuenta: recibe la config y
-devuelve los cambios al App, que es el que sabe si quedó sucia (`dirty`) para
-ofrecer "Guardar configuración". La página es una lista de niveles —una fila por
-nivel, con el rol, el prefijo, el modo (acumular/reemplazar) y cuántos roles
-extra da o quita— y todo el detalle se edita en una **ventana emergente** por
-nivel, con la búsqueda de roles adentro; así el módulo no se vuelve una página
-larga con ocho controles por regla. Los números de configuración van en tres
-columnas, y exportar/importar/sincronizar/resetear quedan en un grupo "Datos"
-con botones chicos.
+### Piezas compartidas del panel Admin
+
+Todas las páginas del panel se arman con el mismo vocabulario, así ninguna se ve
+distinta de la otra (el editor de XP fue el primero en usarlo):
+
+- `admin-group` — un bloque con rótulo y contenido. Dos grupos seguidos se
+  separan con una línea: no hay cajas adentro de cajas (la página ya es un
+  panel).
+- `admin-group-head` — el rótulo chico en mayúsculas, con ícono opcional.
+- `admin-list` / `admin-row` / `admin-row-box` — listas de filas compactas
+  (44 px): la caja, el rótulo, el espaciador y los chips (`admin-row-tag`) los
+  comparten los niveles del XP, los módulos, el registro de auditoría, el
+  historial de eventos y los catálogos del Mapeo.
+- `admin-sub` — sub-card plegable (grupos del Mapeo, tipos de evento, lista de
+  roles): misma caja y mismas medidas que una fila.
+- `admin-actions` — fila de botones chicos, y `admin-save` — la fila de guardado
+  al pie de la sección (aparece solo si hay cambios, en todas las secciones
+  igual).
+
+El editor de XP vive en `apps/web/src/XpSection.tsx` y no guarda nada por su
+cuenta: recibe la config y devuelve los cambios al App, que es el que sabe si
+quedó sucia (`dirty`) para ofrecer "Guardar configuración". Los roles por nivel
+son una fila cada uno y todo el detalle se edita en una **ventana emergente**
+(con la búsqueda de roles adentro), así el módulo no se vuelve una página larga
+con ocho controles por regla.
 Los colores de rol (chip y nombre con degradado) salen de
 `apps/web/src/roles.ts`, compartidos con el perfil y el ranking: un rol se ve
 igual en todos lados.
