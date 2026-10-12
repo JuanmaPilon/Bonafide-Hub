@@ -4463,7 +4463,8 @@ a:hover {
 
 /* Podio: la escala baja como los rangos de LoL — diamante, platino, oro,
    plata y bronce. Cada puesto define su color (--podium-c) y el mismo en
-   canales (--podium-rgb) para las transparencias. */
+   canales (--podium-rgb) para las transparencias: los usan el top 5 de Inicio y
+   las filas MVP del leaderboard. */
 :root {
   --podium-1: #5bc0f8;
   --podium-1-rgb: 91, 192, 248;
@@ -4490,96 +4491,6 @@ a:hover {
   --podium-5-rgb: 150, 81, 31;
 }
 
-.podium-place-1 {
-  --podium-c: var(--podium-1);
-  --podium-rgb: var(--podium-1-rgb);
-}
-
-.podium-place-2 {
-  --podium-c: var(--podium-2);
-  --podium-rgb: var(--podium-2-rgb);
-}
-
-.podium-place-3 {
-  --podium-c: var(--podium-3);
-  --podium-rgb: var(--podium-3-rgb);
-}
-
-.podium-place-4 {
-  --podium-c: var(--podium-4);
-  --podium-rgb: var(--podium-4-rgb);
-}
-
-.podium-place-5 {
-  --podium-c: var(--podium-5);
-  --podium-rgb: var(--podium-5-rgb);
-}
-
-.podium {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.podium-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 10px;
-  border-radius: 16px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(var(--podium-rgb), 0.5);
-  box-shadow: 0 0 20px rgba(var(--podium-rgb), 0.16);
-  text-align: center;
-}
-
-.podium-rank {
-  color: var(--podium-c);
-  font-size: 1.4rem;
-  font-weight: 800;
-  line-height: 1;
-  text-shadow:
-    0 0 8px rgba(var(--podium-rgb), 0.6),
-    0 0 18px rgba(var(--podium-rgb), 0.3);
-}
-
-:root[data-theme="light"] .podium-item {
-  box-shadow: 0 0 0 1px rgba(var(--podium-rgb), 0.5);
-}
-
-:root[data-theme="light"] .podium-rank {
-  text-shadow: none;
-}
-
-.podium-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--panel-border);
-}
-
-.podium-avatar-placeholder {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-}
-
-.podium-name {
-  font-weight: 700;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.podium-meta {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
 .boost-count-badge {
   display: inline-flex;
   align-items: center;
@@ -4594,8 +4505,9 @@ a:hover {
   text-shadow: 0 0 8px rgba(244, 127, 255, 0.6);
 }
 
-/* Filas de miembros de Inicio: la misma fila para boosters y raid leads. El
-   acento del grupo pinta el avatar, el borde y el nombre. */
+/* Filas de miembros de Inicio: la comparten el podio y los raid leads. El acento
+   del grupo (--home-member-rgb, en canales) pinta el borde, el avatar y el
+   nombre; el podio lo cambia por puesto y los leads usan el dorado. */
 .home-member-list {
   display: grid;
   gap: 10px;
@@ -4611,12 +4523,45 @@ a:hover {
   background: rgba(var(--home-member-rgb), 0.07);
 }
 
-.home-member-row--booster {
-  --home-member-rgb: 244, 127, 255;
+/* Puesto del podio en la fila: "1ro".."5to" con el color del puesto. */
+.home-member-rank {
+  flex-shrink: 0;
+  min-width: 34px;
+  color: rgb(var(--home-member-rgb));
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(var(--home-member-rgb), 0.5);
 }
 
-.home-member-row--lead {
-  --home-member-rgb: 201, 138, 27;
+/* Boosters: la fila de tarjetas. Es lo más notorio de Inicio, así que se lleva el
+   formato de tarjeta; el resto de las listas van compactas. */
+.home-card-grid {
+  --home-member-rgb: 244, 127, 255;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.home-member-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--home-member-rgb), 0.45);
+  background: rgba(var(--home-member-rgb), 0.08);
+  box-shadow: 0 0 20px rgba(var(--home-member-rgb), 0.16);
+  text-align: center;
+}
+
+.home-member-card .home-member-avatar {
+  width: 52px;
+  height: 52px;
+}
+
+.home-member-card .home-member-name {
+  width: 100%;
 }
 
 .home-member-avatar {
@@ -4679,9 +4624,17 @@ a:hover {
   background: var(--surface-card);
 }
 
+:root[data-theme="light"] .home-member-rank,
 :root[data-theme="light"] .home-member-name {
   text-shadow: none;
 }
+
+/* Sobre blanco el tinte del acento alcanza y el halo del tema oscuro se ve
+   sucio: la tarjeta de booster queda con un anillo. */
+:root[data-theme="light"] .home-member-card {
+  box-shadow: 0 0 0 1px rgba(var(--home-member-rgb), 0.3);
+}
+
 .booster-badge {
   display: inline-flex;
   align-items: center;
@@ -4702,8 +4655,9 @@ a:hover {
 }
 
 @media (max-width: 760px) {
-  .podium {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .home-member-card .home-member-avatar {
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -9319,8 +9273,8 @@ select.list-order {
   filter: drop-shadow(0 1px 1px rgba(28, 45, 80, 0.22));
 }
 
-/* Podio: los colores del tema claro y el "sin glow" viven con las variables
-   del podio (arriba, junto a las reglas .podium-*). */
+/* Podio: los colores del tema claro viven con las variables del podio (arriba)
+   y el "sin glow" del puesto va en las filas de Inicio (.home-member-*). */
 
 /* Barra superior */
 :root[data-theme="light"] .topbar {
@@ -9380,7 +9334,6 @@ select.list-order {
 :root[data-theme="light"] .rr-job,
 :root[data-theme="light"] .audit-row,
 :root[data-theme="light"] .home-hero,
-:root[data-theme="light"] .podium-item,
 :root[data-theme="light"] .stat-tile,
 :root[data-theme="light"] .admin-row-box,
 :root[data-theme="light"] .admin-sub,
@@ -9622,16 +9575,6 @@ select.list-order {
 }
 
 /* Elementos "booster" (púrpura) -> tintes claros */
-:root[data-theme="light"] .home-member-row--booster {
-  background: rgba(244, 127, 255, 0.1);
-  border-color: rgba(244, 127, 255, 0.4);
-}
-
-:root[data-theme="light"] .home-member-row--lead {
-  background: rgba(201, 138, 27, 0.1);
-  border-color: rgba(201, 138, 27, 0.4);
-}
-
 :root[data-theme="light"] .booster-pill,
 :root[data-theme="light"] .boost-count-badge {
   background: rgba(244, 127, 255, 0.14);

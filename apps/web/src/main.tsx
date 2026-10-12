@@ -6156,21 +6156,34 @@ const KARUTA_COMMAND_GROUPS: Array<{
   },
 ];
 
-// Fila de miembro de Inicio: la comparten los boosters y los raid leads (mismo
-// alto, mismo avatar, mismo nombre linkeado al perfil; cambia el acento).
+// Acento de los raid leads: el dorado de Raid Officer, el mismo del resto de la
+// app. El de los boosters lo pone el CSS del grid (es una sola lista).
+const HOME_LEAD_ACCENT = "201, 138, 27";
+
+// Fila de miembro de Inicio: la comparten el podio y los raid leads (mismo alto,
+// mismo avatar, mismo nombre linkeado al perfil; cambia el acento).
 function HomeMemberRow({
   accent,
-  meta,
   member,
+  meta,
+  nameStyle,
   onOpenProfile,
+  rank,
 }: {
-  accent: "booster" | "lead";
-  meta?: string;
+  // Color del grupo, como canales ("244, 127, 255" o `var(--podium-1-rgb)`).
+  accent: string;
   member: GuildMemberCard;
+  meta?: string;
+  nameStyle?: CSSProperties;
   onOpenProfile: (userId: string) => void;
+  rank?: string;
 }) {
   return (
-    <div className={`home-member-row home-member-row--${accent}`}>
+    <div
+      className="home-member-row"
+      style={{ "--home-member-rgb": accent } as CSSProperties}
+    >
+      {rank ? <span className="home-member-rank">{rank}</span> : null}
       {member.avatarUrl ? (
         <img className="home-member-avatar" src={member.avatarUrl} alt="" />
       ) : (
@@ -6178,7 +6191,7 @@ function HomeMemberRow({
           ?
         </span>
       )}
-      <span className="home-member-name">
+      <span className="home-member-name" style={nameStyle}>
         <button
           className="member-link"
           onClick={() => onOpenProfile(member.userId)}
@@ -6249,15 +6262,34 @@ function HomeView({
         ) : boosters.length === 0 ? (
           <p className="admin-empty">Aún no hay boosters registrados.</p>
         ) : (
-          <div className="home-member-list">
+          <div className="home-card-grid">
             {boosters.map((booster) => (
-              <HomeMemberRow
-                accent="booster"
-                key={booster.userId}
-                member={booster}
-                meta={`Desde ${formatDate24(booster.premiumSince)}`}
-                onOpenProfile={onOpenProfile}
-              />
+              <article className="home-member-card" key={booster.userId}>
+                {booster.avatarUrl ? (
+                  <img
+                    className="home-member-avatar"
+                    src={booster.avatarUrl}
+                    alt=""
+                  />
+                ) : (
+                  <span className="home-member-avatar home-member-avatar-placeholder">
+                    ?
+                  </span>
+                )}
+                <span className="home-member-name">
+                  <button
+                    className="member-link"
+                    onClick={() => onOpenProfile(booster.userId)}
+                    title="Ver perfil"
+                    type="button"
+                  >
+                    {booster.nickname || booster.username}
+                  </button>
+                </span>
+                <span className="home-member-meta">
+                  Desde {formatDate24(booster.premiumSince)}
+                </span>
+              </article>
             ))}
           </div>
         )}
@@ -6277,36 +6309,24 @@ function HomeView({
             Aún no hay XP registrado en este servidor.
           </p>
         ) : (
-          <div className="podium">
+          <div className="home-member-list">
             {top5.map((entry) => (
-              <div
-                className={`podium-item podium-place-${entry.rank}`}
+              <HomeMemberRow
+                accent={`var(--podium-${entry.rank}-rgb)`}
                 key={entry.userId}
-              >
-                <span className="podium-rank">
-                  {PODIUM_LABELS[entry.rank - 1] ?? entry.rank}
-                </span>
-                {entry.avatarUrl ? (
-                  <img className="podium-avatar" src={entry.avatarUrl} alt="" />
-                ) : (
-                  <span className="podium-avatar podium-avatar-placeholder">
-                    ?
-                  </span>
-                )}
-                <span className="podium-name" style={colorFor(entry.level)}>
-                  <button
-                    className="member-link"
-                    onClick={() => onOpenProfile(entry.userId)}
-                    title="Ver perfil"
-                    type="button"
-                  >
-                    {entry.nickname || entry.username || `@${entry.userId}`}
-                  </button>
-                </span>
-                <span className="podium-meta">
-                  Nivel {entry.level} · {entry.xp} XP
-                </span>
-              </div>
+                member={{
+                  avatarUrl: entry.avatarUrl,
+                  nickname: entry.nickname,
+                  userId: entry.userId,
+                  // `username` puede venir vacío en el leaderboard: la fila cae
+                  // al @id cuando no hay nick ni usuario.
+                  username: entry.username ?? "",
+                }}
+                meta={`Nivel ${entry.level} · ${entry.xp} XP`}
+                nameStyle={colorFor(entry.level)}
+                onOpenProfile={onOpenProfile}
+                rank={PODIUM_LABELS[entry.rank - 1] ?? String(entry.rank)}
+              />
             ))}
           </div>
         )}
@@ -6315,8 +6335,8 @@ function HomeView({
       <section className="panel content-panel home-panel">
         <div className="section-header">
           <div>
-            <h2>Raid leads</h2>
-            <p>Los que llevan el core de WoW.</p>
+            <h2>Raid Leads</h2>
+            <p>Los que ayudan, planifican y llevan adelante el core de WoW.</p>
           </div>
         </div>
         {leadsLoading ? (
@@ -6327,7 +6347,7 @@ function HomeView({
           <div className="home-member-list">
             {leads.map((lead) => (
               <HomeMemberRow
-                accent="lead"
+                accent={HOME_LEAD_ACCENT}
                 key={lead.userId}
                 member={lead}
                 onOpenProfile={onOpenProfile}
