@@ -22,9 +22,9 @@
 3. `apps/web`
 
 - UI de Guild Hub (React + Vite)
-- Home (tarjeta de boosters + podio por XP y raid leads), dashboard, tab Eventos,
-  panel admin (donde "Plantillas" es el catálogo de tipos de evento y "Eventos" el
-  historial de los que ya terminaron)
+- Home (tarjeta de boosters al frente y, debajo, el podio por XP y los raid leads
+  lado a lado), dashboard, tab Eventos, panel admin (donde "Plantillas" es el
+  catálogo de tipos de evento y "Eventos" el historial de los que ya terminaron)
 - Consume endpoints del API
 - Iconos: `@phosphor-icons/react` con `weight="fill"` (un solo set, formas
   sólidas que se leen en el panel oscuro); el tamaño y el color los fija el CSS

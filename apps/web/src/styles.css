@@ -4408,6 +4408,20 @@ a:hover {
   gap: 24px;
 }
 
+/* Las dos listas de seguimiento van lado a lado: el ancho lo fijan las columnas
+   y no la cantidad de miembros, así las tres cajas de Inicio ocupan lo mismo. */
+.home-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 1020px) {
+  .home-secondary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .home-hero {
   position: relative;
   border-radius: 22px;
@@ -4535,11 +4549,13 @@ a:hover {
 }
 
 /* Boosters: la fila de tarjetas. Es lo más notorio de Inicio, así que se lleva el
-   formato de tarjeta; el resto de las listas van compactas. */
+   formato de tarjeta; el resto de las listas van compactas. `auto-fit` y no
+   `auto-fill` para que las tarjetas se repartan el ancho que sobra cuando hay
+   pocos miembros (con `auto-fill` quedaban las columnas vacías al final). */
 .home-card-grid {
   --home-member-rgb: 244, 127, 255;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
 }
 

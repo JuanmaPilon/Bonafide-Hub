@@ -6295,67 +6295,69 @@ function HomeView({
         )}
       </section>
 
-      <section className="panel content-panel home-panel">
-        <div className="section-header">
-          <div>
-            <h2>Podio del servidor</h2>
-            <p>Top 5 MVP por XP del servidor.</p>
+      <div className="home-secondary">
+        <section className="panel content-panel home-panel">
+          <div className="section-header">
+            <div>
+              <h2>Podio del servidor</h2>
+              <p>Top 5 MVP por XP del servidor.</p>
+            </div>
           </div>
-        </div>
-        {loading ? (
-          <LoadingState label="Cargando podio…" />
-        ) : top5.length === 0 ? (
-          <p className="admin-empty">
-            Aún no hay XP registrado en este servidor.
-          </p>
-        ) : (
-          <div className="home-member-list">
-            {top5.map((entry) => (
-              <HomeMemberRow
-                accent={`var(--podium-${entry.rank}-rgb)`}
-                key={entry.userId}
-                member={{
-                  avatarUrl: entry.avatarUrl,
-                  nickname: entry.nickname,
-                  userId: entry.userId,
-                  // `username` puede venir vacío en el leaderboard: la fila cae
-                  // al @id cuando no hay nick ni usuario.
-                  username: entry.username ?? "",
-                }}
-                meta={`Nivel ${entry.level} · ${entry.xp} XP`}
-                nameStyle={colorFor(entry.level)}
-                onOpenProfile={onOpenProfile}
-                rank={PODIUM_LABELS[entry.rank - 1] ?? String(entry.rank)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+          {loading ? (
+            <LoadingState label="Cargando podio…" />
+          ) : top5.length === 0 ? (
+            <p className="admin-empty">
+              Aún no hay XP registrado en este servidor.
+            </p>
+          ) : (
+            <div className="home-member-list">
+              {top5.map((entry) => (
+                <HomeMemberRow
+                  accent={`var(--podium-${entry.rank}-rgb)`}
+                  key={entry.userId}
+                  member={{
+                    avatarUrl: entry.avatarUrl,
+                    nickname: entry.nickname,
+                    userId: entry.userId,
+                    // `username` puede venir vacío en el leaderboard: la fila cae
+                    // al @id cuando no hay nick ni usuario.
+                    username: entry.username ?? "",
+                  }}
+                  meta={`Nivel ${entry.level} · ${entry.xp} XP`}
+                  nameStyle={colorFor(entry.level)}
+                  onOpenProfile={onOpenProfile}
+                  rank={PODIUM_LABELS[entry.rank - 1] ?? String(entry.rank)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
-      <section className="panel content-panel home-panel">
-        <div className="section-header">
-          <div>
-            <h2>Raid Leads</h2>
-            <p>Los que ayudan, planifican y llevan adelante el core de WoW.</p>
+        <section className="panel content-panel home-panel">
+          <div className="section-header">
+            <div>
+              <h2>Raid Leads</h2>
+              <p>Los que ayudan, planifican y llevan adelante el core de WoW.</p>
+            </div>
           </div>
-        </div>
-        {leadsLoading ? (
-          <LoadingState label="Cargando raid leads…" />
-        ) : leads.length === 0 ? (
-          <p className="admin-empty">Aún no hay raid leads.</p>
-        ) : (
-          <div className="home-member-list">
-            {leads.map((lead) => (
-              <HomeMemberRow
-                accent={HOME_LEAD_ACCENT}
-                key={lead.userId}
-                member={lead}
-                onOpenProfile={onOpenProfile}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+          {leadsLoading ? (
+            <LoadingState label="Cargando raid leads…" />
+          ) : leads.length === 0 ? (
+            <p className="admin-empty">Aún no hay raid leads.</p>
+          ) : (
+            <div className="home-member-list">
+              {leads.map((lead) => (
+                <HomeMemberRow
+                  accent={HOME_LEAD_ACCENT}
+                  key={lead.userId}
+                  member={lead}
+                  onOpenProfile={onOpenProfile}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

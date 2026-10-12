@@ -523,15 +523,18 @@ Boosters de Nitro: `GET /guilds/:guildId/boosters`
 Inicio: la tarjeta principal son los **boosters** (los que bancan el server, con
 el acento de Nitro, el contador de boosts y una tarjeta por miembro —
 `.home-member-card`— porque es lo que más se mira) y abajo van dos de
-seguimiento, ya compactas: el **podio** por XP (top 5, con el color de rango de
-cada puesto —las variables `--podium-*`— y el del nivel en el nombre) y los
-**raid leads** (`GET /guilds/:guildId/raid-leads`), que son los que tienen el rol
-de Raid Officer mapeado en el roster —liviano a propósito: avatar, nick y usuario,
-porque la fila solo muestra quiénes son—. Las dos listas comparten la misma fila
-(`.home-member-row`, con el acento del grupo en `--home-member-rgb`), así que no
-hay dos UI para lo mismo. Ni los boosters ni los raid leads se borran al salir de
-Inicio (solo al cambiar de guild): aparecer de golpe después de esperar la
-respuesta era peor.
+seguimiento, lado a lado (`.home-secondary`, media pantalla cada una y apiladas
+abajo de 1020 px): el **podio** por XP (top 5, con el color de rango de cada
+puesto —las variables `--podium-*`— y el del nivel en el nombre) y los **raid
+leads** (`GET /guilds/:guildId/raid-leads`), que son los que tienen el rol de Raid
+Officer mapeado en el roster —liviano a propósito: avatar, nick y usuario, porque
+la fila solo muestra quiénes son—. Las tres cajas ocupan el ancho completo sin
+importar cuántos miembros haya: la grilla de tarjetas usa `auto-fit` (con
+`auto-fill` las columnas sobrantes quedaban vacías a la derecha) y las dos listas
+comparten la misma fila (`.home-member-row`, con el acento del grupo en
+`--home-member-rgb`), así que no hay dos UI para lo mismo. Ni los boosters ni los
+raid leads se borran al salir de Inicio (solo al cambiar de guild): aparecer de
+golpe después de esperar la respuesta era peor.
 
 Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
 
