@@ -1021,6 +1021,43 @@ function memberDisplayName(member: DiscordGuildMember | null): string | null {
   );
 }
 
+// Nombre para el registro de auditoría y los logs: "Nick (usuario)". El nick lo
+// ve el staff a diario, pero solo y sin la cuenta no dice de quién se trata
+// cuando dos personas comparten nick; sin nick vale el nombre de la cuenta, y el
+// usuario va entre paréntesis. Un id crudo no le dice nada a nadie.
+function memberLogName(member: DiscordGuildMember | null): string | null {
+  const username = member?.user?.username?.trim() ?? null;
+  const name =
+    member?.nick?.trim() || member?.user?.global_name?.trim() || null;
+  if (name && name !== username) {
+    return username ? `${name} (${username})` : name;
+  }
+  return name ?? username;
+}
+
+// "Nick (usuario)" de un id, desde la lista de miembros ya cacheada (4 min): no
+// suma un request a Discord por cada acción del panel. Sin resolver, queda el id.
+async function memberLogNameById(
+  guildId: string,
+  userId: string | null | undefined,
+): Promise<string | null> {
+  if (!userId) {
+    return null;
+  }
+  const members = await fetchAllGuildMembers(guildId).catch(() => []);
+  return memberLogName(
+    members.find((member) => member.user?.id === userId) ?? null,
+  );
+}
+
+// Nombre para el registro a partir del id, con el id como último recurso.
+async function memberLogLabel(
+  guildId: string,
+  userId: string,
+): Promise<string> {
+  return (await memberLogNameById(guildId, userId)) ?? userId;
+}
+
 // Si el evento exige un rol mínimo y la persona NO lo tiene, un "Voy" (yes)
 // pasa a bench (no entra al roster principal), estilo Raid Helper. Tarde y
 // No asisto se mantienen igual.
@@ -4942,7 +4979,7 @@ export function buildApp() {
     invalidateRaidLogAnalysis(params.guildId);
 
     await logAdminAction(session, params.guildId, "raid-log:alias", {
-      details: `PJ confirmado en los logs: ${alias.name} → miembro ${userId}${alias.character ? " (y corregido en su inscripción)" : ""}`,
+      details: `PJ confirmado en los logs: ${alias.name} → miembro ${await memberLogLabel(params.guildId, userId)}${alias.character ? " (y corregido en su inscripción)" : ""}`,
       targetId: userId,
       targetType: "raid-log-alias",
     });
@@ -5642,7 +5679,7 @@ export function buildApp() {
     );
     const member = await fetchGuildMemberRecord(params.guildId, params.userId);
     await logAdminAction(session, params.guildId, "roster:profile", {
-      details: `Ficha de ${memberDisplayName(member) ?? params.userId}: ${profile.className} ${profile.specName}${alts.length > 0 ? ` (+${alts.length} alter)` : ""}`,
+      details: `Ficha de ${memberLogName(member) ?? params.userId}: ${profile.className} ${profile.specName}${alts.length > 0 ? ` (+${alts.length} alter)` : ""}`,
       targetId: params.userId,
       targetType: "user",
     });
@@ -5688,7 +5725,7 @@ export function buildApp() {
       tags: [],
     });
     await logAdminAction(session, params.guildId, "roster:add", {
-      details: `${memberDisplayName(member) ?? userId} agregado al roster (ficha vacía)`,
+      details: `${memberLogName(member) ?? userId} agregado al roster (ficha vacía)`,
       targetId: userId,
       targetType: "user",
     });
@@ -5714,7 +5751,7 @@ export function buildApp() {
     const deleted = await deleteRosterProfile(params.guildId, params.userId);
     await deleteRosterAlts(params.guildId, params.userId);
     await logAdminAction(session, params.guildId, "roster:delete", {
-      details: `Ficha de ${params.userId} eliminada.`,
+      details: `Ficha de ${await memberLogLabel(params.guildId, params.userId)} eliminada.`,
       targetId: params.userId,
       targetType: "user",
     });
@@ -5756,9 +5793,12 @@ export function buildApp() {
     // quitado: si no, seguiría oculta por `active: false`. Al revés no: elegir
     // "Inactivo" solo saca los roles, así se sigue viendo quién está afuera.
     const reactivated = rank ? await setRosterProfileActive(params.guildId, params.userId, true) : false;
+    // El nombre se resuelve antes de tirar la caché de miembros: sale de la lista
+    // que ya estaba en memoria, sin un fetch extra a Discord.
+    const memberName = await memberLogLabel(params.guildId, params.userId);
     if (reactivated) {
       await logAdminAction(session, params.guildId, "roster:restore", {
-        details: `Ficha de ${params.userId} reactivada (estado ${rank}).`,
+        details: `Ficha de ${memberName} reactivada (estado ${rank}).`,
         targetId: params.userId,
         targetType: "user",
       });
@@ -5767,7 +5807,7 @@ export function buildApp() {
     invalidateGuildMembers(params.guildId);
 
     await logAdminAction(session, params.guildId, "roster:rank", {
-      details: `Rango de ${params.userId}: ${rank ?? "fuera del roster"}${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
+      details: `Rango de ${memberName}: ${rank ?? "fuera del roster"}${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
       targetId: params.userId,
       targetType: "user",
     });
@@ -5818,10 +5858,12 @@ export function buildApp() {
         : undefined;
       // Los roles cambiaron en Discord: la lista de miembros cacheada quedó
       // vieja y, sin esto, la persona seguía apareciendo hasta 4 minutos más.
+      // El nombre se resuelve antes, con la lista que todavía está en memoria.
+      const memberName = await memberLogLabel(params.guildId, params.userId);
       invalidateGuildMembers(params.guildId);
 
       await logAdminAction(session, params.guildId, "roster:remove", {
-        details: `${params.userId} fuera del roster (roles de Raid/Bench quitados${profileActive === false ? ", ficha inactiva" : ""})${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
+        details: `${memberName} fuera del roster (roles de Raid/Bench quitados${profileActive === false ? ", ficha inactiva" : ""})${roleSync.ok ? "" : ` (rol no sincronizado: ${roleSync.detail ?? "sin detalle"})`}`,
         targetId: params.userId,
         targetType: "user",
       });
@@ -7443,7 +7485,7 @@ export function buildApp() {
       }
 
       await logAdminAction(session, params.guildId, "event:signup-remove", {
-        details: `Inscripción quitada a mano: ${existing?.username ?? params.userId}${notified ? " + aviso por MD" : ""}`,
+        details: `Inscripción quitada a mano: ${existing?.username ?? (await memberLogLabel(params.guildId, params.userId))}${notified ? " + aviso por MD" : ""}`,
         targetId: params.userId,
         targetType: "event-signup",
       });
@@ -8539,10 +8581,35 @@ export function buildApp() {
     // más historial es más útil que menos.
     const logs = await listAuditLogEntries(params.guildId, 100);
 
+    // Los registros viejos guardaron ids crudos ("Rango de 2312512311: Activo")
+    // porque en su momento no se pudo resolver el nombre. Se traduce al leer, que
+    // es donde se muestra, así el historial ya cargado también queda legible; los
+    // que ya tienen nombre no se tocan. La lista de miembros está cacheada.
+    const members = await fetchAllGuildMembers(params.guildId).catch(() => []);
+    const nameById = new Map<string, string>();
+    for (const member of members) {
+      const userId = member.user?.id;
+      const name = memberLogName(member);
+      if (userId && name) {
+        nameById.set(userId, name);
+      }
+    }
+
     return {
       ok: true,
       guildId: params.guildId,
-      logs,
+      logs: logs.map((entry) => ({
+        ...entry,
+        actorName:
+          entry.actorName ??
+          (entry.actorUserId ? (nameById.get(entry.actorUserId) ?? null) : null),
+        details:
+          entry.details && entry.targetId
+            ? entry.details
+                .split(entry.targetId)
+                .join(nameById.get(entry.targetId) ?? entry.targetId)
+            : entry.details,
+      })),
     };
   });
 

@@ -150,24 +150,58 @@ type MemberLeaveDetails = {
 };
 
 // Identidad para el log de miembros: el nick del servidor y, entre paréntesis,
-// el usuario de Discord ("Azzaio (Juanma)"). El nick solo viaja en el evento si
-// el miembro estaba en el cache del bot; con el intent GuildMembers lo está,
-// pero si nunca se cacheó queda solo el usuario (como se veía antes).
-function formatMemberLogName(member: {
-  id: string;
-  nick?: string | null;
-  user?: { username?: string | null } | null;
-}): string {
+// el usuario de Discord ("Azzaio (Juanma)"). Sin nick (lo normal: mucha gente no
+// se lo pone) el nombre sale de la cuenta, y si el evento llegó sin datos
+// (`account`) o no hay ni eso, queda la mención: nunca un id suelto.
+function formatMemberLogName(
+  member: {
+    id: string;
+    nick?: string | null;
+    user?: {
+      global_name?: string | null;
+      globalName?: string | null;
+      username?: string | null;
+    } | null;
+  },
+  account?: { globalName?: string | null; username?: string | null } | null,
+): string {
   // Se usa `username` y no `tag`: en un usuario parcial (no cacheado) `tag`
   // devuelve "undefined#undefined", que ensucia el log más que no poner nada.
-  const username = member.user?.username?.trim() || member.id;
-  const nick = member.nick?.trim();
-  // Un nick igual al usuario no agrega nada y "Juanma (Juanma)" se lee como un
-  // error del bot.
-  if (!nick || nick === username) {
-    return username;
+  const username =
+    member.user?.username?.trim() || account?.username?.trim() || null;
+  // El nombre "de todos los días": el nick del servidor si lo tiene; si no, el
+  // nombre de la cuenta (el que se ve en Discord). El usuario va entre paréntesis
+  // porque solo, sin el nombre, no siempre identifica a la persona.
+  const name =
+    member.nick?.trim() ||
+    member.user?.globalName?.trim() ||
+    member.user?.global_name?.trim() ||
+    account?.globalName?.trim() ||
+    null;
+  if (name && name !== username) {
+    return username ? `${name} (${username})` : name;
   }
-  return `${nick} (${username})`;
+  // Sin nada legible queda la mención, que en Discord igual se ve como nombre.
+  return name ?? username ?? `<@${member.id}>`;
+}
+
+// Cuenta de Discord de alguien que puede haber salido del servidor: si el evento
+// llegó con un miembro parcial (el bot no lo tenía cacheado) `user` viene con el
+// id y nada más, y `users.fetch` es la única forma de saber quién era — la cuenta
+// sigue existiendo fuera de la guild. Solo se pide en ese caso, para no sumar un
+// request por cada salida.
+async function resolveLeaveAccount(member: {
+  id: string;
+  user?: { username?: string | null } | null;
+}): Promise<{ globalName?: string | null; username?: string | null } | null> {
+  if (member.user?.username?.trim()) {
+    return null;
+  }
+  const user = await client.users.fetch(member.id).catch(() => null);
+  if (!user) {
+    return null;
+  }
+  return { globalName: user.globalName, username: user.username };
 }
 
 function formatLeaveMessage(
@@ -4525,7 +4559,10 @@ client.on(Events.GuildMemberAdd, async (member) => {
 client.on(Events.GuildMemberRemove, async (member) => {
   // El nick hay que leerlo acá: cuando termina el evento el miembro ya salió y
   // el cache lo suelta, así que después no hay de dónde sacarlo.
-  const memberName = formatMemberLogName(member);
+  const memberName = formatMemberLogName(
+    member,
+    await resolveLeaveAccount(member).catch(() => null),
+  );
   const leaveDetails = await resolveMemberLeaveDetails(member).catch(
     () => ({ kind: "leave" }) as MemberLeaveDetails,
   );

@@ -66,7 +66,10 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 ## 3. Eventos y automatizaciones
 
 1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada
-2. `GuildMemberRemove` → log de salida
+2. `GuildMemberRemove` → log de salida (con el nombre de la persona: `Nick (usuario)`,
+   el nick del servidor o si no el nombre de la cuenta; si el evento llega con un
+   miembro parcial se pide la cuenta con `users.fetch`, que existe aunque ya no esté
+   en la guild, para no terminar mostrando un id)
 3. `MessageCreate` → XP por mensaje (cooldown anti-spam)
 4. `VoiceStateUpdate` → XP por tiempo en voz + salas de voz dinámicas
 5. Polling de `xpSyncRequested` → re-sincroniza roles/nicknames por nivel

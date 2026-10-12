@@ -600,6 +600,15 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 3. Solo lectura: no hay rutas de edición/borrado.
 4. Lectura: `GET /guilds/:guildId/audit-logs` (solo owner).
 
+**Nombres en vez de ids**: las acciones sobre una persona guardan su nombre como
+`Nick (usuario)` (`memberLogName`, `apps/api/src/app.ts`), resuelto con la lista de
+miembros ya cacheada (4 min), así no suma un request a Discord por acción. Si no se
+pudo resolver queda el id, que es lo que se veía antes. Al leer
+(`GET /audit-logs`) se hace una segunda pasada: el `targetId` de cada entrada se
+traduce a su nombre dentro del detalle si quedó crudo, y `actorName` se completa
+desde la lista de miembros cuando la entrada vieja no lo tenía. Así el historial ya
+cargado también queda legible.
+
 ## 6. Persistencia Prisma
 
 Schema: `apps/api/prisma/schema.prisma`
