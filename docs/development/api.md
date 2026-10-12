@@ -79,21 +79,27 @@ rango mueve roles. Administra `raid` (Activo) y `bench` (Bench); `guild`
 los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
 el motivo y el guardado no se pierde.
 
-**Estados de la tarjeta** (los mismos cuatro del filtro de la web):
+**Estados de la tarjeta** (los mismos cuatro del filtro y del menú de la web, en
+ese orden):
 
-1. **Activo** — tiene el rol `raid`.
-2. **Bench** — tiene el rol `bench`.
-3. **Sin asignar** — tiene ficha y ningún rol de estado: sigue en el roster, pero
-   todavía no se lo asignaron a Raid ni a Bench (`rank: null` solo saca los roles,
-   no la ficha).
-4. **Inactivo** — la ficha está `active: false`: se salió del roster.
+1. **Activo** — tiene el rol `raid` (`PUT .../rank` con `raid`).
+2. **Bench** — tiene el rol `bench` (`PUT .../rank` con `bench`).
+3. **Inactivo** — la ficha está `active: false`: se salió del roster
+   (`POST .../remove`). En el menú no se ofrece si ya está inactivo.
+4. **Sin asignar** — tiene ficha y ningún rol de estado: sigue en el roster, pero
+   todavía no se lo asignaron a Raid ni a Bench (`PUT .../rank` con `null`, que
+   solo saca los roles y no toca la ficha).
+
+El color de cada estado sale de su clave (`raid`, `bench`, `inactive`,
+`unassigned`) en el filtro, en el badge de la tarjeta y en el menú, así no se
+pueden desincronizar: verde, ámbar, rojo y gris.
 
 **Quién aparece en la lista:** un miembro entra al roster si tiene el rol de
 `raid`, el de `bench`, el de Raid Officer **o una ficha** (`active: true` o
-`false`). Por eso "quitar del roster" (`/remove`) hace dos cosas: saca los dos
-roles de estado en Discord **y** marca la ficha `active: false`, que es lo que la
-muestra como "Inactivo". La clase, la spec y los alters **no se borran**: al
-volver a ponerle un rol de estado (desde el mismo menú) la ficha se reactiva sola
+`false`). Por eso "Inactivo" (`/remove`) hace dos cosas: saca los dos roles de
+estado en Discord **y** marca la ficha `active: false`, que es lo que la muestra
+como "Inactivo". La clase, la spec y los alters **no se borran**: al volver a
+ponerle un rol de estado (desde el mismo menú) la ficha se reactiva sola
 (`reactivated: true`). Los dos endpoints tiran la caché de miembros (4 min)
 después de tocar roles, así el cambio se ve al instante.
 
@@ -108,7 +114,10 @@ lista: el `PUT` de ficha exige clase y spec válidas del catálogo.
 compara contra los que pasan los chips de estado/rol/tags, **no** contra el total
 del roster (el total queda en el `title`), y la búsqueda mueve solo el numerador.
 Así "Activo" dice `20 de 20` y no `20 de 45`. "Rol" sigue siendo el rol de la spec
-principal; quien no tiene clase cae en "Sin rol".
+principal; quien no tiene clase cae en "Sin rol". Arriba de la lista, "Agregar/
+Modificar mi ficha" abre la ficha propia y "Sumar jugador" (solo staff con el
+módulo de raids) busca entre los miembros del servidor que todavía no tienen
+tarjeta.
 
 Clases secundarias ("alter"): `alts: [{ className, specName }]` (tope 4) viajan
 en el mismo PUT que la ficha y reemplazan la lista completa. Se guardan en

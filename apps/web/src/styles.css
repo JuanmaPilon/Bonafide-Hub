@@ -3630,7 +3630,7 @@ a:hover {
   background: rgba(134, 158, 214, 0.16);
 }
 
-.roster-status-option--activo {
+.roster-status-option--raid {
   color: #6ee7a1;
 }
 
@@ -3638,33 +3638,33 @@ a:hover {
   color: #ffd477;
 }
 
-.roster-status-option--sin-asignar {
+.roster-status-option--inactive {
+  color: #ff9292;
+  font-weight: 700;
+}
+
+.roster-status-option--inactive:hover {
+  background: rgba(229, 72, 77, 0.18);
+}
+
+.roster-status-option--unassigned {
   color: #b8c7e6;
 }
 
-/* Quitar del roster: la acción destructiva, separada del resto por una línea
-   (no con un borde en el botón, que quedaba como un subrayado suelto). */
+/* Los estados que no son "en el roster" (Inactivo y Sin asignar), separados del
+   resto por una línea: no son destinos de raid, son "todavía no" y "se fue". */
 .roster-status-separator {
   height: 1px;
   margin: 4px 2px;
   background: var(--panel-border);
 }
 
-.roster-status-option--quitar {
-  color: #ff9292;
-  font-weight: 700;
-}
-
-.roster-status-option--quitar:hover {
-  background: rgba(229, 72, 77, 0.18);
-}
-
 .roster-status-badge {
   padding: 3px 7px;
-  border: 1px solid rgba(229, 72, 77, 0.55);
+  border: 1px solid rgba(134, 158, 214, 0.45);
   border-radius: 999px;
-  background: rgba(229, 72, 77, 0.14);
-  color: #ff9292;
+  background: rgba(134, 158, 214, 0.14);
+  color: #b8c7e6;
   font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -3672,7 +3672,9 @@ a:hover {
   text-transform: uppercase;
 }
 
-.roster-status-badge--activo {
+/* El color del badge sale de la clave del estado (`raid`, `bench`, `inactive`,
+   `unassigned`), la misma que usan el filtro y el menú. */
+.roster-status-badge--raid {
   border-color: rgba(53, 185, 111, 0.62);
   background: rgba(53, 185, 111, 0.16);
   color: #6ee7a1;
@@ -3682,6 +3684,12 @@ a:hover {
   border-color: rgba(245, 181, 64, 0.65);
   background: rgba(245, 181, 64, 0.16);
   color: #ffd477;
+}
+
+.roster-status-badge--inactive {
+  border-color: rgba(229, 72, 77, 0.55);
+  background: rgba(229, 72, 77, 0.14);
+  color: #ff9292;
 }
 
 .roster-status-badge--unassigned {
@@ -3888,7 +3896,7 @@ a:hover {
 /* "Sin asignar": el azul grisáceo del tema oscuro no se lee sobre blanco. */
 :root[data-theme="light"] .roster-status-badge--unassigned,
 :root[data-theme="light"] .roster-filter-chips .roster-status-chip--unassigned,
-:root[data-theme="light"] .roster-status-option--sin-asignar {
+:root[data-theme="light"] .roster-status-option--unassigned {
   color: #4d5f85;
 }
 

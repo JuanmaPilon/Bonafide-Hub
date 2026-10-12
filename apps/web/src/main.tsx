@@ -1408,8 +1408,8 @@ function toggleInList(list: string[], key: string): string[] {
 const ROSTER_STATUS_FILTERS: Array<{ key: string; label: string }> = [
   { key: "raid", label: "Activo" },
   { key: "bench", label: "Bench" },
-  { key: "unassigned", label: "Sin asignar" },
   { key: "inactive", label: "Inactivo" },
+  { key: "unassigned", label: "Sin asignar" },
 ];
 
 function rosterStatusLabel(key: string | null): string | null {
@@ -2814,15 +2814,15 @@ function RosterSection({
       );
       notify(
         result.roleSyncError
-          ? `Quitado del roster. Pero Discord: ${result.roleSyncError}`
-          : "Quitado del roster.",
+          ? `Fuera del roster. Pero Discord: ${result.roleSyncError}`
+          : "Fuera del roster.",
         result.roleSyncError ? "error" : "success",
       );
     } catch (error) {
       notify(
         error instanceof Error
           ? error.message
-          : "No se pudo quitar del roster.",
+          : "No se pudo sacar del roster.",
         "error",
       );
     }
@@ -3095,53 +3095,47 @@ function RosterSection({
                 </button>
                 {rankMenuFor === member.userId ? (
                   <div className="roster-status-options">
-                    {(roster?.ranks ?? [])
-                      .filter(
-                        (rank) => rank.key === "raid" || rank.key === "bench",
-                      )
-                      .map((rank) => (
-                        <button
-                          className={`roster-status-option roster-status-option--${rosterRankLabel(rank.key).toLowerCase()}`}
-                          key={rank.key}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setRankMenuFor(null);
-                            void changeProfileRank(member, rank.key);
-                          }}
-                          type="button"
-                        >
-                          {rosterRankLabel(rank.key)}
-                        </button>
-                      ))}
+                    {(["raid", "bench"] as RosterRankKey[]).map((rank) => (
+                      <button
+                        className={`roster-status-option roster-status-option--${rank}`}
+                        key={rank}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setRankMenuFor(null);
+                          void changeProfileRank(member, rank);
+                        }}
+                        type="button"
+                      >
+                        {rosterRankLabel(rank)}
+                      </button>
+                    ))}
+                    {member.profile?.active === false ? null : (
+                      <button
+                        className="roster-status-option roster-status-option--inactive"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setRankMenuFor(null);
+                          void removeFromRoster(member);
+                        }}
+                        title="Sale del roster: se le sacan los roles de Raid y Bench en Discord (la clase y la spec quedan guardadas)"
+                        type="button"
+                      >
+                        Inactivo
+                      </button>
+                    )}
+                    <span className="roster-status-separator" />
                     <button
-                      className="roster-status-option roster-status-option--sin-asignar"
+                      className="roster-status-option roster-status-option--unassigned"
                       onClick={(event) => {
                         event.stopPropagation();
                         setRankMenuFor(null);
                         void changeProfileRank(member, null);
                       }}
-                      title="Saca los roles de Raid y Bench en Discord; la ficha queda guardada"
+                      title="Sigue en el roster, sin Raid ni Bench; la ficha queda guardada"
                       type="button"
                     >
                       Sin asignar
                     </button>
-                    {member.profile?.active === false ? null : (
-                      <>
-                        <span className="roster-status-separator" />
-                        <button
-                          className="roster-status-option roster-status-option--quitar"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setRankMenuFor(null);
-                            void removeFromRoster(member);
-                          }}
-                          title="Saca los roles de Raid y Bench en Discord y la ficha del roster (la clase y la spec quedan guardadas)"
-                          type="button"
-                        >
-                          Quitar del roster
-                        </button>
-                      </>
-                    )}
                   </div>
                 ) : null}
               </div>
@@ -3205,11 +3199,11 @@ function RosterSection({
           onClick={() =>
             meId && setSheetFor({ displayName: "Mi ficha", userId: meId })
           }
-          title="Cargar mi ficha (clase, spec y alters)"
+          title="Cargar o editar mi ficha (clase, spec y alters)"
           type="button"
         >
           <IdentificationCard size={16} weight="bold" />
-          Agregar ficha
+          Agregar/Modificar mi ficha
         </button>
         {canEditOthers ? (
           <button
