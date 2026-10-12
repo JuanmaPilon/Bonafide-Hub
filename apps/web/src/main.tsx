@@ -67,6 +67,7 @@ import {
   getEventRoster,
   getGuildBoosters,
   getGuildGameActivity,
+  getRaidLeads,
   getGuildConfig,
   getGuildRoles,
   getGuilds,
@@ -155,7 +156,8 @@ import {
   type GuildChannel,
   type GuildConfig,
   type GuildEmoji,
-  type GuildGameActivity,
+  type GuildMemberCard,
+  type GuildGameActivityResponse,
   type GuildMember,
   type GuildRole,
   type MappingGroup,
@@ -5149,10 +5151,12 @@ const TAB_SECTIONS: Partial<
       module: "config",
       tier: "owner",
     },
-    { key: "eventos", label: "Eventos", module: "eventos", tier: "subofficer" },
+    // Las claves no cambian con el nombre: los enlaces (#/admin/eventos) siguen
+    // abriendo lo mismo.
+    { key: "eventos", label: "Plantillas", module: "eventos", tier: "subofficer" },
     {
       key: "historial",
-      label: "Historial",
+      label: "Eventos",
       module: "eventos",
       tier: "subofficer",
     },
@@ -5984,8 +5988,40 @@ const GAME_MARQUEE_SPEED = 43;
 const GAME_HOT_COUNT = 10;
 const GAME_HOT_MIN_PLAYERS = 2;
 
-// Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
-const GAME_SKELETON_TILES = [0, 1, 2, 3, 4, 5];
+// Lo último que se vio del carrusel, guardado en la sesión del navegador (por
+// guild). Al recargar, las portadas aparecen de una —y el refresco va detrás,
+// igual que los boosters— en vez de mostrar las tarjetas de carga un instante.
+// Vive en `sessionStorage`: dura lo que la pestaña, así que nunca se muestra algo
+// viejo de una sesión anterior.
+const GAMES_CACHE_KEY = "bonafide-games";
+
+function readGamesCache(guildId: string): GuildGameActivityResponse | null {
+  try {
+    const raw = sessionStorage.getItem(`${GAMES_CACHE_KEY}:${guildId}`);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as GuildGameActivityResponse;
+    return Array.isArray(parsed?.games) ? parsed : null;
+  } catch {
+    // Modo privado o algo raro guardado: sin caché, se carga normal.
+    return null;
+  }
+}
+
+function writeGamesCache(
+  guildId: string,
+  activity: GuildGameActivityResponse,
+): void {
+  try {
+    sessionStorage.setItem(
+      `${GAMES_CACHE_KEY}:${guildId}`,
+      JSON.stringify(activity),
+    );
+  } catch {
+    // Cuota llena: el carrusel funciona igual, solo que sin caché.
+  }
+}
 
 // Guía de comandos de Karuta con el prefijo del server ("k" + comando).
 // Basado en el listado oficial de Karuta (karuta.com). Si Karuta agrega o
@@ -6120,11 +6156,53 @@ const KARUTA_COMMAND_GROUPS: Array<{
   },
 ];
 
+// Fila de miembro de Inicio: la comparten los boosters y los raid leads (mismo
+// alto, mismo avatar, mismo nombre linkeado al perfil; cambia el acento).
+function HomeMemberRow({
+  accent,
+  meta,
+  member,
+  onOpenProfile,
+}: {
+  accent: "booster" | "lead";
+  meta?: string;
+  member: GuildMemberCard;
+  onOpenProfile: (userId: string) => void;
+}) {
+  return (
+    <div className={`home-member-row home-member-row--${accent}`}>
+      {member.avatarUrl ? (
+        <img className="home-member-avatar" src={member.avatarUrl} alt="" />
+      ) : (
+        <span className="home-member-avatar home-member-avatar-placeholder">
+          ?
+        </span>
+      )}
+      <span className="home-member-name">
+        <button
+          className="member-link"
+          onClick={() => onOpenProfile(member.userId)}
+          title="Ver perfil"
+          type="button"
+        >
+          {member.nickname || member.username || `@${member.userId}`}
+        </button>
+      </span>
+      {meta ? <span className="home-member-meta">{meta}</span> : null}
+    </div>
+  );
+}
+
+// Inicio: la tarjeta principal es la de los boosters (los que bancan el server),
+// y abajo van las dos de seguimiento —el podio por XP y los raid leads—. Las
+// tres usan el mismo encabezado y las mismas filas que el resto de la app.
 function HomeView({
   boostCount,
   boosters,
   colorFor,
   leaderboard,
+  leads,
+  leadsLoading,
   loading,
   onOpenProfile,
   username,
@@ -6133,8 +6211,10 @@ function HomeView({
   boosters: GuildBooster[];
   colorFor: (level: number) => CSSProperties | undefined;
   leaderboard: LeaderboardEntry[];
+  leads: GuildMemberCard[];
+  leadsLoading: boolean;
   loading: boolean;
-  // Abre el perfil del miembro clickeado (podio y boosters).
+  // Abre el perfil del miembro clickeado (podio, boosters y raid leads).
   onOpenProfile: (userId: string) => void;
   username: string | null;
 }) {
@@ -6151,6 +6231,38 @@ function HomeView({
         </p>
       </section>
 
+      <section className="panel content-panel home-panel home-panel--main">
+        <div className="section-header">
+          <div>
+            <h2>Nitro · Boosts del servidor</h2>
+            <p>Los miembros que ayudan a crecer el server.</p>
+          </div>
+          <span className="boost-count-badge">
+            <span className="boost-gem" aria-hidden="true">
+              ◈
+            </span>
+            {boostCount ?? "—"}
+          </span>
+        </div>
+        {loading ? (
+          <LoadingState label="Cargando boosters…" />
+        ) : boosters.length === 0 ? (
+          <p className="admin-empty">Aún no hay boosters registrados.</p>
+        ) : (
+          <div className="home-member-list">
+            {boosters.map((booster) => (
+              <HomeMemberRow
+                accent="booster"
+                key={booster.userId}
+                member={booster}
+                meta={`Desde ${formatDate24(booster.premiumSince)}`}
+                onOpenProfile={onOpenProfile}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="panel content-panel home-panel">
         <div className="section-header">
           <div>
@@ -6159,11 +6271,11 @@ function HomeView({
           </div>
         </div>
         {loading ? (
-          <div className="empty-state">Cargando podio...</div>
+          <LoadingState label="Cargando podio…" />
         ) : top5.length === 0 ? (
-          <div className="empty-state">
+          <p className="admin-empty">
             Aún no hay XP registrado en este servidor.
-          </div>
+          </p>
         ) : (
           <div className="podium">
             {top5.map((entry) => (
@@ -6203,49 +6315,23 @@ function HomeView({
       <section className="panel content-panel home-panel">
         <div className="section-header">
           <div>
-            <h2>Nitro · Boosts del servidor</h2>
-            <p>Los miembros que ayudan a crecer el server.</p>
+            <h2>Raid leads</h2>
+            <p>Los que llevan el core de WoW.</p>
           </div>
-          <span className="boost-count-badge">
-            <span className="boost-gem" aria-hidden="true">
-              ◈
-            </span>
-            {boostCount ?? "—"}
-          </span>
         </div>
-        {loading ? (
-          <div className="empty-state">Cargando boosters...</div>
-        ) : boosters.length === 0 ? (
-          <div className="empty-state">Aún no hay boosters registrados.</div>
+        {leadsLoading ? (
+          <LoadingState label="Cargando raid leads…" />
+        ) : leads.length === 0 ? (
+          <p className="admin-empty">Aún no hay raid leads.</p>
         ) : (
-          <div className="booster-list">
-            {boosters.map((booster) => (
-              <div className="booster-item" key={booster.userId}>
-                {booster.avatarUrl ? (
-                  <img
-                    className="booster-avatar"
-                    src={booster.avatarUrl}
-                    alt=""
-                  />
-                ) : (
-                  <span className="booster-avatar booster-avatar-placeholder">
-                    ?
-                  </span>
-                )}
-                <span className="booster-name">
-                  <button
-                    className="member-link"
-                    onClick={() => onOpenProfile(booster.userId)}
-                    title="Ver perfil"
-                    type="button"
-                  >
-                    {booster.nickname || booster.username}
-                  </button>
-                </span>
-                <span className="booster-since">
-                  Desde {formatDate24(booster.premiumSince)}
-                </span>
-              </div>
+          <div className="home-member-list">
+            {leads.map((lead) => (
+              <HomeMemberRow
+                accent="lead"
+                key={lead.userId}
+                member={lead}
+                onOpenProfile={onOpenProfile}
+              />
             ))}
           </div>
         )}
@@ -6704,20 +6790,20 @@ function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
   const [boostersLoading, setBoostersLoading] = useState(true);
+  const [raidLeads, setRaidLeads] = useState<GuildMemberCard[]>([]);
+  const [raidLeadsLoading, setRaidLeadsLoading] = useState(true);
   // Guild de los datos que están en pantalla: al cambiar de guild hay que
   // limpiar, al cambiar de pestaña no.
   const boostersGuildRef = useRef<string | null>(null);
+  const raidLeadsGuildRef = useRef<string | null>(null);
   const [gamesLoading, setGamesLoading] = useState(true);
   const dashboardGuildRef = useRef<string | null>(null);
   const gameTrackRef = useRef<HTMLDivElement | null>(null);
   // Posición del carrusel de juegos: se guarda al desmontarlo para retomar donde
   // iba. Volver a cero se ve como un corte (la lista salta al principio).
   const gameMarqueeOffsetRef = useRef(0);
-  const [gameActivity, setGameActivity] = useState<{
-    days: number;
-    games: GuildGameActivity[];
-    source: "activity" | "configured";
-  } | null>(null);
+  const [gameActivity, setGameActivity] =
+    useState<GuildGameActivityResponse | null>(null);
   // El marquee necesita el track repetido: ver GAME_MARQUEE_TARGET_TILES.
   const marqueeGames = useMemo(() => {
     const games = gameActivity?.games ?? [];
@@ -9822,6 +9908,43 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
+  // Raid leads: misma idea que los boosters (no se borran al salir de Inicio,
+  // solo al cambiar de guild).
+  useEffect(() => {
+    if (activeTab !== "home" || !selectedGuildId) {
+      return;
+    }
+
+    const sameGuild = raidLeadsGuildRef.current === selectedGuildId;
+    raidLeadsGuildRef.current = selectedGuildId;
+    if (!sameGuild) {
+      setRaidLeads([]);
+      setRaidLeadsLoading(true);
+    }
+
+    let cancelled = false;
+    getRaidLeads(selectedGuildId)
+      .then((leads) => {
+        if (!cancelled) {
+          setRaidLeads(leads);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !sameGuild) {
+          setRaidLeads([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRaidLeadsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
   // Juegos del server: los mide el bot con las presencias. Un fallo acá deja
   // el dashboard sin las portadas, nada más.
   //
@@ -9835,12 +9958,15 @@ function App() {
     }
 
     // Igual que los boosters: al volver a la sección se muestra lo último que
-    // hay y el refresco va detrás, sin que el carrusel aparezca de golpe.
+    // hay y el refresco va detrás, sin que el carrusel aparezca de golpe. Si no
+    // hay nada en memoria, se usa lo guardado en la sesión (una recarga no deja
+    // el dashboard en blanco).
     const sameGuild = dashboardGuildRef.current === selectedGuildId;
     dashboardGuildRef.current = selectedGuildId;
     if (!sameGuild) {
-      setGameActivity(null);
-      setGamesLoading(true);
+      const cached = readGamesCache(selectedGuildId);
+      setGameActivity(cached);
+      setGamesLoading(cached === null);
     }
 
     let cancelled = false;
@@ -9855,6 +9981,7 @@ function App() {
         setGameActivity((current) =>
           samePayload(current, activity) ? current : activity,
         );
+        writeGamesCache(selectedGuildId, activity);
       } catch {
         // Un fallo acá deja el carrusel como estaba: no se vacía por un error.
         if (!cancelled && !sameGuild) {
@@ -10198,6 +10325,8 @@ function App() {
             boosters={boosters}
             colorFor={levelStyleFor}
             leaderboard={leaderboard}
+            leads={raidLeads}
+            leadsLoading={raidLeadsLoading}
             loading={loadingGuildData || boostersLoading}
             onOpenProfile={openMemberProfile}
             username={username}
@@ -10296,22 +10425,13 @@ function App() {
                       </div>
                     </div>
                   ) : gamesLoading ? (
-                    /* Mientras llega la primera respuesta: la misma caja, así
-                       el dashboard no se reacomoda cuando aparecen. */
-                    <div className="game-marquee">
-                      <div className="game-covers">
-                        {GAME_SKELETON_TILES.map((index) => (
-                          <span
-                            aria-hidden="true"
-                            className="game-cover game-cover--skeleton"
-                            key={index}
-                          >
-                            <span className="game-cover-art" />
-                            <span className="game-cover-name" />
-                          </span>
-                        ))}
-                      </div>
-                    </div>                  ) : null}
+                    /* Primera carga (sin caché): la misma caja que el carrusel,
+                       con un spinner, así el dashboard no se reacomoda cuando
+                       llegan las portadas. */
+                    <div className="game-marquee game-marquee--loading">
+                      <LoadingState label="Cargando juegos…" />
+                    </div>
+                  ) : null}
 
                   <div className="leaderboard-panel">
                     <h3>Leaderboard de XP</h3>
@@ -11596,7 +11716,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Eventos{" "}
+                            Plantillas{" "}
                             <span className="admin-tier-badge tier-subofficer">
                               Sub Officer
                             </span>
@@ -11669,7 +11789,7 @@ function App() {
                       <summary className="admin-card-header admin-acc-header">
                         <div>
                           <h3>
-                            Historial de eventos{" "}
+                            Eventos{" "}
                             <span className="admin-tier-badge tier-subofficer">
                               Sub Officer
                             </span>

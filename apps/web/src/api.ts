@@ -287,13 +287,31 @@ export type GuildWidgetStatus = {
   presenceCount: number | null;
 };
 
-export type GuildBooster = {
+// Tarjeta de miembro de Inicio: la misma fila para boosters y raid leads.
+export type GuildMemberCard = {
   avatarUrl: string | null;
   nickname: string | null;
-  premiumSince: string;
   userId: string;
   username: string;
 };
+
+export type GuildBooster = GuildMemberCard & {
+  premiumSince: string;
+};
+
+// Raid leads del servidor: los que tienen el rol de Raid Officer del roster.
+export async function getRaidLeads(
+  guildId: string,
+): Promise<GuildMemberCard[]> {
+  const data = await requestJson<{ leads: GuildMemberCard[] }>(
+    `/guilds/${guildId}/raid-leads`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.leads;
+}
 
 export async function getGuildBoosters(
   guildId: string,

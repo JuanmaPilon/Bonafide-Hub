@@ -368,12 +368,16 @@ type LeaderboardUserInfo = {
   username: string;
 };
 
-type GuildBooster = {
+// Tarjeta de miembro de Inicio (boosters y raid leads): avatar + cómo llamarlo.
+type GuildMemberCard = {
   avatarUrl: string | null;
   nickname: string | null;
-  premiumSince: string;
   userId: string;
   username: string;
+};
+
+type GuildBooster = GuildMemberCard & {
+  premiumSince: string;
 };
 
 function buildAvatarUrl(userId: string, avatarHash: string): string {
@@ -1255,32 +1259,69 @@ function resolveGameKey(
   return games.some((entry) => entry.key === key) ? key : null;
 }
 
+// Avatar de un miembro: el del usuario si tiene uno propio; si no, el del
+// servidor (el que Discord deja personalizar por guild). Lo comparten los
+// boosters y los raid leads de Inicio.
+function memberAvatarUrl(
+  guildId: string,
+  member: DiscordGuildMember,
+): string | null {
+  if (member.user?.avatar) {
+    return buildAvatarUrl(member.user.id, member.user.avatar);
+  }
+  if (member.user && member.avatar) {
+    return buildServerAvatarUrl(guildId, member.user.id, member.avatar);
+  }
+  return null;
+}
+
 async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
   const members = await fetchAllGuildMembers(guildId).catch(() => []);
 
   return members
     .filter((member) => member.user && member.premium_since)
-    .map((member) => {
-      let avatarUrl: string | null = null;
-      if (member.user?.avatar) {
-        avatarUrl = buildAvatarUrl(member.user.id, member.user.avatar);
-      } else if (member.user && member.avatar) {
-        avatarUrl = buildServerAvatarUrl(
-          guildId,
-          member.user.id,
-          member.avatar,
-        );
-      }
-
-      return {
-        avatarUrl,
-        nickname: memberDisplayName(member),
-        premiumSince: member.premium_since as string,
-        userId: member.user?.id ?? "",
-        username: member.user?.username ?? "",
-      };
-    })
+    .map((member) => ({
+      avatarUrl: memberAvatarUrl(guildId, member),
+      nickname: memberDisplayName(member),
+      premiumSince: member.premium_since as string,
+      userId: member.user?.id ?? "",
+      username: member.user?.username ?? "",
+    }))
     .filter((booster) => booster.userId);
+}
+
+// Raid leads: los que tienen el rol de Raid Officer mapeado en el roster. Es la
+// misma tarjeta de miembro que los boosters (Inicio solo muestra quiénes son).
+async function fetchGuildRaidLeads(guildId: string): Promise<GuildMemberCard[]> {
+  const [config, mappings, members] = await Promise.all([
+    getGuildConfig(guildId),
+    listGuildMappings(guildId),
+    fetchAllGuildMembers(guildId).catch(() => []),
+  ]);
+  const officerRoleId = resolveRosterRankRoles(mappings, config).guild;
+  if (!officerRoleId) {
+    return [];
+  }
+
+  return members
+    .filter(
+      (member) =>
+        member.user &&
+        !member.user.bot &&
+        (member.roles ?? []).includes(officerRoleId),
+    )
+    .map((member) => ({
+      avatarUrl: memberAvatarUrl(guildId, member),
+      nickname: memberDisplayName(member),
+      userId: member.user?.id ?? "",
+      username: member.user?.username ?? "",
+    }))
+    .filter((lead) => lead.userId)
+    .sort((left, right) =>
+      (left.nickname ?? left.username).localeCompare(
+        right.nickname ?? right.username,
+      ),
+    );
 }
 
 // ── Cierre de inscripciones de eventos ──────────────────────────────
@@ -3446,6 +3487,32 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       boosters,
+    };
+  });
+
+  // Raid leads (Inicio): quiénes llevan el core. Liviano a propósito — la
+  // tarjeta de Inicio solo muestra avatar y nombre; el roster es otra cosa.
+  app.get("/guilds/:guildId/raid-leads", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const leads = await fetchGuildRaidLeads(params.guildId).catch(() => []);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      leads,
     };
   });
 

@@ -407,7 +407,11 @@ distinguir, y `source: "configured"` viene con todo en cero, o sea sin
 distintivo—. Los cortes viven en la web (`GAME_HOT_COUNT` /
 `GAME_HOT_MIN_PLAYERS`, `apps/web/src/main.tsx`): el API no sabe de presentación.
 La grilla se vuelve a pedir cada 30 s (`GAMES_REFRESH_MS`), aparte del refresco
-del dashboard (60 s) que además pega contra Discord.
+del dashboard (60 s) que además pega contra Discord. Lo último que se vio queda
+guardado en la sesión del navegador (`sessionStorage`, por guild), así una recarga
+muestra las portadas de una y el refresco va detrás —igual que los boosters—; sin
+nada guardado se ve un spinner en la misma caja que el carrusel (antes eran seis
+tarjetas fantasma parpadeando, que se leían como un error de carga).
 
 La agregación agrupa por **nombre base**, no por id de aplicación ni por nombre
 exacto: Discord tiene más de un id para el mismo juego (ids viejos y nuevos, una
@@ -515,6 +519,16 @@ igual en todos lados.
 Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`
+
+Inicio: la tarjeta principal son los **boosters** (los que bancan el server, con
+el acento de Nitro y el contador de boosts) y abajo van dos de seguimiento: el
+**podio** por XP (top 5, con los colores de rango del leaderboard) y los **raid
+leads** (`GET /guilds/:guildId/raid-leads`), que son los que tienen el rol de Raid
+Officer mapeado en el roster —liviano a propósito: avatar, nick y usuario, porque
+la tarjeta solo muestra quiénes son—. Las dos listas comparten la misma fila
+(`.home-member-row`, con el acento del grupo), así que no hay dos UI para lo
+mismo. Ni los boosters ni los raid leads se borran al salir de Inicio (solo al
+cambiar de guild): aparecer de golpe después de esperar la respuesta era peor.
 
 Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
 

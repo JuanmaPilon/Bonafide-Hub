@@ -4552,8 +4552,7 @@ a:hover {
   text-shadow: none;
 }
 
-.podium-avatar,
-.booster-avatar {
+.podium-avatar {
   width: 52px;
   height: 52px;
   border-radius: 50%;
@@ -4561,8 +4560,7 @@ a:hover {
   background: var(--panel-border);
 }
 
-.podium-avatar-placeholder,
-.booster-avatar-placeholder {
+.podium-avatar-placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4596,39 +4594,94 @@ a:hover {
   text-shadow: 0 0 8px rgba(244, 127, 255, 0.6);
 }
 
-.booster-list {
+/* Filas de miembros de Inicio: la misma fila para boosters y raid leads. El
+   acento del grupo pinta el avatar, el borde y el nombre. */
+.home-member-list {
   display: grid;
   gap: 10px;
 }
 
-.booster-item {
+.home-member-row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(28, 12, 40, 0.6);
-  border: 1px solid rgba(244, 127, 255, 0.3);
+  border: 1px solid rgba(var(--home-member-rgb), 0.3);
+  background: rgba(var(--home-member-rgb), 0.07);
 }
 
-.booster-avatar {
-  width: 38px;
-  height: 38px;
+.home-member-row--booster {
+  --home-member-rgb: 244, 127, 255;
+}
+
+.home-member-row--lead {
+  --home-member-rgb: 201, 138, 27;
+}
+
+.home-member-avatar {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
   border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-border);
   box-shadow:
-    0 0 0 2px rgba(244, 127, 255, 0.55),
-    0 0 12px rgba(244, 127, 255, 0.4);
+    0 0 0 2px rgba(var(--home-member-rgb), 0.5),
+    0 0 12px rgba(var(--home-member-rgb), 0.35);
 }
 
-.booster-name {
-  font-weight: 700;
+.home-member-avatar-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.home-member-name {
   flex: 1;
-  color: #f47fff;
-  text-shadow:
-    0 0 6px rgba(244, 127, 255, 0.7),
-    0 0 14px rgba(244, 127, 255, 0.4);
+  min-width: 0;
+  font-weight: 700;
+  color: rgb(var(--home-member-rgb));
+  text-shadow: 0 0 10px rgba(var(--home-member-rgb), 0.45);
 }
 
+.home-member-name .member-link {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-member-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* La tarjeta de boosters es la principal de Inicio (los que bancan el server):
+   lleva el acento de Nitro y un halo, como las tarjetas de rango del Admin. Va
+   con `.home-view` adelante para ganarle al borde y la sombra de `.panel`. */
+.home-view .home-panel--main {
+  border-color: rgba(244, 127, 255, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(244, 127, 255, 0.14),
+    0 16px 44px rgba(94, 16, 120, 0.24);
+}
+
+:root[data-theme="light"] .home-view .home-panel--main {
+  box-shadow:
+    0 0 0 1px rgba(244, 127, 255, 0.3),
+    0 12px 32px rgba(94, 16, 120, 0.12);
+}
+
+:root[data-theme="light"] .home-member-row {
+  background: var(--surface-card);
+}
+
+:root[data-theme="light"] .home-member-name {
+  text-shadow: none;
+}
 .booster-badge {
   display: inline-flex;
   align-items: center;
@@ -4646,11 +4699,6 @@ a:hover {
   box-shadow: 0 0 8px rgba(244, 127, 255, 0.3);
   cursor: default;
   flex-shrink: 0;
-}
-
-.booster-since {
-  color: var(--muted);
-  font-size: 0.8rem;
 }
 
 @media (max-width: 760px) {
@@ -5238,37 +5286,18 @@ a:hover {
   pointer-events: none;
 }
 
-/* Mientras llega la primera respuesta del dashboard: la misma caja que una
-   tarjeta real (misma proporción) para que no se reacomode nada. */
-.game-cover--skeleton .game-cover-art,
-.game-cover--skeleton .game-cover-name {
-  border-radius: 12px;
-  background: linear-gradient(
-    90deg,
-    rgba(134, 158, 214, 0.08),
-    rgba(134, 158, 214, 0.2),
-    rgba(134, 158, 214, 0.08)
-  );
-  background-size: 200% 100%;
-  animation: game-skeleton 1.4s ease-in-out infinite;
+/* Primera carga del carrusel, sin caché: la caja mide lo mismo que una fila de
+   tarjetas (163 = los 6+6 del carrusel + los 151 de una tarjeta), así el
+   dashboard no se reacomoda cuando llegan las portadas. */
+.game-marquee--loading {
+  display: grid;
+  place-items: center;
+  min-height: 163px;
 }
 
-.game-cover--skeleton .game-cover-name {
-  width: 72%;
-  /* Misma altura que la línea real del nombre (1.4 × 0.84rem): así el
-     esqueleto ocupa lo mismo que la tarjeta y nada se reacomoda. */
-  height: 1.4em;
-  border-radius: 999px;
-}
-
-@keyframes game-skeleton {
-  from {
-    background-position: 200% 0;
-  }
-
-  to {
-    background-position: -200% 0;
-  }
+/* El spinner no lleva el aire de las secciones: acá el alto lo pone la caja. */
+.game-marquee--loading .loading-state {
+  padding: 0;
 }
 
 .game-cover-name {
@@ -9593,9 +9622,14 @@ select.list-order {
 }
 
 /* Elementos "booster" (púrpura) -> tintes claros */
-:root[data-theme="light"] .booster-item {
+:root[data-theme="light"] .home-member-row--booster {
   background: rgba(244, 127, 255, 0.1);
   border-color: rgba(244, 127, 255, 0.4);
+}
+
+:root[data-theme="light"] .home-member-row--lead {
+  background: rgba(201, 138, 27, 0.1);
+  border-color: rgba(201, 138, 27, 0.4);
 }
 
 :root[data-theme="light"] .booster-pill,
