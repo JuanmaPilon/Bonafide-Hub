@@ -3137,6 +3137,15 @@ a:hover {
   min-width: 180px;
 }
 
+/* Botones del roster con ícono: misma pastilla que el resto, con el ícono
+   alineado al texto. */
+.roster-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
 .roster-filter-chips {
   display: flex;
   flex: 1 1 100%;
@@ -3193,14 +3202,27 @@ a:hover {
   color: #ffe9b8;
 }
 
-.roster-filter-chips .roster-status-chip--inactivo,
-.roster-filter-chips .roster-status-chip--inactivo:hover,
-.roster-filter-chips .roster-status-chip--inactivo:focus-visible {
+.roster-filter-chips .roster-status-chip--unassigned,
+.roster-filter-chips .roster-status-chip--unassigned:hover,
+.roster-filter-chips .roster-status-chip--unassigned:focus-visible {
+  border-color: rgba(134, 158, 214, 0.45);
+  color: #b8c7e6;
+}
+
+.roster-filter-chips .roster-status-chip--unassigned.active {
+  border-color: rgba(134, 158, 214, 0.75);
+  background: rgba(134, 158, 214, 0.2);
+  color: #dbe4f7;
+}
+
+.roster-filter-chips .roster-status-chip--inactive,
+.roster-filter-chips .roster-status-chip--inactive:hover,
+.roster-filter-chips .roster-status-chip--inactive:focus-visible {
   border-color: rgba(229, 72, 77, 0.5);
   color: #ff9292;
 }
 
-.roster-filter-chips .roster-status-chip--inactivo.active {
+.roster-filter-chips .roster-status-chip--inactive.active {
   border-color: rgba(229, 72, 77, 0.8);
   background: rgba(229, 72, 77, 0.2);
   color: #ffc9c9;
@@ -3393,6 +3415,14 @@ a:hover {
   border-color: rgba(229, 72, 77, 0.48);
   border-left-color: #e5484d;
   box-shadow: 0 0 14px rgba(229, 72, 77, 0.12);
+}
+
+/* Sin asignar: sigue en el roster pero sin Raid ni Bench. Gris apagado para no
+   competir con el rojo de "Inactivo" (que se fue del roster). */
+.roster-member--unassigned {
+  border-color: rgba(134, 158, 214, 0.4);
+  border-left-color: rgba(134, 158, 214, 0.85);
+  box-shadow: 0 0 16px rgba(134, 158, 214, 0.1);
 }
 
 .roster-member-main {
@@ -3608,8 +3638,8 @@ a:hover {
   color: #ffd477;
 }
 
-.roster-status-option--inactivo {
-  color: #ff9292;
+.roster-status-option--sin-asignar {
+  color: #b8c7e6;
 }
 
 /* Quitar del roster: la acción destructiva, separada del resto por una línea
@@ -3654,6 +3684,12 @@ a:hover {
   color: #ffd477;
 }
 
+.roster-status-badge--unassigned {
+  border-color: rgba(134, 158, 214, 0.5);
+  background: rgba(134, 158, 214, 0.14);
+  color: #b8c7e6;
+}
+
 .roster-delete-button {
   align-self: flex-start;
   margin-top: 14px;
@@ -3689,6 +3725,62 @@ a:hover {
 
 .roster-sheet {
   max-width: 520px;
+}
+
+/* Sumar jugador: buscador arriba y lista scrolleable, sin pasar de alto. */
+.roster-add-modal {
+  width: 100%;
+  max-width: 460px;
+}
+
+/* `.list-search` trae una base de flex pensada para las barras de herramientas
+   (donde comparte fila): en el modal, que es una columna, esa base la estiraba
+   a 220px de alto. */
+.roster-add-modal .list-search {
+  flex: 0 0 auto;
+}
+
+.roster-add-list {
+  display: grid;
+  gap: 4px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.roster-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  /* Tinte del texto: se adapta solo a los dos temas (un gris fijo se veía
+     oscuro en el claro). */
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.roster-add-name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.roster-add-username {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-add-button {
+  margin-left: auto;
+  padding: 5px 13px;
+  font-size: 0.8rem;
 }
 
 .roster-sheet-field,
@@ -3770,6 +3862,14 @@ a:hover {
   border-right-color: var(--roster-class-ink);
 }
 
+/* Los dos estados "fuera de línea" van con el borde y el tinte más oscuros:
+   sobre blanco los del tema oscuro quedaban casi invisibles. */
+:root[data-theme="light"] .roster-member--inactive {
+  border-color: rgba(229, 72, 77, 0.4);
+  border-left-color: #d2373c;
+  box-shadow: 0 6px 18px rgba(229, 72, 77, 0.12);
+}
+
 :root[data-theme="light"] .roster-off {
   border-color: rgba(60, 85, 130, 0.25);
 }
@@ -3783,6 +3883,32 @@ a:hover {
   border-color: rgba(124, 58, 237, 0.45);
   background: rgba(124, 58, 237, 0.12);
   color: #5b21b6;
+}
+
+/* "Sin asignar": el azul grisáceo del tema oscuro no se lee sobre blanco. */
+:root[data-theme="light"] .roster-status-badge--unassigned,
+:root[data-theme="light"] .roster-filter-chips .roster-status-chip--unassigned,
+:root[data-theme="light"] .roster-status-option--sin-asignar {
+  color: #4d5f85;
+}
+
+:root[data-theme="light"] .roster-status-badge--unassigned {
+  border-color: rgba(77, 95, 133, 0.45);
+  background: rgba(77, 95, 133, 0.1);
+}
+
+:root[data-theme="light"]
+  .roster-filter-chips
+  .roster-status-chip--unassigned.active {
+  border-color: rgba(77, 95, 133, 0.55);
+  background: rgba(77, 95, 133, 0.14);
+  color: #2f3f61;
+}
+
+:root[data-theme="light"] .roster-member--unassigned {
+  border-color: rgba(77, 95, 133, 0.32);
+  border-left-color: #4d5f85;
+  box-shadow: 0 6px 18px rgba(77, 95, 133, 0.12);
 }
 
 /* Ficha del roster: clases secundarias (una fila por alter) */

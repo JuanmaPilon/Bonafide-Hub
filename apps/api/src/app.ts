@@ -5521,9 +5521,10 @@ export function buildApp() {
           roles.includes(raidOfficerRoleId as string);
         const profile = profiles.get(userId) ?? null;
         // Fuera del roster: sin rol de estado, sin Raid Officer y sin ficha
-        // activa. Ojo: una ficha `active: false` (alguien que se quitó del
-        // roster) NO alcanza para aparecer; un rol de estado sí, siempre.
-        if (!rankKey && !isRaidOfficer && !profile?.active) {
+        // (activa o no). Ojo: una ficha `active: false` es alguien que se quitó
+        // del roster y SÍ se muestra, como "Inactivo": así se ve quién está
+        // afuera sin perder su clase, su spec ni sus alters.
+        if (!rankKey && !isRaidOfficer && !profile) {
           return null;
         }
         return {
@@ -5646,6 +5647,53 @@ export function buildApp() {
       targetType: "user",
     });
     return { alts, ok: true, profile };
+  });
+
+  // Sumar al roster a alguien que todavía no tiene ficha: se crea **vacía** (sin
+  // clase ni spec) para poder marcarle el estado (Raid/Bench) y completarla
+  // después desde su tarjeta. Sin esto, la única forma de que apareciera era que
+  // la persona se cargara su propia ficha.
+  app.post("/guilds/:guildId/roster/members", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    const body = (request.body ?? {}) as { userId?: unknown };
+    const userId = String(body.userId ?? "").trim();
+    if (!params.guildId || !/^\d{5,}$/.test(userId)) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "raids"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    // Tiene que ser alguien del servidor: sumar por id suelto dejaría fichas de
+    // gente que no está en la guild.
+    const member = await fetchGuildMemberRecord(params.guildId, userId);
+    if (!member) {
+      return reply
+        .code(404)
+        .send({ ok: false, error: "Ese usuario no está en el servidor" });
+    }
+
+    const profile = await upsertRosterProfile(params.guildId, userId, {
+      active: true,
+      className: "",
+      game: "wow",
+      offSpecs: [],
+      specName: "",
+      tags: [],
+    });
+    await logAdminAction(session, params.guildId, "roster:add", {
+      details: `${memberDisplayName(member) ?? userId} agregado al roster (ficha vacía)`,
+      targetId: userId,
+      targetType: "user",
+    });
+
+    return { ok: true, profile };
   });
 
   app.delete("/guilds/:guildId/roster/:userId", async (request, reply) => {

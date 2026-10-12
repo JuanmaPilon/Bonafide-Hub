@@ -67,10 +67,11 @@ Roster de raids:
 
 1. `GET /guilds/:guildId/roster` (miembros, fichas, clases secundarias y rangos)
 2. `PUT /guilds/:guildId/roster/me` y `PUT /guilds/:guildId/roster/:userId` (ficha: clase, spec, offs, tags y `alts`)
-3. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `bench` | `null`)
-4. `POST /guilds/:guildId/roster/:userId/remove` (quitar del roster: saca los roles de estado y deja la ficha inactiva)
-5. `PUT /guilds/:guildId/roster/ranks` (mapeo rango → rol de Discord)
-6. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha y sus clases secundarias)
+3. `POST /guilds/:guildId/roster/members` (sumar al roster a alguien del servidor que todavía no tiene ficha: la crea **vacía**)
+4. `PUT /guilds/:guildId/roster/:userId/rank` (estado: `raid` | `bench` | `null`)
+5. `POST /guilds/:guildId/roster/:userId/remove` (salir del roster: saca los roles de estado y deja la ficha inactiva)
+6. `PUT /guilds/:guildId/roster/ranks` (mapeo rango → rol de Discord)
+7. `DELETE /guilds/:guildId/roster/:userId` (borra la ficha y sus clases secundarias)
 
 El estado del roster **es** el rol de Discord del miembro: solo el endpoint de
 rango mueve roles. Administra `raid` (Activo) y `bench` (Bench); `guild`
@@ -78,17 +79,36 @@ rango mueve roles. Administra `raid` (Activo) y `bench` (Bench); `guild`
 los roles. Si Discord rechaza el cambio, la respuesta trae `roleSyncError` con
 el motivo y el guardado no se pierde.
 
+**Estados de la tarjeta** (los mismos cuatro del filtro de la web):
+
+1. **Activo** — tiene el rol `raid`.
+2. **Bench** — tiene el rol `bench`.
+3. **Sin asignar** — tiene ficha y ningún rol de estado: sigue en el roster, pero
+   todavía no se lo asignaron a Raid ni a Bench (`rank: null` solo saca los roles,
+   no la ficha).
+4. **Inactivo** — la ficha está `active: false`: se salió del roster.
+
 **Quién aparece en la lista:** un miembro entra al roster si tiene el rol de
-`raid`, el de `bench`, el de Raid Officer **o una ficha activa** — o sea que tener
-ficha alcanza para figurar, aunque no tenga ningún rol de estado (la tarjeta sale
-como "Inactivo" y se puede cambiar el estado desde ahí). Por eso "quitar del
-roster" (`/remove`) hace dos cosas: saca los dos roles de estado en Discord **y**
-marca la ficha `active: false`, que es lo que la esconde de la lista. La clase, la
-spec y los alters **no se borran**: al volver a ponerle un rol de estado (desde el
-mismo menú) la ficha se reactiva sola (`reactivated: true`). Elegir "Inactivo", en
-cambio, solo saca los roles y deja la persona a la vista, para saber quién está
-afuera. Los dos endpoints tiran la caché de miembros (4 min) después de tocar
-roles, así el cambio se ve al instante.
+`raid`, el de `bench`, el de Raid Officer **o una ficha** (`active: true` o
+`false`). Por eso "quitar del roster" (`/remove`) hace dos cosas: saca los dos
+roles de estado en Discord **y** marca la ficha `active: false`, que es lo que la
+muestra como "Inactivo". La clase, la spec y los alters **no se borran**: al
+volver a ponerle un rol de estado (desde el mismo menú) la ficha se reactiva sola
+(`reactivated: true`). Los dos endpoints tiran la caché de miembros (4 min)
+después de tocar roles, así el cambio se ve al instante.
+
+**Sumar sin ficha** (`POST .../roster/members`): valida que el `userId` sea un
+snowflake y que **esté en el servidor** (`fetchGuildMemberRecord`; si no, 404),
+después crea la ficha vacía (`className: ""`, `specName: ""`, sin offs ni tags) y
+la persona aparece como "Sin asignar" para marcarle el estado y completarla desde
+su tarjeta. Es la única vía para que alguien sin ficha ni rol de estado entre a la
+lista: el `PUT` de ficha exige clase y spec válidas del catálogo.
+
+**Contador y filtros de la web** (`apps/web/src/main.tsx`): el `X de Y jugadores`
+compara contra los que pasan los chips de estado/rol/tags, **no** contra el total
+del roster (el total queda en el `title`), y la búsqueda mueve solo el numerador.
+Así "Activo" dice `20 de 20` y no `20 de 45`. "Rol" sigue siendo el rol de la spec
+principal; quien no tiene clase cae en "Sin rol".
 
 Clases secundarias ("alter"): `alts: [{ className, specName }]` (tope 4) viajan
 en el mismo PUT que la ficha y reemplazan la lista completa. Se guardan en
@@ -373,10 +393,12 @@ ordenado por jugadores distintos: el dashboard muestra los juegos en un carrusel
 de portadas y el orden es la señal de qué se juega más. Sobre ese orden el
 dashboard marca los **más jugados** (🔥 con la cantidad de jugadores en la
 esquina de la portada, más borde y halo cálidos): son los primeros por jugadores
-distintos, hasta 3 y con un mínimo de 2 jugadores —con uno solo no hay nada que
+distintos, hasta 10 y con un mínimo de 2 jugadores —con uno solo no hay nada que
 distinguir, y `source: "configured"` viene con todo en cero, o sea sin
 distintivo—. Los cortes viven en la web (`GAME_HOT_COUNT` /
 `GAME_HOT_MIN_PLAYERS`, `apps/web/src/main.tsx`): el API no sabe de presentación.
+La grilla se vuelve a pedir cada 30 s (`GAMES_REFRESH_MS`), aparte del refresco
+del dashboard (60 s) que además pega contra Discord.
 
 La agregación agrupa por **nombre base**, no por id de aplicación ni por nombre
 exacto: Discord tiene más de un id para el mismo juego (ids viejos y nuevos, una

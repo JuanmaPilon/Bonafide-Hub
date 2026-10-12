@@ -10,8 +10,10 @@ import { env } from "../config/env.js";
 const remoteApiBaseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
 const remoteApiToken = env.BOT_CONFIG_API_TOKEN?.trim();
 // Cada cuánto se manda lo acumulado. El API agrupa por persona + juego + día,
-// así que mandar el mismo juego dos veces no duplica nada.
-const FLUSH_INTERVAL_MS = 2 * 60 * 1000;
+// así que mandar el mismo juego dos veces no duplica nada. Es un minuto: lo que
+// tarda en reflejarse un cambio en el carrusel del Hub (el dashboard además se
+// refresca solo), y sigue siendo un solo request por guild.
+const FLUSH_INTERVAL_MS = 60 * 1000;
 // Techo por las dudas de que el API esté caído mucho rato.
 const MAX_PENDING_ENTRIES = 2000;
 

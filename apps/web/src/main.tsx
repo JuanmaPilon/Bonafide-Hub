@@ -17,6 +17,7 @@ import {
   ClockCounterClockwise,
   DownloadSimple,
   Fire,
+  IdentificationCard,
   Lightning,
   ListChecks,
   Moon,
@@ -28,6 +29,7 @@ import {
   Sun,
   Sword,
   Trash,
+  UserPlus,
   Users,
 } from "@phosphor-icons/react";
 import { RaidLogsBoard } from "./RaidLogsBoard";
@@ -96,6 +98,7 @@ import {
   EVENT_TYPES,
   classColor,
   classEmoji,
+  addRosterMember,
   createEvent,
   createGuildRole,
   deleteMemberRosterProfile,
@@ -116,6 +119,7 @@ import {
   getEvents,
   getGuildEmojis,
   getGuildMappings,
+  getGuildMembers,
   getGuildRolesDetailed,
   getGuildRoster,
   publishRaidLog,
@@ -144,6 +148,7 @@ import {
   type GuildConfig,
   type GuildEmoji,
   type GuildGameActivity,
+  type GuildMember,
   type GuildRole,
   type MappingGroup,
   type MappingEmoji,
@@ -1396,11 +1401,25 @@ function toggleInList(list: string[], key: string): string[] {
 }
 
 // Estados del roster para el filtro: mismas etiquetas que la tarjeta.
+// - `unassigned`: tiene ficha pero ningún rol de estado (todavía no se lo
+//   asignaron a Raid ni Bench).
+// - `inactive`: se salió del roster; la ficha queda guardada (clase, spec y
+//   alters intactos) y vuelve sola al marcarle un estado.
 const ROSTER_STATUS_FILTERS: Array<{ key: string; label: string }> = [
   { key: "raid", label: "Activo" },
   { key: "bench", label: "Bench" },
-  { key: "inactivo", label: "Inactivo" },
+  { key: "unassigned", label: "Sin asignar" },
+  { key: "inactive", label: "Inactivo" },
 ];
+
+function rosterStatusLabel(key: string | null): string | null {
+  if (!key) {
+    return null;
+  }
+  return (
+    ROSTER_STATUS_FILTERS.find((status) => status.key === key)?.label ?? null
+  );
+}
 
 function sortByOrder<T>(
   items: T[],
@@ -1908,8 +1927,12 @@ function RosterSheet({
     ],
     [game, specs],
   );
+  // Una ficha vacía (alguien recién sumado al roster, sin clase todavía) no
+  // trae clase: se arranca por el catálogo, como una ficha nueva.
   const [className, setClassName] = useState(
-    profile?.game === "wow" ? profile.className : (classes[0] ?? ""),
+    profile?.game === "wow" && profile.className
+      ? profile.className
+      : (classes[0] ?? ""),
   );
   const classSpecs = useMemo(
     () =>
@@ -1919,7 +1942,7 @@ function RosterSheet({
     [className, game, specs],
   );
   const [specName, setSpecName] = useState(
-    profile?.game === "wow"
+    profile?.game === "wow" && profile.specName
       ? profile.specName
       : (classSpecs[0]?.specName ?? ""),
   );
@@ -2185,7 +2208,8 @@ function RosterSheet({
 }
 
 // Etiqueta del estado del roster. `guild` (officer) no es un estado y se
-// muestra aparte, así que acá no tiene etiqueta.
+// muestra aparte, así que acá no tiene etiqueta; sin rol de estado la ficha
+// queda "Sin asignar" (no se fue del roster, solo no está en Raid ni Bench).
 function rosterRankLabel(rank: RosterRankKey | null): string {
   if (rank === "raid") {
     return "Activo";
@@ -2193,7 +2217,7 @@ function rosterRankLabel(rank: RosterRankKey | null): string {
   if (rank === "bench") {
     return "Bench";
   }
-  return "Inactivo";
+  return "Sin asignar";
 }
 
 // Admin → Mapeo: relaciona una entidad de la app (un rango del roster, una
@@ -2520,6 +2544,7 @@ function RosterSection({
     userId: string;
   } | null>(null);
   const [savingSheet, setSavingSheet] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   // Tarjeta con el menú de estado abierto: solo una a la vez.
   const [rankMenuFor, setRankMenuFor] = useState<string | null>(null);
   // Clase que está al frente en el mazo de cada persona (id -> className).
@@ -2564,6 +2589,20 @@ function RosterSection({
     return () => document.removeEventListener("click", close);
   }, [rankMenuFor]);
 
+  // Después de sumar a alguien el roster cambia: se vuelve a pedir y se limpian
+  // los filtros, así la tarjeta nueva queda a la vista.
+  async function reloadRoster(): Promise<void> {
+    setSearch("");
+    setRoleFilter([]);
+    setStatusFilter([]);
+    setTagFilter([]);
+    try {
+      setRoster(await getGuildRoster(guildId));
+    } catch {
+      notify("No se pudo refrescar el roster.", "error");
+    }
+  }
+
   const specsByKey = useMemo(() => {
     const map = new Map<string, RaidSpec>();
     for (const spec of roster?.specs ?? []) {
@@ -2606,23 +2645,27 @@ function RosterSection({
     );
   }
 
-  // Estado del filtro: los mismos tres que muestra la tarjeta. Sin ficha la
-  // tarjeta está incompleta y no entra en el filtro de estado.
+  // Estado del filtro: los mismos que muestra la tarjeta. Sin ficha la tarjeta
+  // está incompleta y no entra en el filtro de estado.
   function memberStatusKey(member: RosterMember): string | null {
+    if (member.rankKey === "raid") {
+      return "raid";
+    }
+    if (member.rankKey === "bench") {
+      return "bench";
+    }
     if (!member.profile) {
       return null;
     }
-    return member.rankKey === "raid"
-      ? "raid"
-      : member.rankKey === "bench"
-        ? "bench"
-        : "inactivo";
+    return member.profile.active === false ? "inactive" : "unassigned";
   }
 
   const availableTags = tagOptionsFrom(
     members.map((member) => ({ tags: member.profile?.tags ?? [] })),
   ).sort((left, right) => left.label.localeCompare(right.label, "es"));
-  const visible = members
+  // Filtros de chip (estado, rol, tags) sin contar la búsqueda: es el total con
+  // el que se compara el contador ("X de Y jugadores").
+  const candidates = members
     .filter(
       (member) =>
         roleFilter.length === 0 || roleFilter.includes(memberRole(member)),
@@ -2634,15 +2677,15 @@ function RosterSection({
       const status = memberStatusKey(member);
       return status !== null && statusFilter.includes(status);
     })
-    .filter((member) => matchesTagFilter(member.profile?.tags ?? [], tagFilter))
-    .filter((member) => {
-      if (!query) {
-        return true;
-      }
-      return `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")} ${(member.alts ?? []).map((alt) => `${alt.className} ${alt.specName}`).join(" ")} ${(member.profile?.tags ?? []).map((tag) => tag.label).join(" ")}`
-        .toLowerCase()
-        .includes(query);
-    });
+    .filter((member) => matchesTagFilter(member.profile?.tags ?? [], tagFilter));
+  const visible = candidates.filter((member) => {
+    if (!query) {
+      return true;
+    }
+    return `${member.displayName} ${member.profile?.className ?? ""} ${member.profile?.specName ?? ""} ${(member.profile?.offSpecs ?? []).join(" ")} ${(member.alts ?? []).map((alt) => `${alt.className} ${alt.specName}`).join(" ")} ${(member.profile?.tags ?? []).map((tag) => tag.label).join(" ")}`
+      .toLowerCase()
+      .includes(query);
+  });
 
   async function saveSheet(input: RosterProfileInput): Promise<void> {
     const target = sheetFor;
@@ -2709,7 +2752,16 @@ function RosterSection({
               ...current,
               members: current.members.map((row) =>
                 row.userId === member.userId
-                  ? { ...row, rankKey: result.rank }
+                  ? {
+                      ...row,
+                      // Volver a Raid o Bench reactiva la ficha en el API: el
+                      // estado de la tarjeta tiene que reflejarlo ya.
+                      profile:
+                        row.profile && result.rank
+                          ? { ...row.profile, active: true }
+                          : row.profile,
+                      rankKey: result.rank,
+                    }
                   : row,
               ),
             }
@@ -2733,8 +2785,9 @@ function RosterSection({
   }
 
   // Quitar del roster: saca los roles de estado en Discord y deja la ficha
-  // inactiva, así la tarjeta desaparece de la lista (la clase/spec quedan
-  // guardadas y vuelven si se le pone un rol de estado otra vez).
+  // inactiva. La tarjeta sigue en la lista como "Inactivo" (la clase, la spec y
+  // los alters quedan guardados, y vuelven si se le pone un rol de estado otra
+  // vez).
   async function removeFromRoster(member: RosterMember): Promise<void> {
     if (!canEditOthers) {
       return;
@@ -2745,8 +2798,16 @@ function RosterSection({
         current
           ? {
               ...current,
-              members: current.members.filter(
-                (row) => row.userId !== member.userId,
+              members: current.members.map((row) =>
+                row.userId === member.userId
+                  ? {
+                      ...row,
+                      profile: row.profile
+                        ? { ...row.profile, active: false }
+                        : row.profile,
+                      rankKey: null,
+                    }
+                  : row,
               ),
             }
           : current,
@@ -2804,25 +2865,28 @@ function RosterSection({
   function renderMember(member: RosterMember) {
     const profile = member.profile;
     // Mazo de cartas: la principal (RosterProfile) y sus clases secundarias.
-    // Los alters son la misma persona, así que no suman a ningún total.
-    const sets = profile
-      ? [
-          {
-            className: profile.className,
-            game: profile.game,
-            isMain: true,
-            offSpecs: profile.offSpecs,
-            specName: profile.specName,
-          },
-          ...(member.alts ?? []).map((alt) => ({
-            className: alt.className,
-            game: alt.game ?? profile.game,
-            isMain: false,
-            offSpecs: alt.offSpecs ?? [],
-            specName: alt.specName,
-          })),
-        ]
-      : [];
+    // Los alters son la misma persona, así que no suman a ningún total. Una
+    // ficha vacía (alguien recién sumado, sin clase todavía) no tiene cartas.
+    const sets = (
+      profile
+        ? [
+            {
+              className: profile.className,
+              game: profile.game,
+              isMain: true,
+              offSpecs: profile.offSpecs,
+              specName: profile.specName,
+            },
+            ...(member.alts ?? []).map((alt) => ({
+              className: alt.className,
+              game: alt.game ?? profile.game,
+              isMain: false,
+              offSpecs: alt.offSpecs ?? [],
+              specName: alt.specName,
+            })),
+          ]
+        : []
+    ).filter((set) => set.className);
     const frontSet =
       sets.find((set) => set.className === frontSetByUser[member.userId]) ??
       sets[0] ??
@@ -2839,15 +2903,15 @@ function RosterSection({
       : undefined;
     const isRaidOfficer = member.isRaidOfficer;
     // El estado va con la ficha, sin importar si es Raid Officer: son cosas
-    // distintas y se puede ser Raid Officer e inactivo a la vez.
-    const rosterStatus = profile ? rosterRankLabel(member.rankKey) : null;
+    // distintas y se puede ser Raid Officer e inactivo a la vez. También se
+    // muestra sin ficha (alguien con el rol de estado pero sin datos cargados).
+    const rosterStatusKey = memberStatusKey(member);
+    const rosterStatus = rosterStatusLabel(rosterStatusKey);
+    const rosterStatusClass = rosterStatusKey ?? "";
     const canToggleStatus = canEditOthers && rosterStatus !== null;
     // La tarjeta entera abre la edición: el lápiz flotante quedaba descolgado
     // en el medio cuando la tarjeta era ancha.
     const canEditCard = canEditOthers || member.userId === meId;
-    const rosterStatusClass = rosterStatus
-      ? rosterStatus.toLowerCase().replaceAll(" ", "-")
-      : "";
     return (
       <div
         // Con el menú abierto el mazo sube de capa: si no, la tarjeta de la fila
@@ -2876,7 +2940,7 @@ function RosterSection({
           />
         ))}
         <article
-          className={`roster-member roster-member--front${member.rankKey ? "" : " roster-member--inactive"}${canEditCard ? " roster-member--editable" : ""}`}
+          className={`roster-member roster-member--front${member.profile?.active === false ? " roster-member--inactive" : rosterStatusKey === "unassigned" ? " roster-member--unassigned" : ""}${canEditCard ? " roster-member--editable" : ""}`}
           onClick={
             canEditCard
               ? () =>
@@ -2944,7 +3008,9 @@ function RosterSection({
               )}
             </span>
           ) : (
-            <span className="roster-member-spec">Sin ficha</span>
+            <span className="roster-member-spec">
+              {profile ? "Sin clase" : "Sin ficha"}
+            </span>
           )}
         </div>
         {frontSet && frontSet.offSpecs.length > 0 ? (
@@ -3048,29 +3114,34 @@ function RosterSection({
                         </button>
                       ))}
                     <button
-                      className="roster-status-option roster-status-option--inactivo"
+                      className="roster-status-option roster-status-option--sin-asignar"
                       onClick={(event) => {
                         event.stopPropagation();
                         setRankMenuFor(null);
                         void changeProfileRank(member, null);
                       }}
+                      title="Saca los roles de Raid y Bench en Discord; la ficha queda guardada"
                       type="button"
                     >
-                      Inactivo
+                      Sin asignar
                     </button>
-                    <span className="roster-status-separator" />
-                    <button
-                      className="roster-status-option roster-status-option--quitar"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setRankMenuFor(null);
-                        void removeFromRoster(member);
-                      }}
-                      title="Saca los roles de Raid y Bench en Discord y la ficha del roster (la clase y la spec quedan guardadas)"
-                      type="button"
-                    >
-                      Quitar del roster
-                    </button>
+                    {member.profile?.active === false ? null : (
+                      <>
+                        <span className="roster-status-separator" />
+                        <button
+                          className="roster-status-option roster-status-option--quitar"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setRankMenuFor(null);
+                            void removeFromRoster(member);
+                          }}
+                          title="Saca los roles de Raid y Bench en Discord y la ficha del roster (la clase y la spec quedan guardadas)"
+                          type="button"
+                        >
+                          Quitar del roster
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -3129,15 +3200,28 @@ function RosterSection({
     <div className="roster-view">
       <div className="roster-toolbar">
         <button
-          className="primary-button"
+          className="primary-button roster-toolbar-button"
           disabled={!meId}
           onClick={() =>
             meId && setSheetFor({ displayName: "Mi ficha", userId: meId })
           }
+          title="Cargar mi ficha (clase, spec y alters)"
           type="button"
         >
+          <IdentificationCard size={16} weight="bold" />
           Agregar ficha
         </button>
+        {canEditOthers ? (
+          <button
+            className="primary-button roster-toolbar-button"
+            onClick={() => setAddOpen(true)}
+            title="Sumar a alguien del servidor que todavía no tiene tarjeta"
+            type="button"
+          >
+            <UserPlus size={16} weight="bold" />
+            Sumar jugador
+          </button>
+        ) : null}
         <input
           className="list-search"
           onChange={(event) => setSearch(event.target.value)}
@@ -3206,8 +3290,11 @@ function RosterSection({
             />
           ))}
         </div>
-        <span className="roster-total">
-          {visible.length} de {members.length} jugadores
+        <span
+          className="roster-total"
+          title={`${members.length} jugadores en el roster`}
+        >
+          {visible.length} de {candidates.length} jugadores
         </span>
       </div>
 
@@ -3221,9 +3308,7 @@ function RosterSection({
             {visible.length > 0 ? (
               renderMembers(visible)
             ) : (
-              <p className="muted-text">
-                No hay jugadores activos del core para mostrar.
-              </p>
+              <p className="muted-text">No hay jugadores que coincidan.</p>
             )}
           </div>
         </>
@@ -3249,6 +3334,163 @@ function RosterSection({
           specs={roster?.specs ?? []}
         />
       ) : null}
+
+      {addOpen ? (
+        <RosterAddPlayerModal
+          guildId={guildId}
+          // Los que ya tienen tarjeta no se pueden volver a sumar.
+          inRoster={members.map((member) => member.userId)}
+          notify={notify}
+          onAdded={() => {
+            setAddOpen(false);
+            void reloadRoster();
+          }}
+          onClose={() => setAddOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// Sumar al roster a alguien que todavía no tiene tarjeta: se crea vacía y desde
+// ahí se le marca el estado y se completa la ficha.
+function RosterAddPlayerModal({
+  guildId,
+  inRoster,
+  notify,
+  onAdded,
+  onClose,
+}: {
+  guildId: string;
+  inRoster: string[];
+  notify: (message: string, kind: "error" | "success") => void;
+  onAdded: () => void;
+  onClose: () => void;
+}) {
+  const [members, setMembers] = useState<GuildMember[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getGuildMembers(guildId)
+      .then((rows) => {
+        if (!cancelled) {
+          setMembers(rows);
+          setFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [guildId]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const needle = query.trim().toLowerCase();
+  const results = useMemo(() => {
+    const available = members.filter(
+      (member) => !inRoster.includes(member.id),
+    );
+    const matched = needle
+      ? available.filter((member) =>
+          `${member.displayName} ${member.username}`
+            .toLowerCase()
+            .includes(needle),
+        )
+      : available;
+    return matched.slice(0, 60);
+  }, [inRoster, members, needle]);
+
+  async function add(member: GuildMember): Promise<void> {
+    setAdding(member.id);
+    try {
+      await addRosterMember(guildId, member.id);
+      notify(`${member.displayName} sumado al roster sin clase.`, "success");
+      onAdded();
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudo sumar al roster.",
+        "error",
+      );
+    } finally {
+      setAdding(null);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        aria-modal="true"
+        className="modal roster-add-modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <h4>Sumar jugador</h4>
+        <input
+          autoFocus
+          className="list-search"
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Buscar por nombre o usuario…"
+          type="search"
+          value={query}
+        />
+        <div className="roster-add-list">
+          {loading ? (
+            <p className="muted-text">Cargando jugadores…</p>
+          ) : failed ? (
+            <p className="muted-text">No se pudo cargar el servidor.</p>
+          ) : results.length === 0 ? (
+            <p className="muted-text">
+              {members.length === 0
+                ? "No hay jugadores en el servidor."
+                : "Nadie más del servidor para sumar."}
+            </p>
+          ) : (
+            results.map((member) => (
+              <div className="roster-add-row" key={member.id}>
+                <span className="roster-add-name">
+                  {member.displayName}
+                  <span className="roster-add-username">
+                    @{member.username}
+                  </span>
+                </span>
+                <button
+                  className="primary-button roster-add-button"
+                  disabled={adding !== null}
+                  onClick={() => void add(member)}
+                  type="button"
+                >
+                  {adding === member.id ? "Sumando…" : "Sumar"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -5711,6 +5953,10 @@ const PODIUM_LABELS = ["1ro", "2do", "3ro", "4to", "5to"];
 // Cada cuánto se refresca solo el dashboard. El endpoint de conectados pega
 // tres veces contra Discord, así que el intervalo no puede ser corto.
 const DASHBOARD_REFRESH_MS = 60_000;
+// Los juegos salen de la base y son baratos, así que se refrescan más seguido
+// que el estado del widget: el bot manda las presencias cada minuto y así el
+// carrusel las sigue de cerca.
+const GAMES_REFRESH_MS = 30_000;
 
 // El carrusel de juegos es un marquee, igual que el de la landing: el track se
 // repite y se traslada la mitad de su ancho, así el bucle no tiene costura. Dos
@@ -5729,10 +5975,11 @@ const GAME_MARQUEE_SPEED = 43;
 
 // Cuántos juegos se marcan como "más jugados" en el carrusel (la llama con la
 // cantidad de jugadores). El ranking lo hace el API por jugadores distintos en
-// la ventana consultada, así que acá solo se cortan los primeros. Se exigen al
-// menos 2 jugadores: con uno solo no hay nada que distinguir (y el respaldo sin
-// actividad registrada viene con todo en cero, o sea sin distintivo).
-const GAME_HOT_COUNT = 3;
+// la ventana consultada, así que acá solo se cortan los primeros. El tope es
+// alto a propósito: si la guild juega diez cosas, las diez se marcan. Se exigen
+// al menos 2 jugadores: con uno solo no hay nada que distinguir (y el respaldo
+// sin actividad registrada viene con todo en cero, o sea sin distintivo).
+const GAME_HOT_COUNT = 10;
 const GAME_HOT_MIN_PLAYERS = 2;
 
 // Tarjetas fantasma del carrusel de juegos mientras llega la primera respuesta.
@@ -9466,10 +9713,28 @@ function App() {
     }
 
     let cancelled = false;
+    // Los juegos se refrescan solos (son una consulta a la base); el estado del
+    // widget va con el refresco completo, que sí pega contra Discord.
+    const refreshGames = async (): Promise<void> => {
+      try {
+        const activity = await getGuildGameActivity(selectedGuildId);
+        if (cancelled) {
+          return;
+        }
+        setGameActivity((current) =>
+          samePayload(current, activity) ? current : activity,
+        );
+      } catch {
+        // Un fallo acá deja el carrusel como estaba: no se vacía por un error.
+        if (!cancelled && !sameGuild) {
+          setGameActivity(null);
+        }
+      }
+    };
+
     const refresh = async (): Promise<void> => {
-      const [status, activity] = await Promise.allSettled([
+      const [status] = await Promise.allSettled([
         getGuildWidgetStatus(selectedGuildId),
-        getGuildGameActivity(selectedGuildId),
       ]);
       if (cancelled) {
         return;
@@ -9482,13 +9747,7 @@ function App() {
           samePayload(current, status.value) ? current : status.value,
         );
       }
-      if (activity.status === "fulfilled") {
-        setGameActivity((current) =>
-          samePayload(current, activity.value) ? current : activity.value,
-        );
-      } else if (!sameGuild) {
-        setGameActivity(null);
-      }
+      await refreshGames();
     };
 
     void refresh().finally(() => {
@@ -9502,13 +9761,20 @@ function App() {
         void refresh();
       }
     };
+    const runGamesIfVisible = (): void => {
+      if (document.visibilityState === "visible") {
+        void refreshGames();
+      }
+    };
     const timer = window.setInterval(runIfVisible, DASHBOARD_REFRESH_MS);
+    const gamesTimer = window.setInterval(runGamesIfVisible, GAMES_REFRESH_MS);
     document.addEventListener("visibilitychange", runIfVisible);
     window.addEventListener("focus", runIfVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.clearInterval(gamesTimer);
       document.removeEventListener("visibilitychange", runIfVisible);
       window.removeEventListener("focus", runIfVisible);
     };

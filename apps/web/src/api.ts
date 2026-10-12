@@ -1568,6 +1568,19 @@ export async function saveMyRosterProfile(
   });
 }
 
+// Suma al roster a alguien que todavía no tenía ficha: la crea vacía (sin clase
+// ni spec) para poder marcarle el estado y completarla después desde la tarjeta.
+export async function addRosterMember(
+  guildId: string,
+  userId: string,
+): Promise<RosterProfile> {
+  const data = await requestJson<{ profile: RosterProfile }>(
+    `/guilds/${guildId}/roster/members`,
+    { body: JSON.stringify({ userId }), method: "POST" },
+  );
+  return data.profile;
+}
+
 export async function saveMemberRosterProfile(
   guildId: string,
   userId: string,

@@ -89,7 +89,7 @@ PresenceUpdate (intent GuildPresences, ya habilitado)
 ```
 
 1. Solo se reporta cuando el juego **cambia** (o aparece uno nuevo), y el flush
-   agrupa cada 2 minutos: el Gateway dispara muchísimos `PresenceUpdate` y no
+   agrupa cada 60 s: el Gateway dispara muchísimos `PresenceUpdate` y no
    queremos una request por cada uno.
 2. Solo aparece quien **comparte su actividad** y está online mientras el bot
    corre. Discord no da historial: el panel arranca vacío y se va llenando.
