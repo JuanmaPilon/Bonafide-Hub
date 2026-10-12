@@ -14,15 +14,22 @@ import {
 import {
   ArrowsClockwise,
   Calendar,
+  CardsThree,
+  ChatCircleDots,
   ClockCounterClockwise,
   DownloadSimple,
   Fire,
+  Heart,
   IdentificationCard,
   Lightning,
   ListChecks,
   Moon,
   MusicNotes,
+  Pause,
   PencilSimple,
+  Play,
+  Plus,
+  Quotes,
   ShieldCheck,
   Skull,
   Sliders,
@@ -31,6 +38,7 @@ import {
   Trash,
   UserPlus,
   Users,
+  X,
 } from "@phosphor-icons/react";
 import { RaidLogsBoard } from "./RaidLogsBoard";
 import {
@@ -6246,6 +6254,114 @@ function HomeView({
   );
 }
 
+// Campo numérico del panel: el mismo par etiqueta + control que el resto de las
+// secciones. Vaciar el input deja el valor sin definir, que es lo que hace que
+// vuelva el valor por defecto de la config.
+function AdminNumberField({
+  label,
+  max,
+  min = 1,
+  onChange,
+  value,
+}: {
+  label: string;
+  max?: number;
+  min?: number;
+  onChange: (value: number | undefined) => void;
+  value: number;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        max={max}
+        min={min}
+        onChange={(event) => {
+          const raw = event.target.value;
+          onChange(raw === "" ? undefined : Number(raw));
+        }}
+        type="number"
+        value={value}
+      />
+    </label>
+  );
+}
+
+// Alta y edición de una frase del loro. El texto vive en la ventana: antes había
+// un textarea siempre abierto en el panel, y para corregir una frase había que
+// borrarla y crearla de nuevo.
+function DailyMessageModal({
+  message,
+  onClose,
+  onSave,
+  saving,
+}: {
+  message: DailyMessage | null;
+  onClose: () => void;
+  onSave: (content: string) => void;
+  saving: boolean;
+}) {
+  const [content, setContent] = useState(message?.content ?? "");
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        aria-modal="true"
+        className="modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header className="modal-head">
+          <h4>
+            <Quotes weight="fill" aria-hidden="true" />
+            {message ? "Editar frase" : "Nueva frase"}
+          </h4>
+          <button
+            aria-label="Cerrar"
+            className="icon-button"
+            onClick={onClose}
+            title="Cerrar"
+            type="button"
+          >
+            <X aria-hidden="true" className="icon-button-icon" weight="bold" />
+          </button>
+        </header>
+        <textarea
+          autoFocus
+          className="textarea"
+          onChange={(event) => setContent(event.target.value)}
+          placeholder="Lo que va a decir el loro…"
+          rows={4}
+          value={content}
+        />
+        <div className="admin-save">
+          <button className="ghost-button small" onClick={onClose} type="button">
+            Cancelar
+          </button>
+          <button
+            className="primary-button"
+            disabled={saving || !content.trim()}
+            onClick={() => onSave(content)}
+            type="button"
+          >
+            {saving ? "Guardando…" : "Guardar frase"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [username, setUsername] = useState<string | null>(null);
   const [me, setMe] = useState<{
@@ -6278,7 +6394,9 @@ function App() {
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
-  const [dailyMessageDraft, setDailyMessageDraft] = useState("");
+  // Frase del loro que se está editando en la ventana: `"new"` = alta, un id =
+  // edición, `null` = ninguna.
+  const [dailyEditorId, setDailyEditorId] = useState<string | null>(null);
   const [raidLogs, setRaidLogs] = useState<RaidLog[]>([]);
   const [scanningRaidLogs, setScanningRaidLogs] = useState(false);
   const [raidLogsLoading, setRaidLogsLoading] = useState(false);
@@ -6572,6 +6690,7 @@ function App() {
     | "xp"
     | "panel"
     | "daily"
+    | "dailyMessage"
     | "eventRoles"
     | "modules"
     | "permissions"
@@ -8784,26 +8903,44 @@ function App() {
     }
   }
 
-  async function handleCreateDailyMessage(): Promise<void> {
+  // Alta o edición de una frase: misma ventana para las dos, así el panel no
+  // arrastra un formulario abierto.
+  async function handleSaveDailyMessage(
+    content: string,
+    id: string | null,
+  ): Promise<void> {
     if (!selectedGuildId) {
       return;
     }
-    const content = dailyMessageDraft.trim();
-    if (!content) {
+    const text = content.trim();
+    if (!text) {
       pushToast("Falta la frase.", "error");
       return;
     }
 
+    setSavingAction("dailyMessage");
     try {
-      const created = await createDailyMessage(selectedGuildId, content);
-      setDailyMessages((current) => [...current, created]);
-      setDailyMessageDraft("");
-      pushToast("Frase del loro guardada.", "success");
+      if (id && id !== "new") {
+        const updated = await updateDailyMessage(selectedGuildId, id, {
+          content: text,
+        });
+        setDailyMessages((current) =>
+          current.map((entry) => (entry.id === updated.id ? updated : entry)),
+        );
+        pushToast("Frase actualizada.", "success");
+      } else {
+        const created = await createDailyMessage(selectedGuildId, text);
+        setDailyMessages((current) => [...current, created]);
+        pushToast("Frase del loro guardada.", "success");
+      }
+      setDailyEditorId(null);
     } catch (error) {
       pushToast(
         error instanceof Error ? error.message : "Error al guardar la frase.",
         "error",
       );
+    } finally {
+      setSavingAction(null);
     }
   }
 
@@ -10593,15 +10730,19 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="karuta-watcher-editor">
-                          <div className="karuta-watcher-head">
-                            <div>
-                              <strong>Watcher de Karuta</strong>
-                              <span>
-                                Detecta cartas raras y colecciones
-                                automáticamente
-                              </span>
-                            </div>
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <CardsThree weight="fill" aria-hidden="true" />
+                            Watcher
+                          </span>
+                          <div className="admin-row-box">
+                            <span className="admin-row-title">
+                              Detectar cartas y colecciones
+                            </span>
+                            <span className="admin-row-spacer" />
+                            <span className="admin-row-tag">
+                              {config.karutaWatchEnabled ? "Activo" : "Apagado"}
+                            </span>
                             <label className="raid-watcher-toggle">
                               <input
                                 type="checkbox"
@@ -10649,149 +10790,111 @@ function App() {
                               </select>
                             </label>
                           </div>
-                          <div className="karuta-threshold-group">
-                            <h4 className="karuta-threshold-title">
-                              Por print
-                            </h4>
-                            <div className="form-grid">
-                              <label>
-                                <span>Print máximo "rara"</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={10000}
-                                  value={config.karutaRarePrintMax ?? 10}
-                                  onChange={(event) => {
-                                    const raw = event.target.value;
-                                    editConfig(
-                                      (current) => ({
-                                        ...current,
-                                        karutaRarePrintMax:
-                                          raw === "" ? undefined : Number(raw),
-                                      }),
-                                      "karuta",
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                <span>Print máximo "súper rara"</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={10000}
-                                  value={config.karutaSuperRarePrintMax ?? 3}
-                                  onChange={(event) => {
-                                    const raw = event.target.value;
-                                    editConfig(
-                                      (current) => ({
-                                        ...current,
-                                        karutaSuperRarePrintMax:
-                                          raw === "" ? undefined : Number(raw),
-                                      }),
-                                      "karuta",
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                <span>Print máximo "ultra rara"</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={10000}
-                                  value={config.karutaUltraRarePrintMax ?? 1}
-                                  onChange={(event) => {
-                                    const raw = event.target.value;
-                                    editConfig(
-                                      (current) => ({
-                                        ...current,
-                                        karutaUltraRarePrintMax:
-                                          raw === "" ? undefined : Number(raw),
-                                      }),
-                                      "karuta",
-                                    );
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          </div>
+                        </section>
 
-                          <div className="karuta-threshold-group">
-                            <h4 className="karuta-threshold-title">
-                              Por wishlist
-                            </h4>
-                            <div className="form-grid">
-                              <label>
-                                <span>Wishlists mínimas "rara"</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={100000}
-                                  value={config.karutaRareWishlistMin ?? 3}
-                                  onChange={(event) => {
-                                    const raw = event.target.value;
-                                    editConfig(
-                                      (current) => ({
-                                        ...current,
-                                        karutaRareWishlistMin:
-                                          raw === "" ? undefined : Number(raw),
-                                      }),
-                                      "karuta",
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                <span>Wishlists mínimas "súper rara"</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={100000}
-                                  value={
-                                    config.karutaSuperRareWishlistMin ?? 10
-                                  }
-                                  onChange={(event) => {
-                                    const raw = event.target.value;
-                                    editConfig(
-                                      (current) => ({
-                                        ...current,
-                                        karutaSuperRareWishlistMin:
-                                          raw === "" ? undefined : Number(raw),
-                                      }),
-                                      "karuta",
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                <span>Wishlists mínimas "ultra rara"</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={100000}
-                                  value={
-                                    config.karutaUltraRareWishlistMin ?? 25
-                                  }
-                                  onChange={(event) => {
-                                    const raw = event.target.value;
-                                    editConfig(
-                                      (current) => ({
-                                        ...current,
-                                        karutaUltraRareWishlistMin:
-                                          raw === "" ? undefined : Number(raw),
-                                      }),
-                                      "karuta",
-                                    );
-                                  }}
-                                />
-                              </label>
-                            </div>
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Fire weight="fill" aria-hidden="true" />
+                            Umbral por print
+                          </span>
+                          <div className="form-grid form-grid--three">
+                            <AdminNumberField
+                              label={'Print máximo "rara"'}
+                              max={10000}
+                              onChange={(karutaRarePrintMax) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    karutaRarePrintMax,
+                                  }),
+                                  "karuta",
+                                )
+                              }
+                              value={config.karutaRarePrintMax ?? 10}
+                            />
+                            <AdminNumberField
+                              label={'Print máximo "súper rara"'}
+                              max={10000}
+                              onChange={(karutaSuperRarePrintMax) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    karutaSuperRarePrintMax,
+                                  }),
+                                  "karuta",
+                                )
+                              }
+                              value={config.karutaSuperRarePrintMax ?? 3}
+                            />
+                            <AdminNumberField
+                              label={'Print máximo "ultra rara"'}
+                              max={10000}
+                              onChange={(karutaUltraRarePrintMax) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    karutaUltraRarePrintMax,
+                                  }),
+                                  "karuta",
+                                )
+                              }
+                              value={config.karutaUltraRarePrintMax ?? 1}
+                            />
                           </div>
-                        </div>
-                      </div>
-                      {isDirty("karuta") ? (
-                        <div className="admin-card-body">
+                        </section>
+
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Heart weight="fill" aria-hidden="true" />
+                            Umbral por wishlist
+                          </span>
+                          <div className="form-grid form-grid--three">
+                            <AdminNumberField
+                              label={'Wishlists mínimas "rara"'}
+                              max={100000}
+                              onChange={(karutaRareWishlistMin) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    karutaRareWishlistMin,
+                                  }),
+                                  "karuta",
+                                )
+                              }
+                              value={config.karutaRareWishlistMin ?? 3}
+                            />
+                            <AdminNumberField
+                              label={'Wishlists mínimas "súper rara"'}
+                              max={100000}
+                              onChange={(karutaSuperRareWishlistMin) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    karutaSuperRareWishlistMin,
+                                  }),
+                                  "karuta",
+                                )
+                              }
+                              value={config.karutaSuperRareWishlistMin ?? 10}
+                            />
+                            <AdminNumberField
+                              label={'Wishlists mínimas "ultra rara"'}
+                              max={100000}
+                              onChange={(karutaUltraRareWishlistMin) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    karutaUltraRareWishlistMin,
+                                  }),
+                                  "karuta",
+                                )
+                              }
+                              value={config.karutaUltraRareWishlistMin ?? 25}
+                            />
+                          </div>
+                        </section>
+
+                        {isDirty("karuta") ? (
                           <div className="admin-save">
                             <button
                               className="primary-button"
@@ -10803,8 +10906,8 @@ function App() {
                                 : "Guardar configuración"}
                             </button>
                           </div>
-                        </div>
-                      ) : null}
+                        ) : null}
+                      </div>
                     </details>
                   ) : null}
 
@@ -11070,15 +11173,19 @@ function App() {
                         </span>
                       </summary>
                       <div className="admin-card-body">
-                        <div className="daily-watcher-editor">
-                          <div className="daily-watcher-head">
-                            <div>
-                              <strong>Loro activado</strong>
-                              <span>
-                                Publica una frase al azar en intervalos
-                                aleatorios
-                              </span>
-                            </div>
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <ChatCircleDots weight="fill" aria-hidden="true" />
+                            Publicación
+                          </span>
+                          <div className="admin-row-box">
+                            <span className="admin-row-title">
+                              Publicar frases al azar
+                            </span>
+                            <span className="admin-row-spacer" />
+                            <span className="admin-row-tag">
+                              {config.dailyMessagesEnabled ? "Activo" : "Apagado"}
+                            </span>
                             <label className="raid-watcher-toggle">
                               <input
                                 type="checkbox"
@@ -11102,7 +11209,7 @@ function App() {
                             </label>
                           </div>
 
-                          <div className="form-grid">
+                          <div className="form-grid form-grid--three">
                             <label>
                               <span>Canal de publicación</span>
                               <select
@@ -11127,45 +11234,159 @@ function App() {
                                 ))}
                               </select>
                             </label>
-                            <label>
-                              <span>Intervalo mínimo (min)</span>
-                              <input
-                                type="number"
-                                min="1"
-                                value={config.dailyMessagesMinMinutes ?? 15}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      dailyMessagesMinMinutes:
-                                        Number(event.target.value) || 1,
-                                    }),
-                                    "daily",
-                                  )
-                                }
-                              />
-                            </label>
-                            <label>
-                              <span>Intervalo máximo (min)</span>
-                              <input
-                                type="number"
-                                min="1"
-                                value={config.dailyMessagesMaxMinutes ?? 90}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      dailyMessagesMaxMinutes:
-                                        Number(event.target.value) || 1,
-                                    }),
-                                    "daily",
-                                  )
-                                }
-                              />
-                            </label>
+                            <AdminNumberField
+                              label="Intervalo mínimo (min)"
+                              onChange={(dailyMessagesMinMinutes) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    dailyMessagesMinMinutes:
+                                      dailyMessagesMinMinutes ?? 1,
+                                  }),
+                                  "daily",
+                                )
+                              }
+                              value={config.dailyMessagesMinMinutes ?? 15}
+                            />
+                            <AdminNumberField
+                              label="Intervalo máximo (min)"
+                              onChange={(dailyMessagesMaxMinutes) =>
+                                editConfig(
+                                  (current) => ({
+                                    ...current,
+                                    dailyMessagesMaxMinutes:
+                                      dailyMessagesMaxMinutes ?? 1,
+                                  }),
+                                  "daily",
+                                )
+                              }
+                              value={config.dailyMessagesMaxMinutes ?? 90}
+                            />
                           </div>
+                        </section>
 
-                          {isDirty("daily") ? (
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Quotes weight="fill" aria-hidden="true" />
+                            Frases
+                            <small>
+                              {
+                                dailyMessages.filter(
+                                  (message) => message.enabled,
+                                ).length
+                              }{" "}
+                              de {dailyMessages.length} activas
+                            </small>
+                          </span>
+                          <ListFilterBar
+                            onOrderChange={setDailyOrder}
+                            onSearchChange={setDailySearch}
+                            order={dailyOrder}
+                            placeholder="Buscar frase…"
+                            search={dailySearch}
+                          />
+
+                          {dailyMessages.length === 0 ? (
+                            <p className="admin-empty">
+                              No hay frases todavía. Agregar la primera para que
+                              el loro empiece a hablar.
+                            </p>
+                          ) : visibleDailyMessages.length === 0 ? (
+                            <p className="admin-empty">
+                              Ninguna frase coincide con la búsqueda.
+                            </p>
+                          ) : (
+                            <div className="admin-list">
+                              {visibleDailyMessages.map((message) => (
+                                <div className="admin-row" key={message.id}>
+                                  <button
+                                    className="admin-row-box admin-row-main"
+                                    onClick={() =>
+                                      setDailyEditorId(message.id)
+                                    }
+                                    title="Editar la frase"
+                                    type="button"
+                                  >
+                                    <span
+                                      className={`admin-row-title admin-row-quote${message.enabled ? "" : " admin-row-none"}`}
+                                    >
+                                      {message.content}
+                                    </span>
+                                    <span className="admin-row-spacer" />
+                                    <span
+                                      className={`admin-row-tag${message.enabled ? " admin-row-tag--add" : ""}`}
+                                    >
+                                      {message.enabled ? "Activa" : "Pausada"}
+                                    </span>
+                                    <PencilSimple
+                                      aria-hidden="true"
+                                      className="admin-row-action"
+                                      weight="fill"
+                                    />
+                                  </button>
+                                  <button
+                                    aria-label={
+                                      message.enabled
+                                        ? "Pausar la frase"
+                                        : "Activar la frase"
+                                    }
+                                    className="icon-button"
+                                    onClick={() =>
+                                      void handleToggleDailyMessage(message)
+                                    }
+                                    title={
+                                      message.enabled
+                                        ? "Pausar la frase"
+                                        : "Activar la frase"
+                                    }
+                                    type="button"
+                                  >
+                                    {message.enabled ? (
+                                      <Pause
+                                        aria-hidden="true"
+                                        className="icon-button-icon"
+                                        weight="fill"
+                                      />
+                                    ) : (
+                                      <Play
+                                        aria-hidden="true"
+                                        className="icon-button-icon"
+                                        weight="fill"
+                                      />
+                                    )}
+                                  </button>
+                                  <button
+                                    aria-label="Eliminar la frase"
+                                    className="icon-button"
+                                    onClick={() =>
+                                      void handleDeleteDailyMessage(message)
+                                    }
+                                    title="Eliminar la frase"
+                                    type="button"
+                                  >
+                                    <Trash
+                                      aria-hidden="true"
+                                      className="icon-button-icon"
+                                      weight="fill"
+                                    />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <button
+                            className="ghost-button small admin-add"
+                            onClick={() => setDailyEditorId("new")}
+                            type="button"
+                          >
+                            <Plus weight="bold" aria-hidden="true" />
+                            Agregar frase
+                          </button>
+                        </section>
+
+                        {isDirty("daily") ? (
+                          <div className="admin-save">
                             <button
                               className="primary-button"
                               onClick={() => void handleSaveDailyConfig()}
@@ -11176,92 +11397,26 @@ function App() {
                                 ? "Guardando…"
                                 : "Guardar configuración"}
                             </button>
-                          ) : null}
-                        </div>
-
-                        <div className="daily-messages-editor">
-                          <div className="daily-messages-head">
-                            <strong>Frases del loro</strong>
-                            <span className="muted-text">
-                              {
-                                dailyMessages.filter(
-                                  (message) => message.enabled,
-                                ).length
-                              }{" "}
-                              de {dailyMessages.length} activas
-                            </span>
                           </div>
-                          <textarea
-                            className="textarea"
-                            rows={3}
-                            value={dailyMessageDraft}
-                            onChange={(event) =>
-                              setDailyMessageDraft(event.target.value)
-                            }
-                          />
-                          <button
-                            className="primary-button"
-                            onClick={() => void handleCreateDailyMessage()}
-                            type="button"
-                          >
-                            + Agregar frase
-                          </button>
-
-                          <ListFilterBar
-                            onOrderChange={setDailyOrder}
-                            onSearchChange={setDailySearch}
-                            order={dailyOrder}
-                            placeholder="Buscar frase…"
-                            search={dailySearch}
-                          />
-
-                          {dailyMessages.length === 0 ? (
-                            <div className="empty-state">
-                              <p>
-                                No hay frases todavía. Agregar la primera para
-                                que el loro empiece a hablar.
-                              </p>
-                            </div>
-                          ) : visibleDailyMessages.length === 0 ? (
-                            <div className="empty-state">
-                              <p>Ninguna frase coincide con la búsqueda.</p>
-                            </div>
-                          ) : (
-                            visibleDailyMessages.map((message) => (
-                              <div
-                                className="daily-message-row"
-                                key={message.id}
-                              >
-                                <span
-                                  className={`daily-message-content${message.enabled ? "" : " muted"}`}
-                                >
-                                  {message.content}
-                                </span>
-                                <div className="daily-message-actions">
-                                  <button
-                                    className="ghost-button"
-                                    onClick={() =>
-                                      void handleToggleDailyMessage(message)
-                                    }
-                                    type="button"
-                                  >
-                                    {message.enabled ? "Pausar" : "Activar"}
-                                  </button>
-                                  <button
-                                    className="ghost-button danger"
-                                    onClick={() =>
-                                      void handleDeleteDailyMessage(message)
-                                    }
-                                    type="button"
-                                  >
-                                    Eliminar
-                                  </button>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
+                        ) : null}
                       </div>
+
+                      {dailyEditorId ? (
+                        <DailyMessageModal
+                          message={
+                            dailyEditorId === "new"
+                              ? null
+                              : (dailyMessages.find(
+                                  (entry) => entry.id === dailyEditorId,
+                                ) ?? null)
+                          }
+                          onClose={() => setDailyEditorId(null)}
+                          onSave={(content) =>
+                            void handleSaveDailyMessage(content, dailyEditorId)
+                          }
+                          saving={savingAction === "dailyMessage"}
+                        />
+                      ) : null}
                     </details>
                   ) : null}
 
@@ -11839,44 +11994,50 @@ function App() {
                                     <summary>
                                       Ocultos ({hiddenRaidLogs.length})
                                     </summary>
-                                    {hiddenRaidLogs.map((log) => (
-                                      <div
-                                        className="daily-message-row"
-                                        key={log.id}
-                                      >
-                                        <div className="daily-message-content">
-                                          <strong>
-                                            {log.title || log.reportCode}
-                                          </strong>
-                                          <div className="muted-text log-counts">
-                                            <Sword weight="fill" aria-hidden="true" />
-                                            {log.fightCount}
-                                            <Skull weight="fill" aria-hidden="true" />
-                                            {log.kills}
+                                    <div className="admin-list">
+                                      {hiddenRaidLogs.map((log) => (
+                                        <div className="admin-row" key={log.id}>
+                                          <div className="admin-row-box">
+                                            <span className="admin-row-title">
+                                              {log.title || log.reportCode}
+                                            </span>
+                                            <span className="muted-text log-counts">
+                                              <Sword
+                                                weight="fill"
+                                                aria-hidden="true"
+                                              />
+                                              {log.fightCount}
+                                              <Skull
+                                                weight="fill"
+                                                aria-hidden="true"
+                                              />
+                                              {log.kills}
+                                            </span>
+                                            <span className="admin-row-spacer" />
+                                            <button
+                                              className="ghost-button small"
+                                              onClick={() =>
+                                                requestShowRaidLog(log)
+                                              }
+                                              type="button"
+                                            >
+                                              Restaurar
+                                            </button>
+                                            <button
+                                              className="ghost-button small danger"
+                                              onClick={() =>
+                                                requestPermanentDeleteRaidLog(
+                                                  log,
+                                                )
+                                              }
+                                              type="button"
+                                            >
+                                              Borrar definitivamente
+                                            </button>
                                           </div>
                                         </div>
-                                        <div className="daily-message-actions">
-                                          <button
-                                            className="ghost-button"
-                                            onClick={() =>
-                                              requestShowRaidLog(log)
-                                            }
-                                            type="button"
-                                          >
-                                            Restaurar
-                                          </button>
-                                          <button
-                                            className="ghost-button danger"
-                                            onClick={() =>
-                                              requestPermanentDeleteRaidLog(log)
-                                            }
-                                            type="button"
-                                          >
-                                            Borrar definitivamente
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ))}
+                                      ))}
+                                    </div>
                                   </details>
                                 ) : null}
                               </>

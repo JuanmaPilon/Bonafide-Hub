@@ -474,12 +474,26 @@ distinta de la otra (el editor de XP fue el primero en usarlo):
 - `admin-list` / `admin-row` / `admin-row-box` — listas de filas compactas
   (44 px): la caja, el rótulo, el espaciador y los chips (`admin-row-tag`) los
   comparten los niveles del XP, los módulos, el registro de auditoría, el
-  historial de eventos y los catálogos del Mapeo.
+  historial de eventos, las frases del loro y los catálogos del Mapeo. Lo que se
+  abre (una fila con detalle) es un `button.admin-row-main` con el lápiz
+  (`admin-row-action`) y los botones chicos al costado.
 - `admin-sub` — sub-card plegable (grupos del Mapeo, tipos de evento, lista de
   roles): misma caja y mismas medidas que una fila.
 - `admin-actions` — fila de botones chicos, y `admin-save` — la fila de guardado
   al pie de la sección (aparece solo si hay cambios, en todas las secciones
   igual).
+- `modal-head` — la cabecera de las ventanas del panel (ícono + título y la cruz
+  a la derecha). La comparten el editor de XP y el del loro.
+- `form-grid--three` — variante de tres columnas para grupos de tres campos
+  cortos (umbrales del watcher de Karuta, intervalos del loro), porque con dos
+  columnas quedaba media fila vacía.
+
+Con eso quedaron migrados los dos últimos módulos: **Karuta** (watcher, canal y
+los umbrales por print y por wishlist, en tres grupos) y **Karpindomo** (la
+publicación del loro y la lista de frases). Las frases dejaron de ser un textarea
+siempre abierto: son filas compactas (texto, chip Activa/Pausada y los botones de
+pausar y borrar) y el alta y la edición pasan por una ventana con el texto. Antes
+no había forma de corregir una frase: había que borrarla y crearla de nuevo.
 
 El editor de XP vive en `apps/web/src/XpSection.tsx` y no guarda nada por su
 cuenta: recibe la config y devuelve los cambios al App, que es el que sabe si

@@ -529,7 +529,7 @@ export function XpSection({
                 className="modal xp-rule-modal"
                 role="dialog"
               >
-                <header className="xp-modal-head">
+                <header className="modal-head">
                   <h4>
                     <PencilSimple weight="fill" aria-hidden="true" />
                     Nivel {editing.level}

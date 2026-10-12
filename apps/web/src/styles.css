@@ -818,13 +818,15 @@ a:hover {
   width: min(620px, 96vw);
 }
 
-.xp-rule-modal .xp-modal-head {
+/* Cabecera estándar de las ventanas del panel: ícono + título y la cruz a la
+   derecha. La comparten el editor de XP y los editores del loro. */
+.modal-head {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.xp-modal-head h4 {
+.modal-head h4 {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -832,12 +834,12 @@ a:hover {
   font-size: 1.05rem;
 }
 
-.xp-modal-head h4 svg {
+.modal-head h4 svg {
   width: 20px;
   height: 20px;
 }
 
-.xp-modal-head > .icon-button {
+.modal-head > .icon-button {
   margin-left: auto;
 }
 
@@ -1326,6 +1328,13 @@ a:hover {
   white-space: nowrap;
 }
 
+/* Frase del loro en la fila: es texto corrido, no un nombre, así que va en
+   cursiva y más liviana que un título. */
+.admin-row-quote {
+  font-style: italic;
+  font-weight: 500;
+}
+
 .admin-row-none {
   color: var(--muted);
   font-style: italic;
@@ -1676,81 +1685,6 @@ a:hover {
 }
 
 /* Mensajes Karpindomo (loro) */
-.daily-watcher-editor {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(106, 168, 255, 0.28);
-  border-radius: 14px;
-  background: rgba(106, 168, 255, 0.06);
-}
-
-.daily-watcher-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.daily-watcher-head > div {
-  display: grid;
-  gap: 3px;
-}
-
-.daily-watcher-head > div span {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.daily-messages-editor {
-  display: grid;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--panel-border);
-}
-
-.daily-messages-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.daily-messages-head .muted-text {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.daily-message-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.18);
-}
-
-.daily-message-row .muted {
-  color: var(--muted);
-  text-decoration: line-through;
-}
-
-.daily-message-content {
-  flex: 1;
-  min-width: 0;
-  word-break: break-word;
-  line-height: 1.5;
-}
-
-.daily-message-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .hidden-raid-logs {
   display: grid;
   gap: 10px;
@@ -1872,14 +1806,6 @@ a:hover {
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 0.82rem;
   color: var(--muted);
-}
-
-/* Vigilar perfil: título + checkbox juntos */
-.daily-messages-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 
 /* Vista de Logs de Raid en la tab Raids */
@@ -5634,6 +5560,24 @@ textarea {
   gap: 8px;
 }
 
+/* Grupos de tres campos cortos (umbrales del watcher de Karuta, intervalos del
+   loro): en pantalla ancha entran los tres, así no queda media fila vacía. */
+.form-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 960px) {
+  .form-grid--three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .form-grid--three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .form-grid label span {
   color: #bdd8d2;
   font-size: 0.84rem;
@@ -9173,16 +9117,6 @@ select.list-order {
 }
 
 /* Grupos de umbrales en Admin → Karuta (print vs wishlist). */
-.karuta-threshold-group {
-  margin-top: 14px;
-}
-
-.karuta-threshold-title {
-  font-size: 0.88rem;
-  font-weight: 700;
-  margin: 0 0 8px;
-}
-
 .karuta-card-code {
   margin-top: 8px;
   font-size: 0.78rem;
@@ -9228,32 +9162,6 @@ select.list-order {
   font-size: 0.86rem;
 }
 
-.karuta-watcher-editor {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(106, 168, 255, 0.28);
-  border-radius: 14px;
-  background: rgba(106, 168, 255, 0.06);
-}
-
-.karuta-watcher-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.karuta-watcher-head > div {
-  display: grid;
-  gap: 3px;
-}
-
-.karuta-watcher-head span {
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
 @media (max-width: 640px) {
   .karuta-command-row {
     flex-direction: column;
@@ -9289,16 +9197,6 @@ select.list-order {
 
 :root[data-theme="light"] .karuta-command-row code {
   color: #a04e00;
-}
-
-:root[data-theme="light"] .karuta-watcher-editor {
-  background: rgba(222, 234, 250, 0.72);
-  border-color: rgba(60, 85, 130, 0.22);
-}
-
-:root[data-theme="light"] .daily-watcher-editor {
-  background: rgba(222, 234, 250, 0.72);
-  border-color: rgba(60, 85, 130, 0.22);
 }
 
 /* ============================================================
@@ -9430,7 +9328,6 @@ select.list-order {
 /* Tarjetas y filas con fondo oscuro -> claro */
 :root[data-theme="light"] .user-pill,
 :root[data-theme="light"] .xp-role-row,
-:root[data-theme="light"] .daily-message-row,
 :root[data-theme="light"] .role-chip,
 :root[data-theme="light"] .raid-log-badge,
 :root[data-theme="light"] .raid-log-fight,
