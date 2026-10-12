@@ -485,12 +485,19 @@ distinta de la otra (el editor de XP fue el primero en usarlo):
 - `modal-head` — la cabecera de las ventanas del panel (ícono + título y la cruz
   a la derecha). La comparten el editor de XP y el del loro.
 - `form-grid--three` — variante de tres columnas para grupos de tres campos
-  cortos (umbrales del watcher de Karuta, intervalos del loro), porque con dos
-  columnas quedaba media fila vacía.
+  cortos (umbrales del watcher de Karuta), porque con dos columnas quedaba media
+  fila vacía.
+- `admin-switch-field` — un campo cuyo control es un interruptor (`+ su chip de
+  estado`), con el mismo padding vertical que los controles: el switch entra
+  como un campo más y queda alineado con el select de al lado. Los encendidos
+  **no** ocupan una fila estirada a lo ancho del panel (quedaban con ~900 px de
+  aire en el medio).
 
 Con eso quedaron migrados los dos últimos módulos: **Karuta** (watcher, canal y
 los umbrales por print y por wishlist, en tres grupos) y **Karpindomo** (la
-publicación del loro y la lista de frases). Las frases dejaron de ser un textarea
+publicación del loro y la lista de frases). En los dos, el canal y su interruptor
+comparten la primera fila del grupo, así que no hay cajas solas ocupando media
+fila. Las frases dejaron de ser un textarea
 siempre abierto: son filas compactas (texto, chip Activa/Pausada y los botones de
 pausar y borrar) y el alta y la edición pasan por una ventana con el texto. Antes
 no había forma de corregir una frase: había que borrarla y crearla de nuevo.

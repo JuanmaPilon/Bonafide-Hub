@@ -5560,6 +5560,17 @@ textarea {
   gap: 8px;
 }
 
+/* Campo cuyo control es un interruptor (+ su chip de estado): en vez de ocupar
+   una fila entera estirada, va como un campo más, alineado en altura con los
+   inputs y selects de la barra. El padding es el mismo de los controles, así la
+   fila mide lo mismo que las de al lado. */
+.admin-switch-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 0;
+}
+
 /* Grupos de tres campos cortos (umbrales del watcher de Karuta, intervalos del
    loro): en pantalla ancha entran los tres, así no queda media fila vacía. */
 .form-grid--three {

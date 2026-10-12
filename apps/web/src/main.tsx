@@ -10735,35 +10735,6 @@ function App() {
                             <CardsThree weight="fill" aria-hidden="true" />
                             Watcher
                           </span>
-                          <div className="admin-row-box">
-                            <span className="admin-row-title">
-                              Detectar cartas y colecciones
-                            </span>
-                            <span className="admin-row-spacer" />
-                            <span className="admin-row-tag">
-                              {config.karutaWatchEnabled ? "Activo" : "Apagado"}
-                            </span>
-                            <label className="raid-watcher-toggle">
-                              <input
-                                type="checkbox"
-                                checked={config.karutaWatchEnabled ?? false}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      karutaWatchEnabled: event.target.checked,
-                                    }),
-                                    "karuta",
-                                  )
-                                }
-                              />
-                              <span
-                                className="raid-watcher-switch"
-                                aria-hidden="true"
-                              />
-                              <span className="sr-only">Activar watcher</span>
-                            </label>
-                          </div>
                           <div className="form-grid">
                             <label>
                               <span>Canal de Karuta</span>
@@ -10788,6 +10759,41 @@ function App() {
                                   </option>
                                 ))}
                               </select>
+                            </label>
+                            <label>
+                              <span>Detección automática</span>
+                              <span className="admin-switch-field">
+                                <span className="admin-row-tag">
+                                  {config.karutaWatchEnabled
+                                    ? "Activo"
+                                    : "Apagado"}
+                                </span>
+                                <span className="raid-watcher-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      config.karutaWatchEnabled ?? false
+                                    }
+                                    onChange={(event) =>
+                                      editConfig(
+                                        (current) => ({
+                                          ...current,
+                                          karutaWatchEnabled:
+                                            event.target.checked,
+                                        }),
+                                        "karuta",
+                                      )
+                                    }
+                                  />
+                                  <span
+                                    className="raid-watcher-switch"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="sr-only">
+                                    Activar watcher
+                                  </span>
+                                </span>
+                              </span>
                             </label>
                           </div>
                         </section>
@@ -11178,38 +11184,7 @@ function App() {
                             <ChatCircleDots weight="fill" aria-hidden="true" />
                             Publicación
                           </span>
-                          <div className="admin-row-box">
-                            <span className="admin-row-title">
-                              Publicar frases al azar
-                            </span>
-                            <span className="admin-row-spacer" />
-                            <span className="admin-row-tag">
-                              {config.dailyMessagesEnabled ? "Activo" : "Apagado"}
-                            </span>
-                            <label className="raid-watcher-toggle">
-                              <input
-                                type="checkbox"
-                                checked={config.dailyMessagesEnabled ?? false}
-                                onChange={(event) =>
-                                  editConfig(
-                                    (current) => ({
-                                      ...current,
-                                      dailyMessagesEnabled:
-                                        event.target.checked,
-                                    }),
-                                    "daily",
-                                  )
-                                }
-                              />
-                              <span
-                                className="raid-watcher-switch"
-                                aria-hidden="true"
-                              />
-                              <span className="sr-only">Activar loro</span>
-                            </label>
-                          </div>
-
-                          <div className="form-grid form-grid--three">
+                          <div className="form-grid">
                             <label>
                               <span>Canal de publicación</span>
                               <select
@@ -11233,6 +11208,39 @@ function App() {
                                   </option>
                                 ))}
                               </select>
+                            </label>
+                            <label>
+                              <span>Loro activo</span>
+                              <span className="admin-switch-field">
+                                <span className="admin-row-tag">
+                                  {config.dailyMessagesEnabled
+                                    ? "Activo"
+                                    : "Apagado"}
+                                </span>
+                                <span className="raid-watcher-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      config.dailyMessagesEnabled ?? false
+                                    }
+                                    onChange={(event) =>
+                                      editConfig(
+                                        (current) => ({
+                                          ...current,
+                                          dailyMessagesEnabled:
+                                            event.target.checked,
+                                        }),
+                                        "daily",
+                                      )
+                                    }
+                                  />
+                                  <span
+                                    className="raid-watcher-switch"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="sr-only">Activar loro</span>
+                                </span>
+                              </span>
                             </label>
                             <AdminNumberField
                               label="Intervalo mínimo (min)"
