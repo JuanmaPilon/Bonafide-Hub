@@ -1290,18 +1290,25 @@ async function fetchGuildBoosters(guildId: string): Promise<GuildBooster[]> {
     .filter((booster) => booster.userId);
 }
 
-// Raid leads: los que tienen el rol de Raid Officer mapeado en el roster. Es la
-// misma tarjeta de miembro que los boosters (Inicio solo muestra quiénes son).
+// Raid leads: los que tienen el rol de Raid Officer mapeado en el roster, de
+// mayor a menor XP (el mismo orden que el podio). Es la misma tarjeta de
+// miembro que los boosters (Inicio solo muestra quiénes son).
 async function fetchGuildRaidLeads(guildId: string): Promise<GuildMemberCard[]> {
-  const [config, mappings, members] = await Promise.all([
+  const [config, mappings, members, profiles] = await Promise.all([
     getGuildConfig(guildId),
     listGuildMappings(guildId),
     fetchAllGuildMembers(guildId).catch(() => []),
+    listXpProfiles(guildId).catch(() => []),
   ]);
   const officerRoleId = resolveRosterRankRoles(mappings, config).guild;
   if (!officerRoleId) {
     return [];
   }
+
+  // Sin perfil de XP el miembro cuenta como 0 y queda al final.
+  const xpByUserId = new Map(
+    profiles.map((profile) => [profile.userId, profile.xp]),
+  );
 
   return members
     .filter(
@@ -1317,11 +1324,17 @@ async function fetchGuildRaidLeads(guildId: string): Promise<GuildMemberCard[]> 
       username: member.user?.username ?? "",
     }))
     .filter((lead) => lead.userId)
-    .sort((left, right) =>
-      (left.nickname ?? left.username).localeCompare(
-        right.nickname ?? right.username,
-      ),
-    );
+    .sort((left, right) => {
+      const byXp =
+        (xpByUserId.get(right.userId) ?? 0) - (xpByUserId.get(left.userId) ?? 0);
+      // Empate: alfabético, así el orden no baila entre cargas.
+      return (
+        byXp ||
+        (left.nickname ?? left.username).localeCompare(
+          right.nickname ?? right.username,
+        )
+      );
+    });
 }
 
 // ── Cierre de inscripciones de eventos ──────────────────────────────

@@ -528,7 +528,9 @@ abajo de 1020 px): el **podio** por XP (top 5, con el color de rango de cada
 puesto —las variables `--podium-*`— y el del nivel en el nombre) y los **raid
 leads** (`GET /guilds/:guildId/raid-leads`), que son los que tienen el rol de Raid
 Officer mapeado en el roster —liviano a propósito: avatar, nick y usuario, porque
-la fila solo muestra quiénes son—. Las tres cajas ocupan el ancho completo sin
+la fila solo muestra quiénes son—. Los leads salen ordenados por XP, de mayor a
+menor (y sin perfil de XP al final), así el orden se lee igual que el del podio y
+no baila entre cargas. Las tres cajas ocupan el ancho completo sin
 importar cuántos miembros haya: la grilla de tarjetas usa `auto-fit` (con
 `auto-fill` las columnas sobrantes quedaban vacías a la derecha) y las dos listas
 comparten la misma fila (`.home-member-row`, con el acento del grupo en
