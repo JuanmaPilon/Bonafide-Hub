@@ -50,6 +50,7 @@ import {
 import { XpSection } from "./XpSection";
 import { copyToClipboard } from "./clipboard";
 import { hoursFromMinutes, minutesFromHours } from "./duration";
+import { padImageForEmbed } from "./embed-image";
 import { createMarquee } from "./marquee";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -8218,7 +8219,7 @@ function App() {
         reader.readAsDataURL(file);
       });
       const image = await uploadEventImage(selectedGuildId, {
-        dataUrl,
+        dataUrl: await padImageForEmbed(dataUrl),
         name: file.name,
       });
       setEventImages((current) => [image, ...current]);
@@ -8292,6 +8293,10 @@ function App() {
       }
     };
 
+    // La imagen se guarda re-encuadrada para que el aviso de Discord no quede
+    // más angosto que el resto (ver embed-image.ts).
+    const imageUrl = await padImageForEmbed(eventForm.imageUrl);
+
     setCreatingEvent(true);
     try {
       if (editingEventId) {
@@ -8301,7 +8306,7 @@ function App() {
           durationMinutes: minutesFromHours(eventForm.durationHours) ?? null,
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
-          imageUrl: eventForm.imageUrl || undefined,
+          imageUrl: imageUrl || undefined,
           paused: eventForm.paused,
           // Horas de la encuesta: solo viajan si el juego publica encuesta.
           // null = sin duración explícita → Discord la abre 24 h.
@@ -8345,7 +8350,7 @@ function App() {
           durationMinutes: minutesFromHours(eventForm.durationHours),
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
-          imageUrl: eventForm.imageUrl || undefined,
+          imageUrl: imageUrl || undefined,
           pollHours:
             eventFormGame?.poll && eventForm.pollHours
               ? Number(eventForm.pollHours)

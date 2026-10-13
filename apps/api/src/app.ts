@@ -1,7 +1,6 @@
 import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
-import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { env } from "./config/env.js";
 import {
   cancelReminder,
@@ -2615,35 +2614,6 @@ async function editCommunicationInDiscord(
   }
 
   return { messageIds };
-}
-
-// Ancho mínimo de la imagen del aviso de evento. Discord no deja fijar el ancho
-// de un embed: la caja se ajusta a su contenido (la imagen se muestra hasta
-// ~400 px y el texto hasta ~432), así que una imagen más angosta que eso encoge
-// todo el aviso y quedan unos anchos distintos de otros. Con la imagen
-// re-encuadrada a este ancho, la caja siempre llega al máximo y el arte queda
-// centrado, con bandas transparentes a los costados (que dejan ver el fondo del
-// embed, sin imponer un color que se vea mal en el tema claro).
-const ANNOUNCEMENT_IMAGE_MIN_WIDTH = 432;
-
-// Devuelve la imagen re-encuadrada, o `null` si ya es lo bastante ancha (o si no
-// se puede decodificar): en ese caso conviene servir el archivo tal cual, sin
-// volver a comprimirlo.
-async function padAnnouncementImage(buffer: Buffer): Promise<Buffer | null> {
-  const image = await loadImage(buffer);
-  if (image.width >= ANNOUNCEMENT_IMAGE_MIN_WIDTH) {
-    return null;
-  }
-
-  const canvas = createCanvas(ANNOUNCEMENT_IMAGE_MIN_WIDTH, image.height);
-  canvas
-    .getContext("2d")
-    .drawImage(
-      image,
-      Math.round((ANNOUNCEMENT_IMAGE_MIN_WIDTH - image.width) / 2),
-      0,
-    );
-  return canvas.toBuffer("image/png");
 }
 
 export function buildApp() {
@@ -7012,16 +6982,10 @@ export function buildApp() {
         return reply.code(400).send({ ok: false, error: "Imagen inválida" });
       }
       const buffer = Buffer.from(match[2], "base64");
-      // Discord no permite fijar el ancho de un embed: la caja se ajusta a su
-      // contenido, así que una imagen angosta encoge el aviso entero. Se sirve
-      // re-encuadrada (arte centrado, bandas transparentes) para que todas las
-      // publicaciones queden igual de anchas. Si no hace falta, van los bytes
-      // originales: sin re-encodear no se pierde calidad.
-      const padded = await padAnnouncementImage(buffer).catch(() => null);
       return reply
-        .header("Content-Type", padded ? "image/png" : match[1])
+        .header("Content-Type", match[1])
         .header("Cache-Control", "public, max-age=86400")
-        .send(padded ?? buffer);
+        .send(buffer);
     },
   );
 

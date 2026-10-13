@@ -605,16 +605,20 @@ Ojo: como la base guarda minutos enteros, 0.21 hs (12.6 min) se guarda como
 13 min y al reabrir se ve 0.22.
 
 **Ancho del aviso en Discord:** un embed no tiene ancho propio —la caja se ajusta
-a su contenido: la imagen se muestra hasta ~400 px y el texto hasta ~432—, así que
-una imagen angosta encogía el aviso entero y quedaban publicaciones de anchos
-distintos. Por eso la imagen pública del aviso
-(`GET /public/guilds/:guildId/events/:eventId/image`) se sirve **re-encuadrada a
-432 px de ancho** (`padAnnouncementImage`, `apps/api/src/app.ts`), con el arte
-centrado y bandas transparentes: así la caja vuelve a llegar al máximo. Lo
-guardado no se toca (la biblioteca y la web siguen usando la data URL original) y
-una imagen que ya es ancha se sirve tal cual, sin recomprimir. El `?v=2` de la URL
-hace que Discord la pida de nuevo en lugar de reusar la cacheada, para que los
-avisos ya publicados tomen el re-encuadre en el próximo refresh.
+a su contenido: el texto llega hasta ~432 px y la imagen se muestra a su tamaño
+natural, sin estirarla—, así que una imagen angosta achicaba el aviso entero y
+quedaban publicaciones de anchos distintos. Por eso la imagen se guarda **ya
+re-encuadrada a 400 px de ancho** (`EMBED_IMAGE_MIN_WIDTH`): el arte queda
+centrado y los costados se completan estirando sus columnas de borde (sin marcos
+ni colores inventados). El re-encuadre vive en la web
+(`apps/web/src/embed-image.ts`), **no en el API**: se aplica al subir la imagen y
+al guardar el evento, así lo que se guarda ya está listo y el API solo sirve
+bytes (a `GET /public/guilds/:guildId/events/:eventId/image` le llegó a pesar el
+trabajo de decodificar: si el proceso se reiniciaba justo cuando Discord pedía la
+imagen, el aviso quedaba sin imagen). Los GIF animados no se tocan: pasarlos por
+un canvas los dejaría quietos. La URL del embed lleva `?v=<hash de la imagen>`: al
+cambiar la imagen cambia la URL y Discord la vuelve a pedir; si no cambió,
+mantiene la que ya tiene cacheada.
 
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
@@ -626,7 +630,7 @@ avisos ya publicados tomen el re-encuadre en el próximo refresh.
 8. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
 9. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
 10. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
-11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord; va re-encuadrada, ver arriba)
+11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
 
 ## 4. Endpoint interno para bot
 

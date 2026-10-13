@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { env } from "../config/env.js";
 import { formatDurationHours } from "./duration.js";
 import type { EventTag } from "./events-store.js";
@@ -565,10 +566,14 @@ function resolveEmbedImageUrl(
     if (!base || !eventId) {
       return undefined;
     }
-    // El "v" marca la versión de la imagen servida: al cambiarla, Discord pide
-    // la URL de nuevo en lugar de reusar la que tenía cacheada, así los avisos
-    // ya publicados toman el re-encuadre en el próximo refresh.
-    return `${base}/public/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}/image?v=2`;
+    // El "v" es el hash de la imagen: Discord cachea las imágenes por URL, así
+    // que al cambiar la guardada la URL cambia y la vuelve a pedir; con la misma
+    // imagen la URL no cambia y sigue usando la que ya tiene.
+    const version = createHash("sha1")
+      .update(imageUrl)
+      .digest("hex")
+      .slice(0, 8);
+    return `${base}/public/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}/image?v=${version}`;
   }
   return undefined;
 }
