@@ -565,7 +565,10 @@ function resolveEmbedImageUrl(
     if (!base || !eventId) {
       return undefined;
     }
-    return `${base}/public/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}/image`;
+    // El "v" marca la versión de la imagen servida: al cambiarla, Discord pide
+    // la URL de nuevo en lugar de reusar la que tenía cacheada, así los avisos
+    // ya publicados toman el re-encuadre en el próximo refresh.
+    return `${base}/public/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}/image?v=2`;
   }
   return undefined;
 }

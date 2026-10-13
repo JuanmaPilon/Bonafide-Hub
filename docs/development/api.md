@@ -604,6 +604,18 @@ que ya estaba guardado, así que no hay migración. La conversión vive en
 Ojo: como la base guarda minutos enteros, 0.21 hs (12.6 min) se guarda como
 13 min y al reabrir se ve 0.22.
 
+**Ancho del aviso en Discord:** un embed no tiene ancho propio —la caja se ajusta
+a su contenido: la imagen se muestra hasta ~400 px y el texto hasta ~432—, así que
+una imagen angosta encogía el aviso entero y quedaban publicaciones de anchos
+distintos. Por eso la imagen pública del aviso
+(`GET /public/guilds/:guildId/events/:eventId/image`) se sirve **re-encuadrada a
+432 px de ancho** (`padAnnouncementImage`, `apps/api/src/app.ts`), con el arte
+centrado y bandas transparentes: así la caja vuelve a llegar al máximo. Lo
+guardado no se toca (la biblioteca y la web siguen usando la data URL original) y
+una imagen que ya es ancha se sirve tal cual, sin recomprimir. El `?v=2` de la URL
+hace que Discord la pida de nuevo en lugar de reusar la cacheada, para que los
+avisos ya publicados tomen el re-encuadre en el próximo refresh.
+
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`
@@ -614,7 +626,7 @@ Ojo: como la base guarda minutos enteros, 0.21 hs (12.6 min) se guarda como
 8. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
 9. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
 10. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
-11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
+11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord; va re-encuadrada, ver arriba)
 
 ## 4. Endpoint interno para bot
 
