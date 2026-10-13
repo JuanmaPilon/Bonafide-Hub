@@ -6300,7 +6300,7 @@ function HomeView({
           <div className="section-header">
             <div>
               <h2>Podio del servidor</h2>
-              <p>Top 5 MVP por XP del servidor.</p>
+              <p>Top 5 activos en el servidor.</p>
             </div>
           </div>
           {loading ? (
