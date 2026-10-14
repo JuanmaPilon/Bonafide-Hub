@@ -38,7 +38,8 @@
 - En el panel admin, "Plantillas" es el catálogo de tipos de evento y "Eventos" el
   historial en **calendario** (mes con una tarjeta por evento, buscador con salto
   a los meses con coincidencias y el informe de cada noche en una ventana, con el
-  cruce de los anotados contra su ficha del roster); las claves de los enlaces no
+  cruce de los anotados contra su ficha del roster y contra el log de esa noche,
+  que dice quién vino de verdad); las claves de los enlaces no
   cambian
 - Consume endpoints del API
 - Iconos: `@phosphor-icons/react` con `weight="fill"` (un solo set, formas
@@ -246,6 +247,8 @@ Web -> acción Publicar -> API envía la entrada agrupada al canal de Discord
 Web -> acción Actualizar -> API refresca y edita el mensaje publicado
 Web -> análisis de la noche -> API pide el detalle del report y lo cruza con los
    anotados del evento; el resultado se cachea 10 min
+Web -> informe del evento (Admin -> Eventos) -> la misma API de asistencia, pero
+   pedida por evento: busca el log de esa noche (±14 h) y devuelve quién vino
 ```
 
 El análisis trae los pulls, el DPS promedio, las muertes por habilidad y por

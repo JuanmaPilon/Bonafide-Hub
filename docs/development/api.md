@@ -534,27 +534,47 @@ eventos, se muestra el mes con actividad más cercano, una sola vez: si después
 navegás a un mes vacío a propósito, te quedás ahí.
 
 **El informe de un evento** (click en una tarjeta) va en una ventana ancha
-(`.modal--report`) y tiene tres partes:
+(`.modal--report`) y tiene cuatro partes:
 
 1. El resumen de la noche: fecha, horario (empieza → termina y las horas), juego
    y tipo, y la convocatoria del roster (`GET .../events/:eventId/roster`:
    confirmados sobre esperados y cuántos no respondieron).
-2. La asistencia, con los mismos chips que el aviso de Discord (👥 anotados,
-   ✅ asistentes, 🪑 bench, ⏰ tarde, ❌ no asisten) y una fila de **"A revisar"**
-   que cuenta los problemas del cruce.
-3. **Una fila por anotado, agrupada por estado**, con el cruce contra su ficha
-   del roster: clase y spec (los de la ficha, que es la fuente de verdad; si la
-   inscripción decía otra cosa, se muestra abajo como "inscripción: …"), el rol,
-   y los avisos — "clase distinta a su ficha", "rol distinto a su ficha",
-   "sin ficha en el roster", "ficha sin clase ni spec". Si no eligió rol, la
-   columna muestra el de su ficha ("según su ficha: Healer"). Al final, los que
-   tenían que estar y **no respondieron**.
+2. La asistencia **declarada**, con los mismos chips que el aviso de Discord
+   (👥 anotados, ✅ asistentes, 🪑 bench, ⏰ tarde, ❌ no asisten) y cuántos se
+   anotaron como "asisto".
+3. La asistencia **real**, en la fila "En el log": el cruce de esa noche contra
+   el log de Warcraft Logs (`GET .../events/:eventId/attendance`, que devuelve
+   `attendance: null` cuando esa noche no tiene log guardado, que no es lo mismo
+   que "no vino nadie"). Los chips resumen cuántos de los que se comprometieron
+   vinieron, cuántos no, cuántos de bench jugaron igual, cuántos **dijeron que no
+   y aparecieron**, los nombres parecidos que quedan a confirmar y quiénes
+   jugaron sin anotarse.
+4. **Una fila por anotado, agrupada por lo que declaró** ("Se anotaron para
+   asistir", "🪑 Bench", "Avisaron que llegan tarde", "Avisaron que no van", con
+   "· N en el log" en el título de cada grupo). Cada fila trae el cruce contra su
+   ficha del roster y contra el log: clase y spec (los de la ficha, que es la
+   fuente de verdad; si la inscripción decía otra cosa, se muestra abajo como
+   "inscripción: …"), el rol (si no eligió, el de su ficha: "según su ficha:
+   Healer"), si **jugó** ("✔ jugó (12 pulls)", "✘ no jugó", "¿Danii? (86%)"
+   cuando el nombre del log se parece pero no es igual, "sin personaje para
+   comparar" o "—" si no hay log de esa noche) y los avisos de ficha en una sola
+   columna "A revisar" ("ficha: Fire Mage", "rol distinto a su ficha (Healer)",
+   "sin ficha en el roster", "ficha sin clase ni spec"), con ✓ cuando no hay nada
+   que revisar. Al final, los que tenían que estar y **no respondieron**.
 
 El cruce usa el catálogo que viene **con el roster** (`GuildRoster.specs`,
 `roles` y `classEmojis`), no el de la tab Eventos: entrar directo a
 Admin → Eventos (sin pasar por Eventos) dejaba ese catálogo vacío y el cruce de
 rol se quedaba sin comparar. El roster se pide al abrir la ventana y se olvida al
 cerrarla, así el informe siempre muestra la última ficha guardada.
+
+El endpoint de asistencia devuelve `byUser` con **una entrada por inscripción, de
+cualquier estado** (`present`, `pulls`, el `logName` que coincidió y `likely`
+cuando el parecido no alcanza para confirmar), así el informe puede decir de cada
+persona si jugó o no, sin tener que cruzar los nombres de nuevo en la web. Reusa
+el mismo análisis cacheado de Raids → Logs (`analyzeRaidLogNight`, 10 minutos) y
+prueba como mucho dos logs candidatos por cercanía en ±14 h, aceptando solo el
+que reconoce ese evento: abrir el informe no dispara el análisis de otras noches.
 
 Dos detalles que no son obvios: el día del calendario se calcula en hora
 **local** (con `toISOString()` un evento de las 22:00 caería en el día siguiente)
@@ -669,14 +689,16 @@ mantiene la que ya tiene cacheada.
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`
-4. `PUT/DELETE /guilds/:guildId/events/:eventId/signups/me` (propia inscripción)
-5. `DELETE /guilds/:guildId/events/:eventId/signups/me/reset` (borra inscripción + personaje recordado)
-6. `GET/POST /guilds/:guildId/events/specs` (catálogo; `?game=` filtra por juego)
-7. `PATCH/DELETE /guilds/:guildId/events/specs/:specId`
-8. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
-9. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
-10. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
-11. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
+4. `GET /guilds/:guildId/events/:eventId/roster` (convocatoria del roster: confirmados, esperados y quiénes no respondieron; lo ve el staff de eventos)
+5. `GET /guilds/:guildId/events/:eventId/attendance` (asistencia real de esa noche cruzada contra el log de Warcraft Logs: quién vino, quién no, bench que jugó, dijo-que-no-y-jugó y quiénes jugaron sin anotarse; `attendance: null` cuando esa noche no tiene log)
+6. `PUT/DELETE /guilds/:guildId/events/:eventId/signups/me` (propia inscripción)
+7. `DELETE /guilds/:guildId/events/:eventId/signups/me/reset` (borra inscripción + personaje recordado)
+8. `GET/POST /guilds/:guildId/events/specs` (catálogo; `?game=` filtra por juego)
+9. `PATCH/DELETE /guilds/:guildId/events/specs/:specId`
+10. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
+11. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
+12. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
+13. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
 
 ## 4. Endpoint interno para bot
 
