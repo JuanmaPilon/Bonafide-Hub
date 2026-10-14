@@ -526,9 +526,9 @@ claves siguen siendo `eventos` y `historial`: los enlaces `#/admin/eventos` y
 **Historial de eventos (Admin → Eventos):** no es una lista, es un
 **calendario**: el mes entero con una tarjetita por evento terminado en su día
 (emoji del tipo, título, hora y cuántos asistieron), el contador del mes, la
-navegación `‹ mes ›` y un botón "Mes actual" (vuelve al mes de hoy; el día de hoy
-va marcado en la grilla). Lo que no entra en un día se pliega en "+N más" y se
-despliega ahí mismo. El buscador está en la
+navegación `‹ mes ›` y un botón "Ir al mes actual" (vuelve al mes de hoy; el día
+de hoy va marcado en la grilla). Lo que no entra en un día se pliega en "+N más"
+y se despliega ahí mismo. El buscador está en la
 misma barra y, cuando hay coincidencias en otros meses, muestra chips para saltar
 a ellos (no hay que recorrer mes por mes). Al abrir, si el mes actual no tiene
 eventos, se muestra el mes con actividad más cercano, una sola vez: si después

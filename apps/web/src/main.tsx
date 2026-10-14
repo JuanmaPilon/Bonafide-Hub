@@ -6349,11 +6349,10 @@ function EventHistoryCalendar({
           <button
             className="ghost-button small"
             onClick={() => setMonthKey(monthKeyOf(new Date()))}
-            title="Ir al mes actual"
             type="button"
           >
             <Calendar weight="fill" aria-hidden="true" />
-            Mes actual
+            Ir al mes actual
           </button>
         </div>
       </div>
