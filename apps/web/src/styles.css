@@ -2853,25 +2853,6 @@ a:hover {
   text-overflow: ellipsis;
 }
 
-/* La fecha del evento del cruce manda: el título lo escribe quien crea el
-   evento y puede nombrar los dos días de la raid. La tarjeta es más ancha que
-   las otras para que el título se lea entero. */
-.rlb-attendance-stats > .rlb-attendance-event {
-  max-width: 460px;
-}
-
-.rlb-attendance-event-date {
-  text-transform: capitalize;
-}
-
-.rlb-attendance-event-title {
-  display: block;
-  margin-top: 2px;
-  overflow-wrap: anywhere;
-  font-size: 0.78rem;
-  line-height: 1.35;
-}
-
 :root[data-theme="light"] .rlb-analysis {
   background: rgba(230, 237, 247, 0.58);
 }

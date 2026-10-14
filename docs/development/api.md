@@ -316,10 +316,10 @@ Devuelve:
    "tentativo" es anotarse, así que no aparecen ahí. `partial` avisa cuando no se
    pudo leer la presencia por pull (CombatantInfo) y los participantes salieron
    de la tabla de daño: ahí un "no vino" puede ser un heal que no hizo daño.
-   La tarjeta del evento muestra **su fecha completa** ("miércoles, 07/10/2026")
-   y, abajo, el título tal cual lo escribió quien creó el evento: el título suele
-   nombrar los dos días de la raid ("Raid MIERCOLES - JUEVES 08/10/2026"), así
-   que la fecha en grande es la que dice de qué noche es el cruce.
+   `event` viaja con el cruce porque el staff confirma ahí los nombres parecidos
+   (y el API necesita el id para corregir el PJ de esa inscripción), pero **no se
+   muestra**: de qué noche es el cruce se ve en el informe del evento, en
+   Admin → Eventos.
 6. `source` — de dónde salió el análisis: el report **más completo** de la
    noche es la base (`baseReport` / `basePulls`) y define el nombre de cada boss
    cuando el mismo aparece en los dos reports; `extraPulls` cuenta los pulls que

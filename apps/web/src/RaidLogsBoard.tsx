@@ -1534,30 +1534,6 @@ export function RaidLogsBoard({
                                     <span>Jugadores en el log</span>
                                     <strong>{attendance.players.length}</strong>
                                   </div>
-                                  {attendance.event ? (
-                                    <div className="rlb-attendance-event">
-                                      <span>Evento del cruce</span>
-                                      <strong className="rlb-attendance-event-date">
-                                        {new Date(
-                                          attendance.event.startsAt,
-                                        ).toLocaleDateString("es-AR", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          weekday: "long",
-                                          year: "numeric",
-                                        })}
-                                      </strong>
-                                      {/* El título lo escribe quien crea el
-                                          evento ("Raid MIERCOLES - JUEVES
-                                          08/10/2026") y puede nombrar días que
-                                          no son los de esta noche: va completo
-                                          abajo, chico, para poder verlo entero
-                                          sin que compita con la fecha. */}
-                                      <span className="rlb-attendance-event-title">
-                                        {attendance.event.title}
-                                      </span>
-                                    </div>
-                                  ) : null}
                                 </div>
                                 {attendance.partial ? (
                                   <span className="rlb-label">
