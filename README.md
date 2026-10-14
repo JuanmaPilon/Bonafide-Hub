@@ -96,7 +96,7 @@ corresponde:
 | Karpindomo | Canal, intervalo y frases del loro |
 | Karuta | Canal vigilado y umbrales de rareza |
 | Plantillas | El catálogo de tipos de evento |
-| Eventos | El historial de los eventos que ya terminaron |
+| Eventos | El historial en calendario, con buscador y el detalle de cada noche |
 | Registros | Auditoría: quién cambió qué y cuándo |
 
 ### Perfil, tema y Karpindomo

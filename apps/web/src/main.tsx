@@ -862,6 +862,33 @@ function formatDateTime24(value: string | Date | undefined): string {
   return `${formatDate24(date)} ${formatTime24(date)}`;
 }
 
+// Clave local del día (YYYY-MM-DD) y del mes (YYYY-MM). Se arma con las partes
+// locales a propósito: `toISOString()` pasa a UTC, así que un evento de las
+// 22:00 caería en el día siguiente.
+function localDayKey(value: string | Date | undefined): string {
+  const date = toDateOrNull(value);
+  if (!date) {
+    return "";
+  }
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function monthKeyOf(value: string | Date | undefined): string {
+  return localDayKey(value).slice(0, 7);
+}
+
+// "julio 2026" a partir de una clave YYYY-MM (el CSS lo muestra capitalizado).
+function monthKeyLabel(monthKey: string): string {
+  const [year, month] = monthKey.split("-");
+  return `${MONTH_LABELS[Number(month) - 1] ?? month} ${year}`;
+}
+
+function shiftMonthKey(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1 + delta, 1);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+}
+
 // Parte de fecha (dd/mm/aaaa) de un valor local YYYY-MM-DDTHH:mm.
 function datePartText(value: string): string {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -6157,10 +6184,414 @@ const KARUTA_COMMAND_GROUPS: Array<{
   },
 ];
 
+// ── Historial de eventos en calendario (Admin → Eventos) ────────────
+// La lista larga se cambió por el mes entero de un vistazo: una tarjetita por
+// evento en su día, con el acento del tipo. El buscador sigue estando y además
+// ofrece saltar a los meses que tienen coincidencias.
+
+// Tarjetas que entran en un día antes de plegar el resto en "+N más".
+const EVENT_MONTH_MAX_CARDS = 3;
+// La semana arranca el lunes, como el almanaque del formulario de eventos.
+const EVENT_MONTH_WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+type EventMonthCell = {
+  date: Date;
+  day: number;
+  events: HubEvent[];
+  inMonth: boolean;
+  isToday: boolean;
+  key: string;
+};
+
+// Celdas del mes: desde el lunes de la semana del día 1 hasta el domingo de la
+// semana del último día, así la grilla siempre es rectangular.
+function buildEventMonthCells(
+  monthKey: string,
+  byDay: Map<string, HubEvent[]>,
+): EventMonthCell[] {
+  const [year, month] = monthKey.split("-").map(Number);
+  const first = new Date(year, month - 1, 1);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const totalCells = Math.ceil((mondayOffset + daysInMonth) / 7) * 7;
+  const todayKey = localDayKey(new Date());
+
+  return Array.from({ length: totalCells }, (_, index) => {
+    const date = new Date(year, month - 1, 1 - mondayOffset + index);
+    const key = localDayKey(date);
+    return {
+      date,
+      day: date.getDate(),
+      events: byDay.get(key) ?? [],
+      inMonth: date.getMonth() === month - 1,
+      isToday: key === todayKey,
+      key,
+    };
+  });
+}
+
+// Mes con eventos más cercano al que se está mirando: es el que se muestra solo
+// cuando el mes en pantalla no tiene nada.
+function nearestMonthKey(fromKey: string, monthKeys: string[]): string {
+  const distance = (key: string): number => {
+    const [fromYear, fromMonth] = fromKey.split("-").map(Number);
+    const [year, month] = key.split("-").map(Number);
+    return Math.abs((year - fromYear) * 12 + (month - fromMonth));
+  };
+  return (
+    [...monthKeys].sort(
+      (left, right) =>
+        distance(left) - distance(right) || right.localeCompare(left),
+    )[0] ?? fromKey
+  );
+}
+
+function EventHistoryCalendar({
+  events,
+  onOpen,
+  onSearchChange,
+  search,
+}: {
+  events: HubEvent[];
+  onOpen: (event: HubEvent) => void;
+  onSearchChange: (value: string) => void;
+  search: string;
+}) {
+  const [monthKey, setMonthKey] = useState(() => monthKeyOf(new Date()));
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const searching = search.trim().length > 0;
+
+  // Una sola pasada por los eventos: el día de cada uno (para la grilla) y
+  // cuántos hay por mes (para el salto rápido y el salto automático).
+  const { byDay, monthCounts } = useMemo(() => {
+    const days = new Map<string, HubEvent[]>();
+    const months = new Map<string, number>();
+    for (const event of events) {
+      const dayKey = localDayKey(event.startsAt);
+      days.set(dayKey, [...(days.get(dayKey) ?? []), event]);
+      const key = dayKey.slice(0, 7);
+      months.set(key, (months.get(key) ?? 0) + 1);
+    }
+    for (const list of days.values()) {
+      list.sort(
+        (left, right) =>
+          new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+      );
+    }
+    return { byDay: days, monthCounts: months };
+  }, [events]);
+
+  const cells = useMemo(
+    () => buildEventMonthCells(monthKey, byDay),
+    [byDay, monthKey],
+  );
+  const monthTotal = monthCounts.get(monthKey) ?? 0;
+  // Del más nuevo al más viejo: el orden en el que se busca en el historial.
+  const monthsWithEvents = useMemo(
+    () => [...monthCounts.keys()].sort().reverse(),
+    [monthCounts],
+  );
+
+  // Al abrir, si el mes de hoy no tiene nada, se muestra el mes con eventos más
+  // cercano (el último raid es más útil que un mes vacío). La decisión se toma
+  // UNA vez, cuando ya llegaron los eventos: si después navegás a un mes vacío
+  // (o buscás algo que no está en el mes visible) te quedás donde estás, que
+  // para eso están los accesos de "Meses con coincidencias".
+  const autoJumped = useRef(false);
+  useEffect(() => {
+    if (autoJumped.current || monthsWithEvents.length === 0) {
+      return;
+    }
+    autoJumped.current = true;
+    if (monthTotal > 0) {
+      return;
+    }
+    setMonthKey(nearestMonthKey(monthKey, monthsWithEvents));
+  }, [monthKey, monthTotal, monthsWithEvents]);
+
+  const monthLabel = monthKeyLabel(monthKey);
+
+  return (
+    <div className="event-month">
+      <div className="event-month-bar">
+        <div className="event-month-nav">
+          <button
+            aria-label="Mes anterior"
+            onClick={() => setMonthKey(shiftMonthKey(monthKey, -1))}
+            title="Mes anterior"
+            type="button"
+          >
+            ‹
+          </button>
+          <strong className="event-month-title">{monthLabel}</strong>
+          <button
+            aria-label="Mes siguiente"
+            onClick={() => setMonthKey(shiftMonthKey(monthKey, 1))}
+            title="Mes siguiente"
+            type="button"
+          >
+            ›
+          </button>
+        </div>
+        <input
+          className="input list-search event-month-search"
+          onChange={(changeEvent) => onSearchChange(changeEvent.target.value)}
+          placeholder="Buscar evento…"
+          type="search"
+          value={search}
+        />
+        <div className="event-month-actions">
+          <span className="admin-row-tag">
+            {monthTotal === 1 ? "1 evento" : `${monthTotal} eventos`}
+          </span>
+          <button
+            className="ghost-button small"
+            onClick={() => setMonthKey(monthKeyOf(new Date()))}
+            type="button"
+          >
+            <Calendar weight="fill" aria-hidden="true" />
+            Hoy
+          </button>
+        </div>
+      </div>
+
+      {searching && monthsWithEvents.length > 0 ? (
+        <div className="event-month-jumps">
+          <span className="event-month-jumps-label">Meses con coincidencias:</span>
+          {monthsWithEvents.slice(0, 8).map((key) => (
+            <button
+              className={`event-month-jump${key === monthKey ? " is-active" : ""}`}
+              key={key}
+              onClick={() => setMonthKey(key)}
+              type="button"
+            >
+              {monthKeyLabel(key)}
+              <span>({monthCounts.get(key)})</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="event-month-weekdays" aria-hidden="true">
+        {EVENT_MONTH_WEEKDAYS.map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+
+      <div className="event-month-grid" role="grid">
+        {cells.map((cell) => {
+          const expanded = expandedDay === cell.key;
+          const shown = expanded
+            ? cell.events
+            : cell.events.slice(0, EVENT_MONTH_MAX_CARDS);
+          const hidden = cell.events.length - shown.length;
+          return (
+            <div
+              className={`event-month-day${cell.inMonth ? "" : " is-outside"}${
+                cell.isToday ? " is-today" : ""
+              }${cell.events.length === 0 ? " is-empty" : ""}${
+                expanded ? " is-expanded" : ""
+              }`}
+              data-date={formatDate24(cell.date)}
+              key={cell.key}
+            >
+              <span className="event-month-date">{cell.day}</span>
+              {shown.map((event) => {
+                const meta =
+                  EVENT_TYPES.find((entry) => entry.key === event.type) ??
+                  EVENT_TYPES[0];
+                const attending = event.signups.filter(
+                  (signup) => signup.status === "yes",
+                ).length;
+                return (
+                  <button
+                    className={`event-month-card event-month-card--${meta.key}`}
+                    key={event.id}
+                    onClick={() => onOpen(event)}
+                    title={`${event.title} · ${formatTime24(event.startsAt)}`}
+                    type="button"
+                  >
+                    <span className="event-month-card-title">
+                      <span aria-hidden="true">{meta.emoji}</span>
+                      {event.title}
+                    </span>
+                    <span className="event-month-card-meta">
+                      <time dateTime={event.startsAt}>
+                        {formatTime24(event.startsAt)}
+                      </time>
+                      <span>· ✅ {attending}</span>
+                    </span>
+                  </button>
+                );
+              })}
+              {hidden > 0 ? (
+                <button
+                  className="event-month-more"
+                  onClick={() => setExpandedDay(cell.key)}
+                  type="button"
+                >
+                  +{hidden} más
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {monthTotal === 0 ? (
+        <p className="event-month-empty">
+          {searching
+            ? `Ningún evento coincide con la búsqueda en ${monthLabel}.`
+            : `Sin eventos terminados en ${monthLabel}.`}{" "}
+          {monthsWithEvents.length > 0 ? (
+            <button
+              className="ghost-button small"
+              onClick={() => setMonthKey(monthsWithEvents[0])}
+              type="button"
+            >
+              Ir al más reciente
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// Detalle de un evento del historial: los mismos grupos que antes se desplegaban
+// en la lista, ahora en una ventana (para no estirar el calendario).
+function EventHistoryModal({
+  event,
+  gameLabel,
+  onClose,
+  onDelete,
+  onDownload,
+  reportBusy,
+}: {
+  event: HubEvent | null;
+  gameLabel: string;
+  onClose: () => void;
+  onDelete: (event: HubEvent) => void;
+  onDownload: (event: HubEvent) => void;
+  reportBusy: boolean;
+}) {
+  useEffect(() => {
+    if (!event) {
+      return;
+    }
+    function onKeyDown(keyEvent: KeyboardEvent): void {
+      if (keyEvent.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [event, onClose]);
+
+  if (!event) {
+    return null;
+  }
+
+  const meta =
+    EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
+  const groups = (
+    [
+      ["yes", "✅", "Asistieron"],
+      ["bench", "🪑", "Bench"],
+      ["late", "⏰", "Tarde"],
+      ["no", "❌", "No asistieron"],
+    ] as const
+  ).map(([status, emoji, label]) => ({
+    emoji,
+    label,
+    members: event.signups.filter((signup) => signup.status === status),
+    status,
+  }));
+  const attending = groups[0].members.length;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        aria-modal="true"
+        className="modal"
+        onClick={(clickEvent) => clickEvent.stopPropagation()}
+        role="dialog"
+      >
+        <header className="modal-head">
+          <h4>
+            <span aria-hidden="true">{meta.emoji}</span>
+            {event.title}
+          </h4>
+          <button
+            aria-label="Cerrar"
+            className="icon-button"
+            onClick={onClose}
+            title="Cerrar"
+            type="button"
+          >
+            <X aria-hidden="true" className="icon-button-icon" weight="bold" />
+          </button>
+        </header>
+        <div className="event-history-body">
+          <span className="event-history-when">
+            {formatDateTime24(event.startsAt)}
+            {event.durationMinutes
+              ? ` · ${hoursFromMinutes(event.durationMinutes)} hs`
+              : ""}
+            {event.game ? ` · ${gameLabel}` : ""}
+          </span>
+          <span className="event-history-when">
+            {attending} de {event.signups.length} anotados asistieron
+          </span>
+          {event.signups.length === 0 ? (
+            <p className="muted-text">Sin inscripciones.</p>
+          ) : (
+            groups.map((group) =>
+              group.members.length === 0 ? null : (
+                <div className="event-history-group" key={group.status}>
+                  <span className="event-roster-role">
+                    {group.emoji} {group.label} ({group.members.length})
+                  </span>
+                  <span className="event-history-names">
+                    {group.members.map((signup) => (
+                      <span className="event-roster-member" key={signup.id}>
+                        {signup.username}
+                        {signup.character ? ` (${signup.character})` : ""}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              ),
+            )
+          )}
+        </div>
+        <div className="event-history-actions">
+          <button
+            className="ghost-button small"
+            disabled={reportBusy}
+            onClick={() => onDownload(event)}
+            type="button"
+          >
+            <DownloadSimple weight="fill" aria-hidden="true" />
+            {reportBusy ? "Generando…" : "Descargar informe"}
+          </button>
+          <button
+            className="ghost-button small danger"
+            onClick={() => onDelete(event)}
+            type="button"
+          >
+            <Trash weight="fill" aria-hidden="true" />
+            Eliminar evento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Acento de los raid leads: el dorado de Raid Officer, el mismo del resto de la
 // app. El de los boosters lo pone el CSS del grid (es una sola lista).
 const HOME_LEAD_ACCENT = "201, 138, 27";
-
 // Fila de miembro de Inicio: la comparten el podio y los raid leads (mismo alto,
 // mismo avatar, mismo nombre linkeado al perfil; cambia el acento).
 function HomeMemberRow({
@@ -6542,8 +6973,10 @@ function App() {
   const [auditSearch, setAuditSearch] = useState("");
   const [auditOrder, setAuditOrder] = useState<ListOrder>("newest");
   const [eventHistorySearch, setEventHistorySearch] = useState("");
-  const [eventHistoryOrder, setEventHistoryOrder] =
-    useState<ListOrder>("newest");
+  // Evento del historial abierto en la ventana de detalle (null = cerrada).
+  const [eventHistoryOpen, setEventHistoryOpen] = useState<HubEvent | null>(
+    null,
+  );
   const [karutaAlbumSearch, setKarutaAlbumSearch] = useState("");
   const [karutaAlbumOrder, setKarutaAlbumOrder] = useState<ListOrder>("newest");
   const [leaderboardSearch, setLeaderboardSearch] = useState("");
@@ -6605,25 +7038,27 @@ function App() {
     [dailyMessages, dailyOrder, dailySearch],
   );
 
-  // Historial de eventos: completados, con buscador + orden.
+  // Historial de eventos: completados, en calendario (con buscador). El orden
+  // manual ya no aplica: dentro del mes se ordenan por fecha los del mismo día.
   const completedEvents = useMemo(
     () => events.filter((entry) => entry.status === "completed"),
     [events],
   );
   const visibleEventHistory = useMemo(
     () =>
-      sortByOrder(
-        completedEvents.filter((entry) =>
+      completedEvents
+        .filter((entry) =>
           matchesSearch(
             `${entry.title} ${entry.description ?? ""}`,
             eventHistorySearch,
           ),
+        )
+        .sort(
+          (left, right) =>
+            new Date(left.startsAt).getTime() -
+            new Date(right.startsAt).getTime(),
         ),
-        eventHistoryOrder,
-        (entry) => entry.startsAt,
-        (entry) => entry.title,
-      ),
-    [completedEvents, eventHistoryOrder, eventHistorySearch],
+    [completedEvents, eventHistorySearch],
   );
 
   // Colecciones de Karuta: buscador por colección o dueño.
@@ -11832,113 +12267,12 @@ function App() {
                             <ClockCounterClockwise weight="fill" aria-hidden="true" />
                             Eventos terminados
                           </span>
-                          <ListFilterBar
-                            onOrderChange={setEventHistoryOrder}
+                          <EventHistoryCalendar
+                            events={visibleEventHistory}
+                            onOpen={setEventHistoryOpen}
                             onSearchChange={setEventHistorySearch}
-                            order={eventHistoryOrder}
-                            placeholder="Buscar evento…"
                             search={eventHistorySearch}
                           />
-                          {visibleEventHistory.length === 0 ? (
-                            <p className="admin-empty">
-                              Ningún evento coincide con la búsqueda.
-                            </p>
-                          ) : (
-                            <div className="admin-list">
-                              {visibleEventHistory.map((finished) => (
-                                <details
-                                  className="admin-sub event-history-item"
-                                  key={finished.id}
-                                >
-                                  <summary className="event-history-head">
-                                    <strong>{finished.title}</strong>
-                                    <span className="event-history-date">
-                                      {formatDateTime24(finished.startsAt)}
-                                    </span>
-                                  </summary>
-                                  <div className="event-history-body">
-                                    {finished.signups.length === 0 ? (
-                                      <p className="muted-text">
-                                        Sin inscripciones.
-                                      </p>
-                                    ) : (
-                                      (
-                                        [
-                                          ["yes", "✅", "Asistieron"],
-                                          ["bench", "🪑", "Bench"],
-                                          ["late", "⏰", "Tarde"],
-                                          ["no", "❌", "No asistieron"],
-                                        ] as const
-                                      ).map(([st, emoji, label]) => {
-                                        const members = finished.signups.filter(
-                                          (signup) => signup.status === st,
-                                        );
-                                        if (members.length === 0) {
-                                          return null;
-                                        }
-                                        return (
-                                          <div
-                                            className="event-history-group"
-                                            key={st}
-                                          >
-                                            <span className="event-roster-role">
-                                              {emoji} {label} ({members.length})
-                                            </span>
-                                            <span className="event-history-names">
-                                              {members.map((signup) => (
-                                                <span
-                                                  className="event-roster-member"
-                                                  key={signup.id}
-                                                >
-                                                  {signup.username}
-                                                  {signup.character
-                                                    ? ` (${signup.character})`
-                                                    : ""}
-                                                </span>
-                                              ))}
-                                            </span>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                    <div className="event-history-actions">
-                                      <button
-                                        className="ghost-button small"
-                                        disabled={
-                                          reportBusyEventId === finished.id
-                                        }
-                                        onClick={() =>
-                                          setReportDownloadEvent(finished)
-                                        }
-                                        type="button"
-                                      >
-                                        <DownloadSimple
-                                          weight="fill"
-                                          aria-hidden="true"
-                                        />
-                                        {reportBusyEventId === finished.id
-                                          ? "Generando…"
-                                          : "Descargar informe"}
-                                      </button>
-                                      <button
-                                        className="ghost-button small danger"
-                                        onClick={() =>
-                                          handleDeleteEvent(finished)
-                                        }
-                                        type="button"
-                                      >
-                                        <Trash
-                                          weight="fill"
-                                          aria-hidden="true"
-                                        />
-                                        Eliminar evento
-                                      </button>
-                                    </div>
-                                  </div>
-                                </details>
-                              ))}
-                            </div>
-                          )}
                         </section>
                       </div>
                     </details>
@@ -13725,6 +14059,24 @@ function App() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {eventHistoryOpen ? (
+        <EventHistoryModal
+          event={eventHistoryOpen}
+          gameLabel={
+            eventGames.find((game) => game.key === eventHistoryOpen.game)
+              ?.label ??
+            (eventHistoryOpen.game ?? "").toUpperCase()
+          }
+          onClose={() => setEventHistoryOpen(null)}
+          onDelete={(target) => {
+            setEventHistoryOpen(null);
+            handleDeleteEvent(target);
+          }}
+          onDownload={setReportDownloadEvent}
+          reportBusy={reportBusyEventId === eventHistoryOpen.id}
+        />
       ) : null}
 
       {reportDownloadEvent ? (

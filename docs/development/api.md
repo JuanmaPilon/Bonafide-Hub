@@ -523,6 +523,23 @@ tipos de evento), **Eventos** (el historial de los que ya terminaron) y
 claves siguen siendo `eventos` y `historial`: los enlaces `#/admin/eventos` y
 `#/admin/historial` abren lo mismo de siempre.
 
+**Historial de eventos (Admin → Eventos):** no es una lista, es un
+**calendario**: el mes entero con una tarjetita por evento terminado en su día
+(emoji del tipo, título, hora y cuántos asistieron), el contador del mes, la
+navegación `‹ mes ›` y un botón "Hoy". Lo que no entra en un día se pliega en
+"+N más" y se despliega ahí mismo. El buscador está en la misma barra y, cuando
+hay coincidencias en otros meses, muestra chips para saltar a ellos (no hay que
+recorrer mes por mes). Al abrir, si el mes actual no tiene eventos, se muestra
+el mes con actividad más cercano, una sola vez: si después navegás a un mes
+vacío a propósito, te quedás ahí. El detalle de un evento (asistentes por
+estado, descargar informe, eliminar) se abre en una **ventana**, así el
+calendario no se estira.
+
+Dos detalles que no son obvios: el día se calcula en hora **local** (con
+`toISOString()` un evento de las 22:00 caería en el día siguiente) y en pantallas
+angostas (≤900 px) el calendario se vuelve una **agenda**: un día por fila, sin
+los días vacíos ni los del mes vecino.
+
 Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`

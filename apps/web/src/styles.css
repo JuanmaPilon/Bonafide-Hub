@@ -9676,32 +9676,283 @@ select.list-order {
 }
 
 /* Historial de eventos (Admin) */
-/* Evento terminado del Historial: sub-card (`.admin-sub`) con el título y la
-   fecha en el resumen; el detalle (asistentes y acciones) va adentro. */
-.event-history-item > summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.event-history-item > summary::-webkit-details-marker {
-  display: none;
-}
-
-.event-history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* Calendario del historial: el mes entero, con una tarjetita por evento en su
+   día. Reemplaza la lista larga (había que scrollear para encontrar una noche).
+   La semana arranca el lunes, igual que el almanaque del formulario. */
+.event-month {
+  display: grid;
   gap: 10px;
 }
 
-.event-history-head strong {
-  color: var(--text);
+.event-month-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
-.event-history-date {
+/* El buscador vive acá (y no en una fila propia arriba) para que el mes, la
+   búsqueda y el contador entren en una sola línea. Hereda de `input.list-search`
+   el ancho de todos los buscadores de la app (máx. 420 px). */
+.event-month-search {
+  margin-left: auto;
+}
+
+.event-month-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-month-nav button {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid rgba(133, 156, 212, 0.28);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.event-month-nav button:hover {
+  border-color: rgba(106, 168, 255, 0.6);
+}
+
+.event-month-title {
+  min-width: 132px;
+  text-align: center;
+  font-size: 0.95rem;
+  /* "julio 2026" y no "Julio 2026": el nombre del mes es un nombre común. */
+  text-transform: capitalize;
+}
+
+.event-month-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Salto rápido a los meses con coincidencias: solo aparece mientras buscás, que
+   es cuando sirve (el buscador no filtra el mes que estás mirando: salta). */
+.event-month-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
   color: var(--muted);
-  font-size: 0.8rem;
+}
+
+.event-month-jumps-label {
+  margin-right: 2px;
+}
+
+.event-month-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.28);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+
+.event-month-jump span {
+  color: var(--muted);
+}
+
+.event-month-jump:hover {
+  border-color: rgba(106, 168, 255, 0.6);
+}
+
+.event-month-jump.is-active {
+  border-color: rgba(106, 168, 255, 0.7);
+  background: rgba(106, 168, 255, 0.16);
+}
+
+.event-month-weekdays,
+.event-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.event-month-weekdays span {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-month-day {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 96px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(134, 158, 214, 0.16);
+  background: rgba(6, 16, 24, 0.35);
+}
+
+/* Los días de los meses vecinos se ven, pero no compiten con el mes. */
+.event-month-day.is-outside {
+  opacity: 0.45;
+}
+
+.event-month-day.is-today {
+  border-color: rgba(106, 168, 255, 0.55);
+}
+
+.event-month-date {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.event-month-day.is-today .event-month-date {
+  color: #6aa8ff;
+}
+
+/* Tarjeta de un evento: emoji del tipo, título y hora + asistencia. El color
+   sale del tipo (--event-rgb), el mismo criterio que los chips de asistencia. */
+.event-month-card {
+  --event-rgb: 134, 158, 214;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 5px 7px;
+  border-radius: 9px;
+  border: 1px solid rgba(var(--event-rgb), 0.45);
+  background: rgba(var(--event-rgb), 0.12);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.event-month-card:hover {
+  border-color: rgba(var(--event-rgb), 0.8);
+  background: rgba(var(--event-rgb), 0.2);
+}
+
+.event-month-card--raid {
+  --event-rgb: 255, 138, 92;
+}
+
+.event-month-card--mplus {
+  --event-rgb: 176, 143, 224;
+}
+
+.event-month-card--pvp {
+  --event-rgb: 106, 168, 255;
+}
+
+.event-month-card--social {
+  --event-rgb: 124, 227, 139;
+}
+
+.event-month-card-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.event-month-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.event-month-more {
+  justify-self: start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px dashed rgba(134, 158, 214, 0.4);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.event-month-more:hover {
+  color: var(--text);
+  border-color: rgba(106, 168, 255, 0.6);
+}
+
+.event-month-empty {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+:root[data-theme="light"] .event-month-day {
+  background: rgba(240, 245, 252, 0.9);
+  border-color: rgba(60, 85, 130, 0.18);
+}
+
+:root[data-theme="light"] .event-month-card {
+  color: #22304a;
+  background: rgba(var(--event-rgb), 0.16);
+}
+
+/* Angosto: el calendario se vuelve una agenda (un día por fila, sin días
+   vacíos ni del mes vecino) en lugar de encoger siete columnas. */
+@media (max-width: 900px) {
+  .event-month-weekdays {
+    display: none;
+  }
+
+  .event-month-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-month-day {
+    min-height: 0;
+  }
+
+  .event-month-day.is-empty,
+  .event-month-day.is-outside {
+    display: none;
+  }
+
+  /* La fecha completa, que en la grilla no hace falta (está el número). */
+  .event-month-day::before {
+    content: attr(data-date);
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  /* En la agenda el día va en la fecha completa: el número suelto repetía. */
+  .event-month-date {
+    display: none;
+  }
+}
+
+/* Detalle del evento del historial: la fecha y el resumen en una línea. */
+.event-history-when {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .event-history-body {
@@ -9732,9 +9983,4 @@ select.list-order {
 
 .event-history-names .event-roster-member + .event-roster-member::before {
   content: ", ";
-}
-
-:root[data-theme="light"] .event-history-item {
-  background: rgba(255, 255, 255, 0.75);
-  border-color: rgba(60, 85, 130, 0.2);
 }
