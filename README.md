@@ -68,7 +68,9 @@ roles de inscripción propios de cada juego. Se arma con plantillas, se define
 cierre de inscripciones, recordatorios y repetición, y se publica como evento de
 Discord y/o como aviso con botones en un canal: la gente se anota desde Discord y
 el roster del aviso se actualiza solo. Al terminar queda el informe de asistencia
-(el cruce de lo que se anotó contra el log de Raids de esa noche) y el historial.
+(el cruce de lo que se anotó contra el log de Raids de esa noche, descargable en
+CSV o PDF) y el historial. Las imágenes de los avisos se suben desde el hub
+(hasta 10 MB, se guardan ya optimizadas).
 
 ### Karuta
 

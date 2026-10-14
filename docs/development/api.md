@@ -596,6 +596,24 @@ aparecía un instante como "sin ficha en el roster" y después cambiaba de golpe
 La convocatoria dice "Calculando…" y la fila "En el log" avisa que está buscando
 el log de esa noche con el anillo de carga.
 
+**La descarga del informe (CSV y PDF) sale del mismo modelo.** Todo lo que se ve
+en la ventana —resumen, chips de asistencia declarada, el cruce con el log, la
+ficha de cada uno, su presencia real y los avisos— lo arma `event-report.ts` una
+sola vez, y la ventana y los dos formatos lo consumen: si la web muestra un dato,
+el archivo lo tiene. Antes el CSV lo generaba el API (`report.csv`, sin el cruce
+ni la presencia: un informe entero por su cuenta) y el PDF el navegador, así que
+los dos salían incompletos y distintos de la pantalla. El CSV va con `;` y BOM
+(Excel en español, acentos y emojis), y el PDF se dibuja con jsPDF: encabezado,
+resumen en dos columnas, una tabla por grupo y pie con el paginado.
+
+Dos cosas de la descarga que no son obvias:
+
+- El PDF se genera como **Blob** y lo baja `downloadBlob`, que agrega el `<a>` al
+  documento antes de clickearlo. Con `doc.save()` de jsPDF el `<a>` queda suelto y
+  **Firefox ignora la descarga en silencio**: no bajaba nada y tampoco había error.
+- El nombre del archivo se arma con el título (`informe-<slug>.pdf`), así que dos
+  eventos distintos no se pisan al descargar.
+
 El cruce usa el catálogo que viene **con el roster** (`GuildRoster.specs`,
 `roles` y `classEmojis`), no el de la tab Eventos: entrar directo a
 Admin → Eventos (sin pasar por Eventos) dejaba ese catálogo vacío y el cruce de
@@ -723,6 +741,16 @@ imagen, el aviso quedaba sin imagen). Los GIF animados no se tocan: pasarlos por
 un canvas los dejaría quietos. La URL del embed lleva `?v=<hash de la imagen>`: al
 cambiar la imagen cambia la URL y Discord la vuelve a pedir; si no cambió,
 mantiene la que ya tiene cacheada.
+
+**Peso de las imágenes:** el archivo que se puede elegir llega a **10 MB**
+(`EVENT_IMAGE_MAX_BYTES`) porque una raid en alta se pasa de 3 MB sin drama. Pero
+lo que se **guarda** no es ese archivo: antes de subirlo se reduce al ancho máximo
+de pantalla (`UPLOAD_IMAGE_MAX_WIDTH`, 1920 px) y se recodifica (WebP; JPEG si no
+hay soporte; PNG si la imagen tiene transparencia, que el JPEG aplanaría a negro).
+Sin esa reducción, subir el límite solo serviría para llenar la base de megas: el
+data URL viaja en la lista de eventos y en la biblioteca. El límite del API
+(`14_000_000` caracteres en el data URL, y `bodyLimit` de 16 MB) está calculado
+sobre el archivo ya reducido, con margen para el base64.
 
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)

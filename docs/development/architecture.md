@@ -41,6 +41,9 @@
   cruce de los anotados contra su ficha del roster y contra el log de esa noche,
   que dice quién vino de verdad); las claves de los enlaces no
   cambian
+- El informe se puede **descargar** en CSV y PDF con todo lo que muestra la
+  ventana: las dos salidas se arman del mismo modelo (`apps/web/src/event-report.ts`),
+  no de una copia paralela que se desactualiza
 - Consume endpoints del API
 - Iconos: `@phosphor-icons/react` con `weight="fill"` (un solo set, formas
   sólidas que se leen en el panel oscuro); el tamaño y el color los fija el CSS
