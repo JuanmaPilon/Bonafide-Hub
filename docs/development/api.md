@@ -516,6 +516,13 @@ Los colores de rol (chip y nombre con degradado) salen de
 `apps/web/src/roles.ts`, compartidos con el perfil y el ranking: un rol se ve
 igual en todos lados.
 
+Las secciones del panel son: **Configuraciones**, **Mapeo**, **Roles**, **Módulos**,
+**Permisos**, **XP**, **Karpindomo**, **Karuta**, **Plantillas** (el catálogo de
+tipos de evento), **Eventos** (el historial de los que ya terminaron) y
+**Registros** (auditoría). El nombre visible de las dos últimas cambió, pero las
+claves siguen siendo `eventos` y `historial`: los enlaces `#/admin/eventos` y
+`#/admin/historial` abren lo mismo de siempre.
+
 Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`

@@ -8,6 +8,14 @@
 
 ## 2. Comandos disponibles
 
+### Perfil y ranking
+
+1. `/profile [usuario]` — tarjeta del miembro (o tuya, si no pasás usuario): avatar
+   y banner, rol más alto como color, booster, antigüedad, nivel, XP, mensajes,
+   tiempo en voz y barra de progreso al siguiente nivel.
+2. `/ranking` — top 20 por XP: banner con el podio en imagen (top 3) y la tabla del
+   4 al 20; al pie, tu propia posición.
+
 ### Estadísticas
 
 1. `/memberstats [publico]`

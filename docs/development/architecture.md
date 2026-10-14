@@ -4,27 +4,39 @@
 
 1. `apps/discord-bot`
 
-- Runtime de Discord (discord.js)
-- Eventos, comandos slash, XP, voz dinámica, timers
+- Runtime de Discord (discord.js v14)
+- Comandos slash (perfil, ranking, timers, XP, música, salas de voz)
+- Eventos: entrada/salida de miembros, XP por mensaje y por voz, presencias
+  (juegos que se juegan), mensajes de Karuta en el canal vigilado
+- Salas de voz temporales, música y control de los avisos de eventos (botones)
 - Scheduler del loro: publica frases aleatorias a intervalos aleatorios
+- Tiene la config del bot en memoria (caché) y un archivo local de respaldo
 
 2. `apps/api`
 
-- API HTTP (Fastify)
+- API HTTP (Fastify) + validación de payloads (Zod)
 - OAuth con Discord + sesiones
 - Persistencia en PostgreSQL via Prisma
-- Endpoint interno para config del bot
+- Endpoint interno para el bot (x-bot-token), con merge selectivo de config
 - Registro de auditoría de cambios del Hub
 - Comunicados: publica en Discord vía REST + los muestra en el hub
-- Logs de raid: sincroniza con Warcraft Logs y publica en Discord/web
-- Módulo de eventos: eventos con inscripciones ("Módulo X"), publicación en Discord (scheduled event + aviso-embed con botones) y roster
+- Logs de raid: sincroniza con Warcraft Logs, analiza la noche y publica en Discord/web
+- Módulo de eventos ("Módulo X"): eventos por juego, inscripciones, publicación en
+  Discord (scheduled event + aviso-embed con botones), roster y asistencia
+- Roster de raids: fichas, estados y rangos (lo comparten la web y los raid leads de Inicio)
+- Karuta: cartas raras, wishlists y álbumes (con las imágenes cacheadas)
+- Sugerencias: las manda por DM a los rangos configurados
+- Boosters, widget del servidor y raid leads para Inicio
+- Tareas periódicas que hacen avanzar el estado sin intervención (ver §9)
 
 3. `apps/web`
 
 - UI de Guild Hub (React + Vite)
-- Home (tarjeta de boosters al frente y, debajo, el podio por XP y los raid leads
-  lado a lado), dashboard, tab Eventos, panel admin (donde "Plantillas" es el
-  catálogo de tipos de evento y "Eventos" el historial de los que ya terminaron)
+- Inicio (tarjeta de boosters al frente y, debajo, el podio por XP y los raid leads
+  lado a lado), dashboard, comunicados, raids (roster y logs), eventos, karuta,
+  sugerencias y panel admin
+- En el panel admin, "Plantillas" es el catálogo de tipos de evento y "Eventos" el
+  historial de los que ya terminaron (las claves de los enlaces no cambian)
 - Consume endpoints del API
 - Iconos: `@phosphor-icons/react` con `weight="fill"` (un solo set, formas
   sólidas que se leen en el panel oscuro); el tamaño y el color los fija el CSS
@@ -150,25 +162,59 @@ Endpoints:
 
 Tablas:
 
-1. `guild_configs` — config por guild (canales, rol de entrada, `enabledModules`, `suggestionsDm*`, `xpSyncRequested`, salas temporales, loro, logs)
-2. `admin_role_modules` — permisos de staff: qué módulos del Admin ve cada rol de Discord
-3. `xp_configs` — config de XP (niveles, multiplicadores, colores)
-4. `xp_profiles` — XP/nivel/contadores por usuario
-5. `audit_log_entries` — registro de auditoría
-6. `discord_sessions` / `oauth_states` — OAuth
-7. `communications` / `communication_instances` — comunicados y sus publicaciones
-8. `daily_messages` — frases del loro de Karpindomo
-9. `raid_logs` — logs de raid sincronizados con Warcraft Logs
-10. `karuta_cards` / `karuta_albums` / `karuta_album_pages` — cartas raras, álbumes e imágenes cacheadas de Karuta
+1. `guild_configs` — config por guild (canales, rol de entrada, `enabledModules`, `suggestionsDm*`, `xpSyncRequested`, salas temporales, loro, logs, juegos de eventos)
+2. `guild_mappings` — mapeo clave → rol/emoji de Discord (rangos del roster, clases, juegos)
+3. `role_templates` — plantillas para crear roles del servidor
+4. `admin_role_modules` — permisos de staff: qué módulos del Admin ve cada rol de Discord
+5. `xp_configs` — config de XP (niveles, multiplicadores, colores)
+6. `xp_profiles` — XP/nivel/contadores por usuario (+ última identidad vista)
+7. `audit_log_entries` — registro de auditoría
+8. `discord_sessions` / `oauth_states` — OAuth
+9. `communications` / `communication_instances` — comunicados y sus publicaciones
+10. `daily_messages` — frases del loro de Karpindomo
+11. `raid_logs` — logs de raid sincronizados con Warcraft Logs (summary con los pulls)
+12. `hub_events` / `event_signups` — eventos e inscripciones
+13. `event_player_profiles` / `event_player_characters` — personaje recordado por jugador y PJs del cruce de asistencia
+14. `raid_specs` — catálogo de clases/specs por guild y juego
+15. `event_images` — biblioteca de imágenes de eventos (data URL, ya re-encuadradas)
+16. `roster_profiles` / `roster_alt_profiles` — ficha principal y clases secundarias
+17. `karuta_cards` / `karuta_card_images` / `karuta_wishlists` — cartas raras, arte cacheado y wishlists
+18. `karuta_albums` / `karuta_album_pages` — álbumes (comando `ka`) y sus páginas cacheadas
+19. `member_game_activity` — 1 fila por persona + juego + día (presencias de Discord)
 
-## 9. Decisiones operativas
+## 9. Tareas periódicas
+
+Nada de esto lo dispara una persona y ninguna tarea se re-agenda a sí misma: son
+intervalos fijos, con cachés por recurso para que un pico de pedidos no se
+multiplique.
+
+`apps/api`:
+
+1. Cada 1 min — cierre de inscripciones, recurrencia y auto-completado de eventos
+2. Cada 5 min — refresh de los logs de raid ya guardados (`raid-logs-sync.ts`)
+3. Cada 15 min — imágenes de cartas y álbumes de Karuta (con throttle de 10 min)
+4. Cada 24 h — limpieza de perfiles de XP de quien dejó el servidor
+
+`apps/discord-bot`:
+
+1. Cada 30 s — recordatorios por DM y pedidos de re-sincronización de XP/roles
+2. Cada 1 min — voz→XP, control de eventos (recordatorios e informes) y flush de las presencias
+3. Cada 2 min — barrido del loro (relee la config y reprograma si cambió)
+4. Cada 30 s / 5 s — música: barrido de estados y panel "sonando ahora" (con música activa)
+
+`apps/web` (solo con la pestaña abierta):
+
+1. Cada 30 s — portadas de los juegos más jugados (con caché en `sessionStorage`)
+2. Cada 60 s — estado del servidor y ranking
+
+## 10. Decisiones operativas
 
 1. Mantener API como capa de persistencia/negocio.
 2. Permitir fallback local para resiliencia en planes con sleep.
 3. Sincronizar local -> remoto cuando remoto vuelve y está vacío.
 4. Log de auditoría: solo escritura, lectura solo para owner.
 
-## 10. Flujo de comunicados (web -> Discord)
+## 11. Flujo de comunicados (web -> Discord)
 
 ```text
 Web (Admin → Comunicados) -> API guarda la plantilla
@@ -176,7 +222,7 @@ Web (Admin → Comunicados) -> API guarda la plantilla
    -> El hub muestra las instancias publicadas (tab Comunicados)
 ```
 
-## 11. Flujo del loro de Karpindomo (mensajes diarios)
+## 12. Flujo del loro de Karpindomo (mensajes diarios)
 
 ```text
 Admin (web) configura canal/intervalo/frases -> API guarda en DB
@@ -184,16 +230,26 @@ Bot (cada ~2 min) -> lee config + frases habilitadas -> programa un timer aleato
    -> publica opener aleatorio + frase aleatoria en el canal
 ```
 
-## 12. Flujo de Logs de Raid (Warcraft Logs)
+## 13. Flujo de Logs de Raid (Warcraft Logs)
 
 ```text
-Web (Raids -> Logs) -> escaneo manual de guild/realm configurados
+Web (Raids -> Logs) -> "Escanear": detecta reports NUEVOS de la guild/realm
    -> API consulta Warcraft Logs y guarda/refresca borradores en raid_logs
+
+API (cada 5 min) -> refresca los logs ya guardados: cantidad de pulls, kills y
+   estado (en vivo / terminado). No crea logs nuevos y saltea los que fallaron.
+
 Web -> acción Publicar -> API envía la entrada agrupada al canal de Discord
 Web -> acción Actualizar -> API refresca y edita el mensaje publicado
+Web -> análisis de la noche -> API pide el detalle del report y lo cruza con los
+   anotados del evento; el resultado se cachea 10 min
 ```
 
-## 13. Módulos del hub y permisos de staff
+El análisis trae los pulls, el DPS promedio, las muertes por habilidad y por
+jugador, las flask y la comida que faltaron, y la asistencia real cruzada con las
+inscripciones del evento (incluidos los nombres que "se parecen" pero no coinciden).
+
+## 14. Módulos del hub y permisos de staff
 
 El panel Admin no es un único bloque: se compone de tarjetas por funcionalidad y
 cada una exige acceso a un módulo. El acceso se decide así:
@@ -219,7 +275,7 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
    `admin_role_modules`. Esa relación solo se reemplaza cuando el owner guarda
    explícitamente la tarjeta de permisos de staff.
 
-## 14. Sugerencias del hub (web -> DM)
+## 15. Sugerencias del hub (web -> DM)
 
 ```text
 Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
@@ -229,7 +285,7 @@ Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
    -> envía el DM por Discord
 ```
 
-## 15. Tema claro/oscuro y widget de Karpindomo
+## 16. Tema claro/oscuro y widget de Karpindomo
 
 1. Tema: la web aplica `data-theme="light"` en `<html>` y persiste la elección en
    `localStorage` (`bonafide-theme`). El tema claro redefine variables CSS y las
@@ -239,7 +295,7 @@ Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
    aparece solo tras login. Usa clases tipo "widget" para no ser bloqueado por
    adblockers.
 
-## 16. Flujo del Módulo de eventos (web <-> Discord)
+## 17. Flujo del Módulo de eventos (web <-> Discord)
 
 ```text
 Web (Admin → Configuración de eventos)
@@ -260,3 +316,40 @@ Inscripción
 3. La mención del rol mínimo va pelada en el contenido del mensaje (`<@&rol>`, sin decoración) y se normaliza al refrescar sin re-notificar (`allowed_mentions: { parse: [] }`).
 4. Cambiar el tipo de un evento no borra inscripciones: las que tienen un rol de otro tipo pasan a su icono clásico (o "Sin rol").
 5. El catálogo se guarda por tipo, así cargar emojis de LoL no toca los de WoW.
+
+## 18. Flujo del roster (fichas, estados y raid leads)
+
+```text
+Web (Raids -> Roster) -> GET /guilds/:g/roster -> fichas + rangos + clase de cada uno
+Cada persona -> PUT /guilds/:g/roster/me  ("Agregar/Modificar mi ficha")
+Staff -> estado (raid | bench | null) -> API cambia el rol de Discord y registra la acción
+Inicio -> GET /guilds/:g/raid-leads -> los que tienen el rol de Raid Officer, por XP
+```
+
+1. El estado de la tarjeta es exactamente el rol de Discord que tiene el miembro:
+   el API pone el rol del rango pedido y saca los otros estados (el de Raid Officer
+   no se toca desde acá).
+2. Las **clases secundarias** ("alter") se guardan en su propia tabla y no cuentan
+   para ningún total.
+3. Sumar a alguien del servidor que no tiene ficha la crea **vacía**, y queda "sin
+   asignar" hasta que el staff le ponga estado.
+4. El nombre de la persona siempre viaja como `Nick (usuario)`, también en el
+   registro de auditoría.
+
+## 19. Flujo de Karuta (cartas raras, wishlists y álbumes)
+
+```text
+Bot (canal vigilado) -> lee los mensajes de Karuta (kv / ka / kg) y las reacciones
+   -> POST /internal/guilds/:g/karuta/cards  (posesión, print, wishlist)
+Backfill -> recorre el historial del canal para completar wishlists viejas
+
+API (cada 15 min) -> renueva el arte de las cartas y las páginas de los álbumes
+   (se guardan los bytes propios: las URLs de Discord vencen)
+
+Web (tab Karuta) -> Raras, Colecciones y la guía de comandos
+```
+
+1. Se guardan los **bytes** de cada imagen y no el link: los enlaces firmados de
+   Discord expiran y el arte se perdía.
+2. Los umbrales de rareza (print / wishlist) se configuran en el Admin y deciden
+   qué entra en la lista de raras.

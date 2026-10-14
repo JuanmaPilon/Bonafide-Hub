@@ -38,6 +38,9 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 13. `HOST`
 14. `PORT`
 15. `NODE_ENV`
+16. `PUBLIC_API_URL` — URL pública de esta API (por ejemplo
+    `https://tu-api.up.railway.app`), para que Discord pueda bajar la imagen de un
+    evento. Si no está, se usa `RAILWAY_PUBLIC_DOMAIN`, que Railway expone solo.
 
 ## 3. Comandos recomendados de deploy
 
@@ -103,17 +106,30 @@ el owner, reemplaza esas reglas. Si desaparecen tras un deploy, revisar que el
 servicio API siga apuntando a la misma `DATABASE_URL` y que no se haya creado
 una base de datos nueva o cambiado de environment en Railway.
 
-### Escaneo manual de Warcraft Logs falla
+### Escaneo de Warcraft Logs: qué es automático y qué no
 
-El escaneo se inicia desde **Raids → Logs**; no hay polling automático en la
-API ni en la Web. Revisar los logs de Railway de `API` al solicitar un escaneo:
+Conviene tenerlo claro porque cambia dónde mirar cuando algo no aparece:
+
+1. **Detectar reports nuevos es manual**: se dispara desde **Raids → Logs**
+   ("Escanear"). No hay ningún proceso que recorra la guild de Warcraft Logs solo.
+2. **Refrescar los logs que ya están guardados es automático**: el scheduler de la
+   API los revisa cada 5 minutos (`apps/api/src/services/raid-logs-sync.ts`), así el
+   estado (en vivo / terminado), la cantidad de pulls y el resultado avanzan sin
+   que nadie apriete nada. Ese sync **no crea** logs nuevos y **saltea** los que
+   quedaron en estado `failed`: esos se reintentan con un escaneo manual.
+
+Revisar los logs de Railway de `API` al solicitar un escaneo:
 
 1. Confirmar que la guild y el realm configurados coinciden con Warcraft Logs.
 2. `WARCRAFT_LOGS_API_KEY` ausente o inválida puede provocar una respuesta 401;
    403 indica falta de permisos o una key no autorizada.
-3. El log `[raid-logs] scan manual` aparece cuando el escaneo termina y resume
-   reports detectados y borradores refrescados.
-4. Publicar y actualizar son acciones aparte. Si falla la publicación, revisar
+3. Un **504** (el cuerpo es el error de Cloudflare con su link a la documentación)
+   es del lado de Warcraft Logs: tardó más de lo que el borde espera. Es
+   transitorio; se reintenta con otro escaneo.
+4. El log `[raid-logs] scan manual` aparece cuando el escaneo termina y resume
+   reports detectados y borradores refrescados. Si el sync automático falla, deja
+   `[raid-logs] sync de logs falló:` con el motivo.
+5. Publicar y actualizar son acciones aparte. Si falla la publicación, revisar
    `logsChannelId` y que el bot pueda ver el canal, enviar mensajes y leer historial.
 
 Variables necesarias en el servicio `API` (environment correcto):
@@ -122,7 +138,7 @@ Variables necesarias en el servicio `API` (environment correcto):
 - `DISCORD_BOT_TOKEN`
 
 La Web consulta la lista al entrar a Raids o abrir el popup. Para detectar
-reports nuevos o actualizar borradores, se debe solicitar un escaneo manual.
+reports nuevos o reintentar uno que falló, se debe solicitar un escaneo manual.
 
 ## 6. Seguridad operativa
 
@@ -130,3 +146,44 @@ reports nuevos o actualizar borradores, se debe solicitar un escaneo manual.
 2. Rotar secretos cuando se exponen.
 3. Mantener tokens por servicio.
 4. Preferir private networking entre servicios.
+
+## 7. Límites y costos
+
+Las dos piezas se comportan distinto y conviene saberlo antes de que aparezca una
+factura sorpresa.
+
+### Railway (acá está el gasto real)
+
+El costo sale del cómputo de los servicios siempre encendidos: `API`, `Bot` y
+`PRD_DB`. Railway **sí tiene límite duro**: al alcanzarlo, apaga los servicios.
+
+1. Se configura en el workspace: *Usage → Set Usage Limits*.
+2. Por CLI: `railway usage limit set --target workspace --soft <aviso> --hard <tope>`.
+   El `soft` avisa por email; el `hard` corta. El hard no puede ser menor al soft.
+3. El consumo se sigue en la misma pantalla de Usage.
+
+### Cloudflare (DNS/CDN delante del dominio)
+
+Estar delante de la web en plan Free **no genera gasto**: Cloudflare no factura el
+proxy por requests ni por ancho de banda. Lo que sí factura son los productos
+medidos (Workers pago, R2, Images, Stream, Load Balancing, Argo, Logpush), y
+**no existe un tope duro nativo**: las *budget alerts* son avisos por email y no
+cortan nada.
+
+1. No agregar método de pago ni activar productos medidos que no se usen: sin
+   suscripción no hay factura posible.
+2. Auditar qué está activo en *Manage Account → Billing* (Subscriptions y
+   Billable Usage).
+3. Dejar una *budget alert* como aviso temprano: *Manage Account → Billing →
+   Billable Usage → Create budget alert*, con un umbral chico (por ejemplo USD 1).
+4. Si algún día se necesita un Worker pago, tener presente que el plan Free corta
+   al pasar 100.000 requests por día en lugar de facturar; para un tope real hay
+   que pausar el Worker por API al pasar el umbral.
+
+### Servicios externos
+
+Discord y la API v1 de Warcraft Logs son gratuitos: no facturan por uso, aunque sí
+tienen límites de tasa. El código los respeta con reintentos acotados
+(`fetchWithDiscordRetry`) y cachés por recurso (miembros 4 min, roles y canales
+5 min, portadas de juegos 24 h). Las tareas periódicas de las dos apps están
+listadas en `docs/development/architecture.md`.
