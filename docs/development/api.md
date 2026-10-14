@@ -523,18 +523,24 @@ tipos de evento), **Eventos** (el historial de los que ya terminaron) y
 claves siguen siendo `eventos` y `historial`: los enlaces `#/admin/eventos` y
 `#/admin/historial` abren lo mismo de siempre.
 
-**Historial de eventos (Admin → Eventos):** no es una lista, es un
-**calendario**: el mes entero con una tarjetita por evento terminado en su día
-(emoji del tipo, título, hora y cuántos asistieron), el contador del mes, la
-navegación `‹ mes ›` y un botón "Ir al mes actual" (vuelve al mes de hoy; el día
-de hoy va marcado en la grilla). Lo que no entra en un día se pliega en "+N más"
-y se despliega ahí mismo. El buscador está en la
-misma barra y, cuando hay coincidencias en otros meses, muestra chips para saltar
-a ellos (no hay que recorrer mes por mes). Al abrir, si el mes actual no tiene
-eventos, se muestra el mes con actividad más cercano, una sola vez: si después
-navegás a un mes vacío a propósito, te quedás ahí.
+**Historial de eventos (Admin → Eventos):** tiene dos vistas, **Mes** y **Día**
+(el selector de dos botones, como el de Google Calendar). En **Mes** se ve el mes
+entero con una tarjetita por evento terminado en su día (emoji del tipo, título,
+hora y cuántos asistieron), el contador del mes y la navegación `‹ mes ›` — el día
+de hoy va marcado; lo que no entra en un día se pliega en "+N más" y se despliega
+ahí mismo. El número de cada día es un botón que abre la vista **Día** de esa
+jornada: los eventos de ese día, uno por fila (hora, título y la asistencia
+declarada), con la navegación `‹ día ›` y el acento del tipo en una barra a la
+izquierda. Al pasar a Día se abre en el día que estabas mirando y, si ese día no
+tiene nada, en el día con eventos más cercano; volver a Mes muestra el mes de ese
+día. El botón de la derecha dice "Ir al mes actual" o "Ir a hoy" según la vista.
+El buscador está en la misma barra y, mientras buscás, muestra chips para saltar
+a los meses (o a los días) con coincidencias, así no hay que recorrer el historial
+a mano. Al abrir, si el mes actual no tiene eventos, se muestra el mes con
+actividad más cercano, una sola vez.
 
-**El informe de un evento** (click en una tarjeta) va en una ventana ancha
+**El informe de un evento** (click en una tarjeta o en una fila del día) va en una
+ventana ancha
 (`.modal--report`) y tiene cuatro partes:
 
 1. El resumen de la noche: fecha, horario (empieza → termina y las horas), juego
