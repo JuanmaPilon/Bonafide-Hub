@@ -844,27 +844,28 @@ export function buildEventAnnouncementEmbeds(input: {
       true,
     );
   });
-  // Estados: bench → tarde → no asisten. Van juntos en UNA fila (una columna por
-  // estado) para ganar alto: con los tres son tres columnas de un tercio y la
-  // fila se lee igual. Con uno solo va a lo ancho (`inline: false`), porque un
-  // field inline solo en su fila se queda con un tercio del ancho y desperdicia
-  // el resto. Igual que el roster, los nombres van citados (`> `) para que el
-  // bloque se lea igual que los roles.
+  // Estados: NO van inline, así cada uno queda en su propia fila (una debajo
+  // de la otra) y en este orden: bench → tarde → no asisten. Van separados del
+  // roster (y entre ellos) con un poco de aire. Igual que el roster, los
+  // nombres van citados (`> `) para que el bloque se lea igual que los roles.
   const statusGroups: Array<[string, AnnouncementSignup[]]> = [
     [`🪑 Bench (${bench.length})`, bench],
     [`⏰ Llegan tarde (${late.length})`, late],
     [`❌ No asisten (${absent.length})`, absent],
   ];
-  const presentStatus = statusGroups.filter(([, members]) => members.length > 0);
-  const statusInline = presentStatus.length > 1;
-  presentStatus.forEach(([label, members], index) => {
+  let firstStatus = true;
+  for (const [label, members] of statusGroups) {
+    if (members.length === 0) {
+      continue;
+    }
     // Un renglón de aire antes del primer estado (para despegarlo del roster);
     // entre estados alcanza con la separación propia de Discord.
-    if (index === 0) {
+    if (firstStatus) {
       pushSpacer(fields);
     }
-    pushField(fields, label, linesFor(members), statusInline, true);
-  });
+    firstStatus = false;
+    pushField(fields, label, linesFor(members), false, true);
+  }
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción
   // que escribió el staff. El resto (duración, cierre, requisito, asistencia

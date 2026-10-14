@@ -715,10 +715,8 @@ cualquier estado, bench incluido, y también "no asisto": haber contestado es lo
 que saca a alguien de "faltan anotarse", sobre el roster esperado), `📊
 Asistencia 20 (+3)` (confirmados y posibles) y `📋 Por estado` (el detalle
 `✅ · 🪑 · ⏰ · ❌`)— y al final la gente: **columnas por rol de a dos** (tank,
-healer, melee, range) y los **estados juntos en una fila** (bench → tarde → no
-asisten, uno por columna, para no gastar un renglón por estado; con uno solo va a
-lo ancho, porque un inline solo en su fila se queda con un tercio del ancho). El
-roster arranca siempre en una fila nueva. Los conteos salen de
+healer, melee, range) y los **estados** (bench → tarde → no asisten), con el
+roster arrancando siempre en una fila nueva. Los conteos salen de
 `rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
 ([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que
