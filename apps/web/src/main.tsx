@@ -6347,6 +6347,7 @@ function EventHistoryCalendar({
           <button
             className="ghost-button small"
             onClick={() => setMonthKey(monthKeyOf(new Date()))}
+            title="Ir al mes de hoy"
             type="button"
           >
             <Calendar weight="fill" aria-hidden="true" />
@@ -6458,25 +6459,71 @@ function EventHistoryCalendar({
   );
 }
 
-// Detalle de un evento del historial: los mismos grupos que antes se desplegaban
-// en la lista, ahora en una ventana (para no estirar el calendario).
-function EventHistoryModal({
+// Informe de un evento del historial. Además de los números de la noche, cruza
+// cada anotado con su ficha del roster (clase, spec y rol) y marca las
+// diferencias: así el staff no tiene que abrir el roster aparte para saber si
+// alguien se anotó con un personaje o un rol que no es el de su ficha.
+function EventReportModal({
+  classEmojis,
   event,
   gameLabel,
+  guildId,
   onClose,
   onDelete,
   onDownload,
   reportBusy,
+  roles,
+  specs,
 }: {
+  classEmojis: Record<string, MappingEmoji>;
   event: HubEvent | null;
   gameLabel: string;
+  guildId: string | null;
   onClose: () => void;
   onDelete: (event: HubEvent) => void;
   onDownload: (event: HubEvent) => void;
   reportBusy: boolean;
+  roles: EventRoleOption[];
+  specs: RaidSpec[];
 }) {
+  const [roster, setRoster] = useState<GuildRoster | null>(null);
+  const [expected, setExpected] = useState<EventRoster | null>(null);
+  const [loading, setLoading] = useState(false);
+  const eventId = event?.id ?? null;
+
+  // El cruce necesita la ficha de cada uno: el roster se pide al abrir (y se
+  // olvida al cerrar, así el informe siempre muestra lo último guardado).
   useEffect(() => {
-    if (!event) {
+    if (!eventId || !guildId) {
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setRoster(null);
+    setExpected(null);
+    Promise.all([
+      getGuildRoster(guildId).catch(() => null),
+      getEventRoster(guildId, eventId).catch(() => null),
+    ])
+      .then(([nextRoster, nextExpected]) => {
+        if (cancelled) {
+          return;
+        }
+        setRoster(nextRoster);
+        setExpected(nextExpected);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, guildId]);
+
+  useEffect(() => {
+    if (!eventId) {
       return;
     }
     function onKeyDown(keyEvent: KeyboardEvent): void {
@@ -6486,7 +6533,33 @@ function EventHistoryModal({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [event, onClose]);
+  }, [eventId, onClose]);
+
+  // El roster ya trae el catálogo (specs, roles y emojis de clase): se usa ese y
+  // los del App quedan de respaldo mientras carga. Sin esto, entrar directo a
+  // Admin → Eventos (sin pasar por la tab Eventos) dejaba el catálogo vacío y el
+  // cruce de rol no tenía con qué comparar.
+  const catalogSpecs = roster?.specs?.length ? roster.specs : specs;
+  const catalogRoles = roster?.roles?.length ? roster.roles : roles;
+  const catalogClassEmojis = roster?.classEmojis ?? classEmojis;
+
+  const specByKey = useMemo(
+    () =>
+      new Map(
+        catalogSpecs.map((spec) => [
+          rosterSpecKey(spec.game, spec.className, spec.specName),
+          spec,
+        ]),
+      ),
+    [catalogSpecs],
+  );
+  const memberByUser = useMemo(
+    () =>
+      new Map(
+        (roster?.members ?? []).map((member) => [member.userId, member]),
+      ),
+    [roster],
+  );
 
   if (!event) {
     return null;
@@ -6494,11 +6567,17 @@ function EventHistoryModal({
 
   const meta =
     EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
+  const game = event.game ?? "wow";
+  const endAt = event.durationMinutes
+    ? new Date(
+        new Date(event.startsAt).getTime() + event.durationMinutes * 60_000,
+      )
+    : null;
   const groups = (
     [
       ["yes", "✅", "Asistieron"],
       ["bench", "🪑", "Bench"],
-      ["late", "⏰", "Tarde"],
+      ["late", "⏰", "Llegaron tarde"],
       ["no", "❌", "No asistieron"],
     ] as const
   ).map(([status, emoji, label]) => ({
@@ -6509,11 +6588,136 @@ function EventHistoryModal({
   }));
   const attending = groups[0].members.length;
 
+  // Cruce de un anotado con su ficha del roster. `primary` es lo que se muestra
+  // como su clase/spec (manda la ficha) y `flags` lo que hay que revisar.
+  function crossCheck(signup: EventSignup): {
+    flags: string[];
+    fromSignup: string | null;
+    primary: { className: string; specName: string; role?: string } | null;
+  } {
+    const profile = memberByUser.get(signup.userId)?.profile ?? null;
+    // La ficha es por juego: comparar la de otro juego sería comparar peras con
+    // manzanas (una misma persona puede tener ficha de WoW y de LoL).
+    const sameGame = (profile?.game ?? "wow") === game;
+    const rosterClass = sameGame ? (profile?.className ?? "") : "";
+    const rosterSpec = sameGame ? (profile?.specName ?? "") : "";
+    const rosterMeta =
+      rosterClass && rosterSpec
+        ? specByKey.get(rosterSpecKey(game, rosterClass, rosterSpec))
+        : undefined;
+    const signupClass = signup.wowClass?.trim() ?? "";
+    const signupSpec = signup.spec?.trim() ?? "";
+    const apiClassName = signup.rosterClass?.className?.trim() ?? "";
+    const apiSpecName = signup.rosterClass?.specName?.trim() ?? "";
+
+    let primary: { className: string; specName: string; role?: string } | null =
+      null;
+    if (rosterClass && rosterSpec) {
+      primary = {
+        className: rosterClass,
+        role: rosterMeta?.role,
+        specName: rosterSpec,
+      };
+    } else if (apiClassName && apiSpecName) {
+      // El API ya lo resolvió desde la ficha para quien no eligió nada.
+      primary = { className: apiClassName, specName: apiSpecName };
+    } else if (signupClass && signupSpec) {
+      primary = { className: signupClass, specName: signupSpec };
+    } else if (signupClass || signupSpec) {
+      primary = {
+        className: signupClass || "?",
+        specName: signupSpec || "?",
+      };
+    }
+
+    const flags: string[] = [];
+    if (!profile) {
+      flags.push(
+        memberByUser.has(signup.userId)
+          ? "ficha sin clase ni spec"
+          : "sin ficha en el roster",
+      );
+    }
+    if (signupClass && rosterClass && signupClass !== rosterClass) {
+      flags.push(`clase distinta a su ficha (${rosterClass})`);
+    } else if (signupSpec && rosterSpec && signupSpec !== rosterSpec) {
+      flags.push(`spec distinta a su ficha (${rosterSpec})`);
+    }
+    if (
+      primary?.role &&
+      signup.role &&
+      primary.role !== signup.role
+    ) {
+      flags.push(
+        `rol distinto a su ficha (${
+          eventRoleMeta(primary.role, catalogRoles)?.label ?? primary.role
+        })`,
+      );
+    }
+
+    // Lo que escribió en la inscripción, cuando no es lo mismo que la ficha.
+    const fromSignup =
+      signupClass && signupSpec && rosterClass
+        ? signupClass === rosterClass && signupSpec === rosterSpec
+          ? null
+          : `${signupSpec} ${signupClass}`
+        : null;
+
+    return { flags, fromSignup, primary };
+  }
+
+  const checks = event.signups.map((signup) => ({
+    check: crossCheck(signup),
+    signup,
+  }));
+  const alertCounts = checks.reduce<Record<string, number>>((counts, row) => {
+    for (const flag of row.check.flags) {
+      counts[flag] = (counts[flag] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+  const alerts = Object.entries(alertCounts);
+
+  function renderClassChip(
+    className: string,
+    specName: string,
+    size = 15,
+  ): ReactNode {
+    const specMeta = specByKey.get(rosterSpecKey(game, className, specName));
+    const classMeta = catalogClassEmojis[className];
+    return (
+      <span
+        className="event-report-class"
+        style={
+          {
+            "--event-report-class": classColor(className) ?? "#6aa8ff",
+          } as CSSProperties
+        }
+      >
+        <DiscordEmojiImage
+          animated={
+            specMeta?.emojiId ? specMeta.animated : Boolean(classMeta?.animated)
+          }
+          emojiId={specMeta?.emojiId ?? classMeta?.emojiId}
+          fallback={classMeta?.unicode ?? classEmoji(className)}
+          name={specName}
+          size={size}
+        />
+        <span>
+          {specName !== "?" ? specName : ""} {className !== "?" ? className : ""}
+        </span>
+        {specName === "?" || className === "?" ? (
+          <span className="event-report-muted">sin datos</span>
+        ) : null}
+      </span>
+    );
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         aria-modal="true"
-        className="modal"
+        className="modal modal--report"
         onClick={(clickEvent) => clickEvent.stopPropagation()}
         role="dialog"
       >
@@ -6532,39 +6736,195 @@ function EventHistoryModal({
             <X aria-hidden="true" className="icon-button-icon" weight="bold" />
           </button>
         </header>
-        <div className="event-history-body">
-          <span className="event-history-when">
-            {formatDateTime24(event.startsAt)}
-            {event.durationMinutes
-              ? ` · ${hoursFromMinutes(event.durationMinutes)} hs`
-              : ""}
-            {event.game ? ` · ${gameLabel}` : ""}
+
+        <div className="event-report-summary">
+          <div className="event-report-item">
+            <span className="event-info-label">Fecha</span>
+            <span>{formatDateTime24(event.startsAt)}</span>
+          </div>
+          <div className="event-report-item">
+            <span className="event-info-label">Horario</span>
+            <span>
+              {formatTime24(event.startsAt)}
+              {endAt ? ` → ${formatTime24(endAt)}` : ""}
+              {event.durationMinutes
+                ? ` (${hoursFromMinutes(event.durationMinutes)} hs)`
+                : ""}
+            </span>
+          </div>
+          <div className="event-report-item">
+            <span className="event-info-label">Juego</span>
+            <span>
+              {gameLabel} · {meta.label}
+            </span>
+          </div>
+          <div className="event-report-item">
+            <span className="event-info-label">Convocatoria</span>
+            <span>
+              {expected
+                ? `${expected.confirmedCount} de ${expected.expectedCount} del roster${
+                    expected.missing.length > 0
+                      ? ` · ${expected.missing.length} sin responder`
+                      : ""
+                  }`
+                : loading
+                  ? "Calculando…"
+                  : "—"}
+            </span>
+          </div>
+        </div>
+
+        <div className="event-report-line">
+          <span className="event-info-label">Asistencia</span>
+          <div className="event-card-counts">
+            <span className="event-count total">
+              👥 {event.signups.length} anotados
+            </span>
+            {groups.map((group) => (
+              <span className={`event-count ${group.status}`} key={group.status}>
+                {group.emoji} {group.members.length}
+              </span>
+            ))}
+          </div>
+          <span className="event-report-note">
+            {attending} de {event.signups.length} se anotaron como “asisto”
           </span>
-          <span className="event-history-when">
-            {attending} de {event.signups.length} anotados asistieron
-          </span>
-          {event.signups.length === 0 ? (
-            <p className="muted-text">Sin inscripciones.</p>
-          ) : (
-            groups.map((group) =>
+        </div>
+
+        {alerts.length > 0 ? (
+          <div className="event-report-line">
+            <span className="event-info-label">A revisar</span>
+            <div className="event-card-counts">
+              {alerts.map(([flag, count]) => (
+                <span className="event-count warn" key={flag}>
+                  ⚠️ {count} {flag}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : loading ? null : (
+          <div className="event-report-line">
+            <span className="event-info-label">A revisar</span>
+            <span className="event-report-note">
+              Todos los anotados coinciden con su ficha del roster.
+            </span>
+          </div>
+        )}
+
+        {event.signups.length === 0 ? (
+          <p className="muted-text">Sin inscripciones.</p>
+        ) : (
+          <>
+            <div className="event-report-head">
+              <span>Anotado</span>
+              <span>Clase y spec</span>
+              <span>Rol</span>
+              <span>A revisar</span>
+            </div>
+            {groups.map((group) =>
               group.members.length === 0 ? null : (
-                <div className="event-history-group" key={group.status}>
-                  <span className="event-roster-role">
+                <section className="event-report-group" key={group.status}>
+                  <span className="admin-group-head">
                     {group.emoji} {group.label} ({group.members.length})
                   </span>
-                  <span className="event-history-names">
-                    {group.members.map((signup) => (
-                      <span className="event-roster-member" key={signup.id}>
-                        {signup.username}
-                        {signup.character ? ` (${signup.character})` : ""}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              ),
-            )
+                  <ul className="event-report-list">
+                  {group.members.map((signup) => {
+                    const { check } = checks.find(
+                      (row) => row.signup.id === signup.id,
+                    ) ?? { check: crossCheck(signup) };
+                    const roleMeta = signup.role
+                      ? eventRoleMeta(signup.role, catalogRoles)
+                      : undefined;
+                    return (
+                      <li className="event-report-row" key={signup.id}>
+                        <span className="event-report-who">
+                          <strong>{signup.username}</strong>
+                          {signup.character ? (
+                            <span className="event-report-char">
+                              {signup.character}
+                            </span>
+                          ) : (
+                            <span className="event-report-muted">
+                              sin personaje
+                            </span>
+                          )}
+                        </span>
+                        <span className="event-report-spec">
+                          {check.primary ? (
+                            renderClassChip(
+                              check.primary.className,
+                              check.primary.specName,
+                            )
+                          ) : (
+                            <span className="event-report-muted">
+                              Sin clase ni spec
+                            </span>
+                          )}
+                          {check.fromSignup ? (
+                            <span className="event-report-diff">
+                              inscripción: {check.fromSignup}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="event-report-role">
+                          {signup.role ? (
+                            <>
+                              <EventRoleEmoji
+                                role={signup.role}
+                                roles={catalogRoles}
+                                size={14}
+                              />
+                              {roleMeta?.label ?? signup.role}
+                            </>
+                          ) : check.primary?.role ? (
+                            // No eligió rol: se muestra el de su ficha, que es
+                            // el dato que le sirve a quien arma el grupo.
+                            <span className="event-report-muted">
+                              según su ficha:{" "}
+                              {eventRoleMeta(check.primary.role, catalogRoles)
+                                ?.label ?? check.primary.role}
+                            </span>
+                          ) : (
+                            <span className="event-report-muted">—</span>
+                          )}
+                        </span>
+                        <span className="event-report-flags">
+                          {check.flags.length === 0 ? (
+                            <span className="event-report-ok">✓</span>
+                          ) : (
+                            check.flags.map((flag) => (
+                              <span className="event-report-flag" key={flag}>
+                                {flag}
+                              </span>
+                            ))
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ),
           )}
-        </div>
+          </>
+        )}
+
+        {expected && expected.missing.length > 0 ? (
+          <section className="event-report-group">
+            <span className="admin-group-head">
+              ❓ Sin responder ({expected.missing.length})
+            </span>
+            <span className="event-history-names">
+              {expected.missing.map((row) => (
+                <span className="event-roster-member" key={row.userId}>
+                  {row.username}
+                  {row.bench ? " (bench)" : ""}
+                </span>
+              ))}
+            </span>
+          </section>
+        ) : null}
+
         <div className="event-history-actions">
           <button
             className="ghost-button small"
@@ -14062,13 +14422,15 @@ function App() {
       ) : null}
 
       {eventHistoryOpen ? (
-        <EventHistoryModal
+        <EventReportModal
+          classEmojis={classEmojis}
           event={eventHistoryOpen}
           gameLabel={
             eventGames.find((game) => game.key === eventHistoryOpen.game)
               ?.label ??
             (eventHistoryOpen.game ?? "").toUpperCase()
           }
+          guildId={selectedGuildId}
           onClose={() => setEventHistoryOpen(null)}
           onDelete={(target) => {
             setEventHistoryOpen(null);
@@ -14076,6 +14438,8 @@ function App() {
           }}
           onDownload={setReportDownloadEvent}
           reportBusy={reportBusyEventId === eventHistoryOpen.id}
+          roles={rolesForGame(eventHistoryOpen.game)}
+          specs={specsForGame(eventHistoryOpen.game)}
         />
       ) : null}
 

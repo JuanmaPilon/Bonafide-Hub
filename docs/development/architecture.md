@@ -37,8 +37,9 @@
   sugerencias y panel admin
 - En el panel admin, "Plantillas" es el catálogo de tipos de evento y "Eventos" el
   historial en **calendario** (mes con una tarjeta por evento, buscador con salto
-  a los meses con coincidencias y el detalle de cada noche en una ventana); las
-  claves de los enlaces no cambian
+  a los meses con coincidencias y el informe de cada noche en una ventana, con el
+  cruce de los anotados contra su ficha del roster); las claves de los enlaces no
+  cambian
 - Consume endpoints del API
 - Iconos: `@phosphor-icons/react` con `weight="fill"` (un solo set, formas
   sólidas que se leen en el panel oscuro); el tamaño y el color los fija el CSS

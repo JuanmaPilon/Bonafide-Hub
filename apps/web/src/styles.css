@@ -9955,6 +9955,188 @@ select.list-order {
   font-size: 0.82rem;
 }
 
+/* Informe de un evento: los números de la noche arriba y, abajo, cada anotado
+   con su clase/spec del roster, su rol y lo que hay que revisar. Es una ventana
+   ancha a propósito: la lista con el cruce no entra en el ancho de un modal
+   normal sin volver a apretar todo. */
+.modal--report {
+  width: min(940px, 100%);
+}
+
+.event-report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(134, 158, 214, 0.16);
+  background: rgba(134, 158, 214, 0.07);
+}
+
+.event-report-item {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+}
+
+.event-report-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.event-report-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.event-report-group {
+  display: grid;
+  gap: 8px;
+}
+
+/* Encabezado de columnas del informe (una fila de títulos, no una caja). */
+.event-report-head,
+.event-report-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.1fr) minmax(150px, 1fr) minmax(96px, auto)
+    minmax(0, 1.1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.event-report-head {
+  padding-bottom: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-report-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-report-row {
+  border-radius: 12px;
+  border: 1px solid rgba(134, 158, 214, 0.16);
+  background: rgba(6, 16, 24, 0.35);
+}
+
+.event-report-who {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.event-report-who strong {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-report-char {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* Clase y spec: el emoji de la clase (o el custom del Mapeo) con el color de la
+   clase, como en el roster. La tinta se calcula aparte porque el blanco de
+   sacerdote (y el amarillo de pícaro) desaparecen sobre el fondo claro. */
+.event-report-class {
+  --event-report-ink: var(--event-report-class);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--event-report-ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.event-report-spec {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.event-report-diff,
+.event-report-muted {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
+.event-report-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.86rem;
+}
+
+.event-report-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.event-report-flag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 180, 84, 0.45);
+  background: rgba(255, 180, 84, 0.12);
+  color: #ffb454;
+  font-size: 0.74rem;
+}
+
+.event-report-ok {
+  color: rgba(124, 227, 139, 0.85);
+}
+
+:root[data-theme="light"] .event-report-row {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(60, 85, 130, 0.2);
+}
+
+/* En claro, la clase se lee con una tinta más oscura (el blanco del sacerdote y
+   el amarillo del pícaro no se ven sobre blanco): mismo criterio que el roster. */
+:root[data-theme="light"] .event-report-class {
+  --event-report-ink: color-mix(
+    in srgb,
+    var(--event-report-class) 60%,
+    #16233d
+  );
+}
+
+:root[data-theme="light"] .event-report-flag {
+  color: #8a5a00;
+  background: rgba(255, 180, 84, 0.2);
+}
+
+:root[data-theme="light"] .event-report-ok {
+  color: #227d3c;
+}
+
+@media (max-width: 760px) {
+  /* Angosto: cada fila se lee como una ficha (título de columna arriba no, los
+     datos uno debajo del otro). */
+  .event-report-head {
+    display: none;
+  }
+
+  .event-report-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+
 .event-history-body {
   display: grid;
   gap: 6px;

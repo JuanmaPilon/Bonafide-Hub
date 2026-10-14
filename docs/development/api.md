@@ -526,19 +526,41 @@ claves siguen siendo `eventos` y `historial`: los enlaces `#/admin/eventos` y
 **Historial de eventos (Admin → Eventos):** no es una lista, es un
 **calendario**: el mes entero con una tarjetita por evento terminado en su día
 (emoji del tipo, título, hora y cuántos asistieron), el contador del mes, la
-navegación `‹ mes ›` y un botón "Hoy". Lo que no entra en un día se pliega en
-"+N más" y se despliega ahí mismo. El buscador está en la misma barra y, cuando
-hay coincidencias en otros meses, muestra chips para saltar a ellos (no hay que
-recorrer mes por mes). Al abrir, si el mes actual no tiene eventos, se muestra
-el mes con actividad más cercano, una sola vez: si después navegás a un mes
-vacío a propósito, te quedás ahí. El detalle de un evento (asistentes por
-estado, descargar informe, eliminar) se abre en una **ventana**, así el
-calendario no se estira.
+navegación `‹ mes ›` y un botón "Hoy" (vuelve al mes actual). Lo que no entra en
+un día se pliega en "+N más" y se despliega ahí mismo. El buscador está en la
+misma barra y, cuando hay coincidencias en otros meses, muestra chips para saltar
+a ellos (no hay que recorrer mes por mes). Al abrir, si el mes actual no tiene
+eventos, se muestra el mes con actividad más cercano, una sola vez: si después
+navegás a un mes vacío a propósito, te quedás ahí.
 
-Dos detalles que no son obvios: el día se calcula en hora **local** (con
-`toISOString()` un evento de las 22:00 caería en el día siguiente) y en pantallas
-angostas (≤900 px) el calendario se vuelve una **agenda**: un día por fila, sin
-los días vacíos ni los del mes vecino.
+**El informe de un evento** (click en una tarjeta) va en una ventana ancha
+(`.modal--report`) y tiene tres partes:
+
+1. El resumen de la noche: fecha, horario (empieza → termina y las horas), juego
+   y tipo, y la convocatoria del roster (`GET .../events/:eventId/roster`:
+   confirmados sobre esperados y cuántos no respondieron).
+2. La asistencia, con los mismos chips que el aviso de Discord (👥 anotados,
+   ✅ asistentes, 🪑 bench, ⏰ tarde, ❌ no asisten) y una fila de **"A revisar"**
+   que cuenta los problemas del cruce.
+3. **Una fila por anotado, agrupada por estado**, con el cruce contra su ficha
+   del roster: clase y spec (los de la ficha, que es la fuente de verdad; si la
+   inscripción decía otra cosa, se muestra abajo como "inscripción: …"), el rol,
+   y los avisos — "clase distinta a su ficha", "rol distinto a su ficha",
+   "sin ficha en el roster", "ficha sin clase ni spec". Si no eligió rol, la
+   columna muestra el de su ficha ("según su ficha: Healer"). Al final, los que
+   tenían que estar y **no respondieron**.
+
+El cruce usa el catálogo que viene **con el roster** (`GuildRoster.specs`,
+`roles` y `classEmojis`), no el de la tab Eventos: entrar directo a
+Admin → Eventos (sin pasar por Eventos) dejaba ese catálogo vacío y el cruce de
+rol se quedaba sin comparar. El roster se pide al abrir la ventana y se olvida al
+cerrarla, así el informe siempre muestra la última ficha guardada.
+
+Dos detalles que no son obvios: el día del calendario se calcula en hora
+**local** (con `toISOString()` un evento de las 22:00 caería en el día siguiente)
+y en pantallas angostas (≤900 px) el calendario se vuelve una **agenda**: un día
+por fila, sin los días vacíos ni los del mes vecino (y las filas del informe
+pasan a una columna).
 
 Emojis del servidor: `GET /guilds/:guildId/emojis`
 
