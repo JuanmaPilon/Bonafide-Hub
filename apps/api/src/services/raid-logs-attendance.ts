@@ -40,6 +40,10 @@ export type RaidLogAttendance = {
   // comprometieron): es lo que necesita el informe de un evento para decir, uno
   // por uno, quién vino y quién no. `matchable: false` = no hay personaje con el
   // que buscarlo en el log, así que la ausencia no se puede afirmar.
+  //
+  // Incluye también a los del roster esperado que no respondieron (status
+  // "none"): no tienen inscripción, pero si aparece un personaje suyo en el log
+  // el informe puede decir que jugaron igual, con la misma fila que el resto.
   byUser: Array<{
     likely?: { logName: string; pulls: number; similarity: number };
     logName?: string;
@@ -50,6 +54,19 @@ export type RaidLogAttendance = {
     userId: string;
   }>;
 };
+
+// Gente del roster esperado que todavía no respondió: sale del evento (rol
+// mínimo y bench), no del log, así que se recibe como dato de entrada.
+export type RaidLogRosterEntry = {
+  bench?: boolean;
+  userId: string;
+  username: string;
+};
+
+// Estado de los que no declararon nada. No es un estado de inscripción (esos son
+// yes/late/bench/tentative/no) y existe para que la fila se lea igual que el
+// resto sin inventar una respuesta que nadie dio.
+export const UNDECLARED_STATUS = "none";
 
 const EVENT_WINDOW_MS = 14 * 60 * 60 * 1000;
 // Solo "voy" y "tarde" son un compromiso de asistir: son los que se cuentan como
@@ -71,6 +88,7 @@ export async function crossRaidAttendance(input: {
   nightStart?: Date;
   partialParticipants?: boolean;
   players: RaidLogAttendance["players"];
+  roster?: RaidLogRosterEntry[];
   totalPulls: number;
 }): Promise<RaidLogAttendance> {
   const players = [...input.players].sort(
@@ -122,7 +140,12 @@ export async function crossRaidAttendance(input: {
     title: event.title,
   };
 
-  const userIds = event.signups.map((signup) => signup.userId);
+  const userIds = [
+    ...new Set([
+      ...event.signups.map((signup) => signup.userId),
+      ...(input.roster ?? []).map((member) => member.userId),
+    ]),
+  ];
   const [profiles, aliases] = await Promise.all([
     prisma.eventPlayerProfile.findMany({
       where: { guildId: input.guildId, userId: { in: userIds } },
@@ -246,6 +269,41 @@ export async function crossRaidAttendance(input: {
     }
   }
 
+  // 3) Los del roster esperado que no respondieron: no tienen inscripción, así
+  // que la única forma de afirmar que jugaron es un personaje suyo (el recordado
+  // de su última inscripción o un PJ ya confirmado en otro cruce). Un nombre
+  // parecido no alcanza: sin declaración y con parecido, el aviso no se puede
+  // confirmar desde el informe.
+  const responded = new Set(
+    event.signups.map((signup) => signup.userId),
+  );
+  const undeclared = (input.roster ?? []).filter(
+    (member) => !responded.has(member.userId),
+  );
+  const undeclaredByUser = new Map<
+    string,
+    { matchable: boolean; present: boolean; pulls: number }
+  >();
+  for (const member of undeclared) {
+    const keys = [
+      profileCharacter.get(member.userId),
+      ...(aliases.get(member.userId) ?? []),
+    ]
+      .filter(hasText)
+      .map((value) => characterKey(value.trim()));
+    const matchedKey = keys.find(
+      (key) => Boolean(key) && presentByKey.has(key) && !attributed.has(key),
+    );
+    undeclaredByUser.set(member.userId, {
+      matchable: keys.length > 0,
+      present: Boolean(matchedKey),
+      pulls: matchedKey ? (presentByKey.get(matchedKey)?.pulls ?? 0) : 0,
+    });
+    if (matchedKey) {
+      attributed.add(matchedKey);
+    }
+  }
+
   for (const [key, player] of presentByKey) {
     const status = statusByKey.get(key);
     if (status && SIGNED_STATUSES.has(status)) {
@@ -263,19 +321,33 @@ export async function crossRaidAttendance(input: {
   // Presencia de cada inscripción, sin importar el estado: el informe del evento
   // necesita el dato uno por uno (quién se anotó y no vino, quién estaba en
   // bench y jugó igual, quién dijo que no y apareció).
-  result.byUser = entries.map((entry) => {
-    const matched = matchedByUser.get(entry.signup.userId);
-    const probable = likely.get(entry.signup.userId);
-    return {
-      ...(probable ? { likely: probable } : {}),
-      ...(matched ? { logName: matched.name } : {}),
-      matchable: entry.characters.length > 0,
-      present: exact.has(entry.signup.userId),
-      pulls: matched?.pulls ?? 0,
-      status: entry.signup.status,
-      userId: entry.signup.userId,
-    };
-  });
+  result.byUser = [
+    ...entries.map((entry) => {
+      const matched = matchedByUser.get(entry.signup.userId);
+      const probable = likely.get(entry.signup.userId);
+      return {
+        ...(probable ? { likely: probable } : {}),
+        ...(matched ? { logName: matched.name } : {}),
+        matchable: entry.characters.length > 0,
+        present: exact.has(entry.signup.userId),
+        pulls: matched?.pulls ?? 0,
+        status: entry.signup.status,
+        userId: entry.signup.userId,
+      };
+    }),
+    // Y los que no respondieron, con la misma forma: el informe los muestra en
+    // una fila igual a las demás.
+    ...undeclared.map((member) => {
+      const row = undeclaredByUser.get(member.userId);
+      return {
+        matchable: row?.matchable ?? false,
+        present: row?.present ?? false,
+        pulls: row?.pulls ?? 0,
+        status: UNDECLARED_STATUS,
+        userId: member.userId,
+      };
+    }),
+  ];
 
   return result;
 }

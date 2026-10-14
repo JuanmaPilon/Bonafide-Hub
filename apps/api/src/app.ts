@@ -67,7 +67,11 @@ import {
   analyzeRaidLogNight,
   invalidateRaidLogAnalysis,
 } from "./services/raid-logs-analysis.js";
-import type { RaidLogAttendance } from "./services/raid-logs-attendance.js";
+import {
+  crossRaidAttendance,
+  type RaidLogAttendance,
+  type RaidLogRosterEntry,
+} from "./services/raid-logs-attendance.js";
 import { saveRaidLogAlias } from "./services/raid-log-aliases-store.js";
 import {
   listGuildGameActivity,
@@ -2631,9 +2635,10 @@ const EVENT_ATTENDANCE_WINDOW_MS = 14 * 60 * 60 * 1000;
 async function attendanceForEvent(
   guildId: string,
   eventId: string,
-  startsAt: Date,
+  event: { startsAt: Date },
+  roster: RaidLogRosterEntry[],
 ): Promise<RaidLogAttendance | null> {
-  const nightMs = startsAt.getTime();
+  const nightMs = new Date(event.startsAt).getTime();
   const logs = await prisma.raidLog.findMany({
     select: { firstFightAt: true, id: true },
     where: {
@@ -2655,13 +2660,28 @@ async function attendanceForEvent(
     .slice(0, 2);
 
   for (const candidate of candidates) {
+    // El análisis cacheado tiene los participantes de la noche (lo caro: la
+    // llamada a Warcraft Logs). El cruce se rehace acá porque el roster esperado
+    // es del evento y no del log: sin esto, los que no respondieron no tendrían
+    // presencia y el informe no podría decir si aparecieron igual.
     const analysis = await analyzeRaidLogNight(guildId, candidate.id).catch(
       () => null,
     );
     const attendance = analysis?.attendance;
-    if (attendance?.event?.id === eventId) {
+    if (attendance?.event?.id !== eventId) {
+      continue;
+    }
+    if (!candidate.firstFightAt || roster.length === 0) {
       return attendance;
     }
+    return await crossRaidAttendance({
+      guildId,
+      nightStart: candidate.firstFightAt,
+      partialParticipants: attendance.partial,
+      players: attendance.players,
+      roster,
+      totalPulls: attendance.totalPulls,
+    }).catch(() => attendance);
   }
   return null;
 }
@@ -5556,10 +5576,25 @@ export function buildApp() {
           .send({ ok: false, error: "Evento no encontrado" });
       }
 
+      // Los que tenían que responder y no lo hicieron: son parte del informe (una
+      // fila más cada uno) y el cruce necesita sus personajes para saber si
+      // aparecieron igual.
+      const members = await fetchAllGuildMembers(params.guildId).catch(() => []);
+      const roster =
+        expectedRoster(
+          members,
+          event,
+          benchRoleForGame(
+            event.game,
+            await benchRoleIdFor(params.guildId),
+          ),
+        )?.missing ?? [];
+
       const attendance = await attendanceForEvent(
         params.guildId,
         params.eventId,
-        new Date(event.startsAt),
+        event,
+        roster,
       ).catch(() => null);
 
       return {
