@@ -50,8 +50,27 @@ import {
 import { XpSection } from "./XpSection";
 import { copyToClipboard } from "./clipboard";
 import { hoursFromMinutes, minutesFromHours } from "./duration";
-import { padImageForEmbed } from "./embed-image";
-import { createMarquee } from "./marquee";
+import {
+  buildEventReport,
+  eventGameLabel,
+  eventReportCsv,
+  eventReportFileName,
+  eventReportPdf,
+  type EventReportRow,
+} from "./event-report";
+import {
+  formatDate24,
+  formatDateTime24,
+  formatTime24,
+  pad2,
+  toDateOrNull,
+} from "./datetime";
+import {
+  EVENT_IMAGE_MAX_BYTES,
+  EVENT_IMAGE_MAX_LABEL,
+  padImageForEmbed,
+  shrinkImageForUpload,
+} from "./embed-image";import { createMarquee } from "./marquee";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
@@ -65,7 +84,6 @@ import {
   exportXpData,
   getAuditLogs,
   getEventAttendance,
-  getEventReportCsv,
   getEventRoster,
   getGuildBoosters,
   getGuildGameActivity,
@@ -485,16 +503,30 @@ function slugifyTitle(title: string): string {
 
 // Descarga un texto como archivo (lo usa el informe de asistencia en CSV).
 function downloadCsvFile(name: string, content: string): void {
-  const url = URL.createObjectURL(
-    new Blob([content], { type: "text/csv;charset=utf-8" }),
-  );
+  downloadBlob(name, new Blob([content], { type: "text/csv;charset=utf-8" }));
+}
+
+// Descarga un archivo ya armado en memoria. El <a> se agrega al documento antes
+// de clickearlo a propósito: un <a> suelto (sin colgar del DOM) no dispara la
+// descarga en todos los navegadores —Firefox, por ejemplo, la ignora en
+// silencio—, que es lo que hacía que el PDF no bajara.
+function downloadBlob(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = name;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // El revoke va después del click: si se revoca antes, algunos navegadores ya
+  // no encuentran el archivo.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Baja la primera letra de un texto del informe ("Jugó (12 pulls)" → "jugó (12
+// pulls)") sin tocar el resto, que puede traer un nombre propio.
+function lowerFirst(value: string): string {
+  return value.charAt(0).toLowerCase() + value.slice(1);
 }
 
 // Parsea el hash:
@@ -819,49 +851,6 @@ function toIsoInstant(value: string): string | undefined {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-}
-
-// ── Fechas y horas en formato fijo (dd/mm/aaaa + 24 hs) ─────────────
-// No usamos toLocaleString/toLocaleDateString porque dependen del idioma del
-// navegador: con el navegador en inglés muestran mm/dd y AM/PM.
-function toDateOrNull(value: string | Date | undefined): Date | null {
-  if (!value) {
-    return null;
-  }
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function pad2(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
-function formatDate24(value: string | Date | undefined): string {
-  const date = toDateOrNull(value);
-  if (!date) {
-    return "—";
-  }
-  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
-}
-
-function formatTime24(
-  value: string | Date | undefined,
-  withSeconds = false,
-): string {
-  const date = toDateOrNull(value);
-  if (!date) {
-    return "—";
-  }
-  const base = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
-  return withSeconds ? `${base}:${pad2(date.getSeconds())}` : base;
-}
-
-function formatDateTime24(value: string | Date | undefined): string {
-  const date = toDateOrNull(value);
-  if (!date) {
-    return "—";
-  }
-  return `${formatDate24(date)} ${formatTime24(date)}`;
 }
 
 // Clave local del día (YYYY-MM-DD) y del mes (YYYY-MM). Se arma con las partes
@@ -3560,219 +3549,6 @@ function RosterAddPlayerModal({
 
 // ── Informe de asistencia (descarga en CSV o PDF) ───────────────────
 type ReportFormat = "csv" | "pdf";
-
-// Mismas etiquetas que usa el CSV del API y el informe del bot.
-const REPORT_STATUS_LABELS: Record<string, string> = {
-  bench: "Bench",
-  late: "Llega tarde",
-  no: "No asiste",
-  yes: "Asiste",
-};
-
-// Orden de la lista: primero los que asisten (igual que el roster del hub).
-const REPORT_STATUS_ORDER = ["yes", "bench", "late", "no"];
-
-// La fuente estándar de un PDF (Helvetica) no tiene glifos de emoji: en el
-// archivo saldrían como cuadraditos, así que se limpian antes de escribirlo.
-function pdfPlainText(value: string): string {
-  return value
-    .replace(
-      /[\u{1F000}-\u{1FAFF}\u{2100}-\u{21FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu,
-      "",
-    )
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-// Arma el PDF del informe en el navegador (mismo contenido que el CSV: los
-// anotados con su estado + quiénes tienen el rol mínimo y no se anotaron).
-// jsPDF se importa recién al usarlo para que la librería no viaje en el bundle
-// inicial.
-async function downloadEventReportPdf(
-  event: HubEvent,
-  missing: string[],
-  roleLabels: Map<string, string>,
-): Promise<void> {
-  const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF({ format: "a4", unit: "mm" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 14;
-  const contentWidth = pageWidth - marginX * 2;
-  const rowHeight = 6.4;
-  const bottomLimit = pageHeight - 16;
-
-  const columns = [
-    { key: "name", label: "Nombre", width: 54 },
-    { key: "status", label: "Estado", width: 24 },
-    { key: "role", label: "Rol", width: 22 },
-    { key: "class", label: "Clase", width: 24 },
-    { key: "spec", label: "Spec", width: 26 },
-    { key: "character", label: "Personaje", width: 36 },
-  ];
-  // La última columna absorbe lo que sobra para que la tabla cierre al borde.
-  const fixedWidth = columns.reduce((sum, column) => sum + column.width, 0);
-  columns[columns.length - 1].width += contentWidth - fixedWidth;
-
-  // Recorta el texto al ancho de la celda (con puntos suspensivos) para que no
-  // se monte sobre la columna de al lado.
-  const fit = (value: string, width: number): string => {
-    if (doc.getTextWidth(value) <= width) {
-      return value;
-    }
-    let trimmed = value;
-    while (trimmed.length > 1 && doc.getTextWidth(`${trimmed}…`) > width) {
-      trimmed = trimmed.slice(0, -1);
-    }
-    return `${trimmed}…`;
-  };
-
-  const rows = [...(event.signups ?? [])]
-    .sort((left, right) => {
-      // Un estado que no esté en la lista (dato viejo) va al final, no primero.
-      const rank = (status: string): number => {
-        const index = REPORT_STATUS_ORDER.indexOf(status);
-        return index === -1 ? REPORT_STATUS_ORDER.length : index;
-      };
-      const leftRank = rank(left.status);
-      const rightRank = rank(right.status);
-      return leftRank === rightRank
-        ? left.username.localeCompare(right.username)
-        : leftRank - rightRank;
-    })
-    .map((signup) => [
-      signup.username,
-      REPORT_STATUS_LABELS[signup.status] ?? signup.status,
-      signup.role ? (roleLabels.get(signup.role) ?? signup.role) : "",
-      signup.wowClass ?? "",
-      signup.spec ?? "",
-      signup.character ?? "",
-    ]);
-
-  let y = 34;
-
-  // Encabezado
-  doc.setFillColor(15, 22, 41);
-  doc.rect(0, 0, pageWidth, 26, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.text("Informe de asistencia", marginX, 12);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(fit(pdfPlainText(event.title), contentWidth), marginX, 20);
-
-  doc.setTextColor(45, 55, 75);
-  doc.setFontSize(10);
-  doc.text(`Evento: ${formatDateTime24(event.startsAt)}`, marginX, y);
-  y += 5.5;
-  doc.text(
-    `Anotados: ${rows.length}` +
-      (missing.length > 0 ? ` · Sin anotarse: ${missing.length}` : ""),
-    marginX,
-    y,
-  );
-  y += 8;
-
-  const drawTableHead = (): void => {
-    doc.setFillColor(226, 232, 240);
-    doc.rect(marginX, y - 4.6, contentWidth, rowHeight, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(31, 41, 55);
-    let x = marginX;
-    for (const column of columns) {
-      doc.text(fit(column.label, column.width - 4), x + 2, y);
-      x += column.width;
-    }
-    doc.setFont("helvetica", "normal");
-    y += rowHeight;
-  };
-
-  const newPage = (): void => {
-    doc.addPage();
-    y = 20;
-  };
-
-  drawTableHead();
-  doc.setFontSize(9);
-  doc.setTextColor(45, 55, 75);
-
-  if (rows.length === 0) {
-    doc.text("Sin inscripciones.", marginX, y);
-    y += rowHeight;
-  }
-
-  rows.forEach((row, index) => {
-    if (y > bottomLimit) {
-      newPage();
-      drawTableHead();
-      doc.setFontSize(9);
-      doc.setTextColor(45, 55, 75);
-    }
-    if (index % 2 === 1) {
-      doc.setFillColor(243, 245, 249);
-      doc.rect(marginX, y - 4.6, contentWidth, rowHeight, "F");
-    }
-    let x = marginX;
-    row.forEach((cell, cellIndex) => {
-      const column = columns[cellIndex];
-      doc.text(fit(pdfPlainText(cell), column.width - 4), x + 2, y);
-      x += column.width;
-    });
-    y += rowHeight;
-  });
-
-  // Quiénes tienen el rol mínimo y no se anotaron.
-  if (missing.length > 0) {
-    if (y + 16 > bottomLimit) {
-      newPage();
-    }
-    y += 10;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(31, 41, 55);
-    doc.text(
-      `No se anotaron (${missing.length} con el rol mínimo)`,
-      marginX,
-      y,
-    );
-    y += 6;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(45, 55, 75);
-    const lines = doc.splitTextToSize(
-      pdfPlainText(missing.join(" · ")),
-      contentWidth,
-    ) as string[];
-    for (const line of lines) {
-      if (y > bottomLimit) {
-        newPage();
-      }
-      doc.text(line, marginX, y);
-      y += 5;
-    }
-  }
-
-  // Pie de página con el paginado (se recorre al final porque recién ahí se
-  // sabe cuántas hojas tiene el informe).
-  const pageCount = doc.getNumberOfPages();
-  for (let page = 1; page <= pageCount; page += 1) {
-    doc.setPage(page);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(130, 140, 160);
-    doc.text("Bonafide", marginX, pageHeight - 8);
-    doc.text(
-      `Página ${page} de ${pageCount}`,
-      pageWidth - marginX,
-      pageHeight - 8,
-      { align: "right" },
-    );
-  }
-
-  doc.save(`informe-${slugifyTitle(event.title) || "evento"}.pdf`);
-}
 
 // Elección del formato del informe. Es un modal y no un menú desplegable
 // porque la tarjeta del evento tiene `overflow: hidden`: cualquier panel
@@ -6720,28 +6496,9 @@ function EventHistoryCalendar({
   );
 }
 
-// Estado de los que no respondieron: lo manda el API con ese valor porque no es
-// un estado de inscripción (los demás son yes/late/bench/tentative/no).
-const UNDECLARED_STATUS = "none";
-
-// Fila del informe. Vienen de dos lados (una inscripción o el roster esperado) y
-// se unifican acá para que las dos se lean igual: misma ficha, mismo cruce con
-// el log de la noche y la misma columna de avisos.
-type ReportRowInput = {
-  bench?: boolean;
-  character?: string;
-  role?: string;
-  rosterClass?: { className: string; specName: string };
-  spec?: string;
-  status: string;
-  userId: string;
-  username: string;
-  wowClass?: string;
-};
-
-// `declared: false` = no se anotó (es del roster esperado): no tiene personaje ni
-// rol declarado, y su estado es UNDECLARED_STATUS.
-type ReportRow = ReportRowInput & { declared: boolean };
+// Fila del informe: el modelo lo arma `event-report.ts`, que es el mismo que
+// usan el CSV y el PDF.
+type ReportRow = EventReportRow;
 
 // Informe de un evento del historial. Además de los números de la noche, cruza
 // cada anotado con su ficha del roster (clase, spec y rol) y marca las
@@ -6875,168 +6632,21 @@ function EventReportModal({
     return null;
   }
 
+  const game = event.game ?? "wow";
   const meta =
     EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
-  const game = event.game ?? "wow";
-  const endAt = event.durationMinutes
-    ? new Date(
-        new Date(event.startsAt).getTime() + event.durationMinutes * 60_000,
-      )
-    : null;
-  const groups = (
-    [
-      ["yes", "✅", "Se anotaron para asistir"],
-      ["bench", "🪑", "Bench"],
-      ["late", "⏰", "Avisaron que llegan tarde"],
-      ["no", "❌", "Avisaron que no van"],
-    ] as const
-  ).map(([status, emoji, label]) => ({
-    emoji,
-    label,
-    members: event.signups.filter((signup) => signup.status === status),
-    status,
-  }));
-  const attending = groups[0].members.length;
-
-  // Cruce de una fila con su ficha del roster. `primary` es lo que se muestra
-  // como su clase/spec (manda la ficha) y `flags` lo que hay que revisar.
-  function crossCheck(signup: ReportRowInput): {
-    flags: string[];
-    fromSignup: string | null;
-    primary: { className: string; specName: string; role?: string } | null;
-  } {
-    const profile = memberByUser.get(signup.userId)?.profile ?? null;
-    // La ficha es por juego: comparar la de otro juego sería comparar peras con
-    // manzanas (una misma persona puede tener ficha de WoW y de LoL).
-    const sameGame = (profile?.game ?? "wow") === game;
-    const rosterClass = sameGame ? (profile?.className ?? "") : "";
-    const rosterSpec = sameGame ? (profile?.specName ?? "") : "";
-    const rosterMeta =
-      rosterClass && rosterSpec
-        ? specByKey.get(rosterSpecKey(game, rosterClass, rosterSpec))
-        : undefined;
-    const signupClass = signup.wowClass?.trim() ?? "";
-    const signupSpec = signup.spec?.trim() ?? "";
-    const apiClassName = signup.rosterClass?.className?.trim() ?? "";
-    const apiSpecName = signup.rosterClass?.specName?.trim() ?? "";
-
-    let primary: { className: string; specName: string; role?: string } | null =
-      null;
-    if (rosterClass && rosterSpec) {
-      primary = {
-        className: rosterClass,
-        role: rosterMeta?.role,
-        specName: rosterSpec,
-      };
-    } else if (apiClassName && apiSpecName) {
-      // El API ya lo resolvió desde la ficha para quien no eligió nada.
-      primary = { className: apiClassName, specName: apiSpecName };
-    } else if (signupClass && signupSpec) {
-      primary = { className: signupClass, specName: signupSpec };
-    } else if (signupClass || signupSpec) {
-      primary = {
-        className: signupClass || "?",
-        specName: signupSpec || "?",
-      };
-    }
-
-    const flags: string[] = [];
-    // La ficha puede faltar por completo o existir vacía (quien se sumó al roster
-    // y nunca la completó): en los dos casos falta el dato contra el que se cruza.
-    // Una ficha de OTRO juego no entra acá: no es que falte, es de otro juego.
-    const fichaMissing =
-      !profile || (sameGame && !(profile.className && profile.specName));
-    if (fichaMissing) {
-      flags.push(
-        memberByUser.has(signup.userId)
-          ? "ficha sin clase ni spec"
-          : "sin ficha en el roster",
-      );
-    }
-    // Una sola marca para la ficha: con dos chips ("clase distinta" + "spec
-    // distinta") la misma diferencia se leía dos veces.
-    if (
-      (signupClass && rosterClass && signupClass !== rosterClass) ||
-      (signupSpec && rosterSpec && signupSpec !== rosterSpec)
-    ) {
-      flags.push(`ficha: ${rosterSpec} ${rosterClass}`);
-    }
-    if (
-      primary?.role &&
-      signup.role &&
-      primary.role !== signup.role
-    ) {
-      flags.push(
-        `rol distinto a su ficha (${
-          eventRoleMeta(primary.role, catalogRoles)?.label ?? primary.role
-        })`,
-      );
-    }
-
-    // Lo que escribió en la inscripción, cuando no es lo mismo que la ficha.
-    const fromSignup =
-      signupClass && signupSpec && rosterClass
-        ? signupClass === rosterClass && signupSpec === rosterSpec
-          ? null
-          : `${signupSpec} ${signupClass}`
-        : null;
-
-    return { flags, fromSignup, primary };
-  }
-
-  const presenceByUser = new Map(
-    (attendance?.byUser ?? []).map((row) => [row.userId, row]),
-  );
-
-  // Los que no respondieron: se arma la fila con lo que da el roster esperado.
-  const undeclaredRows: ReportRow[] = (expected?.missing ?? []).map((member) => ({
-    bench: member.bench,
-    declared: false,
-    status: UNDECLARED_STATUS,
-    userId: member.userId,
-    username: member.username,
-  }));
-
-  // Cuántas de estas filas aparecen en el log de la noche.
-  const playedIn = (rows: ReportRow[]): number =>
-    rows.filter((row) => presenceByUser.get(row.userId)?.present).length;
-
-  // Resumen del cruce con el log: lo que se cuenta es por persona y por estado,
-  // así el número que se lee es el que después se puede verificar fila por fila.
-  const expectedStatuses = new Set(["yes", "late"]);
-  const attendanceSummary = (() => {
-    if (!attendance) {
-      return null;
-    }
-    const rows = event.signups.map((signup) => ({
-      presence: presenceByUser.get(signup.userId),
-      status: signup.status,
-    }));
-    const expectedRows = rows.filter((row) => expectedStatuses.has(row.status));
-    return {
-      came: expectedRows.filter((row) => row.presence?.present).length,
-      expected: expectedRows.length,
-      missed: expectedRows.filter(
-        (row) =>
-          !row.presence?.present &&
-          !row.presence?.likely &&
-          row.presence?.matchable !== false,
-      ).length,
-      // Estaba en bench (no se le exigía jugar) y jugó igual.
-      benchPlayed: rows.filter(
-        (row) => row.status === "bench" && row.presence?.present,
-      ).length,
-      // Dijo que no y apareció: se explica solo, pero es la excepción que el
-      // staff quiere ver marcada.
-      saidNoAndPlayed: rows.filter(
-        (row) => row.status === "no" && row.presence?.present,
-      ).length,
-      toConfirm: rows.filter((row) => row.presence?.likely).length,
-      // Estuvo en el log sin figurar en las inscripciones.
-      unsigned: (attendance.unsignedPresent ?? []).filter((row) => !row.status)
-        .length,
-    };
-  })();
+  // Todo el informe (resumen, chips, filas y avisos) sale del mismo modelo que
+  // usan las descargas: la pantalla y el archivo no pueden decir cosas distintas.
+  const report = buildEventReport({
+    attendance,
+    event,
+    game,
+    gameLabel,
+    roster,
+    rosterExpected: expected,
+    roles,
+    specs,
+  });
 
   // Guarda la ficha corregida desde el informe. Se actualiza el roster local con
   // lo que devuelve el API, así el cruce de la fila se rehace solo (los avisos
@@ -7107,13 +6717,13 @@ function EventReportModal({
   // Clase y spec con las que se abre la ficha: lo que la persona se anotó en el
   // evento (el personaje lo declara ella, la ficha es de antes). Sin clase en la
   // inscripción no hay nada que precargar y el panel arranca de la ficha.
-  function sheetSeed(row: ReportRow): {
+  function sheetSeed(row: EventReportRow): {
     className: string;
     specName: string;
   } | null {
-    const className = row.wowClass?.trim() ?? "";
-    const specName = row.spec?.trim() ?? "";
-    return className && specName ? { className, specName } : null;
+    return row.declaredClass && row.declaredSpec
+      ? { className: row.declaredClass, specName: row.declaredSpec }
+      : null;
   }
 
   function renderClassChip(
@@ -7156,12 +6766,7 @@ function EventReportModal({
   // Mientras el cruce está en camino van esqueletos en las columnas que dependen
   // de él: sin eso la fila aparecía un instante como "sin ficha en el roster" y
   // después cambiaba de golpe.
-  function renderRow(row: ReportRow): ReactNode {
-    const check = crossCheck(row);
-    const roleMeta = row.role
-      ? eventRoleMeta(row.role, catalogRoles)
-      : undefined;
-    const presence = presenceByUser.get(row.userId);
+  function renderRow(row: EventReportRow): ReactNode {
     return (
       <li className="event-report-row" key={row.userId}>
         <span className="event-report-who">
@@ -7177,33 +6782,33 @@ function EventReportModal({
         <span className="event-report-spec">
           {loading ? (
             <span className="event-report-skeleton" style={{ width: "78%" }} />
-          ) : check.primary ? (
-            renderClassChip(check.primary.className, check.primary.specName)
+          ) : row.primary ? (
+            renderClassChip(row.primary.className, row.primary.specName)
           ) : (
             <span className="event-report-muted">Sin clase ni spec</span>
           )}
-          {!loading && check.fromSignup ? (
+          {!loading && row.fromSignup ? (
             <span className="event-report-diff">
-              inscripción: {check.fromSignup}
+              inscripción: {row.fromSignup}
             </span>
           ) : null}
         </span>
         <span className="event-report-role">
           {loading ? (
             <span className="event-report-skeleton" style={{ width: "62%" }} />
-          ) : row.role ? (
+          ) : row.declaredRole ? (
             <>
-              <EventRoleEmoji role={row.role} roles={catalogRoles} size={14} />
-              {roleMeta?.label ?? row.role}
+              <EventRoleEmoji
+                role={row.declaredRole}
+                roles={catalogRoles}
+                size={14}
+              />
+              {row.roleLabel}
             </>
-          ) : check.primary?.role ? (
+          ) : row.roleLabelFromSheet ? (
             // No eligió rol: se muestra el de su ficha, que es el dato que le
             // sirve a quien arma el grupo.
-            <span className="event-report-muted">
-              según su ficha:{" "}
-              {eventRoleMeta(check.primary.role, catalogRoles)?.label ??
-                check.primary.role}
-            </span>
+            <span className="event-report-muted">{row.roleLabel}</span>
           ) : (
             <span className="event-report-muted">—</span>
           )}
@@ -7211,34 +6816,37 @@ function EventReportModal({
         <span className="event-report-presence">
           {loading ? (
             <span className="event-report-skeleton" style={{ width: "70%" }} />
-          ) : !attendance ? (
-            <span className="event-report-muted">—</span>
-          ) : !presence ? (
-            <span className="event-report-muted">sin datos</span>
-          ) : presence.present ? (
-            <span className="event-report-present">
-              ✔ jugó ({presence.pulls} pull{presence.pulls === 1 ? "" : "s"})
-            </span>
-          ) : presence.likely ? (
-            <span className="event-report-likely">
-              ¿{presence.likely.logName}? (
-              {Math.round(presence.likely.similarity * 100)}%)
-            </span>
-          ) : !presence.matchable ? (
+          ) : !row.presence ? (
             <span className="event-report-muted">
-              sin personaje para comparar
+              {attendance ? "sin datos" : "—"}
             </span>
           ) : (
-            <span className="event-report-absent">✘ no jugó</span>
+            <span
+              className={
+                row.presence.kind === "present"
+                  ? "event-report-present"
+                  : row.presence.kind === "absent"
+                    ? "event-report-absent"
+                    : row.presence.kind === "likely"
+                      ? "event-report-likely"
+                      : "event-report-muted"
+              }
+            >
+              {row.presence.kind === "present"
+                ? `✔ ${lowerFirst(row.presence.text)}`
+                : row.presence.kind === "absent"
+                  ? `✘ ${lowerFirst(row.presence.text)}`
+                  : row.presence.text}
+            </span>
           )}
         </span>
         <span className="event-report-flags">
           {loading ? (
             <span className="event-report-skeleton" style={{ width: "54%" }} />
-          ) : check.flags.length === 0 ? (
+          ) : row.flags.length === 0 ? (
             <span className="event-report-ok">✓</span>
           ) : (
-            check.flags.map((flag) => (
+            row.flags.map((flag) => (
               <span className="event-report-flag" key={flag}>
                 {flag}
               </span>
@@ -7247,7 +6855,7 @@ function EventReportModal({
           {/* Solo con algo que revisar y con el roster cargado: el panel
               necesita la ficha real para conservar los tags y los alters al
               guardar. Si el roster no cargó, guardar sería pisar datos a ciegas. */}
-          {!loading && roster && canEditRoster && check.flags.length > 0 ? (
+          {!loading && roster && canEditRoster && row.flags.length > 0 ? (
             <button
               className="event-report-fix"
               onClick={() => setSheetFor(row)}
@@ -7288,97 +6896,43 @@ function EventReportModal({
         </header>
 
         <div className="event-report-summary">
-          <div className="event-report-item">
-            <span className="event-info-label">Fecha</span>
-            <span>{formatDateTime24(event.startsAt)}</span>
-          </div>
-          <div className="event-report-item">
-            <span className="event-info-label">Horario</span>
-            <span>
-              {formatTime24(event.startsAt)}
-              {endAt ? ` → ${formatTime24(endAt)}` : ""}
-              {event.durationMinutes
-                ? ` (${hoursFromMinutes(event.durationMinutes)} hs)`
-                : ""}
-            </span>
-          </div>
-          <div className="event-report-item">
-            <span className="event-info-label">Juego</span>
-            <span>
-              {gameLabel} · {meta.label}
-            </span>
-          </div>
-          <div className="event-report-item">
-            <span className="event-info-label">Convocatoria</span>
-            <span>
-              {expected
-                ? `${expected.confirmedCount} de ${expected.expectedCount} del roster${
-                    expected.missing.length > 0
-                      ? ` · ${expected.missing.length} sin responder`
-                      : ""
-                  }`
-                : loading
+          {report.summary.map((item) => (
+            <div className="event-report-item" key={item.label}>
+              <span className="event-info-label">{item.label}</span>
+              <span>
+                {item.label === "Convocatoria" && loading
                   ? "Calculando…"
-                  : "—"}
-            </span>
-          </div>
+                  : item.value}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div className="event-report-line">
           <span className="event-info-label">Asistencia</span>
           <div className="event-card-counts">
-            <span className="event-count total">
-              👥 {event.signups.length} anotados
-            </span>
-            {groups.map((group) => (
-              <span className={`event-count ${group.status}`} key={group.status}>
-                {group.emoji} {group.members.length}
+            {report.declaredChips.map((chip) => (
+              <span className={`event-count ${chip.kind}`} key={chip.kind}>
+                {chip.text}
               </span>
             ))}
           </div>
-          <span className="event-report-note">
-            {attending} de {event.signups.length} se anotaron como “asisto”
-          </span>
+          <span className="event-report-note">{report.declaredNote}</span>
         </div>
 
         {/* Cruce con el log de esa noche: lo que se anotó contra lo que pasó. */}
         <div className="event-report-line">
           <span className="event-info-label">En el log</span>
-          {attendance && attendanceSummary ? (
+          {!report.logNotFound ? (
             <>
               <div className="event-card-counts">
-                <span className="event-count yes">
-                  ✔ {attendanceSummary.came} de {attendanceSummary.expected}{" "}
-                  vinieron
-                </span>
-                {attendanceSummary.missed > 0 ? (
-                  <span className="event-count no">
-                    ✘ {attendanceSummary.missed} no vinieron
+                {report.logChips.map((chip) => (
+                  <span className={`event-count ${chip.kind}`} key={chip.text}>
+                    {chip.text}
                   </span>
-                ) : null}
-                {attendanceSummary.benchPlayed > 0 ? (
-                  <span className="event-count bench">
-                    🪑 {attendanceSummary.benchPlayed} de bench jugaron
-                  </span>
-                ) : null}
-                {attendanceSummary.saidNoAndPlayed > 0 ? (
-                  <span className="event-count warn">
-                    ⚠️ {attendanceSummary.saidNoAndPlayed} dijeron que no y
-                    jugaron
-                  </span>
-                ) : null}
-                {attendanceSummary.toConfirm > 0 ? (
-                  <span className="event-count tentative">
-                    ❔ {attendanceSummary.toConfirm} a confirmar
-                  </span>
-                ) : null}
-                {attendanceSummary.unsigned > 0 ? (
-                  <span className="event-count">
-                    ➕ {attendanceSummary.unsigned} jugaron sin anotarse
-                  </span>
-                ) : null}
+                ))}
               </div>
-              {attendance.partial ? (
+              {report.partial ? (
                 <span className="event-report-note">
                   Sin presencia por pull: puede faltar algún healer sin daño.
                 </span>
@@ -7402,7 +6956,7 @@ function EventReportModal({
           )}
         </div>
 
-        {event.signups.length === 0 && undeclaredRows.length === 0 ? (
+        {report.groups.length === 0 ? (
           <p className="muted-text">Sin inscripciones.</p>
         ) : (
           <>
@@ -7413,36 +6967,17 @@ function EventReportModal({
               <span>En el log</span>
               <span>A revisar</span>
             </div>
-            {groups.map((group) => {
-              const rows: ReportRow[] = group.members.map((signup) => ({
-                ...signup,
-                declared: true,
-              }));
-              return rows.length === 0 ? null : (
-                <section className="event-report-group" key={group.status}>
-                  <span className="admin-group-head">
-                    {group.emoji} {group.label} ({rows.length})
-                    {attendance ? ` · ${playedIn(rows)} en el log` : ""}
-                  </span>
-                  <ul className="event-report-list">{rows.map(renderRow)}</ul>
-                </section>
-              );
-            })}
-            {/* Sin responder: no dijeron nada, pero se leen como cualquier otra
-                fila para que se vea si aparecieron igual en el log. */}
-            {undeclaredRows.length > 0 ? (
-              <section className="event-report-group">
+            {/* Los grupos ya vienen armados por el modelo (declarados primero y
+                "Sin responder" al final), así el archivo dice lo mismo. */}
+            {report.groups.map((group) => (
+              <section className="event-report-group" key={group.status}>
                 <span className="admin-group-head">
-                  ❓ Sin responder ({undeclaredRows.length})
-                  {attendance
-                    ? ` · ${playedIn(undeclaredRows)} en el log`
-                    : ""}
+                  {group.emoji} {group.label} ({group.rows.length})
+                  {report.logNotFound ? "" : ` · ${group.playedInLog} en el log`}
                 </span>
-                <ul className="event-report-list">
-                  {undeclaredRows.map(renderRow)}
-                </ul>
+                <ul className="event-report-list">{group.rows.map(renderRow)}</ul>
               </section>
-            ) : null}
+            ))}
           </>
         )}
 
@@ -9318,6 +8853,9 @@ function App() {
   // Baja el informe de asistencia del evento (los anotados con su estado +
   // quiénes tienen el rol mínimo y no se anotaron). El CSV lo arma el API; el
   // PDF se arma en el navegador con los datos que ya tiene la tarjeta.
+  // Descarga el informe del evento (CSV o PDF). Las dos salidas se arman del
+  // mismo modelo que la ventana del informe, así el archivo tiene todo lo que se
+  // ve en pantalla: el cruce con la ficha, quién vino de verdad y los avisos.
   async function handleDownloadEventReport(
     event: HubEvent,
     format: ReportFormat = "csv",
@@ -9327,24 +8865,33 @@ function App() {
     }
     setReportBusyEventId(event.id);
     try {
+      // Las tres fuentes del cruce. Los dos extras son staff-only: si alguno
+      // falla, el archivo sale igual con lo que se pudo leer.
+      const [roster, rosterExpected, attendance] = await Promise.all([
+        getGuildRoster(selectedGuildId).catch(() => null),
+        getEventRoster(selectedGuildId, event.id).catch(() => null),
+        getEventAttendance(selectedGuildId, event.id).catch(() => null),
+      ]);
+      const report = buildEventReport({
+        attendance,
+        event,
+        game: event.game ?? "wow",
+        gameLabel: eventGameLabel(eventGames, event.game),
+        roster,
+        rosterExpected,
+        roles: rolesForGame(event.game),
+        specs: specsForGame(event.game),
+      });
+
       if (format === "csv") {
-        const csv = await getEventReportCsv(selectedGuildId, event.id);
         downloadCsvFile(
-          `informe-${slugifyTitle(event.title) || "evento"}.csv`,
-          csv,
+          eventReportFileName(event.title, "csv"),
+          eventReportCsv(report, event.title),
         );
       } else {
-        // La lista de los que faltan es staff-only: si falla, el PDF sale
-        // igual (sin esa sección) en vez de no bajar nada.
-        const roster = await getEventRoster(selectedGuildId, event.id).catch(
-          () => null,
-        );
-        await downloadEventReportPdf(
-          event,
-          roster?.missing.map((entry) => entry.username) ?? [],
-          new Map(
-            rolesForGame(event.game).map((role) => [role.key, role.label]),
-          ),
+        downloadBlob(
+          eventReportFileName(event.title, "pdf"),
+          await eventReportPdf(report, event.title),
         );
       }
       pushToast(
@@ -9352,8 +8899,12 @@ function App() {
         "success",
       );
     } catch (error) {
-      void error;
-      pushToast("No se pudo generar el informe.", "error");
+      pushToast(
+        error instanceof Error
+          ? `No se pudo generar el informe: ${error.message}`
+          : "No se pudo generar el informe.",
+        "error",
+      );
     } finally {
       setReportBusyEventId(null);
     }
@@ -9531,7 +9082,10 @@ function App() {
     setShowEventForm(true);
   }
 
-  // Sube una imagen a la biblioteca y la selecciona como imagen del evento.
+  // Sube una imagen a la biblioteca y la selecciona como imagen del evento. El
+  // archivo puede ser grande (una raid en alta se pasa de 3MB fácil): se acepta
+  // hasta EVENT_IMAGE_MAX_BYTES y antes de subirla se reduce a un tamaño de
+  // pantalla, así lo que se guarda y lo que baja Discord es liviano.
   async function handleImageFileChange(
     changeEvent: ChangeEvent<HTMLInputElement>,
   ): Promise<void> {
@@ -9544,8 +9098,11 @@ function App() {
       changeEvent.target.value = "";
       return;
     }
-    if (file.size > 3 * 1024 * 1024) {
-      pushToast("La imagen es demasiado grande (máx. 3MB).", "error");
+    if (file.size > EVENT_IMAGE_MAX_BYTES) {
+      pushToast(
+        `La imagen es demasiado grande (máx. ${EVENT_IMAGE_MAX_LABEL}).`,
+        "error",
+      );
       changeEvent.target.value = "";
       return;
     }
@@ -9558,7 +9115,7 @@ function App() {
         reader.readAsDataURL(file);
       });
       const image = await uploadEventImage(selectedGuildId, {
-        dataUrl: await padImageForEmbed(dataUrl),
+        dataUrl: await padImageForEmbed(await shrinkImageForUpload(dataUrl)),
         name: file.name,
       });
       setEventImages((current) => [image, ...current]);
@@ -14970,11 +14527,7 @@ function App() {
           canEditRoster={canAccess("raids")}
           classEmojis={classEmojis}
           event={eventHistoryOpen}
-          gameLabel={
-            eventGames.find((game) => game.key === eventHistoryOpen.game)
-              ?.label ??
-            (eventHistoryOpen.game ?? "").toUpperCase()
-          }
+          gameLabel={eventGameLabel(eventGames, eventHistoryOpen.game)}
           guildId={selectedGuildId}
           meId={me?.id}
           notify={pushToast}

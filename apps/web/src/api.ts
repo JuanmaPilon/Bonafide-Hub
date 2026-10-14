@@ -133,15 +133,17 @@ export type RaidLogAttendance = {
   // de un evento para decir uno por uno quién vino y quién no. `matchable: false`
   // = no hay personaje con el que buscarlo en el log, así que la ausencia no se
   // puede afirmar.
-  byUser?: Array<{
-    likely?: { logName: string; pulls: number; similarity: number };
-    logName?: string;
-    matchable: boolean;
-    present: boolean;
-    pulls: number;
-    status: string;
-    userId: string;
-  }>;
+  byUser?: RaidLogAttendanceRow[];
+};
+
+export type RaidLogAttendanceRow = {
+  likely?: { logName: string; pulls: number; similarity: number };
+  logName?: string;
+  matchable: boolean;
+  present: boolean;
+  pulls: number;
+  status: string;
+  userId: string;
 };
 
 export async function getEventAttendance(
@@ -815,23 +817,9 @@ export async function getGuildMembers(guildId: string): Promise<GuildMember[]> {
   return data.members;
 }
 
-// Informe de asistencia en CSV (lo arma el API: los anotados con su estado y
-// quiénes tienen el rol mínimo y no se anotaron).
-export async function getEventReportCsv(
-  guildId: string,
-  eventId: string,
-): Promise<string> {
-  const response = await fetch(
-    `${API_BASE_URL}/guilds/${guildId}/events/${eventId}/report.csv`,
-    { credentials: "include" },
-  );
-
-  if (!response.ok) {
-    throw new Error(`No se pudo generar el informe (${response.status})`);
-  }
-
-  return response.text();
-}
+// Informe de asistencia: lo arma la web (`event-report.ts`) con el mismo modelo
+// que muestra la ventana del informe, así el CSV y el PDF tienen todo lo que se
+// ve en pantalla (cruce con la ficha, presencia real y avisos).
 
 export async function getXpConfig(guildId: string): Promise<XpConfig> {
   const data = await requestJson<{ xpConfig: XpConfig }>(
