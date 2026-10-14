@@ -9728,6 +9728,36 @@ select.list-order {
   gap: 8px;
 }
 
+/* Selector de vista (Mes / Día): dos botones que se leen como uno solo. */
+.event-month-views {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid rgba(134, 158, 214, 0.28);
+}
+
+.event-month-view {
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.event-month-view:hover {
+  color: var(--text);
+}
+
+.event-month-view.is-active {
+  background: rgba(106, 168, 255, 0.18);
+  color: var(--text);
+}
+
 .event-month-nav button {
   width: 28px;
   height: 28px;
@@ -9750,6 +9780,12 @@ select.list-order {
   font-size: 0.95rem;
   /* "julio 2026" y no "Julio 2026": el nombre del mes es un nombre común. */
   text-transform: capitalize;
+}
+
+/* La fecha larga del día ("Jueves 9 de octubre de 2026") ya viene capitalizada:
+   `capitalize` acá daría "9 De Octubre De 2026". */
+.event-month-title--day {
+  text-transform: none;
 }
 
 .event-month-actions {
@@ -9836,9 +9872,21 @@ select.list-order {
 }
 
 .event-month-date {
+  justify-self: start;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--muted);
+  cursor: pointer;
+  font: inherit;
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.event-month-date:hover {
+  background: rgba(106, 168, 255, 0.16);
+  color: var(--text);
 }
 
 .event-month-day.is-today .event-month-date {
@@ -9865,22 +9913,6 @@ select.list-order {
 .event-month-card:hover {
   border-color: rgba(var(--event-rgb), 0.8);
   background: rgba(var(--event-rgb), 0.2);
-}
-
-.event-month-card--raid {
-  --event-rgb: 255, 138, 92;
-}
-
-.event-month-card--mplus {
-  --event-rgb: 176, 143, 224;
-}
-
-.event-month-card--pvp {
-  --event-rgb: 106, 168, 255;
-}
-
-.event-month-card--social {
-  --event-rgb: 124, 227, 139;
 }
 
 .event-month-card-title {
@@ -9926,6 +9958,93 @@ select.list-order {
   gap: 8px;
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+/* Vista de un día: los eventos de esa jornada, uno por fila, con la hora, el
+   título y la asistencia declarada. Es el detalle de un día del mes. */
+.event-day-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-day-row {
+  --event-rgb: 134, 158, 214;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--event-rgb), 0.45);
+  /* En una fila el tipo se lee por la barra de la izquierda: es lo único que
+     distingue una raid de una noche social, que es lo que hace el color en la
+     tarjetita del mes. */
+  border-left: 3px solid rgba(var(--event-rgb), 0.85);
+  background: rgba(var(--event-rgb), 0.14);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.event-day-row:hover {
+  border-color: rgba(var(--event-rgb), 0.8);
+  background: rgba(var(--event-rgb), 0.18);
+}
+
+.event-day-time {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.event-day-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-day-counts {
+  display: flex;
+  gap: 6px;
+}
+
+/* Acento por tipo: lo comparten la tarjetita del mes y la fila del día. Va acá
+   (y no junto a la tarjeta) porque las dos reglas base definen su propio
+   `--event-rgb` y estas tienen que quedar después para ganarle al default. */
+.event-month-card--raid,
+.event-day-row--raid {
+  --event-rgb: 255, 138, 92;
+}
+
+.event-month-card--mplus,
+.event-day-row--mplus {
+  --event-rgb: 176, 143, 224;
+}
+
+.event-month-card--pvp,
+.event-day-row--pvp {
+  --event-rgb: 106, 168, 255;
+}
+
+.event-month-card--social,
+.event-day-row--social {
+  --event-rgb: 124, 227, 139;
+}
+
+@media (max-width: 620px) {
+  .event-day-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
 }
 
 :root[data-theme="light"] .event-month-day {

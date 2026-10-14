@@ -6187,14 +6187,24 @@ const KARUTA_COMMAND_GROUPS: Array<{
 ];
 
 // ── Historial de eventos en calendario (Admin → Eventos) ────────────
-// La lista larga se cambió por el mes entero de un vistazo: una tarjetita por
-// evento en su día, con el acento del tipo. El buscador sigue estando y además
-// ofrece saltar a los meses que tienen coincidencias.
+// Dos vistas del historial: el mes entero (una tarjetita por evento en su día,
+// con el acento del tipo) y el detalle de un día. El buscador sirve para las dos:
+// en el mes ofrece saltar a los meses con coincidencias y en el día, a los días.
 
 // Tarjetas que entran en un día antes de plegar el resto en "+N más".
 const EVENT_MONTH_MAX_CARDS = 3;
 // La semana arranca el lunes, como el almanaque del formulario de eventos.
 const EVENT_MONTH_WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+// Los mismos días, completos, para el título de la vista de un día.
+const EVENT_WEEKDAYS_LONG = [
+  "domingo",
+  "lunes",
+  "martes",
+  "miércoles",
+  "jueves",
+  "viernes",
+  "sábado",
+];
 
 type EventMonthCell = {
   date: Date;
@@ -6248,6 +6258,82 @@ function nearestMonthKey(fromKey: string, monthKeys: string[]): string {
   );
 }
 
+// Fecha local de una clave de día (YYYY-MM-DD): con `new Date(key)` la fecha se
+// leería en UTC y acá todo se muestra en hora local.
+function dateFromDayKey(key: string): Date | null {
+  const [year, month, day] = key.split("-").map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+// Día con eventos más cercano al que se está mirando, con el mismo criterio que
+// los meses: se usa cuando el día en pantalla no tiene nada.
+function nearestDayKey(fromKey: string, dayKeys: string[]): string {
+  const distance = (key: string): number => {
+    const other = dateFromDayKey(key);
+    const from = dateFromDayKey(fromKey);
+    if (!other || !from) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    return Math.abs(other.getTime() - from.getTime());
+  };
+  return (
+    [...dayKeys].sort(
+      (left, right) =>
+        distance(left) - distance(right) || right.localeCompare(left),
+    )[0] ?? fromKey
+  );
+}
+
+function shiftDayKey(key: string, delta: number): string {
+  const date = dateFromDayKey(key);
+  if (!date) {
+    return key;
+  }
+  return localDayKey(
+    new Date(date.getFullYear(), date.getMonth(), date.getDate() + delta),
+  );
+}
+
+// "9 de octubre de 2026": la fecha larga sin el día de la semana (es la que
+// entra en una frase).
+function longDateLabel(key: string): string {
+  const date = dateFromDayKey(key);
+  if (!date) {
+    return key;
+  }
+  return `${date.getDate()} de ${
+    MONTH_LABELS[date.getMonth()] ?? ""
+  } de ${date.getFullYear()}`;
+}
+
+// "Jueves 9 de octubre de 2026": el título de la vista de un día. El día de la
+// semana va capitalizado a mano porque el título del mes usa
+// `text-transform: capitalize`, que acá daría "9 De Octubre De 2026".
+function dayKeyLabel(key: string): string {
+  const date = dateFromDayKey(key);
+  if (!date) {
+    return key;
+  }
+  const weekday = EVENT_WEEKDAYS_LONG[date.getDay()] ?? "";
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${longDateLabel(
+    key,
+  )}`;
+}
+
+// "Jue 09/10/2026": el chip para saltar a un día con coincidencias.
+function dayJumpLabel(key: string): string {
+  const date = dateFromDayKey(key);
+  if (!date) {
+    return key;
+  }
+  return `${EVENT_MONTH_WEEKDAYS[(date.getDay() + 6) % 7]} ${formatDate24(
+    date,
+  )}`;
+}
+
 function EventHistoryCalendar({
   events,
   onOpen,
@@ -6259,9 +6345,12 @@ function EventHistoryCalendar({
   onSearchChange: (value: string) => void;
   search: string;
 }) {
-  const [monthKey, setMonthKey] = useState(() => monthKeyOf(new Date()));
+  const [dayKey, setDayKey] = useState(() => localDayKey(new Date()));
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [monthKey, setMonthKey] = useState(() => monthKeyOf(new Date()));
+  const [view, setView] = useState<"day" | "month">("month");
   const searching = search.trim().length > 0;
+  const inDayView = view === "day";
 
   // Una sola pasada por los eventos: el día de cada uno (para la grilla) y
   // cuántos hay por mes (para el salto rápido y el salto automático).
@@ -6288,11 +6377,30 @@ function EventHistoryCalendar({
     [byDay, monthKey],
   );
   const monthTotal = monthCounts.get(monthKey) ?? 0;
+  const dayEvents = useMemo(() => byDay.get(dayKey) ?? [], [byDay, dayKey]);
   // Del más nuevo al más viejo: el orden en el que se busca en el historial.
   const monthsWithEvents = useMemo(
     () => [...monthCounts.keys()].sort().reverse(),
     [monthCounts],
   );
+  const daysWithEvents = useMemo(
+    () => [...byDay.keys()].sort().reverse(),
+    [byDay],
+  );
+
+  // Cambiar de vista: al pasar a Día se abre en el día que se está mirando y, si
+  // ese día no tiene nada, en el día con eventos más cercano (el mismo criterio
+  // que el salto del mes). Volver a Mes muestra el mes de ese día.
+  function openDay(nextKey: string): void {
+    setExpandedDay(null);
+    setDayKey(nextKey);
+    setView("day");
+  }
+
+  function openMonth(): void {
+    setMonthKey(dayKey.slice(0, 7));
+    setView("month");
+  }
 
   // Al abrir, si el mes de hoy no tiene nada, se muestra el mes con eventos más
   // cercano (el último raid es más útil que un mes vacío). La decisión se toma
@@ -6301,7 +6409,7 @@ function EventHistoryCalendar({
   // para eso están los accesos de "Meses con coincidencias".
   const autoJumped = useRef(false);
   useEffect(() => {
-    if (autoJumped.current || monthsWithEvents.length === 0) {
+    if (autoJumped.current || inDayView || monthsWithEvents.length === 0) {
       return;
     }
     autoJumped.current = true;
@@ -6309,27 +6417,72 @@ function EventHistoryCalendar({
       return;
     }
     setMonthKey(nearestMonthKey(monthKey, monthsWithEvents));
-  }, [monthKey, monthTotal, monthsWithEvents]);
+  }, [inDayView, monthKey, monthTotal, monthsWithEvents]);
 
   const monthLabel = monthKeyLabel(monthKey);
+  // Los saltos del buscador cambian de unidad con la vista: meses o días.
+  const jumpKeys = inDayView ? daysWithEvents : monthsWithEvents;
+  const jumpCount = (key: string): number =>
+    inDayView ? (byDay.get(key)?.length ?? 0) : (monthCounts.get(key) ?? 0);
+  const activeKey = inDayView ? dayKey : monthKey;
 
   return (
     <div className="event-month">
       <div className="event-month-bar">
+        <div
+          aria-label="Vista del historial"
+          className="event-month-views"
+          role="group"
+        >
+          <button
+            aria-pressed={!inDayView}
+            className={`event-month-view${inDayView ? "" : " is-active"}`}
+            onClick={openMonth}
+            type="button"
+          >
+            Mes
+          </button>
+          <button
+            aria-pressed={inDayView}
+            className={`event-month-view${inDayView ? " is-active" : ""}`}
+            onClick={() =>
+              openDay(
+                dayEvents.length > 0 || daysWithEvents.length === 0
+                  ? dayKey
+                  : nearestDayKey(dayKey, daysWithEvents),
+              )
+            }
+            type="button"
+          >
+            Día
+          </button>
+        </div>
         <div className="event-month-nav">
           <button
-            aria-label="Mes anterior"
-            onClick={() => setMonthKey(shiftMonthKey(monthKey, -1))}
-            title="Mes anterior"
+            aria-label={inDayView ? "Día anterior" : "Mes anterior"}
+            onClick={() =>
+              inDayView
+                ? setDayKey(shiftDayKey(dayKey, -1))
+                : setMonthKey(shiftMonthKey(monthKey, -1))
+            }
+            title={inDayView ? "Día anterior" : "Mes anterior"}
             type="button"
           >
             ‹
           </button>
-          <strong className="event-month-title">{monthLabel}</strong>
+          <strong
+            className={`event-month-title${inDayView ? " event-month-title--day" : ""}`}
+          >
+            {inDayView ? dayKeyLabel(dayKey) : monthLabel}
+          </strong>
           <button
-            aria-label="Mes siguiente"
-            onClick={() => setMonthKey(shiftMonthKey(monthKey, 1))}
-            title="Mes siguiente"
+            aria-label={inDayView ? "Día siguiente" : "Mes siguiente"}
+            onClick={() =>
+              inDayView
+                ? setDayKey(shiftDayKey(dayKey, 1))
+                : setMonthKey(shiftMonthKey(monthKey, 1))
+            }
+            title={inDayView ? "Día siguiente" : "Mes siguiente"}
             type="button"
           >
             ›
@@ -6343,62 +6496,69 @@ function EventHistoryCalendar({
           value={search}
         />
         <div className="event-month-actions">
-          <span className="admin-row-tag">
-            {monthTotal === 1 ? "1 evento" : `${monthTotal} eventos`}
-          </span>
+          {/* En la vista de un día los eventos están a la vista, uno por fila: el
+              contador no agrega nada. */}
+          {inDayView ? null : (
+            <span className="admin-row-tag">
+              {monthTotal === 1 ? "1 evento" : `${monthTotal} eventos`}
+            </span>
+          )}
           <button
             className="ghost-button small"
-            onClick={() => setMonthKey(monthKeyOf(new Date()))}
+            onClick={() =>
+              inDayView
+                ? setDayKey(localDayKey(new Date()))
+                : setMonthKey(monthKeyOf(new Date()))
+            }
             type="button"
           >
             <Calendar weight="fill" aria-hidden="true" />
-            Ir al mes actual
+            {inDayView ? "Ir a hoy" : "Ir al mes actual"}
           </button>
         </div>
       </div>
 
-      {searching && monthsWithEvents.length > 0 ? (
+      {searching && jumpKeys.length > 0 ? (
         <div className="event-month-jumps">
-          <span className="event-month-jumps-label">Meses con coincidencias:</span>
-          {monthsWithEvents.slice(0, 8).map((key) => (
+          <span className="event-month-jumps-label">
+            {inDayView ? "Días con coincidencias:" : "Meses con coincidencias:"}
+          </span>
+          {jumpKeys.slice(0, 8).map((key) => (
             <button
-              className={`event-month-jump${key === monthKey ? " is-active" : ""}`}
+              className={`event-month-jump${key === activeKey ? " is-active" : ""}`}
               key={key}
-              onClick={() => setMonthKey(key)}
+              onClick={() => (inDayView ? setDayKey(key) : setMonthKey(key))}
               type="button"
             >
-              {monthKeyLabel(key)}
-              <span>({monthCounts.get(key)})</span>
+              {inDayView ? dayJumpLabel(key) : monthKeyLabel(key)}
+              <span>({jumpCount(key)})</span>
             </button>
           ))}
         </div>
       ) : null}
 
-      <div className="event-month-weekdays" aria-hidden="true">
-        {EVENT_MONTH_WEEKDAYS.map((label) => (
-          <span key={label}>{label}</span>
-        ))}
-      </div>
-
-      <div className="event-month-grid" role="grid">
-        {cells.map((cell) => {
-          const expanded = expandedDay === cell.key;
-          const shown = expanded
-            ? cell.events
-            : cell.events.slice(0, EVENT_MONTH_MAX_CARDS);
-          const hidden = cell.events.length - shown.length;
-          return (
-            <div
-              className={`event-month-day${cell.inMonth ? "" : " is-outside"}${
-                cell.isToday ? " is-today" : ""
-              }${cell.events.length === 0 ? " is-empty" : ""}${
-                expanded ? " is-expanded" : ""
-              }`}
-              data-date={formatDate24(cell.date)}
-              key={cell.key}
-            >
-              <span className="event-month-date">{cell.day}</span>
-              {shown.map((event) => {
+      {inDayView ? (
+        <div className="event-day">
+          {dayEvents.length === 0 ? (
+            <p className="event-month-empty">
+              {searching
+                ? `Ningún evento coincide con la búsqueda el ${longDateLabel(
+                    dayKey,
+                  )}.`
+                : `Sin eventos terminados el ${longDateLabel(dayKey)}.`}{" "}
+              {daysWithEvents.length > 0 ? (
+                <button
+                  className="ghost-button small"
+                  onClick={() => setDayKey(daysWithEvents[0])}
+                  type="button"
+                >
+                  Ir al más reciente
+                </button>
+              ) : null}
+            </p>
+          ) : (
+            <ul className="event-day-list">
+              {dayEvents.map((event) => {
                 const meta =
                   EVENT_TYPES.find((entry) => entry.key === event.type) ??
                   EVENT_TYPES[0];
@@ -6406,56 +6566,127 @@ function EventHistoryCalendar({
                   (signup) => signup.status === "yes",
                 ).length;
                 return (
-                  <button
-                    className={`event-month-card event-month-card--${meta.key}`}
-                    key={event.id}
-                    onClick={() => onOpen(event)}
-                    title={`${event.title} · ${formatTime24(event.startsAt)}`}
-                    type="button"
-                  >
-                    <span className="event-month-card-title">
-                      <span aria-hidden="true">{meta.emoji}</span>
-                      {event.title}
-                    </span>
-                    <span className="event-month-card-meta">
-                      <time dateTime={event.startsAt}>
+                  <li key={event.id}>
+                    <button
+                      className={`event-day-row event-day-row--${meta.key}`}
+                      onClick={() => onOpen(event)}
+                      title={`Ver el informe de ${event.title}`}
+                      type="button"
+                    >
+                      <time className="event-day-time" dateTime={event.startsAt}>
                         {formatTime24(event.startsAt)}
                       </time>
-                      <span>· ✅ {attending}</span>
-                    </span>
-                  </button>
+                      <span className="event-day-title">
+                        <span aria-hidden="true">{meta.emoji}</span>
+                        {event.title}
+                      </span>
+                      <span className="event-day-counts">
+                        <span className="event-count total">
+                          👥 {event.signups.length}
+                        </span>
+                        <span className="event-count yes">✅ {attending}</span>
+                      </span>
+                    </button>
+                  </li>
                 );
               })}
-              {hidden > 0 ? (
+            </ul>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="event-month-weekdays" aria-hidden="true">
+            {EVENT_MONTH_WEEKDAYS.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+
+          <div className="event-month-grid" role="grid">
+            {cells.map((cell) => {
+              const expanded = expandedDay === cell.key;
+              const shown = expanded
+                ? cell.events
+                : cell.events.slice(0, EVENT_MONTH_MAX_CARDS);
+              const hidden = cell.events.length - shown.length;
+              return (
+                <div
+                  className={`event-month-day${cell.inMonth ? "" : " is-outside"}${
+                    cell.isToday ? " is-today" : ""
+                  }${cell.events.length === 0 ? " is-empty" : ""}${
+                    expanded ? " is-expanded" : ""
+                  }`}
+                  data-date={formatDate24(cell.date)}
+                  key={cell.key}
+                >
+                  {/* El número del día lleva al detalle de esa jornada. */}
+                  <button
+                    className="event-month-date"
+                    onClick={() => openDay(cell.key)}
+                    title="Ver el día"
+                    type="button"
+                  >
+                    {cell.day}
+                  </button>
+                  {shown.map((event) => {
+                    const meta =
+                      EVENT_TYPES.find((entry) => entry.key === event.type) ??
+                      EVENT_TYPES[0];
+                    const attending = event.signups.filter(
+                      (signup) => signup.status === "yes",
+                    ).length;
+                    return (
+                      <button
+                        className={`event-month-card event-month-card--${meta.key}`}
+                        key={event.id}
+                        onClick={() => onOpen(event)}
+                        title={`${event.title} · ${formatTime24(event.startsAt)}`}
+                        type="button"
+                      >
+                        <span className="event-month-card-title">
+                          <span aria-hidden="true">{meta.emoji}</span>
+                          {event.title}
+                        </span>
+                        <span className="event-month-card-meta">
+                          <time dateTime={event.startsAt}>
+                            {formatTime24(event.startsAt)}
+                          </time>
+                          <span>· ✅ {attending}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {hidden > 0 ? (
+                    <button
+                      className="event-month-more"
+                      onClick={() => setExpandedDay(cell.key)}
+                      type="button"
+                    >
+                      +{hidden} más
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          {monthTotal === 0 ? (
+            <p className="event-month-empty">
+              {searching
+                ? `Ningún evento coincide con la búsqueda en ${monthLabel}.`
+                : `Sin eventos terminados en ${monthLabel}.`}{" "}
+              {monthsWithEvents.length > 0 ? (
                 <button
-                  className="event-month-more"
-                  onClick={() => setExpandedDay(cell.key)}
+                  className="ghost-button small"
+                  onClick={() => setMonthKey(monthsWithEvents[0])}
                   type="button"
                 >
-                  +{hidden} más
+                  Ir al más reciente
                 </button>
               ) : null}
-            </div>
-          );
-        })}
-      </div>
-
-      {monthTotal === 0 ? (
-        <p className="event-month-empty">
-          {searching
-            ? `Ningún evento coincide con la búsqueda en ${monthLabel}.`
-            : `Sin eventos terminados en ${monthLabel}.`}{" "}
-          {monthsWithEvents.length > 0 ? (
-            <button
-              className="ghost-button small"
-              onClick={() => setMonthKey(monthsWithEvents[0])}
-              type="button"
-            >
-              Ir al más reciente
-            </button>
+            </p>
           ) : null}
-        </p>
-      ) : null}
+        </>
+      )}
     </div>
   );
 }
