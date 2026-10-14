@@ -64,6 +64,7 @@ import {
   deleteRaidLogPermanent,
   exportXpData,
   getAuditLogs,
+  getEventAttendance,
   getEventReportCsv,
   getEventRoster,
   getGuildBoosters,
@@ -171,6 +172,7 @@ import {
   type PublicLeaderboardEntry,
   type RaidLog,
   type RaidLogAnalysis,
+  type RaidLogAttendance,
   type KarutaCard,
   type KarutaAlbum,
   type XpConfig,
@@ -6488,11 +6490,13 @@ function EventReportModal({
 }) {
   const [roster, setRoster] = useState<GuildRoster | null>(null);
   const [expected, setExpected] = useState<EventRoster | null>(null);
+  const [attendance, setAttendance] = useState<RaidLogAttendance | null>(null);
   const [loading, setLoading] = useState(false);
   const eventId = event?.id ?? null;
 
   // El cruce necesita la ficha de cada uno: el roster se pide al abrir (y se
-  // olvida al cerrar, así el informe siempre muestra lo último guardado).
+  // olvida al cerrar, así el informe siempre muestra lo último guardado). Del
+  // log de esa noche sale quién vino de verdad.
   useEffect(() => {
     if (!eventId || !guildId) {
       return;
@@ -6501,16 +6505,19 @@ function EventReportModal({
     setLoading(true);
     setRoster(null);
     setExpected(null);
+    setAttendance(null);
     Promise.all([
       getGuildRoster(guildId).catch(() => null),
       getEventRoster(guildId, eventId).catch(() => null),
+      getEventAttendance(guildId, eventId).catch(() => null),
     ])
-      .then(([nextRoster, nextExpected]) => {
+      .then(([nextRoster, nextExpected, nextAttendance]) => {
         if (cancelled) {
           return;
         }
         setRoster(nextRoster);
         setExpected(nextExpected);
+        setAttendance(nextAttendance);
       })
       .finally(() => {
         if (!cancelled) {
@@ -6575,10 +6582,10 @@ function EventReportModal({
     : null;
   const groups = (
     [
-      ["yes", "✅", "Asistieron"],
+      ["yes", "✅", "Se anotaron para asistir"],
       ["bench", "🪑", "Bench"],
-      ["late", "⏰", "Llegaron tarde"],
-      ["no", "❌", "No asistieron"],
+      ["late", "⏰", "Avisaron que llegan tarde"],
+      ["no", "❌", "Avisaron que no van"],
     ] as const
   ).map(([status, emoji, label]) => ({
     emoji,
@@ -6638,10 +6645,13 @@ function EventReportModal({
           : "sin ficha en el roster",
       );
     }
-    if (signupClass && rosterClass && signupClass !== rosterClass) {
-      flags.push(`clase distinta a su ficha (${rosterClass})`);
-    } else if (signupSpec && rosterSpec && signupSpec !== rosterSpec) {
-      flags.push(`spec distinta a su ficha (${rosterSpec})`);
+    // Una sola marca para la ficha: con dos chips ("clase distinta" + "spec
+    // distinta") la misma diferencia se leía dos veces.
+    if (
+      (signupClass && rosterClass && signupClass !== rosterClass) ||
+      (signupSpec && rosterSpec && signupSpec !== rosterSpec)
+    ) {
+      flags.push(`ficha: ${rosterSpec} ${rosterClass}`);
     }
     if (
       primary?.role &&
@@ -6670,13 +6680,46 @@ function EventReportModal({
     check: crossCheck(signup),
     signup,
   }));
-  const alertCounts = checks.reduce<Record<string, number>>((counts, row) => {
-    for (const flag of row.check.flags) {
-      counts[flag] = (counts[flag] ?? 0) + 1;
+  const presenceByUser = new Map(
+    (attendance?.byUser ?? []).map((row) => [row.userId, row]),
+  );
+
+  // Resumen del cruce con el log: lo que se cuenta es por persona y por estado,
+  // así el número que se lee es el que después se puede verificar fila por fila.
+  const expectedStatuses = new Set(["yes", "late"]);
+  const attendanceSummary = (() => {
+    if (!attendance) {
+      return null;
     }
-    return counts;
-  }, {});
-  const alerts = Object.entries(alertCounts);
+    const rows = event.signups.map((signup) => ({
+      presence: presenceByUser.get(signup.userId),
+      status: signup.status,
+    }));
+    const expectedRows = rows.filter((row) => expectedStatuses.has(row.status));
+    return {
+      came: expectedRows.filter((row) => row.presence?.present).length,
+      expected: expectedRows.length,
+      missed: expectedRows.filter(
+        (row) =>
+          !row.presence?.present &&
+          !row.presence?.likely &&
+          row.presence?.matchable !== false,
+      ).length,
+      // Estaba en bench (no se le exigía jugar) y jugó igual.
+      benchPlayed: rows.filter(
+        (row) => row.status === "bench" && row.presence?.present,
+      ).length,
+      // Dijo que no y apareció: se explica solo, pero es la excepción que el
+      // staff quiere ver marcada.
+      saidNoAndPlayed: rows.filter(
+        (row) => row.status === "no" && row.presence?.present,
+      ).length,
+      toConfirm: rows.filter((row) => row.presence?.likely).length,
+      // Estuvo en el log sin figurar en las inscripciones.
+      unsigned: (attendance.unsignedPresent ?? []).filter((row) => !row.status)
+        .length,
+    };
+  })();
 
   function renderClassChip(
     className: string,
@@ -6791,25 +6834,57 @@ function EventReportModal({
           </span>
         </div>
 
-        {alerts.length > 0 ? (
-          <div className="event-report-line">
-            <span className="event-info-label">A revisar</span>
-            <div className="event-card-counts">
-              {alerts.map(([flag, count]) => (
-                <span className="event-count warn" key={flag}>
-                  ⚠️ {count} {flag}
+        {/* Cruce con el log de esa noche: lo que se anotó contra lo que pasó. */}
+        <div className="event-report-line">
+          <span className="event-info-label">En el log</span>
+          {attendance && attendanceSummary ? (
+            <>
+              <div className="event-card-counts">
+                <span className="event-count yes">
+                  ✔ {attendanceSummary.came} de {attendanceSummary.expected}{" "}
+                  vinieron
                 </span>
-              ))}
-            </div>
-          </div>
-        ) : loading ? null : (
-          <div className="event-report-line">
-            <span className="event-info-label">A revisar</span>
+                {attendanceSummary.missed > 0 ? (
+                  <span className="event-count no">
+                    ✘ {attendanceSummary.missed} no vinieron
+                  </span>
+                ) : null}
+                {attendanceSummary.benchPlayed > 0 ? (
+                  <span className="event-count bench">
+                    🪑 {attendanceSummary.benchPlayed} de bench jugaron
+                  </span>
+                ) : null}
+                {attendanceSummary.saidNoAndPlayed > 0 ? (
+                  <span className="event-count warn">
+                    ⚠️ {attendanceSummary.saidNoAndPlayed} dijeron que no y
+                    jugaron
+                  </span>
+                ) : null}
+                {attendanceSummary.toConfirm > 0 ? (
+                  <span className="event-count tentative">
+                    ❔ {attendanceSummary.toConfirm} a confirmar
+                  </span>
+                ) : null}
+                {attendanceSummary.unsigned > 0 ? (
+                  <span className="event-count">
+                    ➕ {attendanceSummary.unsigned} jugaron sin anotarse
+                  </span>
+                ) : null}
+              </div>
+              {attendance.partial ? (
+                <span className="event-report-note">
+                  Sin presencia por pull: puede faltar algún healer sin daño.
+                </span>
+              ) : null}
+            </>
+          ) : (
             <span className="event-report-note">
-              Todos los anotados coinciden con su ficha del roster.
+              {loading
+                ? "Buscando el log de esa noche…"
+                : "No hay un log de raid guardado de esa noche, así que no se puede cruzar quién vino."}
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
         {event.signups.length === 0 ? (
           <p className="muted-text">Sin inscripciones.</p>
@@ -6819,13 +6894,18 @@ function EventReportModal({
               <span>Anotado</span>
               <span>Clase y spec</span>
               <span>Rol</span>
+              <span>En el log</span>
               <span>A revisar</span>
             </div>
-            {groups.map((group) =>
-              group.members.length === 0 ? null : (
+            {groups.map((group) => {
+              const played = group.members.filter(
+                (signup) => presenceByUser.get(signup.userId)?.present,
+              ).length;
+              return group.members.length === 0 ? null : (
                 <section className="event-report-group" key={group.status}>
                   <span className="admin-group-head">
                     {group.emoji} {group.label} ({group.members.length})
+                    {attendance ? ` · ${played} en el log` : ""}
                   </span>
                   <ul className="event-report-list">
                   {group.members.map((signup) => {
@@ -6888,6 +6968,56 @@ function EventReportModal({
                             <span className="event-report-muted">—</span>
                           )}
                         </span>
+                        <span className="event-report-presence">
+                          {(() => {
+                            const presence = presenceByUser.get(
+                              signup.userId,
+                            );
+                            if (!attendance) {
+                              return (
+                                <span className="event-report-muted">—</span>
+                              );
+                            }
+                            if (!presence) {
+                              return (
+                                <span className="event-report-muted">
+                                  sin datos
+                                </span>
+                              );
+                            }
+                            const pulls = `${presence.pulls} pull${
+                              presence.pulls === 1 ? "" : "s"
+                            }`;
+                            if (presence.present) {
+                              return (
+                                <span className="event-report-present">
+                                  ✔ jugó ({pulls})
+                                </span>
+                              );
+                            }
+                            if (presence.likely) {
+                              return (
+                                <span className="event-report-likely">
+                                  ¿{presence.likely.logName}? (
+                                  {Math.round(presence.likely.similarity * 100)}
+                                  %)
+                                </span>
+                              );
+                            }
+                            if (!presence.matchable) {
+                              return (
+                                <span className="event-report-muted">
+                                  sin personaje para comparar
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="event-report-absent">
+                                ✘ no jugó
+                              </span>
+                            );
+                          })()}
+                        </span>
                         <span className="event-report-flags">
                           {check.flags.length === 0 ? (
                             <span className="event-report-ok">✓</span>
@@ -6904,8 +7034,8 @@ function EventReportModal({
                   })}
                 </ul>
               </section>
-            ),
-          )}
+              );
+            })}
           </>
         )}
 

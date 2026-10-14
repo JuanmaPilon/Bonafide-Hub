@@ -129,7 +129,31 @@ export type RaidLogAttendance = {
   totalPulls: number;
   unmatchedSignups: Array<{ name: string; status: string; userId: string }>;
   unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
+  // Presencia de CADA inscripción, de cualquier estado: es lo que usa el informe
+  // de un evento para decir uno por uno quién vino y quién no. `matchable: false`
+  // = no hay personaje con el que buscarlo en el log, así que la ausencia no se
+  // puede afirmar.
+  byUser?: Array<{
+    likely?: { logName: string; pulls: number; similarity: number };
+    logName?: string;
+    matchable: boolean;
+    present: boolean;
+    pulls: number;
+    status: string;
+    userId: string;
+  }>;
 };
+
+export async function getEventAttendance(
+  guildId: string,
+  eventId: string,
+): Promise<RaidLogAttendance | null> {
+  const data = await requestJson<{ attendance: RaidLogAttendance | null }>(
+    `/guilds/${guildId}/events/${encodeURIComponent(eventId)}/attendance`,
+    { method: "GET" },
+  );
+  return data.attendance;
+}
 
 export type RaidConsumableKey = "flask" | "food";
 
