@@ -248,12 +248,17 @@ Web -> acción Actualizar -> API refresca y edita el mensaje publicado
 Web -> análisis de la noche -> API pide el detalle del report y lo cruza con los
    anotados del evento; el resultado se cachea 10 min
 Web -> informe del evento (Admin -> Eventos) -> la misma API de asistencia, pero
-   pedida por evento: busca el log de esa noche (±14 h) y devuelve quién vino
+   pedida por evento: busca el log de esa noche (±14 h) y devuelve quién vino,
+   incluidos los del roster esperado que no respondieron (su presencia se cruza
+   por el personaje recordado o un PJ ya confirmado, nunca por parecido)
 ```
 
 El análisis trae los pulls, el DPS promedio, las muertes por habilidad y por
 jugador, las flask y la comida que faltaron, y la asistencia real cruzada con las
 inscripciones del evento (incluidos los nombres que "se parecen" pero no coinciden).
+El informe del historial usa el mismo cruce más el roster esperado del evento: se
+rehace ahí (y no dentro del análisis cacheado) porque el roster es del evento, no
+del log.
 
 ## 14. Módulos del hub y permisos de staff
 

@@ -526,8 +526,9 @@ claves siguen siendo `eventos` y `historial`: los enlaces `#/admin/eventos` y
 **Historial de eventos (Admin → Eventos):** no es una lista, es un
 **calendario**: el mes entero con una tarjetita por evento terminado en su día
 (emoji del tipo, título, hora y cuántos asistieron), el contador del mes, la
-navegación `‹ mes ›` y un botón "Hoy" (vuelve al mes actual). Lo que no entra en
-un día se pliega en "+N más" y se despliega ahí mismo. El buscador está en la
+navegación `‹ mes ›` y un botón "Mes actual" (vuelve al mes de hoy; el día de hoy
+va marcado en la grilla). Lo que no entra en un día se pliega en "+N más" y se
+despliega ahí mismo. El buscador está en la
 misma barra y, cuando hay coincidencias en otros meses, muestra chips para saltar
 a ellos (no hay que recorrer mes por mes). Al abrir, si el mes actual no tiene
 eventos, se muestra el mes con actividad más cercano, una sola vez: si después
@@ -549,7 +550,7 @@ navegás a un mes vacío a propósito, te quedás ahí.
    vinieron, cuántos no, cuántos de bench jugaron igual, cuántos **dijeron que no
    y aparecieron**, los nombres parecidos que quedan a confirmar y quiénes
    jugaron sin anotarse.
-4. **Una fila por anotado, agrupada por lo que declaró** ("Se anotaron para
+4. **Una fila por jugador, agrupada por lo que declaró** ("Se anotaron para
    asistir", "🪑 Bench", "Avisaron que llegan tarde", "Avisaron que no van", con
    "· N en el log" en el título de cada grupo). Cada fila trae el cruce contra su
    ficha del roster y contra el log: clase y spec (los de la ficha, que es la
@@ -560,7 +561,16 @@ navegás a un mes vacío a propósito, te quedás ahí.
    comparar" o "—" si no hay log de esa noche) y los avisos de ficha en una sola
    columna "A revisar" ("ficha: Fire Mage", "rol distinto a su ficha (Healer)",
    "sin ficha en el roster", "ficha sin clase ni spec"), con ✓ cuando no hay nada
-   que revisar. Al final, los que tenían que estar y **no respondieron**.
+   que revisar. El último grupo son los que tenían que estar y **no
+   respondieron** ("❓ Sin responder"): se leen con la misma fila que el resto
+   (ficha, rol y si aparecieron en el log igual), para que el cruce se pueda
+   hacer de un vistazo sin abrir el roster aparte.
+
+Mientras el roster y el log están en camino, las columnas que dependen de ellos
+muestran **esqueletos** en lugar de contenido provisorio: si no, cada fila
+aparecía un instante como "sin ficha en el roster" y después cambiaba de golpe.
+La convocatoria dice "Calculando…" y la fila "En el log" avisa que está buscando
+el log de esa noche con el anillo de carga.
 
 El cruce usa el catálogo que viene **con el roster** (`GuildRoster.specs`,
 `roles` y `classEmojis`), no el de la tab Eventos: entrar directo a
@@ -568,13 +578,17 @@ Admin → Eventos (sin pasar por Eventos) dejaba ese catálogo vacío y el cruce
 rol se quedaba sin comparar. El roster se pide al abrir la ventana y se olvida al
 cerrarla, así el informe siempre muestra la última ficha guardada.
 
-El endpoint de asistencia devuelve `byUser` con **una entrada por inscripción, de
-cualquier estado** (`present`, `pulls`, el `logName` que coincidió y `likely`
-cuando el parecido no alcanza para confirmar), así el informe puede decir de cada
-persona si jugó o no, sin tener que cruzar los nombres de nuevo en la web. Reusa
-el mismo análisis cacheado de Raids → Logs (`analyzeRaidLogNight`, 10 minutos) y
-prueba como mucho dos logs candidatos por cercanía en ±14 h, aceptando solo el
-que reconoce ese evento: abrir el informe no dispara el análisis de otras noches.
+El endpoint de asistencia devuelve `byUser` con **una entrada por jugador del
+evento**: los anotados de cualquier estado (`present`, `pulls`, el `logName` que
+coincidió y `likely` cuando el parecido no alcanza para confirmar) y los del
+roster esperado que no respondieron (estado `none`, presencia solo si un
+personaje suyo —el recordado o un PJ ya confirmado— aparece en el log), así el
+informe puede decir de cada persona si jugó o no sin cruzar los nombres de nuevo
+en la web. Ese cruce de los que no respondieron se hace **en el endpoint** y no en
+el análisis cacheado, porque el roster esperado es del evento y no del log: del
+análisis (cacheado 10 minutos) sale lo caro, que es la llamada a Warcraft Logs.
+Prueba como mucho dos logs candidatos por cercanía en ±14 h y acepta solo el que
+reconoce ese evento, así abrir el informe no dispara el análisis de otras noches.
 
 Dos detalles que no son obvios: el día del calendario se calcula en hora
 **local** (con `toISOString()` un evento de las 22:00 caería en el día siguiente)
@@ -690,7 +704,7 @@ mantiene la que ya tiene cacheada.
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
 3. `PATCH/DELETE /guilds/:guildId/events/:eventId`
 4. `GET /guilds/:guildId/events/:eventId/roster` (convocatoria del roster: confirmados, esperados y quiénes no respondieron; lo ve el staff de eventos)
-5. `GET /guilds/:guildId/events/:eventId/attendance` (asistencia real de esa noche cruzada contra el log de Warcraft Logs: quién vino, quién no, bench que jugó, dijo-que-no-y-jugó y quiénes jugaron sin anotarse; `attendance: null` cuando esa noche no tiene log)
+5. `GET /guilds/:guildId/events/:eventId/attendance` (asistencia real de esa noche cruzada contra el log de Warcraft Logs: quién vino, quién no, bench que jugó, dijo-que-no-y-jugó, quiénes jugaron sin anotarse y qué pasó con los del roster que no respondieron; `attendance: null` cuando esa noche no tiene log)
 6. `PUT/DELETE /guilds/:guildId/events/:eventId/signups/me` (propia inscripción)
 7. `DELETE /guilds/:guildId/events/:eventId/signups/me/reset` (borra inscripción + personaje recordado)
 8. `GET/POST /guilds/:guildId/events/specs` (catálogo; `?game=` filtra por juego)
