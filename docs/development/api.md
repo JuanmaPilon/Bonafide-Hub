@@ -708,16 +708,15 @@ par se cierra con un field de ancho cero (`pushSpacer`): sin ese corte el field
 siguiente se mete en la fila de arriba y las columnas del roster se corren una
 posición (pasó cuando se movió la asistencia: `Empieza | Termina | Tank` en la
 misma fila). El orden es: **empieza y termina** (lo primero que se mira para
-confirmar la hora), después el **cierre** con el **requisito para anotarse** —el
-contador `👥 Roster 21/25`, que cuenta a los que **respondieron** (cualquier
-estado, bench incluido, y también "no asisto": haber contestado es lo que saca a
-alguien de "faltan anotarse") sobre el roster esperado, junto al `Requiere
-<@rol>` y la nota de bench—, después la **asistencia** a lo ancho con los números
-en el título (`📊 Asistencia 20 (+3)`, confirmados y posibles) encabezando la
-lista de gente, y al final la gente: **columnas por rol de a dos** (tank, healer,
-melee, range) y los **estados** (bench → tarde → no asisten), con el roster
-arrancando siempre en una fila nueva. La asistencia no es inline justamente para
-cortar la fila de tres. Los conteos salen de
+confirmar la hora), después el **cierre** con el **requisito para anotarse**
+(`🔑 Requisito`: `Requiere <@rol>` y la nota de bench), después los **tres
+conteos juntos en una fila** — `👥 Roster 21/25` (los que **respondieron**,
+cualquier estado, bench incluido, y también "no asisto": haber contestado es lo
+que saca a alguien de "faltan anotarse", sobre el roster esperado), `📊
+Asistencia 20 (+3)` (confirmados y posibles) y `📋 Por estado` (el detalle
+`✅ · 🪑 · ⏰ · ❌`)— y al final la gente: **columnas por rol de a dos** (tank,
+healer, melee, range) y los **estados** (bench → tarde → no asisten), con el
+roster arrancando siempre en una fila nueva. Los conteos salen de
 `rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
 ([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que

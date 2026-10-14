@@ -683,9 +683,9 @@ export function buildEventAnnouncementEmbeds(input: {
   // ese corte, el field siguiente se mete en la fila de arriba (las columnas del
   // roster se corrían una posición según cuántos datos hubiera).
   // Orden: primero **empieza y termina** (lo que se mira para confirmar la hora),
-  // después el **cierre** con el **requisito para anotarse** (el contador del
-  // roster, que cuenta a TODOS los que respondieron, estén en bench o no), y
-  // después la **asistencia**, que encabeza la lista de gente.
+  // después el **cierre** con el **requisito para anotarse**, después los tres
+  // conteos juntos (roster, asistencia y el detalle por estado) y al final la
+  // gente.
   fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
   fields.push({
     inline: true,
@@ -707,29 +707,35 @@ export function buildEventAnnouncementEmbeds(input: {
   if (requiredRoleId) {
     fields.push({
       inline: true,
-      name:
-        expected > 0
-          ? `👥 Roster ${input.rosterSignedCount ?? 0}/${expected}`
-          : "👥 Roster",
+      name: "🔑 Requisito",
       value: `Requiere <@&${requiredRoleId}>\n*Sin el rol, la inscripción queda como Bench.*`,
     });
   }
   pushSpacer(fields);
+  // Los tres conteos en UNA fila (Discord empaqueta los inline de a tres): el
+  // roster esperado —cuenta a los que RESPONDIERON, cualquier estado, bench
+  // incluido, y también "no asisto": haber contestado es lo que saca a alguien de
+  // "faltan anotarse"—, la asistencia (confirmados, y entre paréntesis los
+  // posibles) y el detalle por estado.
+  if (requiredRoleId) {
+    fields.push({
+      inline: true,
+      name: "👥 Roster",
+      value: expected > 0 ? `**${input.rosterSignedCount ?? 0}/${expected}**` : "—",
+    });
+  }
+  fields.push({
+    inline: true,
+    name: "📊 Asistencia",
+    value:
+      input.signups.length > 0
+        ? `**${confirmed.length}**${possibles > 0 ? ` (+${possibles})` : ""}`
+        : "Sin anotados todavía",
+  });
+  fields.push({ inline: true, name: "📋 Por estado", value: assistanceValue });
+  pushSpacer(fields);
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda
   // para la fecha concreta del evento.
-
-  // Asistencia: a lo ancho (no inline) y ANTES de la lista, porque es el
-  // encabezado de la gente que viene abajo (los confirmados por rol y los
-  // estados). El título lleva los números: confirmados y, entre paréntesis, los
-  // posibles. Al no ser inline corta la fila de tres de los datos de arriba, así
-  // que el roster arranca siempre en una fila nueva.
-  fields.push({
-    name:
-      input.signups.length > 0
-        ? `📊 Asistencia ${confirmed.length}${possibles > 0 ? ` (+${possibles})` : ""}`
-        : "📊 Asistencia",
-    value: assistanceValue,
-  });
 
   const resolveSpec = (
     signup: AnnouncementSignup,
@@ -824,10 +830,10 @@ export function buildEventAnnouncementEmbeds(input: {
   // evita que se lea como una lista pegada sin divisiones.
   const rosterInline = columns.length > 1;
   columns.forEach((column, index) => {
-    // Un renglón de aire antes de cada PAR (y antes del primero, para despegarlo
-    // de la asistencia): Discord empaqueta solo los inline de a tres, así que el
-    // corte hay que ponerlo a mano.
-    if (rosterInline && index % 2 === 0) {
+    // Un renglón de aire antes de cada PAR (el primero ya viene separado por el
+    // espacio de los conteos): Discord empaqueta solo los inline de a tres, así
+    // que el corte hay que ponerlo a mano.
+    if (rosterInline && index > 0 && index % 2 === 0) {
       pushSpacer(fields);
     }
     pushField(
