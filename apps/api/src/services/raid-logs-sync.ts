@@ -2,7 +2,7 @@ import { prisma } from "../db/prisma.js";
 import { listRaidLogs, refreshRaidLog } from "./raid-logs-store.js";
 
 // Los reports en curso se refrescan solos: sin esto, el estado ("en vivo" /
-// terminado) y el "Actualizar mensaje" solo avanzan si alguien aprieta Escanear.
+// terminado) y el "Actualizar log" solo avanzan si alguien aprieta Escanear.
 // No publica nada: el mensaje de la noche se manda a mano desde la web.
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;
 const SYNC_STALE_MS = 5 * 60 * 1000;
@@ -19,7 +19,7 @@ export async function syncActiveRaidLogs(): Promise<number> {
     for (const log of logs) {
       const stale =
         !log.lastSyncedAt || now - log.lastSyncedAt.getTime() >= SYNC_STALE_MS;
-      // Los publicados se actualizan a mano ("Actualizar mensaje"); los que
+      // Los publicados se actualizan a mano ("Actualizar log"); los que
       // fallaron quedan para el escaneo manual.
       if (log.status === "failed" || !stale) {
         continue;

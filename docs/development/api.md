@@ -228,14 +228,14 @@ de más fights), que es el que mejor la nombra. Un report que todavía no se
 refrescó (sin fecha) queda solo hasta que el refresh le traiga la fecha. El estado (`status: new | live | synced | failed`)
 sale del mismo cálculo de estabilidad; la web solo muestra `live` ("En vivo",
 la subida sigue en curso), porque publicar o no es cosa de quien lo maneja: la
-acción aparece en la ficha ("Publicar en Discord" / "Actualizar mensaje") según
+acción aparece en la ficha ("Publicar en Discord" / "Actualizar log") según
 el estado, pero el estado en sí no se muestra. Las acciones de la noche
 —**Ver análisis**, publicar/actualizar y **Eliminar**— están arriba, al lado del
 título, y arriba de ellas van los avisos: "● En vivo" y **"Mensaje
 desactualizado"** cuando la entrada está publicada pero el mensaje quedó viejo
 (`needsUpdate`, que calcula el API comparando el texto guardado con el que
 generaría ahora).
-**Actualizar mensaje** vuelve a leer el report en Warcraft Logs y edita el
+**Actualizar log** vuelve a leer el report en Warcraft Logs y edita el
 mensaje ya publicado **solo si el texto cambió** (si no, avisa "sin cambios"); no
 toca el análisis, que se recalcula al abrirlo. El refresco automático cada 5 min
 solo baja los datos del report: el mensaje de Discord se actualiza a mano.
@@ -343,7 +343,7 @@ El mensaje que se publica a mano ("Publicar en Discord") lleva los links de los
 reports de Warcraft Logs y, además, un link al **análisis en el Hub**
 (`/?log=<logId>#/raids/logs`): la web lee `log`, selecciona esa noche y abre el
 análisis solo. No hay publicación automática: el mensaje de la noche se manda
-desde la ficha y se actualiza con "Actualizar mensaje" (ver abajo).
+desde la ficha y se actualiza con "Actualizar log" (ver abajo).
 
 La **configuración del módulo** (canal de publicación, guild/realm/región de
 Warcraft Logs, alta por URL y logs ocultos) vive en un modal que abre el botón de

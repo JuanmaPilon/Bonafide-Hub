@@ -1044,12 +1044,12 @@ export function RaidLogsBoard({
                               }
                               disabled={busyKey === selected.key}
                               onClick={() => runAction(selected, onUpdate)}
-                              title="Vuelve a leer el report en Warcraft Logs y edita el mensaje publicado si cambió"
+                              title="Vuelve a leer el log en Warcraft Logs y edita el mensaje publicado en Discord si cambió"
                               type="button"
                             >
                               {busyKey === selected.key
                                 ? "Actualizando…"
-                                : "Actualizar mensaje"}
+                                : "Actualizar log"}
                             </button>
                           )}
                       {onHide ? (
