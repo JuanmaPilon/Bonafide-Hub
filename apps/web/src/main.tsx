@@ -1943,6 +1943,7 @@ function RosterSheet({
   onSave,
   profile,
   saving,
+  seed,
   specs,
 }: {
   alts: RosterAlt[];
@@ -1954,6 +1955,10 @@ function RosterSheet({
   onSave: (input: RosterProfileInput) => void;
   profile: RosterProfile | null;
   saving: boolean;
+  // Clase y spec con las que arranca el panel cuando se abre para corregir una
+  // ficha desde el informe de un evento: se precarga lo que esa persona se anotó.
+  // Sin seed se arranca de la ficha guardada, que es el camino del roster.
+  seed?: { className: string; specName: string } | null;
   specs: RaidSpec[];
 }) {
   const [game] = useState("wow");
@@ -1969,11 +1974,29 @@ function RosterSheet({
   );
   // Una ficha vacía (alguien recién sumado al roster, sin clase todavía) no
   // trae clase: se arranca por el catálogo, como una ficha nueva.
-  const [className, setClassName] = useState(
-    profile?.game === "wow" && profile.className
-      ? profile.className
-      : (classes[0] ?? ""),
+  const profileClass = profile?.game === "wow" ? profile.className : "";
+  const seedClass =
+    seed && classes.includes(seed.className) ? seed.className : "";
+  const initialClass = seedClass || profileClass || classes[0] || "";
+  const initialSpecs = useMemo(
+    () =>
+      specs.filter(
+        (spec) => spec.game === game && spec.className === initialClass,
+      ),
+    [game, initialClass, specs],
   );
+  // El seed manda solo si su spec existe en el catálogo de esa clase: si el
+  // catálogo cambió, precargar un valor que no está en la lista dejaría el
+  // selector mostrando una spec y guardando otra.
+  const seedSpec = seedClass
+    ? initialSpecs.find((spec) => spec.specName === seed?.specName)?.specName
+    : undefined;
+  const profileSpec =
+    profile?.game === "wow" &&
+    initialSpecs.some((spec) => spec.specName === profile.specName)
+      ? profile.specName
+      : "";
+  const [className, setClassName] = useState(initialClass);
   const classSpecs = useMemo(
     () =>
       specs.filter(
@@ -1982,9 +2005,7 @@ function RosterSheet({
     [className, game, specs],
   );
   const [specName, setSpecName] = useState(
-    profile?.game === "wow" && profile.specName
-      ? profile.specName
-      : (classSpecs[0]?.specName ?? ""),
+    seedSpec || profileSpec || initialSpecs[0]?.specName || "",
   );
   const [offSpecs, setOffSpecs] = useState<string[]>(
     profile?.game === "wow" ? profile.offSpecs : [],
@@ -2084,6 +2105,14 @@ function RosterSheet({
         role="dialog"
       >
         <h4>{memberName}</h4>
+        {/* Sin este aviso, lo que se ve precargado se lee como si ya fuera la
+            ficha guardada. */}
+        {seedClass ? (
+          <p className="roster-sheet-seed">
+            Precargado con lo que se anotó en el evento:{" "}
+            {seedSpec || seed?.specName} {seedClass}.
+          </p>
+        ) : null}
         <label className="roster-sheet-field">
           <span>Juego</span>
           <select className="select" disabled value={game}>
@@ -6719,10 +6748,13 @@ type ReportRow = ReportRowInput & { declared: boolean };
 // diferencias: así el staff no tiene que abrir el roster aparte para saber si
 // alguien se anotó con un personaje o un rol que no es el de su ficha.
 function EventReportModal({
+  canEditRoster,
   classEmojis,
   event,
   gameLabel,
   guildId,
+  meId,
+  notify,
   onClose,
   onDelete,
   onDownload,
@@ -6730,10 +6762,13 @@ function EventReportModal({
   roles,
   specs,
 }: {
+  canEditRoster: boolean;
   classEmojis: Record<string, MappingEmoji>;
   event: HubEvent | null;
   gameLabel: string;
   guildId: string | null;
+  meId?: string;
+  notify: (message: string, kind: "error" | "success") => void;
   onClose: () => void;
   onDelete: (event: HubEvent) => void;
   onDownload: (event: HubEvent) => void;
@@ -6744,6 +6779,10 @@ function EventReportModal({
   const [roster, setRoster] = useState<GuildRoster | null>(null);
   const [expected, setExpected] = useState<EventRoster | null>(null);
   const [attendance, setAttendance] = useState<RaidLogAttendance | null>(null);
+  // Fila cuya ficha se está corrigiendo: abre el panel del roster acá mismo, sin
+  // mandar al staff a buscarla en Raids → Roster.
+  const [sheetFor, setSheetFor] = useState<ReportRow | null>(null);
+  const [savingSheet, setSavingSheet] = useState(false);
   // Arranca en true: el informe se abre con el cruce ya en camino. Si no, el
   // primer pintado mostraba cada fila como "sin ficha en el roster" y después
   // todo cambiaba de golpe.
@@ -6791,13 +6830,20 @@ function EventReportModal({
       return;
     }
     function onKeyDown(keyEvent: KeyboardEvent): void {
-      if (keyEvent.key === "Escape") {
-        onClose();
+      if (keyEvent.key !== "Escape") {
+        return;
       }
+      // Con la ficha abierta, Escape cierra la ficha: el informe (y lo que se
+      // estaba leyendo) queda donde estaba.
+      if (sheetFor) {
+        setSheetFor(null);
+        return;
+      }
+      onClose();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [eventId, onClose]);
+  }, [eventId, onClose, sheetFor]);
 
   // El roster ya trae el catálogo (specs, roles y emojis de clase): se usa ese y
   // los del App quedan de respaldo mientras carga. Sin esto, entrar directo a
@@ -6895,7 +6941,12 @@ function EventReportModal({
     }
 
     const flags: string[] = [];
-    if (!profile) {
+    // La ficha puede faltar por completo o existir vacía (quien se sumó al roster
+    // y nunca la completó): en los dos casos falta el dato contra el que se cruza.
+    // Una ficha de OTRO juego no entra acá: no es que falte, es de otro juego.
+    const fichaMissing =
+      !profile || (sameGame && !(profile.className && profile.specName));
+    if (fichaMissing) {
       flags.push(
         memberByUser.has(signup.userId)
           ? "ficha sin clase ni spec"
@@ -6986,6 +7037,84 @@ function EventReportModal({
         .length,
     };
   })();
+
+  // Guarda la ficha corregida desde el informe. Se actualiza el roster local con
+  // lo que devuelve el API, así el cruce de la fila se rehace solo (los avisos
+  // desaparecen sin cerrar y volver a abrir el informe).
+  async function saveSheet(input: RosterProfileInput): Promise<void> {
+    const target = sheetFor;
+    if (!target || !guildId) {
+      return;
+    }
+    setSavingSheet(true);
+    try {
+      const saved =
+        target.userId === meId
+          ? await saveMyRosterProfile(guildId, input)
+          : await saveMemberRosterProfile(guildId, target.userId, input);
+      const profile = saved.profile;
+      const alts = saved.alts ?? [];
+      setRoster((current) => {
+        if (!current) {
+          return current;
+        }
+        const known = current.members.some(
+          (member) => member.userId === target.userId,
+        );
+        return {
+          ...current,
+          members: known
+            ? current.members.map((member) =>
+                member.userId === target.userId
+                  ? { ...member, alts, profile }
+                  : member,
+              )
+            : // No tenía ficha ni estado en el roster (por eso el aviso decía
+              // "sin ficha en el roster"): se agrega para que la fila ya no la
+              // pida y su clase cuente en el cruce.
+              [
+                ...current.members,
+                {
+                  alts,
+                  displayName: target.username,
+                  isRaidOfficer: false,
+                  profile,
+                  rankKey: null,
+                  userId: target.userId,
+                },
+              ],
+        };
+      });
+      setSheetFor(null);
+      notify(
+        saved.roleSyncError
+          ? `Ficha guardada, pero Discord: ${saved.roleSyncError}`
+          : "Ficha guardada.",
+        saved.roleSyncError ? "error" : "success",
+      );
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la ficha.",
+        "error",
+      );
+    } finally {
+      setSavingSheet(false);
+    }
+  }
+
+  // Clase y spec con las que se abre la ficha: lo que la persona se anotó en el
+  // evento (el personaje lo declara ella, la ficha es de antes). Sin clase en la
+  // inscripción no hay nada que precargar y el panel arranca de la ficha.
+  function sheetSeed(row: ReportRow): {
+    className: string;
+    specName: string;
+  } | null {
+    const className = row.wowClass?.trim() ?? "";
+    const specName = row.spec?.trim() ?? "";
+    return className && specName ? { className, specName } : null;
+  }
 
   function renderClassChip(
     className: string,
@@ -7115,6 +7244,20 @@ function EventReportModal({
               </span>
             ))
           )}
+          {/* Solo con algo que revisar y con el roster cargado: el panel
+              necesita la ficha real para conservar los tags y los alters al
+              guardar. Si el roster no cargó, guardar sería pisar datos a ciegas. */}
+          {!loading && roster && canEditRoster && check.flags.length > 0 ? (
+            <button
+              className="event-report-fix"
+              onClick={() => setSheetFor(row)}
+              title="Abrir la ficha del roster con lo que se anotó"
+              type="button"
+            >
+              <PencilSimple aria-hidden="true" weight="fill" />
+              Corregir ficha
+            </button>
+          ) : null}
         </span>
       </li>
     );
@@ -7322,6 +7465,29 @@ function EventReportModal({
             Eliminar evento
           </button>
         </div>
+
+        {/* Ficha del roster, abierta desde el aviso de una fila: se guarda sin
+            salir del informe. No se puede eliminar la ficha desde acá (esa
+            acción vive en el roster, con su confirmación). El wrapper corta el
+            click: el overlay del informe cierra todo con un click afuera, así
+            que sin esto, cerrar la ficha cerraba también el informe. */}
+        {sheetFor ? (
+          <div onClick={(clickEvent) => clickEvent.stopPropagation()}>
+            <RosterSheet
+              alts={memberByUser.get(sheetFor.userId)?.alts ?? []}
+              canDelete={false}
+              games={roster?.games ?? []}
+              memberName={sheetFor.username}
+              onClose={() => setSheetFor(null)}
+              onDelete={() => setSheetFor(null)}
+              onSave={(input) => void saveSheet(input)}
+              profile={memberByUser.get(sheetFor.userId)?.profile ?? null}
+              saving={savingSheet}
+              seed={sheetSeed(sheetFor)}
+              specs={catalogSpecs}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -14801,6 +14967,7 @@ function App() {
 
       {eventHistoryOpen ? (
         <EventReportModal
+          canEditRoster={canAccess("raids")}
           classEmojis={classEmojis}
           event={eventHistoryOpen}
           gameLabel={
@@ -14809,6 +14976,8 @@ function App() {
             (eventHistoryOpen.game ?? "").toUpperCase()
           }
           guildId={selectedGuildId}
+          meId={me?.id}
+          notify={pushToast}
           onClose={() => setEventHistoryOpen(null)}
           onDelete={(target) => {
             setEventHistoryOpen(null);
