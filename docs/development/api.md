@@ -707,9 +707,13 @@ columnas por fila (Discord empaqueta los fields inline de a tres, así que cada
 par se cierra con un field de ancho cero). Primero el **roster** con el cierre al
 lado — `👥 Roster 20/24`, donde el número son los que **respondieron** (cualquier
 estado, bench incluido, y también "no asisto": haber contestado es lo que saca a
-alguien de "faltan anotarse") sobre el roster esperado — después **empieza** y
-**duración**, y abajo **asistencia** a lo ancho con los números en el título
-(`📊 Asistencia 20 (+3)`, confirmados y posibles). Los conteos salen de
+alguien de "faltan anotarse") sobre el roster esperado —, después **empieza** y
+**duración**, y **debajo va la gente**: las columnas por rol (2 por fila) y los
+estados (bench → tarde → no asisten). La **asistencia** cierra el bloque, después
+de los estados, porque cuenta a todos los que aparecen arriba
+(`📊 Asistencia 20 (+3)`, confirmados y posibles, en el título). Antes iba entre
+los datos del evento y la lista: el staff leía los totales antes de ver de
+quiénes eran. Los conteos salen de
 `rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
 ([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que

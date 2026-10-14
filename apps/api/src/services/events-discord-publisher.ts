@@ -713,13 +713,6 @@ export function buildEventAnnouncementEmbeds(input: {
   });
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda
   // para la fecha concreta del evento.
-  fields.push({
-    name:
-      input.signups.length > 0
-        ? `📊 Asistencia ${confirmed.length}${possibles > 0 ? ` (+${possibles})` : ""}`
-        : "📊 Asistencia",
-    value: assistanceValue,
-  });
 
   const resolveSpec = (
     signup: AnnouncementSignup,
@@ -847,6 +840,20 @@ export function buildEventAnnouncementEmbeds(input: {
     firstStatus = false;
     pushField(fields, label, linesFor(members), false, true);
   }
+
+  // Asistencia: el resumen va DESPUÉS de la gente (roster por roles y estados),
+  // porque cuenta a todos los que aparecen arriba. Antes iba entre los datos
+  // del evento y la lista, y el staff leía los totales antes de ver de quiénes
+  // eran. El número del título es el de confirmados, con los posibles entre
+  // paréntesis.
+  pushSpacer(fields);
+  fields.push({
+    name:
+      input.signups.length > 0
+        ? `📊 Asistencia ${confirmed.length}${possibles > 0 ? ` (+${possibles})` : ""}`
+        : "📊 Asistencia",
+    value: assistanceValue,
+  });
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción
   // que escribió el staff. El resto (duración, cierre, requisito, asistencia
