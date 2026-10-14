@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { env } from "./config/env.js";
+import { prisma } from "./db/prisma.js";
 import {
   cancelReminder,
   createReminder,
@@ -66,6 +67,7 @@ import {
   analyzeRaidLogNight,
   invalidateRaidLogAnalysis,
 } from "./services/raid-logs-analysis.js";
+import type { RaidLogAttendance } from "./services/raid-logs-attendance.js";
 import { saveRaidLogAlias } from "./services/raid-log-aliases-store.js";
 import {
   listGuildGameActivity,
@@ -2614,6 +2616,54 @@ async function editCommunicationInDiscord(
   }
 
   return { messageIds };
+}
+
+// ── Asistencia real de un evento (cruce con el log de la noche) ──────
+// Una noche de raid puede arrancar antes o después de la hora del evento (se
+// arranca temprano o tarde), así que se busca en una ventana, la misma que usa
+// el cruce del lado del log.
+const EVENT_ATTENDANCE_WINDOW_MS = 14 * 60 * 60 * 1000;
+
+// Devuelve el cruce del log de esa noche, o null si esa noche no tiene log
+// guardado. Se prueban los logs más cercanos (nunca más de dos) y se acepta solo
+// el cruce que reconoce ESTE evento: así la asistencia no se cuelga de otra
+// noche cuando la persona movió la fecha del evento.
+async function attendanceForEvent(
+  guildId: string,
+  eventId: string,
+  startsAt: Date,
+): Promise<RaidLogAttendance | null> {
+  const nightMs = startsAt.getTime();
+  const logs = await prisma.raidLog.findMany({
+    select: { firstFightAt: true, id: true },
+    where: {
+      firstFightAt: {
+        gte: new Date(nightMs - EVENT_ATTENDANCE_WINDOW_MS),
+        lte: new Date(nightMs + EVENT_ATTENDANCE_WINDOW_MS),
+      },
+      guildId,
+      hidden: false,
+    },
+  });
+  const candidates = logs
+    .filter((log) => Boolean(log.firstFightAt))
+    .sort(
+      (left, right) =>
+        Math.abs((left.firstFightAt?.getTime() ?? 0) - nightMs) -
+        Math.abs((right.firstFightAt?.getTime() ?? 0) - nightMs),
+    )
+    .slice(0, 2);
+
+  for (const candidate of candidates) {
+    const analysis = await analyzeRaidLogNight(guildId, candidate.id).catch(
+      () => null,
+    );
+    const attendance = analysis?.attendance;
+    if (attendance?.event?.id === eventId) {
+      return attendance;
+    }
+  }
+  return null;
 }
 
 export function buildApp() {
@@ -5476,6 +5526,50 @@ export function buildApp() {
       signedCount: signups.length,
     };
   });
+
+  // Asistencia REAL de un evento: cruza los anotados contra quién aparece en el
+  // log de Warcraft Logs de esa noche (el mismo cruce que usa el análisis de
+  // Raids → Logs, reutilizado acá para el informe del historial). Devuelve
+  // `attendance: null` cuando esa noche no tiene log guardado, que es distinto de
+  // "no vino nadie".
+  app.get(
+    "/guilds/:guildId/events/:eventId/attendance",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+
+      const attendance = await attendanceForEvent(
+        params.guildId,
+        params.eventId,
+        new Date(event.startsAt),
+      ).catch(() => null);
+
+      return {
+        ok: true,
+        attendance,
+        eventId: params.eventId,
+        guildId: params.guildId,
+      };
+    },
+  );
 
   // ── Roster de raids ────────────────────────────────────────────────
   // Lista actual: cada rango (Raid/Bench/Raid Officer) se llena con los miembros

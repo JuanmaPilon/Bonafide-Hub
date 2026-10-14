@@ -36,6 +36,19 @@ export type RaidLogAttendance = {
   totalPulls: number;
   unmatchedSignups: Array<{ name: string; status: string; userId: string }>;
   unsignedPresent: Array<{ name: string; pulls: number; status?: string }>;
+  // Presencia de CADA inscripción (de cualquier estado, no solo los que
+  // comprometieron): es lo que necesita el informe de un evento para decir, uno
+  // por uno, quién vino y quién no. `matchable: false` = no hay personaje con el
+  // que buscarlo en el log, así que la ausencia no se puede afirmar.
+  byUser: Array<{
+    likely?: { logName: string; pulls: number; similarity: number };
+    logName?: string;
+    matchable: boolean;
+    present: boolean;
+    pulls: number;
+    status: string;
+    userId: string;
+  }>;
 };
 
 const EVENT_WINDOW_MS = 14 * 60 * 60 * 1000;
@@ -64,6 +77,7 @@ export async function crossRaidAttendance(input: {
     (a, b) => b.pulls - a.pulls || a.name.localeCompare(b.name),
   );
   const result: RaidLogAttendance = {
+    byUser: [],
     likelyPresent: [],
     partial: Boolean(input.partialParticipants),
     players,
@@ -143,14 +157,22 @@ export async function crossRaidAttendance(input: {
 
   // 1) Exactos: mismo nombre normalizado (o un PJ ya confirmado a mano).
   const exact = new Set<string>();
+  // Con qué nombre del log quedó identificado cada uno (para mostrarlo tal cual
+  // aparece en Warcraft Logs).
+  const matchedByUser = new Map<string, { name: string; pulls: number }>();
   for (const entry of entries) {
     const matchedKey = entry.keys.find((key) => presentByKey.has(key));
     if (!matchedKey) {
       continue;
     }
+    const player = presentByKey.get(matchedKey);
     exact.add(entry.signup.userId);
     attributed.add(matchedKey);
     statusByKey.set(matchedKey, entry.signup.status);
+    matchedByUser.set(entry.signup.userId, {
+      name: player?.name ?? entry.signup.username,
+      pulls: player?.pulls ?? 0,
+    });
   }
 
   // 2) Parecidos: solo entre los que comprometieron asistir (los que se
@@ -237,6 +259,23 @@ export async function crossRaidAttendance(input: {
   }
   result.unsignedPresent.sort((a, b) => b.pulls - a.pulls);
   result.likelyPresent.sort((a, b) => b.similarity - a.similarity);
+
+  // Presencia de cada inscripción, sin importar el estado: el informe del evento
+  // necesita el dato uno por uno (quién se anotó y no vino, quién estaba en
+  // bench y jugó igual, quién dijo que no y apareció).
+  result.byUser = entries.map((entry) => {
+    const matched = matchedByUser.get(entry.signup.userId);
+    const probable = likely.get(entry.signup.userId);
+    return {
+      ...(probable ? { likely: probable } : {}),
+      ...(matched ? { logName: matched.name } : {}),
+      matchable: entry.characters.length > 0,
+      present: exact.has(entry.signup.userId),
+      pulls: matched?.pulls ?? 0,
+      status: entry.signup.status,
+      userId: entry.signup.userId,
+    };
+  });
 
   return result;
 }
