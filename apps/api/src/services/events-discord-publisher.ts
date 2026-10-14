@@ -678,12 +678,32 @@ export function buildEventAnnouncementEmbeds(input: {
         ].join(" · ");
 
   const fields: Array<{ inline?: boolean; name: string; value: string }> = [];
-  // Datos del evento de a DOS columnas por fila, igual que el roster por roles
-  // (Discord empaqueta los fields inline de a tres, así que el par se cierra con
-  // un espacio). El roster va PRIMERO: es lo que el staff mira para saber si
-  // falta gente, y su número cuenta a TODOS los que respondieron, estén en bench
-  // o no (no solo a los que van).
+  // Datos del evento de a DOS columnas por fila. Discord empaqueta los fields
+  // inline de a TRES, así que cada par se cierra con un field de ancho cero: sin
+  // ese corte, el field siguiente se mete en la fila de arriba (las columnas del
+  // roster se corrían una posición según cuántos datos hubiera).
+  // Orden: primero **empieza y termina** (lo que se mira para confirmar la hora),
+  // después el **cierre** con el **requisito para anotarse** (el contador del
+  // roster, que cuenta a TODOS los que respondieron, estén en bench o no), y
+  // después la **asistencia**, que encabeza la lista de gente.
+  fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
+  fields.push({
+    inline: true,
+    name: "🏁 Termina",
+    value:
+      endTimestamp && durationHours
+        ? `<t:${endTimestamp}:t> (${durationHours})`
+        : "—",
+  });
+  pushSpacer(fields);
   const requiredRoleId = input.requiredRoleId?.trim();
+  fields.push({
+    inline: true,
+    name: "⏳ Cierre de inscripciones",
+    value: input.signupDeadline
+      ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
+      : "—",
+  });
   if (requiredRoleId) {
     fields.push({
       inline: true,
@@ -694,25 +714,22 @@ export function buildEventAnnouncementEmbeds(input: {
       value: `Requiere <@&${requiredRoleId}>\n*Sin el rol, la inscripción queda como Bench.*`,
     });
   }
-  fields.push({
-    inline: true,
-    name: "⏳ Cierre de inscripciones",
-    value: input.signupDeadline
-      ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
-      : "—",
-  });
   pushSpacer(fields);
-  fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
-  fields.push({
-    inline: true,
-    name: "🏁 Termina",
-    value:
-      endTimestamp && durationHours
-        ? `<t:${endTimestamp}:t> (${durationHours})`
-        : "—",
-  });
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda
   // para la fecha concreta del evento.
+
+  // Asistencia: a lo ancho (no inline) y ANTES de la lista, porque es el
+  // encabezado de la gente que viene abajo (los confirmados por rol y los
+  // estados). El título lleva los números: confirmados y, entre paréntesis, los
+  // posibles. Al no ser inline corta la fila de tres de los datos de arriba, así
+  // que el roster arranca siempre en una fila nueva.
+  fields.push({
+    name:
+      input.signups.length > 0
+        ? `📊 Asistencia ${confirmed.length}${possibles > 0 ? ` (+${possibles})` : ""}`
+        : "📊 Asistencia",
+    value: assistanceValue,
+  });
 
   const resolveSpec = (
     signup: AnnouncementSignup,
@@ -807,7 +824,10 @@ export function buildEventAnnouncementEmbeds(input: {
   // evita que se lea como una lista pegada sin divisiones.
   const rosterInline = columns.length > 1;
   columns.forEach((column, index) => {
-    if (rosterInline && index > 0 && index % 2 === 0) {
+    // Un renglón de aire antes de cada PAR (y antes del primero, para despegarlo
+    // de la asistencia): Discord empaqueta solo los inline de a tres, así que el
+    // corte hay que ponerlo a mano.
+    if (rosterInline && index % 2 === 0) {
       pushSpacer(fields);
     }
     pushField(
@@ -840,20 +860,6 @@ export function buildEventAnnouncementEmbeds(input: {
     firstStatus = false;
     pushField(fields, label, linesFor(members), false, true);
   }
-
-  // Asistencia: el resumen va DESPUÉS de la gente (roster por roles y estados),
-  // porque cuenta a todos los que aparecen arriba. Antes iba entre los datos
-  // del evento y la lista, y el staff leía los totales antes de ver de quiénes
-  // eran. El número del título es el de confirmados, con los posibles entre
-  // paréntesis.
-  pushSpacer(fields);
-  fields.push({
-    name:
-      input.signups.length > 0
-        ? `📊 Asistencia ${confirmed.length}${possibles > 0 ? ` (+${possibles})` : ""}`
-        : "📊 Asistencia",
-    value: assistanceValue,
-  });
 
   // Descripción: banner de estado + cuándo, link a la web y la descripción
   // que escribió el staff. El resto (duración, cierre, requisito, asistencia

@@ -702,18 +702,22 @@ la columna del roster, no toca la inscripción guardada y no altera el asistente
 del bot (que sigue mirando `wowClass`). El roster se consulta únicamente si hay
 alguna inscripción sin clase.
 
-**Aviso en Discord (orden y números):** los datos del evento van de a dos
-columnas por fila (Discord empaqueta los fields inline de a tres, así que cada
-par se cierra con un field de ancho cero). Primero el **roster** con el cierre al
-lado — `👥 Roster 20/24`, donde el número son los que **respondieron** (cualquier
+**Aviso en Discord (orden y números):** los datos del evento van de a DOS
+columnas por fila. Discord empaqueta los fields inline de a TRES, así que cada
+par se cierra con un field de ancho cero (`pushSpacer`): sin ese corte el field
+siguiente se mete en la fila de arriba y las columnas del roster se corren una
+posición (pasó cuando se movió la asistencia: `Empieza | Termina | Tank` en la
+misma fila). El orden es: **empieza y termina** (lo primero que se mira para
+confirmar la hora), después el **cierre** con el **requisito para anotarse** —el
+contador `👥 Roster 21/25`, que cuenta a los que **respondieron** (cualquier
 estado, bench incluido, y también "no asisto": haber contestado es lo que saca a
-alguien de "faltan anotarse") sobre el roster esperado —, después **empieza** y
-**duración**, y **debajo va la gente**: las columnas por rol (2 por fila) y los
-estados (bench → tarde → no asisten). La **asistencia** cierra el bloque, después
-de los estados, porque cuenta a todos los que aparecen arriba
-(`📊 Asistencia 20 (+3)`, confirmados y posibles, en el título). Antes iba entre
-los datos del evento y la lista: el staff leía los totales antes de ver de
-quiénes eran. Los conteos salen de
+alguien de "faltan anotarse") sobre el roster esperado, junto al `Requiere
+<@rol>` y la nota de bench—, después la **asistencia** a lo ancho con los números
+en el título (`📊 Asistencia 20 (+3)`, confirmados y posibles) encabezando la
+lista de gente, y al final la gente: **columnas por rol de a dos** (tank, healer,
+melee, range) y los **estados** (bench → tarde → no asisten), con el roster
+arrancando siempre en una fila nueva. La asistencia no es inline justamente para
+cortar la fila de tres. Los conteos salen de
 `rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
 ([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que
