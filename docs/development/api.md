@@ -572,6 +572,24 @@ ventana ancha
    (ficha, rol y si aparecieron en el log igual), para que el cruce se pueda
    hacer de un vistazo sin abrir el roster aparte.
 
+**La ficha se corrige desde el informe.** La fila que tiene algo que revisar trae
+un botón "Corregir ficha" que abre el panel del roster (`RosterSheet`, el mismo de
+Raids → Roster) precargado con **lo que la persona se anotó** en el evento, con un
+aviso de que viene precargado: sin eso, lo que se ve parece ya guardado. Se guarda
+sin salir del informe y el cruce de esa fila se rehace con lo que devuelve el API,
+así el aviso desaparece en el momento. No se puede **eliminar** la ficha desde acá:
+esa acción vive en el roster, con su confirmación.
+
+Tres cosas del botón que no son obvias:
+
+- La ficha **vacía** (la que crea "Sumar jugador" al sumar a alguien al roster)
+  también cuenta como "ficha sin clase ni spec": es el caso más común de ficha a
+  completar. Una ficha de OTRO juego no: no es que falte, es de otro juego.
+- Solo aparece si el roster cargó: al guardar, el panel conserva los tags y los
+  alters de la ficha existente, y sin roster esos datos se pisarían a ciegas.
+- Pide el módulo `raids` (`PUT /guilds/:guildId/roster/:userId`), así que el staff
+  de eventos que no lo tenga ve el aviso pero no el botón.
+
 Mientras el roster y el log están en camino, las columnas que dependen de ellos
 muestran **esqueletos** en lugar de contenido provisorio: si no, cada fila
 aparecía un instante como "sin ficha en el roster" y después cambiaba de golpe.
