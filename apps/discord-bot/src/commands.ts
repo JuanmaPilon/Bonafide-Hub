@@ -216,9 +216,7 @@ export const commandDefinitions = [
     .setDescription("Destranca tu sala de voz dinámica"),
   new SlashCommandBuilder()
     .setName("ranking")
-    .setDescription(
-      "Muestra el top 10 del ranking de XP del servidor",
-    ),
+    .setDescription("Muestra el top 20 del ranking de XP del servidor"),
 ].map((command) => command.toJSON());
 
 export const commandHandlers: Record<string, CommandHandler> = {};
