@@ -4768,6 +4768,25 @@ a:hover {
   }
 }
 
+/* Mismo anillo, chico: para textos que avisan que algo está cargando (el informe
+   de un evento, por ejemplo) sin comerse la línea. */
+.spinner-sm {
+  width: 15px;
+  height: 15px;
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2px),
+    #000 calc(100% - 2px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2px),
+    #000 calc(100% - 2px)
+  );
+  filter: none;
+  flex: none;
+}
+
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -9996,6 +10015,13 @@ select.list-order {
   font-size: 0.82rem;
 }
 
+/* Nota que avisa que algo se está cargando: el anillo chico va delante. */
+.event-report-note--busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .event-report-group {
   display: grid;
   gap: 8px;
@@ -10106,6 +10132,34 @@ select.list-order {
   font-size: 0.8rem;
 }
 
+/* Esqueleto de las columnas que dependen del cruce (ficha del roster y log de la
+   noche): mientras se cargan, el informe no adelanta un dato que todavía no
+   tiene. Ocupa el mismo alto que el contenido para que la fila no salte. */
+.event-report-skeleton {
+  display: block;
+  min-width: 42px;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(134, 158, 214, 0.1) 0%,
+    rgba(134, 158, 214, 0.26) 50%,
+    rgba(134, 158, 214, 0.1) 100%
+  );
+  background-size: 200% 100%;
+  animation: event-report-skeleton 1.3s ease-in-out infinite;
+}
+
+@keyframes event-report-skeleton {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
 .event-report-present {
   color: #7ce38b;
 }
@@ -10156,6 +10210,16 @@ select.list-order {
 
 :root[data-theme="light"] .event-report-likely {
   color: #8a6a00;
+}
+
+:root[data-theme="light"] .event-report-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(67, 81, 109, 0.1) 0%,
+    rgba(67, 81, 109, 0.24) 50%,
+    rgba(67, 81, 109, 0.1) 100%
+  );
+  background-size: 200% 100%;
 }
 
 @media (max-width: 760px) {

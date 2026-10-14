@@ -6349,11 +6349,11 @@ function EventHistoryCalendar({
           <button
             className="ghost-button small"
             onClick={() => setMonthKey(monthKeyOf(new Date()))}
-            title="Ir al mes de hoy"
+            title="Ir al mes actual"
             type="button"
           >
             <Calendar weight="fill" aria-hidden="true" />
-            Hoy
+            Mes actual
           </button>
         </div>
       </div>
@@ -6461,6 +6461,29 @@ function EventHistoryCalendar({
   );
 }
 
+// Estado de los que no respondieron: lo manda el API con ese valor porque no es
+// un estado de inscripción (los demás son yes/late/bench/tentative/no).
+const UNDECLARED_STATUS = "none";
+
+// Fila del informe. Vienen de dos lados (una inscripción o el roster esperado) y
+// se unifican acá para que las dos se lean igual: misma ficha, mismo cruce con
+// el log de la noche y la misma columna de avisos.
+type ReportRowInput = {
+  bench?: boolean;
+  character?: string;
+  role?: string;
+  rosterClass?: { className: string; specName: string };
+  spec?: string;
+  status: string;
+  userId: string;
+  username: string;
+  wowClass?: string;
+};
+
+// `declared: false` = no se anotó (es del roster esperado): no tiene personaje ni
+// rol declarado, y su estado es UNDECLARED_STATUS.
+type ReportRow = ReportRowInput & { declared: boolean };
+
 // Informe de un evento del historial. Además de los números de la noche, cruza
 // cada anotado con su ficha del roster (clase, spec y rol) y marca las
 // diferencias: así el staff no tiene que abrir el roster aparte para saber si
@@ -6491,7 +6514,10 @@ function EventReportModal({
   const [roster, setRoster] = useState<GuildRoster | null>(null);
   const [expected, setExpected] = useState<EventRoster | null>(null);
   const [attendance, setAttendance] = useState<RaidLogAttendance | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Arranca en true: el informe se abre con el cruce ya en camino. Si no, el
+  // primer pintado mostraba cada fila como "sin ficha en el roster" y después
+  // todo cambiaba de golpe.
+  const [loading, setLoading] = useState(true);
   const eventId = event?.id ?? null;
 
   // El cruce necesita la ficha de cada uno: el roster se pide al abrir (y se
@@ -6499,6 +6525,7 @@ function EventReportModal({
   // log de esa noche sale quién vino de verdad.
   useEffect(() => {
     if (!eventId || !guildId) {
+      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -6595,9 +6622,9 @@ function EventReportModal({
   }));
   const attending = groups[0].members.length;
 
-  // Cruce de un anotado con su ficha del roster. `primary` es lo que se muestra
+  // Cruce de una fila con su ficha del roster. `primary` es lo que se muestra
   // como su clase/spec (manda la ficha) y `flags` lo que hay que revisar.
-  function crossCheck(signup: EventSignup): {
+  function crossCheck(signup: ReportRowInput): {
     flags: string[];
     fromSignup: string | null;
     primary: { className: string; specName: string; role?: string } | null;
@@ -6676,13 +6703,22 @@ function EventReportModal({
     return { flags, fromSignup, primary };
   }
 
-  const checks = event.signups.map((signup) => ({
-    check: crossCheck(signup),
-    signup,
-  }));
   const presenceByUser = new Map(
     (attendance?.byUser ?? []).map((row) => [row.userId, row]),
   );
+
+  // Los que no respondieron: se arma la fila con lo que da el roster esperado.
+  const undeclaredRows: ReportRow[] = (expected?.missing ?? []).map((member) => ({
+    bench: member.bench,
+    declared: false,
+    status: UNDECLARED_STATUS,
+    userId: member.userId,
+    username: member.username,
+  }));
+
+  // Cuántas de estas filas aparecen en el log de la noche.
+  const playedIn = (rows: ReportRow[]): number =>
+    rows.filter((row) => presenceByUser.get(row.userId)?.present).length;
 
   // Resumen del cruce con el log: lo que se cuenta es por persona y por estado,
   // así el número que se lee es el que después se puede verificar fila por fila.
@@ -6753,6 +6789,104 @@ function EventReportModal({
           <span className="event-report-muted">sin datos</span>
         ) : null}
       </span>
+    );
+  }
+
+  // Una fila del informe. Las dos fuentes (inscripción y roster esperado) caen
+  // acá, así la ficha, el cruce con el log y los avisos se leen igual en las dos.
+  // Mientras el cruce está en camino van esqueletos en las columnas que dependen
+  // de él: sin eso la fila aparecía un instante como "sin ficha en el roster" y
+  // después cambiaba de golpe.
+  function renderRow(row: ReportRow): ReactNode {
+    const check = crossCheck(row);
+    const roleMeta = row.role
+      ? eventRoleMeta(row.role, catalogRoles)
+      : undefined;
+    const presence = presenceByUser.get(row.userId);
+    return (
+      <li className="event-report-row" key={row.userId}>
+        <span className="event-report-who">
+          <strong>{row.username}</strong>
+          {row.character ? (
+            <span className="event-report-char">{row.character}</span>
+          ) : row.declared ? (
+            <span className="event-report-muted">sin personaje</span>
+          ) : row.bench ? (
+            <span className="event-report-muted">bench</span>
+          ) : null}
+        </span>
+        <span className="event-report-spec">
+          {loading ? (
+            <span className="event-report-skeleton" style={{ width: "78%" }} />
+          ) : check.primary ? (
+            renderClassChip(check.primary.className, check.primary.specName)
+          ) : (
+            <span className="event-report-muted">Sin clase ni spec</span>
+          )}
+          {!loading && check.fromSignup ? (
+            <span className="event-report-diff">
+              inscripción: {check.fromSignup}
+            </span>
+          ) : null}
+        </span>
+        <span className="event-report-role">
+          {loading ? (
+            <span className="event-report-skeleton" style={{ width: "62%" }} />
+          ) : row.role ? (
+            <>
+              <EventRoleEmoji role={row.role} roles={catalogRoles} size={14} />
+              {roleMeta?.label ?? row.role}
+            </>
+          ) : check.primary?.role ? (
+            // No eligió rol: se muestra el de su ficha, que es el dato que le
+            // sirve a quien arma el grupo.
+            <span className="event-report-muted">
+              según su ficha:{" "}
+              {eventRoleMeta(check.primary.role, catalogRoles)?.label ??
+                check.primary.role}
+            </span>
+          ) : (
+            <span className="event-report-muted">—</span>
+          )}
+        </span>
+        <span className="event-report-presence">
+          {loading ? (
+            <span className="event-report-skeleton" style={{ width: "70%" }} />
+          ) : !attendance ? (
+            <span className="event-report-muted">—</span>
+          ) : !presence ? (
+            <span className="event-report-muted">sin datos</span>
+          ) : presence.present ? (
+            <span className="event-report-present">
+              ✔ jugó ({presence.pulls} pull{presence.pulls === 1 ? "" : "s"})
+            </span>
+          ) : presence.likely ? (
+            <span className="event-report-likely">
+              ¿{presence.likely.logName}? (
+              {Math.round(presence.likely.similarity * 100)}%)
+            </span>
+          ) : !presence.matchable ? (
+            <span className="event-report-muted">
+              sin personaje para comparar
+            </span>
+          ) : (
+            <span className="event-report-absent">✘ no jugó</span>
+          )}
+        </span>
+        <span className="event-report-flags">
+          {loading ? (
+            <span className="event-report-skeleton" style={{ width: "54%" }} />
+          ) : check.flags.length === 0 ? (
+            <span className="event-report-ok">✓</span>
+          ) : (
+            check.flags.map((flag) => (
+              <span className="event-report-flag" key={flag}>
+                {flag}
+              </span>
+            ))
+          )}
+        </span>
+      </li>
     );
   }
 
@@ -6878,15 +7012,24 @@ function EventReportModal({
               ) : null}
             </>
           ) : (
-            <span className="event-report-note">
-              {loading
-                ? "Buscando el log de esa noche…"
-                : "No hay un log de raid guardado de esa noche, así que no se puede cruzar quién vino."}
+            <span
+              className={`event-report-note${
+                loading ? " event-report-note--busy" : ""
+              }`}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner spinner-sm" aria-hidden="true" />
+                  Buscando el log de esa noche…
+                </>
+              ) : (
+                "No hay un log de raid guardado de esa noche, así que no se puede cruzar quién vino."
+              )}
             </span>
           )}
         </div>
 
-        {event.signups.length === 0 ? (
+        {event.signups.length === 0 && undeclaredRows.length === 0 ? (
           <p className="muted-text">Sin inscripciones.</p>
         ) : (
           <>
@@ -6898,162 +7041,37 @@ function EventReportModal({
               <span>A revisar</span>
             </div>
             {groups.map((group) => {
-              const played = group.members.filter(
-                (signup) => presenceByUser.get(signup.userId)?.present,
-              ).length;
-              return group.members.length === 0 ? null : (
+              const rows: ReportRow[] = group.members.map((signup) => ({
+                ...signup,
+                declared: true,
+              }));
+              return rows.length === 0 ? null : (
                 <section className="event-report-group" key={group.status}>
                   <span className="admin-group-head">
-                    {group.emoji} {group.label} ({group.members.length})
-                    {attendance ? ` · ${played} en el log` : ""}
+                    {group.emoji} {group.label} ({rows.length})
+                    {attendance ? ` · ${playedIn(rows)} en el log` : ""}
                   </span>
-                  <ul className="event-report-list">
-                  {group.members.map((signup) => {
-                    const { check } = checks.find(
-                      (row) => row.signup.id === signup.id,
-                    ) ?? { check: crossCheck(signup) };
-                    const roleMeta = signup.role
-                      ? eventRoleMeta(signup.role, catalogRoles)
-                      : undefined;
-                    return (
-                      <li className="event-report-row" key={signup.id}>
-                        <span className="event-report-who">
-                          <strong>{signup.username}</strong>
-                          {signup.character ? (
-                            <span className="event-report-char">
-                              {signup.character}
-                            </span>
-                          ) : (
-                            <span className="event-report-muted">
-                              sin personaje
-                            </span>
-                          )}
-                        </span>
-                        <span className="event-report-spec">
-                          {check.primary ? (
-                            renderClassChip(
-                              check.primary.className,
-                              check.primary.specName,
-                            )
-                          ) : (
-                            <span className="event-report-muted">
-                              Sin clase ni spec
-                            </span>
-                          )}
-                          {check.fromSignup ? (
-                            <span className="event-report-diff">
-                              inscripción: {check.fromSignup}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="event-report-role">
-                          {signup.role ? (
-                            <>
-                              <EventRoleEmoji
-                                role={signup.role}
-                                roles={catalogRoles}
-                                size={14}
-                              />
-                              {roleMeta?.label ?? signup.role}
-                            </>
-                          ) : check.primary?.role ? (
-                            // No eligió rol: se muestra el de su ficha, que es
-                            // el dato que le sirve a quien arma el grupo.
-                            <span className="event-report-muted">
-                              según su ficha:{" "}
-                              {eventRoleMeta(check.primary.role, catalogRoles)
-                                ?.label ?? check.primary.role}
-                            </span>
-                          ) : (
-                            <span className="event-report-muted">—</span>
-                          )}
-                        </span>
-                        <span className="event-report-presence">
-                          {(() => {
-                            const presence = presenceByUser.get(
-                              signup.userId,
-                            );
-                            if (!attendance) {
-                              return (
-                                <span className="event-report-muted">—</span>
-                              );
-                            }
-                            if (!presence) {
-                              return (
-                                <span className="event-report-muted">
-                                  sin datos
-                                </span>
-                              );
-                            }
-                            const pulls = `${presence.pulls} pull${
-                              presence.pulls === 1 ? "" : "s"
-                            }`;
-                            if (presence.present) {
-                              return (
-                                <span className="event-report-present">
-                                  ✔ jugó ({pulls})
-                                </span>
-                              );
-                            }
-                            if (presence.likely) {
-                              return (
-                                <span className="event-report-likely">
-                                  ¿{presence.likely.logName}? (
-                                  {Math.round(presence.likely.similarity * 100)}
-                                  %)
-                                </span>
-                              );
-                            }
-                            if (!presence.matchable) {
-                              return (
-                                <span className="event-report-muted">
-                                  sin personaje para comparar
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="event-report-absent">
-                                ✘ no jugó
-                              </span>
-                            );
-                          })()}
-                        </span>
-                        <span className="event-report-flags">
-                          {check.flags.length === 0 ? (
-                            <span className="event-report-ok">✓</span>
-                          ) : (
-                            check.flags.map((flag) => (
-                              <span className="event-report-flag" key={flag}>
-                                {flag}
-                              </span>
-                            ))
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
+                  <ul className="event-report-list">{rows.map(renderRow)}</ul>
+                </section>
               );
             })}
+            {/* Sin responder: no dijeron nada, pero se leen como cualquier otra
+                fila para que se vea si aparecieron igual en el log. */}
+            {undeclaredRows.length > 0 ? (
+              <section className="event-report-group">
+                <span className="admin-group-head">
+                  ❓ Sin responder ({undeclaredRows.length})
+                  {attendance
+                    ? ` · ${playedIn(undeclaredRows)} en el log`
+                    : ""}
+                </span>
+                <ul className="event-report-list">
+                  {undeclaredRows.map(renderRow)}
+                </ul>
+              </section>
+            ) : null}
           </>
         )}
-
-        {expected && expected.missing.length > 0 ? (
-          <section className="event-report-group">
-            <span className="admin-group-head">
-              ❓ Sin responder ({expected.missing.length})
-            </span>
-            <span className="event-history-names">
-              {expected.missing.map((row) => (
-                <span className="event-roster-member" key={row.userId}>
-                  {row.username}
-                  {row.bench ? " (bench)" : ""}
-                </span>
-              ))}
-            </span>
-          </section>
-        ) : null}
 
         <div className="event-history-actions">
           <button
