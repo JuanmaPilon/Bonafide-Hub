@@ -664,28 +664,15 @@ export function buildEventAnnouncementEmbeds(input: {
   const possibles = bench.length + late.length;
   // Roster esperado del evento (rol mínimo + bench del roster).
   const expected = input.expectedCount ?? 0;
-  // Asistencia: confirmados y, entre paréntesis, los posibles (bench + tarde).
-  // El resumen y el detalle por estado son dos fields distintos de la misma fila:
-  // el primero se lee de un vistazo y el segundo trae los cuatro números que lo
-  // explican.
-  const assistanceValue =
-    input.signups.length === 0
-      ? "Sin anotados todavía"
-      : [
-          `✅ ${confirmed.length}`,
-          `🪑 ${bench.length}`,
-          `⏰ ${late.length}`,
-          `❌ ${absent.length}`,
-        ].join(" - ");
 
   const fields: Array<{ inline?: boolean; name: string; value: string }> = [];
-  // Datos del evento de a DOS columnas por fila. Discord empaqueta los fields
-  // inline de a TRES, así que la fila se cierra con un field de ancho cero: sin
-  // ese corte, el field siguiente se mete en la fila de arriba (las columnas del
-  // roster se corrían una posición según cuántos datos hubiera).
+  // Discord empaqueta los fields inline de a TRES, así que la fila se cierra con
+  // un field de ancho cero: sin ese corte, el field siguiente se mete en la fila
+  // de arriba (las columnas del roster se corrían una posición según cuántos
+  // datos hubiera).
   // Orden: primero **empieza y termina** (lo que se mira para confirmar la hora),
-  // después el **cierre** con el **requisito para anotarse** y el contador del
-  // roster, después los **dos conteos** (asistencia y su detalle por estado) y al
+  // después el **cierre** con el **requisito para anotarse**, después el **conteo
+  // de gente** en un solo field (roster, asistencia y el detalle por estado) y al
   // final la gente.
   fields.push({ inline: true, name: "🕒 Empieza", value: `<t:${timestamp}:t>` });
   fields.push({
@@ -706,34 +693,35 @@ export function buildEventAnnouncementEmbeds(input: {
       : "—",
   });
   if (requiredRoleId) {
-    // El requisito es la mención misma: sin título propio ni la nota del bench
-    // (el valor queda invisible porque Discord no deja un field sin valor).
+    // Sin título propio: el requisito dice "Requiere @rol" y, abajo, la nota del
+    // bench (que es la única advertencia de que sin el rol no entrás al roster).
     fields.push({
       inline: true,
       name: `Requiere <@&${requiredRoleId}>`,
-      value: "\u200b",
-    });
-  }
-  // Roster esperado: cuenta a los que RESPONDIERON (cualquier estado, bench
-  // incluido, y también "no asisto": haber contestado es lo que saca a alguien de
-  // "faltan anotarse").
-  if (requiredRoleId && expected > 0) {
-    fields.push({
-      inline: true,
-      name: "👥 Roster",
-      value: `**${input.rosterSignedCount ?? 0}/${expected}**`,
+      value: "*Sin el rol, la inscripción queda como Bench.*",
     });
   }
   pushSpacer(fields);
-  fields.push({
-    inline: true,
-    name: "📊 Asistencia",
-    value:
-      input.signups.length > 0
-        ? `**${confirmed.length}**${possibles > 0 ? ` (+${possibles})` : ""}`
-        : "Sin anotados todavía",
-  });
-  fields.push({ inline: true, name: "📋 Por estado", value: assistanceValue });
+  // Todo el conteo de gente en UN field: el roster esperado (los que
+  // RESPONDIERON, cualquier estado, bench incluido, y también "no asisto": haber
+  // contestado es lo que saca a alguien de "faltan anotarse"), la asistencia
+  // (confirmados y, entre paréntesis, los posibles = bench + tarde) y el detalle
+  // por estado, en el mismo orden. Es a lo ancho (no inline): es el encabezado de
+  // la lista que viene abajo.
+  const rosterCount =
+    expected > 0
+      ? `**${input.rosterSignedCount ?? 0}/${expected}**`
+      : undefined;
+  const attendanceLine =
+    input.signups.length === 0
+      ? "Sin anotados todavía"
+      : `${[
+          rosterCount,
+          `✅ **${confirmed.length}**${possibles > 0 ? ` (+${possibles})` : ""}`,
+        ]
+          .filter(Boolean)
+          .join(" · ")} · 🪑 ${bench.length} - ⏰ ${late.length} - ❌ ${absent.length}`;
+  fields.push({ name: "👥 Roster", value: attendanceLine });
   pushSpacer(fields);
   // La repetición NO se muestra en Discord (solo en la web): el aviso queda
   // para la fecha concreta del evento.

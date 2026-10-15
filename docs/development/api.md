@@ -702,22 +702,23 @@ la columna del roster, no toca la inscripción guardada y no altera el asistente
 del bot (que sigue mirando `wowClass`). El roster se consulta únicamente si hay
 alguna inscripción sin clase.
 
-**Aviso en Discord (orden y números):** Discord empaqueta los fields inline de a
-TRES, así que cada fila se cierra con un field de ancho cero (`pushSpacer`): sin
-ese corte el field siguiente se mete en la fila de arriba y las columnas del
-roster se corren una posición (pasó cuando se movió la asistencia: `Empieza |
-Termina | Tank` en la misma fila). El orden es: **empieza y termina** (lo primero
-que se mira para confirmar la hora), después el **cierre**, el **requisito para
-anotarse** —que es la mención misma, `Requiere <@rol>`, sin título ni nota: el
-valor queda invisible porque Discord no acepta un field sin valor— y el contador
-`👥 Roster 21/25` (los que **respondieron**, cualquier estado, bench incluido, y
-también "no asisto": haber contestado es lo que saca a alguien de "faltan
-anotarse", sobre el roster esperado), después los **dos conteos de la gente**
-—`📊 Asistencia 20 (+3)` (confirmados y, entre paréntesis, los posibles) y `📋
-Por estado` con el detalle separado por guiones (`✅ 18 - 🪑 0 - ⏰ 1 - ❌ 5`)— y
-al final la gente: **columnas por rol de a dos** (tank, healer, melee, range) y
-los **estados** uno por fila (bench → tarde → no asisten), con el roster
-arrancando siempre en una fila nueva. Los conteos salen de
+**Aviso en Discord (orden y números):** los datos del evento van de a DOS
+columnas por fila. Discord empaqueta los fields inline de a TRES, así que cada
+fila se cierra con un field de ancho cero (`pushSpacer`): sin ese corte el field
+siguiente se mete en la fila de arriba y las columnas del roster se corren una
+posición (pasó cuando se movió la asistencia: `Empieza | Termina | Tank` en la
+misma fila). El orden es: **empieza y termina** (lo primero que se mira para
+confirmar la hora), después el **cierre** con el **requisito para anotarse** —que
+es la mención misma, `Requiere <@rol>`, sin título: el requisito *es* la mención,
+y abajo va la nota del bench, que es la única advertencia de que sin el rol no
+entrás al roster—, después **todo el conteo de gente en un solo field** a lo
+ancho (`👥 Roster`: los que **respondieron** sobre el roster esperado —cualquier
+estado, bench incluido, y también "no asisto": haber contestado es lo que saca a
+alguien de "faltan anotarse"—, la asistencia `✅ 18 (+3)` con los confirmados y,
+entre paréntesis, los posibles, y el detalle por estado `🪑 3 - ⏰ 0 - ❌ 1` en el
+mismo orden) y al final la gente: **columnas por rol de a dos** (tank, healer,
+melee, range) y los **estados** uno por fila (bench → tarde → no asisten), con el
+roster arrancando siempre en una fila nueva. Los conteos salen de
 `rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
 ([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que
