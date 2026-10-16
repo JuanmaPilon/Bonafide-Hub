@@ -670,6 +670,33 @@ Eventos con inscripciones estilo Raid Helper. Un evento puede publicarse como
 Scheduled Event de Discord y/o como aviso-embed en un canal (el bot maneja los
 botones de inscripción).
 
+**Dos niveles: la lista y la página del evento.** El módulo tiene `#/eventos`
+(el listado) y `#/eventos/<id>` (la página de un evento). En el listado cada
+evento es una **tarjeta compacta** —portada, cuándo empieza, cuánto dura, las
+etiquetas y la asistencia con mi estado— que lleva a su página; el detalle
+completo vive ahí: portada como banner, datos (empieza, termina, cierre,
+requisito de rol), descripción, roster por rol con los estados (bench, tarde, no
+asisten), el panel para anotarse y las acciones de staff (editar, duplicar,
+informe, limpiar ocurrencia, eliminar). Antes cada tarjeta de la grilla traía el
+evento **entero** (roster, panel de inscripción y botones) apilado en una columna
+de 420 px: el listado se volvía una pared y el detalle quedaba apretado.
+
+Tres decisiones que no son obvias:
+
+- La URL usa el **id** del evento, no un slug del título: las series repiten
+  título (una raid semanal se llama igual todas las semanas), así que un slug
+  colisionaría. El id se toma del hash tal cual (sin pasar a minúsculas, a
+  diferencia de los slugs de comunicados, que sí se arman del título).
+- La página se busca en **todos** los eventos, no solo en los activos: una
+  ocurrencia archivada (Admin → Eventos) también tiene su página y muestra el
+  roster que quedó de esa noche (`#/eventos/<id>` a mano funciona).
+- El ancho se aprovecha con CSS, no moviendo el markup: el cuerpo de la tarjeta
+  se vuelve un grid de dos columnas y cada bloque se ubica con `grid-column`
+  (datos y roster a la izquierda; asistencia, inscripción y acciones a la
+  derecha). Así el orden del DOM sigue siendo el mismo que cuando el componente
+  era una tarjeta de la grilla, y en pantallas angostas (≤900 px) vuelve a una
+  sola columna.
+
 **Juegos por evento (importante):** el módulo sirve para varios juegos a la vez.
 Cada evento elige un JUEGO y de ahí salen sus roles de inscripción y su catálogo:
 

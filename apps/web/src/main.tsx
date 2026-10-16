@@ -12,6 +12,7 @@ import {
 import {
   createRoot } from "react-dom/client";
 import {
+  ArrowLeft,
   ArrowsClockwise,
   Calendar,
   CardsThree,
@@ -61,6 +62,7 @@ import {
 import {
   formatDate24,
   formatDateTime24,
+  formatDayMonthShort,
   formatTime24,
   pad2,
   toDateOrNull,
@@ -533,19 +535,26 @@ function lowerFirst(value: string): string {
 //   #/raids/logs → tab "raids" + sección "logs"
 //   #/karuta/guia-de-comandos → tab "karuta" + sección "guia"
 //   #/comunicados/sistema-de-loot-y-addons → tab "comunicados" + slug
+//   #/eventos/clx123abc → tab "eventos" + la página de ese evento
 function parseLocationHash(): {
+  comunicadoSlug: string | null;
+  // Id del evento abierto como página propia (null = la lista de eventos).
+  eventKey: string | null;
   section: string | null;
   tab: HubTab;
-  comunicadoSlug: string | null;
 } {
-  const raw = window.location.hash.replace(/^#\/?/, "").trim().toLowerCase();
+  const raw = window.location.hash.replace(/^#\/?/, "").trim();
   const parts = raw.split("/").filter(Boolean);
-  const tab = (VALID_TABS as string[]).includes(parts[0])
-    ? (parts[0] as HubTab)
+  const tab = (VALID_TABS as string[]).includes(parts[0]?.toLowerCase() ?? "")
+    ? (parts[0].toLowerCase() as HubTab)
     : "home";
-  const section = parts[1] ? sectionFromSlug(tab, parts[1]) : null;
-  const comunicadoSlug = tab === "comunicados" && parts[1] ? parts[1] : null;
-  return { comunicadoSlug, section, tab };
+  const slug = parts[1]?.toLowerCase() ?? "";
+  const section = slug ? sectionFromSlug(tab, slug) : null;
+  const comunicadoSlug = tab === "comunicados" && slug ? slug : null;
+  // El id del evento va tal cual, sin pasar a minúsculas: es una clave, no un
+  // slug legible (los de comunicados sí, porque se arman del título).
+  const eventKey = tab === "eventos" && parts[1] ? parts[1] : null;
+  return { comunicadoSlug, eventKey, section, tab };
 }
 
 function tabFromHash(): HubTab {
@@ -3614,6 +3623,116 @@ function ReportFormatModal({
 
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
+// Tarjeta compacta del listado de eventos: es la puerta de entrada a la página
+// del evento (cuándo es, cómo viene la asistencia y mi estado). Todo el detalle
+// —roster por rol, mi inscripción, acciones de staff— vive en esa página, que es
+// donde entra cómodo; en la grilla cada tarjeta mostraba el evento entero y por
+// eso el módulo quedaba apretado.
+function EventSummaryCard({
+  event,
+  meId,
+  onOpen,
+}: {
+  event: HubEvent;
+  meId?: string;
+  onOpen: (event: HubEvent) => void;
+}) {
+  const typeMeta =
+    EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
+  const counts = {
+    bench: event.signups.filter((signup) => signup.status === "bench").length,
+    late: event.signups.filter((signup) => signup.status === "late").length,
+    no: event.signups.filter((signup) => signup.status === "no").length,
+    yes: event.signups.filter((signup) => signup.status === "yes").length,
+  };
+  const mySignup = meId
+    ? event.signups.find((signup) => signup.userId === meId)
+    : undefined;
+  const myOption = SIGNUP_OPTIONS.find(
+    (option) => option.key === mySignup?.status,
+  );
+  const paused = event.paused === true;
+  const closed =
+    paused ||
+    event.status !== "scheduled" ||
+    Boolean(
+      event.signupDeadline &&
+      new Date(event.signupDeadline).getTime() < Date.now(),
+    );
+  const durationHours = event.durationMinutes
+    ? `${hoursFromMinutes(event.durationMinutes)} hs`
+    : undefined;
+
+  return (
+    <button
+      className="event-tile"
+      onClick={() => onOpen(event)}
+      type="button"
+    >
+      <span className="event-tile-cover">
+        {event.imageUrl ? (
+          <img alt="" src={event.imageUrl} />
+        ) : (
+          <span aria-hidden="true" className="event-tile-cover-fallback">
+            {typeMeta.emoji}
+          </span>
+        )}
+        <span className="event-tile-type">{typeMeta.label}</span>
+      </span>
+      <span className="event-tile-body">
+        <span className="event-tile-head">
+          <strong>{event.title}</strong>
+          {paused ||
+          event.status !== "scheduled" ||
+          (closed && event.status === "scheduled") ? (
+            <span className="event-card-badges">
+              {paused ? (
+                <span className="event-card-status paused">Pausado</span>
+              ) : null}
+              {event.status !== "scheduled" ? (
+                <span className={`event-card-status ${event.status}`}>
+                  {event.status === "cancelled" ? "Cancelado" : "Completado"}
+                </span>
+              ) : null}
+              {closed && !paused && event.status === "scheduled" ? (
+                <span className="event-card-status closed">Cerradas</span>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
+        <span className="event-tile-when">
+          <Calendar aria-hidden="true" weight="fill" />
+          {formatDayMonthShort(event.startsAt)} · {formatTime24(event.startsAt)}
+          {durationHours ? ` · ${durationHours}` : ""}
+        </span>
+        {(event.tags ?? []).length > 0 ? (
+          <span className="event-tile-tags">
+            {(event.tags ?? []).map((tag) => (
+              <ComunicadoTag color={tag.color} key={tag.label} label={tag.label} />
+            ))}
+          </span>
+        ) : null}
+        <span className="event-tile-foot">
+          <span className="event-count total">
+            <Users aria-hidden="true" weight="fill" />
+            {counts.yes}
+            {counts.bench + counts.late > 0
+              ? ` (+${counts.bench + counts.late})`
+              : ""}
+            {event.expectedCount && event.expectedCount > 0
+              ? ` / ${event.expectedCount}`
+              : ""}
+          </span>
+          <span className={`event-tile-me${mySignup ? "" : " none"}`}>
+            {myOption ? `${myOption.emoji} ${myOption.label}` : "Sin anotarte"}
+            {mySignup?.character ? ` · ${mySignup.character}` : ""}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function EventCard({
   canManage,
   config,
@@ -4313,6 +4432,9 @@ function EventCard({
                             type="button"
                           >
                             {option.emoji}
+                            <span className="event-status-label">
+                              {option.label}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -7387,6 +7509,10 @@ function App() {
   const [comunicadoSlug, setComunicadoSlug] = useState<string | null>(
     () => parseLocationHash().comunicadoSlug,
   );
+  // Evento abierto como página propia (#/eventos/<id>). null = la lista.
+  const [eventKey, setEventKey] = useState<string | null>(
+    () => parseLocationHash().eventKey,
+  );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   // Evento cuyo informe se está generando (estado del botón) y evento del que
@@ -7586,6 +7712,14 @@ function App() {
     }
     return [...byLabel.values()];
   }, [events]);
+
+  // Evento de la página abierta (#/eventos/<id>). Se busca en TODOS los eventos,
+  // no solo en los activos: una ocurrencia archivada también tiene su página (con
+  // el roster que quedó de esa noche).
+  const pageEvent = useMemo(
+    () => (eventKey ? (events.find((entry) => entry.id === eventKey) ?? null) : null),
+    [eventKey, events],
+  );
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   // Indica que el form abrió en modo "duplicar" (para el título del form).
@@ -7847,6 +7981,21 @@ function App() {
   function goToSection(tab: HubTab, section: string): void {
     setTabSections((current) => ({ ...current, [tab]: section }));
     setActiveTab(tab);
+  }
+
+  // Página propia de un evento: la lista vive en #/eventos y cada evento en
+  // #/eventos/<id>, así el enlace se puede compartir (y el botón atrás del
+  // navegador vuelve a la lista).
+  function openEvent(eventId: string): void {
+    setActiveTab("eventos");
+    setEventKey(eventId);
+  }
+
+  function goToEventsList(): void {
+    setEventKey(null);
+    if (activeTab !== "eventos") {
+      setActiveTab("eventos");
+    }
   }
   // Tema visual: oscuro por defecto, con persistencia en localStorage. El
   // atributo ya viene puesto desde index.html (script previo al primer pintado):
@@ -10656,7 +10805,7 @@ function App() {
 
   useEffect(() => {
     const onHashChange = (): void => {
-      const { tab, section, comunicadoSlug } = parseLocationHash();
+      const { tab, section, comunicadoSlug, eventKey } = parseLocationHash();
       setActiveTab(tab);
       if (section) {
         setTabSections((current) =>
@@ -10664,6 +10813,7 @@ function App() {
         );
       }
       setComunicadoSlug(comunicadoSlug);
+      setEventKey(eventKey);
     };
 
     window.addEventListener("hashchange", onHashChange);
@@ -10678,11 +10828,13 @@ function App() {
       ? `#/${activeTab}/${sectionSlug(activeTab, section)}`
       : activeTab === "comunicados" && comunicadoSlug
         ? `#/comunicados/${comunicadoSlug}`
-        : `#/${activeTab}`;
+        : activeTab === "eventos" && eventKey
+          ? `#/eventos/${eventKey}`
+          : `#/${activeTab}`;
     if (window.location.hash !== target) {
       window.location.hash = target;
     }
-  }, [activeTab, comunicadoSlug, tabSections]);
+  }, [activeTab, comunicadoSlug, eventKey, tabSections]);
 
   // Al salir de Comunicados se limpia el slug: volver a la tab siempre
   // muestra la lista (no un comunicado puntual anterior).
@@ -10691,6 +10843,13 @@ function App() {
       setComunicadoSlug(null);
     }
   }, [activeTab, comunicadoSlug]);
+
+  // Igual con la página de un evento: el hash se limpia al cambiar de módulo.
+  useEffect(() => {
+    if (activeTab !== "eventos" && eventKey) {
+      setEventKey(null);
+    }
+  }, [activeTab, eventKey]);
 
   useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
@@ -13464,26 +13623,41 @@ function App() {
                 </div>
               ) : activeTab === "eventos" ? (
                 <div className="dashboard-stack">
-                  <div className="event-list-header">
-                    <h2>Eventos</h2>
-                    {canAccess("eventos") ? (
+                  {/* Con un evento abierto manda su página: la cabecera del
+                      listado (título + Nuevo) y la lista no se muestran. */}
+                  {eventKey ? (
+                    <div className="event-page-bar">
                       <button
-                        className={
-                          showEventForm
-                            ? "ghost-button cancel-button"
-                            : "primary-button"
-                        }
-                        onClick={() =>
-                          showEventForm
-                            ? handleCloseEventForm()
-                            : setShowEventForm(true)
-                        }
+                        className="ghost-button"
+                        onClick={goToEventsList}
                         type="button"
                       >
-                        {showEventForm ? "Cancelar" : "+ Nuevo evento"}
+                        <ArrowLeft aria-hidden="true" weight="fill" />
+                        Todos los eventos
                       </button>
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="event-list-header">
+                      <h2>Eventos</h2>
+                      {canAccess("eventos") ? (
+                        <button
+                          className={
+                            showEventForm
+                              ? "ghost-button cancel-button"
+                              : "primary-button"
+                          }
+                          onClick={() =>
+                            showEventForm
+                              ? handleCloseEventForm()
+                              : setShowEventForm(true)
+                          }
+                          type="button"
+                        >
+                          {showEventForm ? "Cancelar" : "+ Nuevo evento"}
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
 
                   {/* El form es un MODAL: antes se abría abajo de la lista de
                       eventos y había que scrollear toda la página para
@@ -14203,9 +14377,52 @@ function App() {
                   ) : null}
 
                   {eventsLoading ? (
-                    <LoadingState label="Cargando eventos…" />
+                    <LoadingState
+                      label={eventKey ? "Cargando el evento…" : "Cargando eventos…"}
+                    />
+                  ) : eventKey ? (
+                    pageEvent ? (
+                      <div className="event-page">
+                        <EventCard
+                          canManage={canAccess("eventos")}
+                          config={config}
+                          event={pageEvent}
+                          eventPoll={
+                            eventGames.find(
+                              (game) => game.key === pageEvent.game,
+                            )?.poll === true
+                          }
+                          gameRoles={rolesForGame(pageEvent.game)}
+                          guildRoles={guildRoles}
+                          key={pageEvent.id}
+                          meId={me?.id}
+                          onDelete={handleDeleteEvent}
+                          onDownloadReport={handleDownloadEventReport}
+                          onDuplicate={handleDuplicateEvent}
+                          onEdit={handleEditEvent}
+                          onOpenProfile={openMemberProfile}
+                          onRemoveSignup={handleRemoveEventSignup}
+                          onResetOccurrence={handleResetOccurrence}
+                          onResetSignup={handleResetEventSignup}
+                          onSignup={handleEventSignup}
+                          onStaffRemoveSignup={handleStaffRemoveEventSignup}
+                          onStaffSignup={handleStaffEventSignup}
+                          reportBusy={reportBusyEventId === pageEvent.id}
+                          specs={specsForGame(pageEvent.game)}
+                        />
+                      </div>
+                    ) : (
+                      <div className="empty-state">
+                        No encontramos este evento. Puede que se haya eliminado o
+                        que sea de otra guild.
+                      </div>
+                    )
                   ) : (
                     <>
+                      {/* Buscador + orden + filtro por etiqueta en un solo
+                          bloque: el contenedor lleva el `order` para que el
+                          encabezado del módulo quede arriba (el stack es flex). */}
+                      <div className="event-filters">
                       {events.length > 0 ? (
                         <ListFilterBar
                           onOrderChange={setEventOrder}
@@ -14261,6 +14478,7 @@ function App() {
                           ) : null}
                         </div>
                       ) : null}
+                      </div>
                       {filteredEvents.length === 0 ? (
                         <div className="empty-state">
                           {eventTagFilter.length > 0 || eventSearch.trim()
@@ -14272,32 +14490,11 @@ function App() {
                       ) : (
                         <div className="events-grid">
                           {filteredEvents.map((event) => (
-                            <EventCard
-                              canManage={canAccess("eventos")}
-                              config={config}
+                            <EventSummaryCard
                               event={event}
-                              guildRoles={guildRoles}
                               key={event.id}
                               meId={me?.id}
-                              onDelete={handleDeleteEvent}
-                              onDownloadReport={handleDownloadEventReport}
-                              onDuplicate={handleDuplicateEvent}
-                              onEdit={handleEditEvent}
-                              onOpenProfile={openMemberProfile}
-                              onRemoveSignup={handleRemoveEventSignup}
-                              onResetOccurrence={handleResetOccurrence}
-                              onResetSignup={handleResetEventSignup}
-                              onSignup={handleEventSignup}
-                              onStaffRemoveSignup={handleStaffRemoveEventSignup}
-                              onStaffSignup={handleStaffEventSignup}
-                              reportBusy={reportBusyEventId === event.id}
-                              eventPoll={
-                                eventGames.find(
-                                  (game) => game.key === event.game,
-                                )?.poll === true
-                              }
-                              gameRoles={rolesForGame(event.game)}
-                              specs={specsForGame(event.game)}
+                              onOpen={(target) => openEvent(target.id)}
                             />
                           ))}
                         </div>

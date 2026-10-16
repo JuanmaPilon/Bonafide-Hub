@@ -46,3 +46,21 @@ export function formatDateTime24(value: string | Date | undefined): string {
   }
   return `${formatDate24(date)} ${formatTime24(date)}`;
 }
+
+// Día y mes cortos ("mié 15 oct") para las tarjetas de evento, donde la fecha
+// completa no entra y lo que importa es ubicarla en la semana. El locale va
+// explícito: sin eso, un navegador en inglés diría "Wed 15 Oct".
+export function formatDayMonthShort(value: string | Date | undefined): string {
+  const date = toDateOrNull(value);
+  if (!date) {
+    return "—";
+  }
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    day: "numeric",
+    month: "short",
+    weekday: "short",
+  }).formatToParts(date);
+  const part = (type: string): string =>
+    parts.find((entry) => entry.type === type)?.value.replace(".", "") ?? "";
+  return `${part("weekday")} ${part("day")} ${part("month")}`;
+}

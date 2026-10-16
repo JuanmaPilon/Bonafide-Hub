@@ -6676,12 +6676,257 @@ select.list-order {
   opacity: 1;
 }
 
+/* En la página del evento —donde la gente se anota— los botones de estado
+   llevan la etiqueta al lado del emoji: es la acción principal de la pantalla y
+   un círculo con un emoji no dice "Voy" / "No asisto". */
+.event-signup-status .event-status-btn {
+  width: auto;
+  height: auto;
+  padding: 7px 12px;
+  gap: 6px;
+  font-size: 0.88rem;
+}
+
+.event-signup-status .event-status-btn.active {
+  opacity: 1;
+}
+
 .event-card-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ── Eventos: listado compacto y página del evento ──────────────────
+   El listado es una puerta de entrada: cada tarjeta muestra lo justo para
+   reconocer el evento (portada, cuándo, cómo viene la asistencia y mi estado) y
+   el detalle completo vive en la página del evento. Antes cada tarjeta de la
+   grilla traía el evento entero (roster + inscripción + acciones). */
+
+.events-grid {
+  /* Más angostas que antes (420 px) porque la tarjeta ya no lleva el roster:
+     entran más por fila y el listado se lee de un vistazo. */
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 14px;
+}
+
+.event-tile {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  padding: 10px;
+  border: 1px solid rgba(134, 158, 214, 0.22);
+  border-radius: 16px;
+  background: rgba(12, 19, 37, 0.55);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease;
+}
+
+.event-tile:hover {
+  border-color: rgba(134, 158, 214, 0.48);
+  background: rgba(20, 30, 55, 0.7);
+  transform: translateY(-1px);
+}
+
+.event-tile:focus-visible {
+  outline: 2px solid var(--accent, #6aa8ff);
+  outline-offset: 2px;
+}
+
+.event-tile-cover {
+  position: relative;
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1c2340, #0b1226);
+}
+
+.event-tile-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.event-tile-cover-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 84px;
+  height: 100%;
+  font-size: 1.8rem;
+  background:
+    radial-gradient(
+      circle at 30% 20%,
+      rgba(255, 138, 92, 0.35),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at 75% 80%,
+      rgba(124, 227, 139, 0.25),
+      transparent 55%
+    ),
+    linear-gradient(135deg, #1c2340, #0b1226);
+}
+
+.event-tile-type {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(8, 12, 24, 0.72);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.event-tile-body {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+
+.event-tile-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.event-tile-head strong {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.event-tile-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.event-tile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.event-tile-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.event-tile-me {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid rgba(124, 227, 139, 0.45);
+  border-radius: 999px;
+  background: rgba(124, 227, 139, 0.12);
+  color: #9ceea8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.event-tile-me.none {
+  border-color: rgba(134, 158, 214, 0.3);
+  background: rgba(134, 158, 214, 0.1);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.event-page-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.event-page {
+  border-radius: 18px;
+}
+
+/* La página del evento usa el ancho completo: la portada pasa a banner y el
+   detalle se abre en dos columnas (a la izquierda los datos y el roster; a la
+   derecha la asistencia, mi inscripción y las acciones). El orden del DOM queda
+   igual y lo resuelve el grid: así no hay que mover el markup de la tarjeta. */
+.event-page .event-card {
+  border-radius: 18px;
+}
+
+.event-page .event-card-image,
+.event-page .event-card-image-placeholder {
+  aspect-ratio: 3 / 1;
+}
+
+.event-page .event-card-body {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+  gap: 12px 22px;
+  padding: 16px;
+}
+
+.event-page .event-card-head,
+.event-page .event-info-grid,
+.event-page .event-card-desc,
+.event-page .event-deadline,
+.event-page .event-roster,
+.event-page .event-roster-empty,
+.event-page .event-form-note {
+  grid-column: 1;
+}
+
+.event-page .event-card-assistance,
+.event-page .event-signup,
+.event-page .event-card-actions {
+  grid-column: 2;
+}
+
+.event-page .event-card-assistance {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* En la página el roster tiene el ancho completo de la columna: con 4 roles
+   apretados en 140 px cada nombre ("nick (personaje)") se partía en dos
+   líneas. */
+.event-page .event-roster-columns {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .event-page .event-card-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-page .event-card-head,
+  .event-page .event-info-grid,
+  .event-page .event-card-desc,
+  .event-page .event-deadline,
+  .event-page .event-roster,
+  .event-page .event-roster-empty,
+  .event-page .event-form-note,
+  .event-page .event-card-assistance,
+  .event-page .event-signup,
+  .event-page .event-card-actions {
+    grid-column: auto;
+  }
 }
 
 .event-deadline {
@@ -9643,13 +9888,21 @@ select.list-order {
 
 /* ── Eventos: orden de la lista ─────────────────────────────────────
    El form de crear/editar evento es un modal (`.event-form-modal`), así que ya
-   no participa del orden: solo quedan el encabezado y la grilla. */
+   no participa del orden: quedan el encabezado, los filtros y la grilla. El
+   stack es flex, así que cada bloque necesita su `order` (sin esto el buscador
+   aparecía arriba del título del módulo). */
 .event-list-header {
   order: 1;
 }
 
-.events-grid {
+.event-filters {
   order: 2;
+  display: grid;
+  gap: 10px;
+}
+
+.events-grid {
+  order: 3;
 }
 
 /* ── Eventos: tema claro ────────────────────────────────────────────
@@ -9660,6 +9913,19 @@ select.list-order {
 :root[data-theme="light"] .event-signup-summary {
   background: linear-gradient(160deg, #ffffff 0%, #f1f5fc 100%);
   border-color: rgba(60, 85, 130, 0.22);
+}
+
+:root[data-theme="light"] .event-tile {
+  background: linear-gradient(160deg, #ffffff 0%, #f1f5fc 100%);
+  border-color: rgba(60, 85, 130, 0.22);
+}
+
+:root[data-theme="light"] .event-tile:hover {
+  background: linear-gradient(160deg, #ffffff 0%, #e7eefa 100%);
+}
+
+:root[data-theme="light"] .event-tile-me {
+  color: #1d6e30;
 }
 
 :root[data-theme="light"] .event-info-grid {
