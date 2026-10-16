@@ -14,16 +14,24 @@ import {
 import {
   ArrowLeft,
   ArrowsClockwise,
+  Broadcast,
   Calendar,
   CardsThree,
   ChatCircleDots,
+  Clock,
   ClockCounterClockwise,
+  Confetti,
   DownloadSimple,
   Fire,
+  Flag,
   Heart,
+  HourglassSimple,
   IdentificationCard,
+  Key,
   Lightning,
   ListChecks,
+  LockSimple,
+  MapPin,
   Moon,
   MusicNotes,
   Pause,
@@ -31,12 +39,14 @@ import {
   Play,
   Plus,
   Quotes,
+  Repeat,
   ShieldCheck,
   Skull,
   Sliders,
   Sun,
   Sword,
   Trash,
+  Trophy,
   UserPlus,
   Users,
   X,
@@ -3623,6 +3633,22 @@ function ReportFormatModal({
 
 // Tarjeta de evento del Módulo X: muestra info, roster e inscripción del
 // usuario logueado (clase, rol, personaje y estado).
+// Ícono de un tipo de evento: el mapa de `EVENT_TYPES` trae emoji (lo comparten
+// el aviso de Discord y los formularios), pero en el hub los tipos se dibujan
+// con íconos, como el resto de la app.
+function eventTypeIcon(type: string) {
+  switch (type) {
+    case "mplus":
+      return Key;
+    case "pvp":
+      return Trophy;
+    case "social":
+      return Confetti;
+    default:
+      return Sword;
+  }
+}
+
 // Tarjeta compacta del listado de eventos: es la puerta de entrada a la página
 // del evento (cuándo es, cómo viene la asistencia y mi estado). Todo el detalle
 // —roster por rol, mi inscripción, acciones de staff— vive en esa página, que es
@@ -3639,6 +3665,7 @@ function EventSummaryCard({
 }) {
   const typeMeta =
     EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
+  const TypeIcon = eventTypeIcon(event.type);
   const counts = {
     bench: event.signups.filter((signup) => signup.status === "bench").length,
     late: event.signups.filter((signup) => signup.status === "late").length,
@@ -3674,7 +3701,7 @@ function EventSummaryCard({
           <img alt="" src={event.imageUrl} />
         ) : (
           <span aria-hidden="true" className="event-tile-cover-fallback">
-            {typeMeta.emoji}
+            <TypeIcon weight="fill" />
           </span>
         )}
         <span className="event-tile-type">{typeMeta.label}</span>
@@ -3898,6 +3925,7 @@ function EventCard({
 
   const typeMeta =
     EVENT_TYPES.find((entry) => entry.key === event.type) ?? EVENT_TYPES[0];
+  const TypeIcon = eventTypeIcon(event.type);
 
   const counts = {
     bench: event.signups.filter((signup) => signup.status === "bench").length,
@@ -4064,7 +4092,7 @@ function EventCard({
             title={`Editar la inscripción de ${signup.username}`}
             type="button"
           >
-            ✏️
+            <PencilSimple aria-hidden="true" weight="fill" />
           </button>
         ) : null}
       </span>
@@ -4129,7 +4157,7 @@ function EventCard({
           />
         ) : (
           <div className="event-card-image event-card-image-placeholder">
-            <span aria-hidden="true">{typeMeta.emoji}</span>
+            <TypeIcon aria-hidden="true" weight="fill" />
           </div>
         )}
         <div className="event-card-body">
@@ -4137,7 +4165,10 @@ function EventCard({
             <strong>{event.title}</strong>
             <div className="event-card-badges">
               {paused ? (
-                <span className="event-card-status paused">⏸️ Pausado</span>
+                <span className="event-card-status paused">
+                  <Pause aria-hidden="true" weight="fill" />
+                  Pausado
+                </span>
               ) : null}
               {event.status !== "scheduled" ? (
                 <span className={`event-card-status ${event.status}`}>
@@ -4145,7 +4176,10 @@ function EventCard({
                 </span>
               ) : null}
               {event.signupDeadline && signupsClosed && !paused ? (
-                <span className="event-card-status closed">🔒 Cerradas</span>
+                <span className="event-card-status closed">
+                  <LockSimple aria-hidden="true" weight="fill" />
+                  Cerradas
+                </span>
               ) : null}
               {(event.tags ?? []).map((tag) => (
                 <ComunicadoTag
@@ -4160,13 +4194,19 @@ function EventCard({
             para que la web y el canal cuenten lo mismo. */}
           <div className="event-info-grid">
             <div className="event-info-item">
-              <span className="event-info-label">🕒 Empieza</span>
+              <span className="event-info-label">
+                <Clock aria-hidden="true" weight="fill" />
+                Empieza
+              </span>
               <span className="event-info-value">
                 {formatDateTime24(event.startsAt)}
               </span>
             </div>
             <div className="event-info-item">
-              <span className="event-info-label">🏁 Termina</span>
+              <span className="event-info-label">
+                <Flag aria-hidden="true" weight="fill" />
+                Termina
+              </span>
               <span className="event-info-value">
                 {endAt && durationHours
                   ? `${formatDateTime24(endAt)} (${durationHours})`
@@ -4175,7 +4215,10 @@ function EventCard({
             </div>{" "}
             {isPoll ? (
               <div className="event-info-item">
-                <span className="event-info-label">📊 Encuesta</span>
+                <span className="event-info-label">
+                  <ListChecks aria-hidden="true" weight="fill" />
+                  Encuesta
+                </span>
                 <span className="event-info-value">
                   {event.pollHours
                     ? `Abierta ${event.pollHours} h`
@@ -4185,7 +4228,8 @@ function EventCard({
             ) : null}
             <div className="event-info-item">
               <span className="event-info-label">
-                ⏳ Cierre de inscripciones
+                <LockSimple aria-hidden="true" weight="fill" />
+                Cierre de inscripciones
               </span>
               <span
                 className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
@@ -4199,14 +4243,20 @@ function EventCard({
             </div>
             {event.recurrenceEnabled && event.recurrenceEveryDays ? (
               <div className="event-info-item">
-                <span className="event-info-label">🔁 Repetición</span>
+                <span className="event-info-label">
+                  <Repeat aria-hidden="true" weight="fill" />
+                  Repetición
+                </span>
                 <span className="event-info-value">
                   {`Cada ${event.recurrenceEveryDays} días`}
                 </span>
               </div>
             ) : recurrenceLabel(event.discordEventConfig?.recurrence) ? (
               <div className="event-info-item">
-                <span className="event-info-label">🔁 Repetición</span>
+                <span className="event-info-label">
+                  <Repeat aria-hidden="true" weight="fill" />
+                  Repetición
+                </span>
                 <span className="event-info-value">
                   {recurrenceLabel(event.discordEventConfig?.recurrence)}
                 </span>
@@ -4215,7 +4265,10 @@ function EventCard({
             {event.discordEventConfig?.entityType === "external" &&
             event.discordEventConfig.location ? (
               <div className="event-info-item">
-                <span className="event-info-label">📍 Ubicación</span>
+                <span className="event-info-label">
+                  <MapPin aria-hidden="true" weight="fill" />
+                  Ubicación
+                </span>
                 <span className="event-info-value">
                   {event.discordEventConfig.location}
                 </span>
@@ -4223,7 +4276,10 @@ function EventCard({
             ) : null}
             {event.requiredRoleId ? (
               <div className="event-info-item wide">
-                <span className="event-info-label">👥 Roster principal</span>
+                <span className="event-info-label">
+                  <Users aria-hidden="true" weight="fill" />
+                  Roster principal
+                </span>
                 <span className="event-info-value">
                   Requiere{" "}
                   <strong>
@@ -4242,7 +4298,10 @@ function EventCard({
             {event.discordEventId ||
             (event.discordMessageIds?.length ?? 0) > 0 ? (
               <div className="event-info-item wide">
-                <span className="event-info-label">📣 Discord</span>
+                <span className="event-info-label">
+                  <Broadcast aria-hidden="true" weight="fill" />
+                  Discord
+                </span>
                 <span className="event-info-value">
                   {event.discordEventId ? (
                     <a
@@ -4261,13 +4320,19 @@ function EventCard({
             ) : null}
           </div>
           {paused ? (
-            <div className="event-deadline paused">⏸️ Evento pausado</div>
+            <div className="event-deadline paused">
+              <Pause aria-hidden="true" weight="fill" />
+              Evento pausado
+            </div>
           ) : null}
           {event.description?.trim() ? (
             <p className="event-card-desc">{event.description.trim()}</p>
           ) : null}
           <div className="event-card-assistance">
-            <span className="event-info-label">📊 Asistencia</span>
+            <span className="event-info-label">
+              <Users aria-hidden="true" weight="fill" />
+              Asistencia
+            </span>
             <div className="event-card-counts">
               {/* El total lleva el contador de control cuando el evento tiene rol
                   mínimo: "confirmados (+tentativos) / esperados". Se clickea para
@@ -4380,8 +4445,8 @@ function EventCard({
               {signupsClosed ? (
                 <div className="event-signup-closed">
                   {paused
-                    ? "⏸️ El evento está pausado."
-                    : "🔒 Las inscripciones están cerradas."}
+                    ? "El evento está pausado."
+                    : "Las inscripciones están cerradas."}
                   {mySignup ? " Tu inscripción actual queda guardada." : ""}
                 </div>
               ) : (
@@ -4618,7 +4683,8 @@ function EventCard({
                 onClick={() => setDownloadOpen(true)}
                 type="button"
               >
-                {reportBusy ? "Generando…" : "⬇️ Descargar informe"}
+                <DownloadSimple aria-hidden="true" weight="fill" />
+                {reportBusy ? "Generando…" : "Descargar informe"}
               </button>
               {event.recurrenceEnabled ? (
                 <button
@@ -7713,6 +7779,20 @@ function App() {
     return [...byLabel.values()];
   }, [events]);
 
+  // Menú del nav: los eventos abiertos, del más cercano al más lejano (los
+  // cerrados viven en Admin → Eventos). El submenú se scrollea si hay muchos.
+  const navEventMenu = useMemo(
+    () =>
+      events
+        .filter((entry) => entry.status !== "completed")
+        .sort(
+          (left, right) =>
+            new Date(left.startsAt).getTime() -
+            new Date(right.startsAt).getTime(),
+        ),
+    [events],
+  );
+
   // Evento de la página abierta (#/eventos/<id>). Se busca en TODOS los eventos,
   // no solo en los activos: una ocurrencia archivada también tiene su página (con
   // el roster que quedó de esa noche).
@@ -9106,8 +9186,7 @@ function App() {
     });
   }
 
-  function handleCloseEventForm(): void {
-    setShowEventForm(false);
+  function handleCloseEventForm(): void {    setShowEventForm(false);
     setEditingEventId(null);
     setDuplicatingEvent(false);
     setEventForm({
@@ -9132,6 +9211,17 @@ function App() {
       title: "",
       type: "raid",
     });
+  }
+
+  // Abre el alta de un evento con el form en blanco. Reusa el reset de cerrar
+  // (así los valores por defecto viven en un solo lugar) y se asegura de estar
+  // en la tab de Eventos: se llama también desde el menú del nav, que se puede
+  // abrir desde cualquier módulo.
+  function startNewEvent(): void {
+    handleCloseEventForm();
+    setActiveTab("eventos");
+    setEventKey(null);
+    setShowEventForm(true);
   }
 
   function handleEditEvent(event: HubEvent): void {
@@ -11282,6 +11372,7 @@ function App() {
 
           <nav className="top-nav">
             {visibleTabs.map((tab) => {
+              const isEvents = tab === "eventos";
               const sections = TAB_SECTIONS[tab];
               const visibleSections =
                 tab === "admin"
@@ -11296,15 +11387,24 @@ function App() {
                           ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
                       )
                   : sections;
+              // Eventos arma su propio menú (dinámico, con los eventos): es la
+              // forma de saltar de un evento a otro sin pasar por la lista.
+              const hasMenu = Boolean(visibleSections) || isEvents;
               return (
                 <div className="nav-item" key={tab}>
                   <button
                     className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                    onClick={sections ? undefined : () => setActiveTab(tab)}
+                    onClick={
+                      isEvents
+                        ? goToEventsList
+                        : hasMenu
+                          ? undefined
+                          : () => setActiveTab(tab)
+                    }
                     type="button"
                   >
                     {tabLabel(tab)}
-                    {visibleSections ? (
+                    {hasMenu ? (
                       <span aria-hidden="true" className="nav-caret">
                         ▾
                       </span>
@@ -11312,25 +11412,86 @@ function App() {
                   </button>
                   {/* Módulo con sub-secciones: al pasar el mouse (o al enfocar
                       con teclado) el nav ofrece cada página. */}
-                  {visibleSections ? (
-                    <div className="nav-submenu">
-                      {visibleSections.map((section) => (
-                        <button
-                          className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
-                          key={section.key}
-                          onClick={() => goToSection(tab, section.key)}
-                          type="button"
-                        >
-                          {section.label}
-                          {tab === "admin" && section.tier ? (
-                            <span
-                              className={`admin-nav-tier tier-${section.tier}`}
+                  {hasMenu ? (
+                    <div
+                      className={`nav-submenu${isEvents ? " nav-submenu-events" : ""}`}
+                    >
+                      {isEvents ? (
+                        <>
+                          {canAccess("eventos") ? (
+                            <button
+                              className="nav-sublink nav-sublink-new"
+                              onClick={startNewEvent}
+                              type="button"
                             >
-                              {accessTierLabel(section.tier)}
+                              <Plus
+                                aria-hidden="true"
+                                weight="bold"
+                                className="nav-sublink-icon"
+                              />
+                              Nuevo evento
+                            </button>
+                          ) : null}
+                          {navEventMenu.map((entry) => {
+                            const TypeIcon = eventTypeIcon(entry.type);
+                            return (
+                              <button
+                                className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
+                                key={entry.id}
+                                onClick={() => openEvent(entry.id)}
+                                type="button"
+                              >
+                                <TypeIcon
+                                  aria-hidden="true"
+                                  weight="fill"
+                                  className="nav-sublink-icon"
+                                />
+                                <span className="nav-sublink-label">
+                                  {entry.title}
+                                </span>
+                                <span className="nav-sublink-meta">
+                                  {formatDayMonthShort(entry.startsAt)}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {navEventMenu.length === 0 ? (
+                            <span className="nav-submenu-empty">
+                              No hay eventos próximos.
                             </span>
                           ) : null}
-                        </button>
-                      ))}
+                          <button
+                            className="nav-sublink nav-sublink-all"
+                            onClick={goToEventsList}
+                            type="button"
+                          >
+                            <CardsThree
+                              aria-hidden="true"
+                              weight="fill"
+                              className="nav-sublink-icon"
+                            />
+                            Ver todos los eventos
+                          </button>
+                        </>
+                      ) : (
+                        visibleSections?.map((section) => (
+                          <button
+                            className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
+                            key={section.key}
+                            onClick={() => goToSection(tab, section.key)}
+                            type="button"
+                          >
+                            {section.label}
+                            {tab === "admin" && section.tier ? (
+                              <span
+                                className={`admin-nav-tier tier-${section.tier}`}
+                              >
+                                {accessTierLabel(section.tier)}
+                              </span>
+                            ) : null}
+                          </button>
+                        ))
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -13649,7 +13810,7 @@ function App() {
                           onClick={() =>
                             showEventForm
                               ? handleCloseEventForm()
-                              : setShowEventForm(true)
+                              : startNewEvent()
                           }
                           type="button"
                         >

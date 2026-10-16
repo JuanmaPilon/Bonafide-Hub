@@ -355,6 +355,62 @@ a:hover {
   text-align: left;
 }
 
+/* ── Menú del nav de Eventos ─────────────────────────────────────────
+   A diferencia de los otros módulos, este submenú es dinámico: arriba el alta
+   de un evento (solo con permiso para crear) y después cada evento abierto, del
+   más cercano al más lejano. Con muchos eventos se scrollea en vez de crecer
+   sin límite (el menú vive colgado del topbar). */
+.nav-submenu-events {
+  min-width: 260px;
+  max-width: 340px;
+  max-height: min(70vh, 460px);
+  overflow-y: auto;
+}
+
+.nav-sublink-icon {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+.nav-sublink-event,
+.nav-sublink-new,
+.nav-sublink-all {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.nav-sublink-label {
+  overflow: hidden;
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-sublink-meta {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.76rem;
+  opacity: 0.8;
+}
+
+.nav-sublink-new {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.nav-sublink-all {
+  margin-top: 2px;
+  border-top: 1px solid rgba(134, 158, 214, 0.18);
+  border-radius: 0 0 8px 8px;
+  color: var(--muted);
+}
+
+.nav-submenu-empty {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .admin-nav-tier {
   border: 1px solid currentColor;
   border-radius: 999px;
@@ -6309,10 +6365,18 @@ select.list-order {
 }
 
 .event-info-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--muted);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.event-info-label svg {
+  font-size: 0.95rem;
+  opacity: 0.9;
 }
 
 .event-info-value {

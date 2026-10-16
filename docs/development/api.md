@@ -697,6 +697,23 @@ Tres decisiones que no son obvias:
   era una tarjeta de la grilla, y en pantallas angostas (≤900 px) vuelve a una
   sola columna.
 
+**Menú del nav y página del evento.** La tab **Eventos** del nav superior es un
+desplegable (como Raids y Admin) pero **dinámico**: arriba el alta
+(`＋ Nuevo evento`, sólo con permiso del módulo `eventos`), después cada evento
+abierto del más cercano al más lejano (ícono del tipo, título y el día) y al final
+"Ver todos los eventos". El menú se scrollea (máx. 460 px) en vez de crecer sin
+límite, y quien no puede crear eventos no ve el alta: sólo entra a cada evento.
+Clickear el título del módulo lleva a la lista (`#/eventos`).
+
+**Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
+cierre, repetición, ubicación, roster principal, Discord) y los tipos
+(`Sword` raid, `Key` M+, `Trophy` PvP, `Confetti` social) se dibujan con íconos de
+Phosphor, como el resto de la app. Los **estados** de la inscripción siguen con
+emoji (✅ ⏰ 🪑 ❌) a propósito: son los mismos que se clickean en el panel y los
+que viajan en el aviso de Discord, así que son un vocabulario compartido y no
+adorno. Los emojis de `EVENT_TYPES` se quedan en el API porque los usa el embed
+(que no puede dibujar íconos).
+
 **Juegos por evento (importante):** el módulo sirve para varios juegos a la vez.
 Cada evento elige un JUEGO y de ahí salen sus roles de inscripción y su catálogo:
 
