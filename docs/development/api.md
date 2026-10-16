@@ -716,12 +716,21 @@ el efecto vaciaba `events` al salir de Eventos, y el desplegable abierto desde
 Inicio decía "No hay eventos próximos" aunque hubiera eventos (mientras cargaba
 tampoco se muestra ese texto: sólo aparece cuando la lista ya llegó y está vacía).
 
-**La barra del módulo es como la del roster:** el título ("Eventos") lo pone la
-cabecera del panel y abajo va la barra con las acciones a la izquierda (con
-ícono) y el buscador ocupando el resto, más los chips de etiqueta. El
-`ListFilterBar` trae `width: 100%` y un margen inferior pensados para ir como
-bloque suelto, así que dentro de la barra se neutralizan: ese margen corría al
-buscador 7 px respecto del botón (el navegador centra la caja **con** su margen).
+**La barra del módulo (Roster, Eventos y Comunicados).** Los tres módulos usan la
+misma barra: el título lo pone la cabecera del panel y abajo va la barra
+(`.module-toolbar`) con las acciones a la izquierda (con ícono) y el buscador
+ocupando el resto, más los chips de filtro en su propia fila. En Comunicados el
+alta (`＋ Nuevo comunicado`) estaba adentro del `ListFilterBar` (quedaba después
+del buscador, alineado a la derecha) y los chips compartían fila con el buscador;
+ahora sigue la misma disposición que Roster y Eventos.
+
+Dos detalles que hacen que se vean alineados: el `ListFilterBar` trae
+`width: 100%` y un margen inferior pensados para ir como bloque suelto, así que
+dentro de la barra se neutralizan (ese margen corría al buscador 7 px respecto del
+botón, porque el navegador centra la caja **con** su margen), y el botón de la
+barra (`.module-toolbar-button`) lleva el ícono alineado al texto con `gap`.
+
+**El título ("Eventos") lo pone la cabecera del panel** y abajo va la barra.
 
 **La ventana de evento es una ventana del panel.** Usa la base (`.modal`: fondo,
 borde, radio, padding y la cabecera `.modal-head` con ícono + título + la cruz

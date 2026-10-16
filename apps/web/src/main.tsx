@@ -3272,9 +3272,9 @@ function RosterSection({
 
   return (
     <div className="roster-view">
-      <div className="roster-toolbar">
+      <div className="module-toolbar">
         <button
-          className="primary-button roster-toolbar-button"
+          className="primary-button module-toolbar-button"
           disabled={!meId}
           onClick={() =>
             meId && setSheetFor({ displayName: "Mi ficha", userId: meId })
@@ -3287,7 +3287,7 @@ function RosterSection({
         </button>
         {canEditOthers ? (
           <button
-            className="primary-button roster-toolbar-button"
+            className="primary-button module-toolbar-button"
             onClick={() => setAddOpen(true)}
             title="Sumar a alguien del servidor que todavía no tiene tarjeta"
             type="button"
@@ -9816,7 +9816,7 @@ function App() {
 
   const newComunicadoButton = canManageComunicados ? (
     <button
-      className="primary-button comunicado-new"
+      className="primary-button module-toolbar-button"
       onClick={() =>
         setCommEditor({
           id: null,
@@ -9828,6 +9828,7 @@ function App() {
       }
       type="button"
     >
+      <Plus aria-hidden="true" size={16} weight="bold" />
       Nuevo comunicado
     </button>
   ) : null;
@@ -13475,14 +13476,22 @@ function App() {
                     </div>
                   ) : (
                     <>
-                      <ListFilterBar
-                        onOrderChange={setComunicadoOrder}
-                        onSearchChange={setComunicadoSearch}
-                        order={comunicadoOrder}
-                        orderOptions={COMUNICADO_ORDER_OPTIONS}
-                        placeholder="Buscar comunicado…"
-                        search={comunicadoSearch}
-                      >
+                      {/* Barra del módulo, igual que la del roster y la de
+                          eventos: la acción a la izquierda (con ícono), el
+                          buscador ocupando el resto y los chips de etiqueta
+                          debajo. */}
+                      <div className="module-toolbar">
+                        {newComunicadoButton}
+                        <ListFilterBar
+                          onOrderChange={setComunicadoOrder}
+                          onSearchChange={setComunicadoSearch}
+                          order={comunicadoOrder}
+                          orderOptions={COMUNICADO_ORDER_OPTIONS}
+                          placeholder="Buscar comunicado…"
+                          search={comunicadoSearch}
+                        />
+                      </div>
+                      <div className="event-tag-filter">
                         <button
                           className={`event-filter-chip${comunicadoTagFilter.length === 0 ? " active" : ""}`}
                           onClick={() => setComunicadoTagFilter([])}
@@ -13527,8 +13536,7 @@ function App() {
                             Sin etiqueta
                           </button>
                         ) : null}
-                        {newComunicadoButton}
-                      </ListFilterBar>
+                      </div>
                       {visiblePublished.length === 0 &&
                       visibleDrafts.length === 0 ? (
                         <div className="empty-state">
@@ -14602,13 +14610,13 @@ function App() {
                       {/* Barra del módulo, como la del roster: las acciones a
                           la izquierda (con ícono) y el buscador ocupando el
                           resto. El título lo pone la cabecera del panel. */}
-                      <div className="event-toolbar">
+                      <div className="module-toolbar">
                         {canAccess("eventos") ? (
                           <button
                             className={
                               showEventForm
-                                ? "ghost-button cancel-button event-toolbar-button"
-                                : "primary-button event-toolbar-button"
+                                ? "ghost-button cancel-button module-toolbar-button"
+                                : "primary-button module-toolbar-button"
                             }
                             onClick={() =>
                               showEventForm

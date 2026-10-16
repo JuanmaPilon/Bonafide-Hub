@@ -3088,21 +3088,34 @@ a:hover {
   gap: 14px;
 }
 
-.roster-toolbar {
+/* ── Barra de un módulo ──────────────────────────────────────────────
+   Es la misma en Roster, Eventos y Comunicados: las acciones a la izquierda
+   (con su ícono) y el buscador ocupando el resto de la fila, con los chips de
+   filtro debajo. */
+.module-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
 
-.roster-toolbar .list-search {
+.module-toolbar .list-search {
   flex: 1 1 220px;
   min-width: 180px;
 }
 
-/* Botones del roster con ícono: misma pastilla que el resto, con el ícono
-   alineado al texto. */
-.roster-toolbar-button {
+/* `ListFilterBar` trae el ancho completo y un margen inferior pensados para ir
+   como bloque suelto: dentro de la barra, ese margen corría al buscador 7 px
+   respecto del botón (el navegador centra la caja CON su margen). */
+.module-toolbar .list-filters {
+  flex: 1 1 320px;
+  width: auto;
+  margin-bottom: 0;
+}
+
+/* Botón de la barra: misma pastilla que el resto, con el ícono alineado al
+   texto. */
+.module-toolbar-button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -7660,11 +7673,6 @@ select.list-order {
 
 /* Botón de crear: comparte la fila del buscador y se va al extremo derecho, así
    el título de la página no queda separado del resto por un renglón vacío. */
-.comunicado-new {
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
 /* Arrastre del tablero (solo staff: el orden es uno solo para toda la guild).
    La tarjeta se agarra y, al soltarla sobre otra, queda en ese lugar. */
 .comunicado-note--draggable {
@@ -9929,32 +9937,6 @@ select.list-order {
    y la grilla van después, en orden natural del DOM. */
 .events-grid {
   order: 3;
-}
-
-/* Barra del módulo: misma disposición que la del roster (acciones con ícono a
-   la izquierda y buscador ocupando el resto). */
-.event-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-/* `ListFilterBar` trae el ancho completo y un margen inferior pensados para ir
-   como bloque suelto: dentro de la barra, ese margen lo corría 7px hacia arriba
-   respecto del botón (el navegador centra la caja CON su margen, así que el
-   botón y el buscador quedaban a distinta altura). */
-.event-toolbar .list-filters {
-  flex: 1 1 320px;
-  width: auto;
-  margin-bottom: 0;
-}
-
-.event-toolbar-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  white-space: nowrap;
 }
 
 /* ── Eventos: tema claro ────────────────────────────────────────────
