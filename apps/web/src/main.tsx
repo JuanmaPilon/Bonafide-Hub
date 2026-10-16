@@ -516,6 +516,27 @@ function slugifyTitle(title: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// Slug legible de un evento: la URL sale del título ("Raid JUEVES" →
+// "raid-jueves") para que se pueda leer y compartir. Una serie repite el título
+// todas las semanas, así que cuando dos eventos quedan con el mismo slug el
+// primero (activo, y entre activos el más próximo) se queda con la URL limpia y
+// el resto se desempata con un sufijo corto del id.
+function eventSlug(event: HubEvent, all: HubEvent[]): string {
+  const base = slugifyTitle(event.title) || event.id;
+  const candidates = all
+    .filter((entry) => (slugifyTitle(entry.title) || entry.id) === base)
+    .sort(
+      (left, right) =>
+        Number(left.status === "completed") -
+          Number(right.status === "completed") ||
+        new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime(),
+    );
+  if (candidates.length <= 1 || candidates[0]?.id === event.id) {
+    return base;
+  }
+  return `${base}-${event.id.slice(-4)}`;
+}
+
 // Descarga un texto como archivo (lo usa el informe de asistencia en CSV).
 function downloadCsvFile(name: string, content: string): void {
   downloadBlob(name, new Blob([content], { type: "text/csv;charset=utf-8" }));
@@ -4154,11 +4175,16 @@ function EventCard({
     <>
       <article className="event-card">
         {event.imageUrl ? (
-          <img
-            className="event-card-image"
-            src={event.imageUrl}
-            alt={event.title}
-          />
+          <div
+            className="event-card-image-wrap"
+            style={{ "--event-image": `url("${event.imageUrl}")` } as CSSProperties}
+          >
+            <img
+              className="event-card-image"
+              src={event.imageUrl}
+              alt={event.title}
+            />
+          </div>
         ) : (
           <div className="event-card-image event-card-image-placeholder">
             <TypeIcon aria-hidden="true" weight="fill" />
@@ -4491,6 +4517,11 @@ function EventCard({
                     </div>
                   ) : (
                     <>
+                      {/* Mismo flujo que el asistente del bot: primero el estado,
+                          después el rol, la clase y la spec, y al final el
+                          personaje. La clase y la spec son dos desplegables (el
+                          catálogo entero como grilla de chips ocupaba media
+                          pantalla de alto). */}
                       <div className="event-signup-status">
                         {SIGNUP_OPTIONS.map((option) => (
                           <button
@@ -4513,7 +4544,16 @@ function EventCard({
                             <button
                               className={`event-status-btn role${catalogRole === entry.key ? " active" : ""}`}
                               key={entry.key}
-                              onClick={() => setCatalogRole(entry.key)}
+                              onClick={() => {
+                                setCatalogRole(entry.key);
+                                // Cambiar de rol cambia el catálogo: la clase y la
+                                // spec elegidas dejan de existir ahí.
+                                if (role && role !== entry.key) {
+                                  setRole("");
+                                  setWowClass("");
+                                  setSpec("");
+                                }
+                              }}
                               title={entry.label}
                               type="button"
                             >
@@ -4521,6 +4561,9 @@ function EventCard({
                                 role={entry.key}
                                 roles={eventRoles}
                               />
+                              <span className="event-status-label">
+                                {entry.label}
+                              </span>
                             </button>
                           ))}
                         </div>
@@ -4534,83 +4577,104 @@ function EventCard({
                             Todavía no hay clases cargadas para ese rol.
                           </div>
                         ) : (
-                          <div className="event-signup-specs">
-                            {catalogClasses.map(([className, rows]) => (
-                              <div
-                                className="event-signup-class"
-                                key={className}
+                          <div className="event-signup-fields">
+                            <label className="event-signup-field">
+                              <span>Clase</span>
+                              <select
+                                className="select"
+                                onChange={(changeEvent) => {
+                                  const className = changeEvent.target.value;
+                                  setWowClass(className);
+                                  setSpec("");
+                                  setRole(catalogRole);
+                                  // La clase ya dice el rol: si el rol del
+                                  // catálogo no era el que se estaba mirando, se
+                                  // acomoda solo.
+                                  const first = specs.find(
+                                    (row) =>
+                                      row.className === className &&
+                                      row.role === catalogRole,
+                                  );
+                                  if (first) {
+                                    setRole(first.role);
+                                  }
+                                }}
+                                value={wowClass}
                               >
-                                <span className="event-signup-class-name">
-                                  {className}
-                                </span>
-                                <div className="event-signup-spec-row">
-                                  {rows.map((row) => {
-                                    const selected =
-                                      role === row.role &&
-                                      wowClass === row.className &&
-                                      spec === row.specName;
-                                    return (
-                                      <button
-                                        className={`event-signup-spec${selected ? " active" : ""}`}
-                                        key={row.id}
-                                        onClick={() => chooseSpec(row)}
-                                        title={`${row.specName} — ${row.className} (${roleLabelFor(row.role)})`}
-                                        type="button"
-                                      >
-                                        <DiscordEmojiImage
-                                          animated={row.animated}
-                                          emojiId={row.emojiId}
-                                          fallback={row.emojiUnicode}
-                                          name={row.specName}
-                                          size={24}
-                                        />
-                                        <span>{row.specName}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ))}
+                                <option value="">Elegir…</option>
+                                {catalogClasses.map(([className, rows]) => (
+                                  <option key={className} value={className}>
+                                    {rows[0]?.emojiUnicode
+                                      ? `${rows[0].emojiUnicode} `
+                                      : classEmoji(className)
+                                        ? `${classEmoji(className)} `
+                                        : ""}
+                                    {className}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="event-signup-field">
+                              <span>Spec</span>
+                              <select
+                                className="select"
+                                disabled={!wowClass}
+                                onChange={(changeEvent) => {
+                                  const chosen = specs.find(
+                                    (row) =>
+                                      row.role === role &&
+                                      row.className === wowClass &&
+                                      row.specName === changeEvent.target.value,
+                                  );
+                                  if (chosen) {
+                                    chooseSpec(chosen);
+                                  }
+                                }}
+                                value={
+                                  specs.some(
+                                    (row) =>
+                                      row.role === role &&
+                                      row.className === wowClass &&
+                                      row.specName === spec,
+                                  )
+                                    ? spec
+                                    : ""
+                                }
+                              >
+                                <option value="">
+                                  {wowClass ? "Elegir…" : "Elegí una clase"}
+                                </option>
+                                {specs
+                                  .filter(
+                                    (row) =>
+                                      row.role === role &&
+                                      row.className === wowClass,
+                                  )
+                                  .map((row) => (
+                                    <option key={row.id} value={row.specName}>
+                                      {row.emojiUnicode
+                                        ? `${row.emojiUnicode} `
+                                        : ""}
+                                      {row.specName}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
                           </div>
                         )}
-                        {role && wowClass && spec ? (
-                          <div className="event-signup-selected">
-                            <DiscordEmojiImage
-                              animated={currentSpecRow?.animated}
-                              emojiId={currentSpecRow?.emojiId}
-                              fallback={
-                                currentSpecRow?.emojiUnicode ??
-                                classEmoji(wowClass)
-                              }
-                              name={currentSpecRow?.specName}
-                            />
-                            <span>
-                              {roleLabelFor(role)} · {wowClass}
-                              {spec ? ` · ${spec}` : ""}
-                            </span>
-                            <button
-                              className="ghost-button small"
-                              onClick={() => {
-                                setRole("");
-                                setWowClass("");
-                                setSpec("");
-                              }}
-                              type="button"
-                            >
-                              Quitar
-                            </button>
-                          </div>
-                        ) : null}
                         {characterEnabled ? (
-                          <input
-                            className="input"
-                            value={character}
-                            onChange={(event) =>
-                              setCharacter(event.target.value)
-                            }
-                            maxLength={40}
-                            placeholder="Nombre de tu personaje"
-                          />
+                          <label className="event-signup-field">
+                            <span>Personaje</span>
+                            <input
+                              className="input"
+                              value={character}
+                              onChange={(event) =>
+                                setCharacter(event.target.value)
+                              }
+                              maxLength={40}
+                              placeholder="El nombre como figura en el juego"
+                            />
+                          </label>
                         ) : null}
                         {signupError ? (
                           <span className="event-signup-error">
@@ -7811,13 +7875,20 @@ function App() {
     [events],
   );
 
-  // Evento de la página abierta (#/eventos/<id>). Se busca en TODOS los eventos,
-  // no solo en los activos: una ocurrencia archivada también tiene su página (con
-  // el roster que quedó de esa noche).
-  const pageEvent = useMemo(
-    () => (eventKey ? (events.find((entry) => entry.id === eventKey) ?? null) : null),
-    [eventKey, events],
-  );
+  // Evento de la página abierta (#/eventos/<slug>). Se busca en TODOS los
+  // eventos, no solo en los activos: una ocurrencia archivada también tiene su
+  // página (con el roster que quedó de esa noche). Acepta el id como clave
+  // (enlaces viejos, o el id cuando la lista todavía no llegó).
+  const pageEvent = useMemo(() => {
+    if (!eventKey) {
+      return null;
+    }
+    return (
+      events.find((entry) => eventSlug(entry, events) === eventKey) ??
+      events.find((entry) => entry.id === eventKey) ??
+      null
+    );
+  }, [eventKey, events]);
   const [showEventForm, setShowEventForm] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   // Indica que el form abrió en modo "duplicar" (para el título del form).
@@ -8082,11 +8153,11 @@ function App() {
   }
 
   // Página propia de un evento: la lista vive en #/eventos y cada evento en
-  // #/eventos/<id>, así el enlace se puede compartir (y el botón atrás del
-  // navegador vuelve a la lista).
-  function openEvent(eventId: string): void {
+  // #/eventos/<slug del título>, así el enlace se puede leer y compartir (y el
+  // botón atrás del navegador vuelve a la lista).
+  function openEvent(event: HubEvent): void {
     setActiveTab("eventos");
-    setEventKey(eventId);
+    setEventKey(eventSlug(event, events));
   }
 
   function goToEventsList(): void {
@@ -10945,12 +11016,29 @@ function App() {
       : activeTab === "comunicados" && comunicadoSlug
         ? `#/comunicados/${comunicadoSlug}`
         : activeTab === "eventos" && eventKey
-          ? `#/eventos/${eventKey}`
+          ? // Con el evento ya resuelto se escribe su slug; si la lista todavía
+            // no llegó, se deja la clave tal cual (si no, el enlace directo
+            // perdía el evento y volvía a la lista).
+            `#/eventos/${pageEvent ? eventSlug(pageEvent, events) : eventKey}`
           : `#/${activeTab}`;
     if (window.location.hash !== target) {
-      window.location.hash = target;
+      // Normalizar la clave de un evento (un enlace viejo con el id) REEMPLAZA la
+      // entrada: si no, el "atrás" pasaba por una URL intermedia que muestra lo
+      // mismo.
+      if (activeTab === "eventos" && pageEvent) {
+        window.history.replaceState(null, "", target);
+      } else {
+        window.location.hash = target;
+      }
     }
-  }, [activeTab, comunicadoSlug, eventKey, tabSections]);
+  }, [activeTab, comunicadoSlug, eventKey, events, pageEvent, tabSections]);
+
+  // El título de la pestaña del navegador sigue al evento abierto.
+  useEffect(() => {
+    document.title = pageEvent
+      ? `${pageEvent.title} · Bonafide Hub`
+      : "Bonafide Hub";
+  }, [pageEvent]);
 
   // Al salir de Comunicados se limpia el slug: volver a la tab siempre
   // muestra la lista (no un comunicado puntual anterior).
@@ -11462,7 +11550,7 @@ function App() {
                             <button
                               className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
                               key={entry.id}
-                              onClick={() => openEvent(entry.id)}
+                              onClick={() => openEvent(entry)}
                               type="button"
                             >
                               <span className="nav-sublink-label">
@@ -11604,34 +11692,47 @@ function App() {
             <section
               className={`panel content-panel${activeTab === "admin" && activeAdminSection?.tier ? ` content-panel-admin admin-tier-panel-${activeAdminSection.tier}` : ""}`}
             >
-              {/* Cabecera del módulo: el título de la subsección actual. Eventos
-                  también la usa (antes armaba su propio título con el botón de
-                  nuevo evento al lado; ahora el botón vive en la barra del
-                  módulo, como en el roster). */}
+              {/* Cabecera del módulo: el título de la subsección actual. En la
+                  página de un evento el título es el del evento, con la vuelta a
+                  la lista a la derecha (la barra de acciones vive abajo, como en
+                  el roster). */}
               <div className="section-header">
-                <div>                    <h2
-                      className={
-                        activeTab === "admin" && activeAdminSection?.tier
-                          ? `admin-section-title tier-${activeAdminSection.tier}`
-                          : undefined
-                      }
-                    >
-                      {activeTab === "admin"
+                <div>
+                  <h2
+                    className={
+                      activeTab === "admin" && activeAdminSection?.tier
+                        ? `admin-section-title tier-${activeAdminSection.tier}`
+                        : undefined
+                    }
+                  >
+                    {pageEvent
+                      ? pageEvent.title
+                      : activeTab === "admin"
                         ? (activeAdminSection?.label ?? panelTitle(activeTab))
                         : currentSectionTitle(
                             activeTab,
                             sectionFor(activeTab),
                             panelTitle(activeTab),
                           )}
-                    </h2>
-                  </div>
-                  {activeTab === "admin" && activeAdminSection?.tier ? (
-                    <span
-                      className={`admin-nav-tier tier-${activeAdminSection.tier}`}
-                    >
-                      {accessTierLabel(activeAdminSection.tier)}
-                    </span>
-                  ) : null}
+                  </h2>
+                </div>
+                {activeTab === "admin" && activeAdminSection?.tier ? (
+                  <span
+                    className={`admin-nav-tier tier-${activeAdminSection.tier}`}
+                  >
+                    {accessTierLabel(activeAdminSection.tier)}
+                  </span>
+                ) : null}
+                {activeTab === "eventos" && eventKey ? (
+                  <button
+                    className="ghost-button module-toolbar-button"
+                    onClick={goToEventsList}
+                    type="button"
+                  >
+                    <ArrowLeft aria-hidden="true" weight="bold" />
+                    Todos los eventos
+                  </button>
+                ) : null}
               </div>
 
               {activeTab === "dashboard" ? (                <div className="dashboard-stack">
@@ -13816,20 +13917,8 @@ function App() {
                 </div>
               ) : activeTab === "eventos" ? (
                 <div className="dashboard-stack">
-                  {/* Con un evento abierto manda su página: la barra de la lista
-                      no se muestra. */}
-                  {eventKey ? (
-                    <div className="event-page-bar">
-                      <button
-                        className="ghost-button"
-                        onClick={goToEventsList}
-                        type="button"
-                      >
-                        <ArrowLeft aria-hidden="true" weight="fill" />
-                        Todos los eventos
-                      </button>
-                    </div>
-                  ) : null}
+                  {/* El título y la vuelta a la lista van en la cabecera del
+                      panel: la página del evento no repite una barra propia. */}
 
                   {/* El form es un MODAL, y va por PORTAL: el panel de contenido
                       tiene backdrop-filter, y eso convierte al panel en el
@@ -14702,7 +14791,7 @@ function App() {
                               event={event}
                               key={event.id}
                               meId={me?.id}
-                              onOpen={(target) => openEvent(target.id)}
+                              onOpen={openEvent}
                             />
                           ))}
                         </div>

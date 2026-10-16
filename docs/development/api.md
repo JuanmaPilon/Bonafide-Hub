@@ -688,19 +688,42 @@ de 420 px: el listado se volvía una pared y el detalle quedaba apretado.
 
 Tres decisiones que no son obvias:
 
-- La URL usa el **id** del evento, no un slug del título: las series repiten
-  título (una raid semanal se llama igual todas las semanas), así que un slug
-  colisionaría. El id se toma del hash tal cual (sin pasar a minúsculas, a
-  diferencia de los slugs de comunicados, que sí se arman del título).
+- La URL sale del **título** (`#/eventos/raid-jueves`), no del id, para que se
+  pueda leer y compartir. Una serie repite el título todas las semanas, así que
+  si dos eventos quedan con el mismo slug el **primero** (activo, y entre activos
+  el más próximo) se queda con la URL limpia y el resto lleva un sufijo corto del
+  id. El id sigue funcionando como clave (enlaces viejos, o mientras la lista
+  carga): la URL se normaliza al slug con `replaceState`, así el "atrás" no pasa
+  por una entrada intermedia.
 - La página se busca en **todos** los eventos, no solo en los activos: una
   ocurrencia archivada (Admin → Eventos) también tiene su página y muestra el
-  roster que quedó de esa noche (`#/eventos/<id>` a mano funciona).
+  roster que quedó de esa noche. El título de la página y de la pestaña del
+  navegador es el del **evento**, con la vuelta a la lista en la cabecera del
+  panel (en la fila del título, como el resto de las acciones de módulo).
 - El ancho se aprovecha con CSS, no moviendo el markup: el cuerpo de la tarjeta
   se vuelve un grid de dos columnas y cada bloque se ubica con `grid-column`
   (datos y roster a la izquierda; asistencia, inscripción y acciones a la
   derecha). Así el orden del DOM sigue siendo el mismo que cuando el componente
   era una tarjeta de la grilla, y en pantallas angostas (≤900 px) vuelve a una
   sola columna.
+
+**La portada se ve entera.** El banner mantiene el alto del formato 3:1, pero la
+imagen va con `object-fit: contain` en vez de `cover`: recortar el arte de una
+imagen que ya viene armada (con texto dibujado) comía justo lo que se lee. Lo que
+sobra a los costados lo llena la misma imagen ampliada y desenfocada
+(`.event-card-image-wrap::before`), así el marco no queda de un color plano.
+
+**La inscripción se hace como en el bot.** El panel de "Mi inscripción" es una
+tarjeta con el flujo del asistente de Discord: primero el **estado** (Voy /
+Tarde / Bench / No asisto), después el **rol** (Tank / Healer / Melee / Range,
+uno por botón con su etiqueta: antes eran círculos con un emoji), después
+**clase** y **spec** en dos desplegables —el catálogo entero como grilla de chips
+ocupaba media pantalla de alto— y al final el **personaje**. Cambiar de rol
+limpia la clase y la spec (el catálogo del rol anterior no aplica).
+
+**Las columnas del roster no se estiran**: cada rol queda con el alto de su gente
+(antes la columna más corta —2 tanks— se estiraba a la altura de la más larga,
+con el resto del recuadro vacío).
 
 **Menú del nav y página del evento.** La tab **Eventos** del nav superior es un
 desplegable (como Raids y Admin) pero **dinámico**: arriba el alta

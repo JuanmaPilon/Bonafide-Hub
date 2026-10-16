@@ -6495,12 +6495,14 @@ select.list-order {
   gap: 10px;
 }
 
-/* Columnas por rol (estilo Raid Helper). El mínimo deja entrar "nick
-   (personaje)" en una línea sin que se caiga a la fila de abajo. */
+/* Columnas por rol (estilo Raid Helper): no se estiran a la altura de la más
+   alta (cada rol queda con el alto de su gente, sin cajas con vacío de sobra) y
+   el mínimo deja entrar "nick (personaje)" en una línea. */
 .event-roster-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-items: start;
+  gap: 10px;
 }
 
 .event-roster-column {
@@ -6610,14 +6612,18 @@ select.list-order {
 
 .event-signup {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  align-content: start;
   margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(136, 159, 216, 0.3);
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(134, 158, 214, 0.07);
+  border: 1px solid rgba(134, 158, 214, 0.16);
 }
 
 .event-signup-status {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -6719,10 +6725,11 @@ select.list-order {
   opacity: 1;
 }
 
-/* En la página del evento —donde la gente se anota— los botones de estado
-   llevan la etiqueta al lado del emoji: es la acción principal de la pantalla y
-   un círculo con un emoji no dice "Voy" / "No asisto". */
-.event-signup-status .event-status-btn {
+/* En la página del evento —donde la gente se anota— los botones de estado y de
+   rol llevan la etiqueta al lado del emoji: son la acción principal de la
+   pantalla y un círculo con un emoji no dice "Voy" ni "Tank". */
+.event-signup-status .event-status-btn,
+.event-signup-role-row .event-status-btn {
   width: auto;
   height: auto;
   padding: 7px 12px;
@@ -6730,7 +6737,8 @@ select.list-order {
   font-size: 0.88rem;
 }
 
-.event-signup-status .event-status-btn.active {
+.event-signup-status .event-status-btn.active,
+.event-signup-role-row .event-status-btn.active {
   opacity: 1;
 }
 
@@ -6902,13 +6910,6 @@ select.list-order {
   font-weight: 500;
 }
 
-.event-page-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .event-page {
   border-radius: 18px;
 }
@@ -6921,9 +6922,38 @@ select.list-order {
   border-radius: 18px;
 }
 
-.event-page .event-card-image,
+/* Sin portada, el alto del banner lo pone el placeholder. */
 .event-page .event-card-image-placeholder {
   aspect-ratio: 3 / 1;
+}
+
+/* La portada de la página del evento: mantiene el alto del banner (3:1) pero
+   muestra la imagen ENTERA (`object-fit: contain`), así no se recorta el arte.
+   Lo que sobra a los costados lo llena la misma imagen, ampliada y desenfocada,
+   así el marco no queda de un color plano. */
+.event-page .event-card-image-wrap {
+  position: relative;
+  aspect-ratio: 3 / 1;
+  overflow: hidden;
+  background: #0b1226;
+}
+
+.event-page .event-card-image-wrap::before {
+  position: absolute;
+  inset: -12%;
+  background-image: var(--event-image);
+  background-position: center;
+  background-size: cover;
+  content: "";
+  filter: blur(26px) saturate(1.15) brightness(0.72);
+}
+
+.event-page .event-card-image {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: contain;
 }
 
 .event-page .event-card-body {
@@ -6953,13 +6983,8 @@ select.list-order {
   align-items: flex-start;
 }
 
-/* En la página el roster tiene el ancho completo de la columna: con 4 roles
-   apretados en 140 px cada nombre ("nick (personaje)") se partía en dos
-   líneas. */
-.event-page .event-roster-columns {
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-}
+/* En la página el roster ya tiene el ancho de su columna: no necesita repetir
+   las medidas (las toma de `.event-roster-columns`). */
 
 @media (max-width: 900px) {
   .event-page .event-card-body {
@@ -7151,7 +7176,6 @@ select.list-order {
   font-size: 0.95rem;
   opacity: 1;
 }
-
 .event-status-btn.role.active {
   border-color: rgba(106, 168, 255, 0.75);
   background: rgba(106, 168, 255, 0.14);
@@ -7161,6 +7185,27 @@ select.list-order {
   color: var(--muted);
   font-size: 0.85rem;
   padding: 4px 0;
+}
+
+/* Campos de la inscripción (clase, spec y personaje): rótulo arriba como en el
+   resto del módulo y el control del hub abajo. Clase y spec van lado a lado. */
+.event-signup-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.event-signup-field {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.event-signup-field > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* Error de validación de la inscripción (p. ej. falta el nombre de personaje). */
