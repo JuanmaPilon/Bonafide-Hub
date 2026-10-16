@@ -456,6 +456,11 @@ presencia puede reportar el que no tiene portada ("scp secret laboratory" al
 lado del "SCP: Secret Laboratory" bueno), así que la entrada sin portada se
 descarta para no dejar dos tarjetas del mismo juego.
 
+Aun así hay juegos que llegan sin portada (los que no están en la lista de
+CurseForge: launchers, editores, juegos muy nuevos). En la grilla esas tarjetas
+dibujan un **ícono de joystick** en la misma caja de la portada, en vez de
+quedar como un recuadro vacío (`game-cover-fallback`).
+
 XP:
 
 1. `GET /guilds/:guildId/xp-config`
@@ -700,15 +705,32 @@ Tres decisiones que no son obvias:
 **Menú del nav y página del evento.** La tab **Eventos** del nav superior es un
 desplegable (como Raids y Admin) pero **dinámico**: arriba el alta
 (`＋ Nuevo evento`, sólo con permiso del módulo `eventos`), después cada evento
-abierto del más cercano al más lejano (ícono del tipo, título y el día) y al final
-"Ver todos los eventos". El menú se scrollea (máx. 460 px) en vez de crecer sin
-límite, y quien no puede crear eventos no ve el alta: sólo entra a cada evento.
-Clickear el título del módulo lleva a la lista (`#/eventos`).
+abierto del más cercano al más lejano (título y el día) y al final "Ver todos los
+eventos". El menú se scrollea (máx. 460 px) en vez de crecer sin límite, y quien
+no puede crear eventos no ve el alta: sólo entra a cada evento. Clickear el título
+del módulo lleva a la lista (`#/eventos`).
+
+Ojo con **cuándo se carga la lista**: el menú se abre desde cualquier módulo, así
+que la lista se pide con el módulo habilitado y no sólo al entrar a la tab. Antes
+el efecto vaciaba `events` al salir de Eventos, y el desplegable abierto desde
+Inicio decía "No hay eventos próximos" aunque hubiera eventos (mientras cargaba
+tampoco se muestra ese texto: sólo aparece cuando la lista ya llegó y está vacía).
 
 **La barra del módulo es como la del roster:** el título ("Eventos") lo pone la
 cabecera del panel y abajo va la barra con las acciones a la izquierda (con
-ícono) y el buscador ocupando el resto, más los chips de etiqueta. Antes la tab
-armaba su propia cabecera con el título y el botón de alta al lado.
+ícono) y el buscador ocupando el resto, más los chips de etiqueta. El
+`ListFilterBar` trae `width: 100%` y un margen inferior pensados para ir como
+bloque suelto, así que dentro de la barra se neutralizan: ese margen corría al
+buscador 7 px respecto del botón (el navegador centra la caja **con** su margen).
+
+**La ventana de evento es una ventana del panel.** Usa la base (`.modal`: fondo,
+borde, radio, padding y la cabecera `.modal-head` con ícono + título + la cruz
+circular) y sólo cambia el ancho (920 px) y que el scroll lo hace la capa y no la
+ventana: con `overflow` en la ventana, el almanaque de "Fecha y hora"
+(`position: absolute`) quedaba recortado por el borde. Los campos van en
+`.form-grid` (dos por fila, los bloques anchos ocupan la fila entera) y las
+acciones usan el pie estándar (`.admin-save`: línea arriba y `Cancelar` +
+`Crear evento`).
 
 **Los modales de eventos van por PORTAL.** El panel de contenido tiene
 `backdrop-filter`, y eso lo convierte en el contenedor de los `position: fixed`

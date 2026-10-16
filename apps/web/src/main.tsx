@@ -17,6 +17,7 @@ import {
   ArrowsClockwise,
   Broadcast,
   Calendar,
+  CalendarDots,
   CardsThree,
   ChatCircleDots,
   Clock,
@@ -25,6 +26,7 @@ import {
   DownloadSimple,
   Fire,
   Flag,
+  GameController,
   Heart,
   HourglassSimple,
   IdentificationCard,
@@ -7594,6 +7596,9 @@ function App() {
   );
   const [events, setEvents] = useState<HubEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
+  // El módulo de Eventos está habilitado: la lista se necesita para el menú del
+  // nav (que se abre desde cualquier tab).
+  const eventsModuleOn = isModuleEnabled(config, "eventos");
   // Evento cuyo informe se está generando (estado del botón) y evento del que
   // se está eligiendo el formato de descarga.
   const [reportBusyEventId, setReportBusyEventId] = useState<string | null>(
@@ -8574,9 +8579,16 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
+  // La lista de eventos la usan la tab del módulo, el historial de Admin y el
+  // menú del nav. Se carga con el MÓDULO habilitado (no solo al entrar a la
+  // tab): el menú se abre desde cualquier lado, y al entrar por primera vez
+  // desde Inicio el desplegable decía "No hay eventos próximos" aunque hubiera.
   useEffect(() => {
     const adminEvents = activeTab === "admin" && canAccess("eventos");
-    if (!selectedGuildId || (activeTab !== "eventos" && !adminEvents)) {
+    if (
+      !selectedGuildId ||
+      (activeTab !== "eventos" && !adminEvents && !eventsModuleOn)
+    ) {
       setEvents([]);
       setEventsLoading(false);
       return;
@@ -8599,7 +8611,7 @@ function App() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, selectedGuildId]);
+  }, [activeTab, eventsModuleOn, selectedGuildId]);
 
   // El catálogo de specs de inscripción se carga en la tab Eventos, que es
   // donde se usa (selector de inscripción y roster).
@@ -11445,30 +11457,22 @@ function App() {
                               Nuevo evento
                             </button>
                           ) : null}
-                          {navEventMenu.map((entry) => {
-                            const TypeIcon = eventTypeIcon(entry.type);
-                            return (
-                              <button
-                                className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
-                                key={entry.id}
-                                onClick={() => openEvent(entry.id)}
-                                type="button"
-                              >
-                                <TypeIcon
-                                  aria-hidden="true"
-                                  weight="fill"
-                                  className="nav-sublink-icon"
-                                />
-                                <span className="nav-sublink-label">
-                                  {entry.title}
-                                </span>
-                                <span className="nav-sublink-meta">
-                                  {formatDayMonthShort(entry.startsAt)}
-                                </span>
-                              </button>
-                            );
-                          })}
-                          {navEventMenu.length === 0 ? (
+                          {navEventMenu.map((entry) => (
+                            <button
+                              className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
+                              key={entry.id}
+                              onClick={() => openEvent(entry.id)}
+                              type="button"
+                            >
+                              <span className="nav-sublink-label">
+                                {entry.title}
+                              </span>
+                              <span className="nav-sublink-meta">
+                                {formatDayMonthShort(entry.startsAt)}
+                              </span>
+                            </button>
+                          ))}
+                          {navEventMenu.length === 0 && !eventsLoading ? (
                             <span className="nav-submenu-empty">
                               No hay eventos próximos.
                             </span>
@@ -11659,7 +11663,16 @@ function App() {
                                     decoding="async"
                                     src={game.coverUrl}
                                   />
-                                ) : null}
+                                ) : (
+                                  /* Discord no siempre manda portada (juegos
+                                     nuevos o sin assets en su CDN): sin esto la
+                                     tarjeta quedaba como una caja vacía. */
+                                  <GameController
+                                    aria-hidden="true"
+                                    className="game-cover-fallback"
+                                    weight="fill"
+                                  />
+                                )}
                                 {hot ? (
                                   <span
                                     className="game-cover-hot"
@@ -13822,30 +13835,39 @@ function App() {
                           onClick={handleCloseEventForm}
                         >
                           <div
-                            className="event-form-card event-form-modal"
+                            className="modal event-form-modal"
                             onClick={(clickEvent) =>
                               clickEvent.stopPropagation()
                             }
                             role="dialog"
                             aria-modal="true"
                           >
-                        <div className="event-form-head">
-                          <h3 className="event-form-title">
+                        {/* Cabecera estándar de las ventanas del panel: ícono +
+                            título y la cruz a la derecha (la misma del editor de
+                            XP y los del loro). */}
+                        <header className="modal-head">
+                          <h4>
+                            <CalendarDots aria-hidden="true" weight="fill" />
                             {editingEventId
                               ? "Editar evento"
                               : duplicatingEvent
                                 ? "Duplicar evento"
                                 : "Nuevo evento"}
-                          </h3>
+                          </h4>
                           <button
-                            className="ghost-button small"
+                            aria-label="Cerrar"
+                            className="icon-button"
                             onClick={handleCloseEventForm}
                             title="Cerrar"
                             type="button"
                           >
-                            ✕
+                            <X
+                              aria-hidden="true"
+                              className="icon-button-icon"
+                              weight="bold"
+                            />
                           </button>
-                        </div>
+                        </header>
                         <div className="form-grid">
                           <label>
                             <span>Título</span>
@@ -14507,9 +14529,9 @@ function App() {
                             </label>
                           ) : null}
                         </div>
-                        <div className="event-form-actions">
+                        <div className="admin-save">
                           <button
-                            className="ghost-button cancel-button"
+                            className="ghost-button small"
                             onClick={handleCloseEventForm}
                             type="button"
                           >
