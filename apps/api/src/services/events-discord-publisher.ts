@@ -12,6 +12,20 @@ import type { EventTag } from "./events-store.js";
 // Esta capa NO toca la base de datos: devuelve los ids que el caller
 // persiste con setEventDiscordInfo().
 
+// Día de la semana con el que se anuncia el cierre de inscripciones. Discord no
+// tiene un estilo de timestamp que sea "día + hora" (los suyos son fecha
+// completa o sólo la hora), así que el día se calcula acá en la zona de la guild
+// y la hora viaja como timestamp de Discord, que se localiza sola para cada uno.
+const GUILD_TIME_ZONE = "America/Argentina/Buenos_Aires";
+
+function weekdayName(date: Date): string {
+  const name = new Intl.DateTimeFormat("es-AR", {
+    timeZone: GUILD_TIME_ZONE,
+    weekday: "long",
+  }).format(date);
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 export type EventRecurrence = "none" | "daily" | "weekly" | "biweekly";
 
 export type EventDiscordOptions = {
@@ -688,17 +702,19 @@ export function buildEventAnnouncementEmbeds(input: {
   fields.push({
     inline: true,
     name: "⏳ Cierre de inscripciones",
+    // Con el día (martes 20:00): el aviso puede ser semanal, así que la hora
+    // sola no dice cuándo cierra.
     value: input.signupDeadline
-      ? `<t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
+      ? `${weekdayName(input.signupDeadline)} <t:${Math.floor(input.signupDeadline.getTime() / 1000)}:t>`
       : "—",
   });
   if (requiredRoleId) {
-    // Sin título propio: el requisito dice "Requiere @rol" y, abajo, la nota del
-    // bench (que es la única advertencia de que sin el rol no entrás al roster).
+    // La mención va en el VALOR: en el nombre de un field Discord no la
+    // resuelve y la muestra cruda (`<@&id>`), que es lo que se veía roto.
     fields.push({
       inline: true,
-      name: `Requiere <@&${requiredRoleId}>`,
-      value: "*Sin el rol, la inscripción queda como Bench.*",
+      name: "\u200b",
+      value: `Requiere <@&${requiredRoleId}>\n*Sin el rol, la inscripción queda como Bench.*`,
     });
   }
   pushSpacer(fields);

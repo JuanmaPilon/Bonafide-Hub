@@ -708,21 +708,32 @@ fila se cierra con un field de ancho cero (`pushSpacer`): sin ese corte el field
 siguiente se mete en la fila de arriba y las columnas del roster se corren una
 posición (pasó cuando se movió la asistencia: `Empieza | Termina | Tank` en la
 misma fila). El orden es: **empieza y termina** (lo primero que se mira para
-confirmar la hora), después el **cierre** con el **requisito para anotarse** —que
-es la mención misma, `Requiere <@rol>`, sin título: el requisito *es* la mención,
-y abajo va la nota del bench, que es la única advertencia de que sin el rol no
-entrás al roster—, después **todo el conteo de gente en un solo field** a lo
-ancho (`👥 Roster`: los que **respondieron** sobre el roster esperado —cualquier
-estado, bench incluido, y también "no asisto": haber contestado es lo que saca a
-alguien de "faltan anotarse"—, la asistencia `✅ 18 (+3)` con los confirmados y,
-entre paréntesis, los posibles, y el detalle por estado `🪑 3 - ⏰ 0 - ❌ 1` en el
-mismo orden) y al final la gente: **columnas por rol de a dos** (tank, healer,
-melee, range) y los **estados** uno por fila (bench → tarde → no asisten), con el
-roster arrancando siempre en una fila nueva. Los conteos salen de
+confirmar la hora), después el **cierre** con el **requisito para anotarse**
+—el cierre muestra el **día y la hora** (`Martes 20:00`): Discord no tiene un
+estilo de timestamp que sea "día + hora" (los suyos son fecha completa o sólo la
+hora), así que el día se calcula en la zona de la guild
+(`America/Argentina/Buenos_Aires`) y la hora viaja como timestamp `<t:…:t>`, que
+se localiza sola para cada uno. El requisito es `Requiere <@rol>` con la nota del
+bench abajo, que es la única advertencia de que sin el rol no entrás al roster—,
+después **todo el conteo de gente en un solo field** a lo ancho (`👥 Roster`: los
+que **respondieron** sobre el roster esperado —cualquier estado, bench incluido, y
+también "no asisto": haber contestado es lo que saca a alguien de "faltan
+anotarse"—, la asistencia `✅ 18 (+3)` con los confirmados y, entre paréntesis,
+los posibles, y el detalle por estado `🪑 3 - ⏰ 0 - ❌ 1` en el mismo orden) y al
+final la gente: **columnas por rol de a dos** (tank, healer, melee, range) y los
+**estados** uno por fila (bench → tarde → no asisten), con el roster arrancando
+siempre en una fila nueva. Los conteos salen de
 `rosterCoverageFor` ([app.ts]) y el armado de `buildEventAnnouncementEmbeds`
 ([events-discord-publisher.ts]); el aviso no muestra el total de confirmados
 sobre el roster (eso era el viejo `🎯 X/Y del roster`, que contaba sólo a los que
 van).
+
+**Ojo con dónde van las menciones:** Discord **no resuelve menciones en el
+`name` de un field** —las muestra crudas (`<@&123…>`), y encima como es un texto
+largo se corta en dos líneas—. La mención del rol del requisito tiene que ir en el
+`value` (el nombre queda con un espacio de ancho cero, porque Discord no acepta
+un field sin nombre). En el mensaje sí se resuelven, y ahí van las del ping
+(`announcementContent`, fuera del embed, con `allowed_mentions`).
 
 **Duración en horas:** el evento se **carga en horas** (formulario) y se muestra
 como el par **Empieza / Termina**, con las horas entre paréntesis
