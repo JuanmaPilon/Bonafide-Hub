@@ -5769,22 +5769,6 @@ textarea {
   flex-wrap: wrap;
 }
 
-.event-list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  /* Es la cabecera principal de la tab Eventos (sin título genérico encima):
-     dejamos aire arriba y abajo para que no quede pegado al panel. */
-  margin: 2px 0 16px;
-  flex-wrap: wrap;
-}
-
-.event-list-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
 .event-form-card {
   margin-bottom: 18px;
   padding: 16px;
@@ -6320,6 +6304,7 @@ select.list-order {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .event-card-status.cancelled {
@@ -6778,7 +6763,7 @@ select.list-order {
 
 .event-tile {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
+  grid-template-columns: 124px minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
   padding: 10px;
@@ -6889,15 +6874,23 @@ select.list-order {
 }
 
 .event-tile-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  gap: 6px;
   align-items: center;
   margin-top: 2px;
 }
 
+.event-tile-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* El estado propio va SIEMPRE en su propio renglón: si comparte la fila con el
+   contador, en una tarjeta entra y en la otra no (según el largo del título y
+   las etiquetas) y las tarjetas de la misma fila quedan desalineadas. */
 .event-tile-me {
-  margin-left: auto;
+  justify-self: start;
   padding: 3px 10px;
   border: 1px solid rgba(124, 227, 139, 0.45);
   border-radius: 999px;
@@ -9951,22 +9944,31 @@ select.list-order {
 }
 
 /* ── Eventos: orden de la lista ─────────────────────────────────────
-   El form de crear/editar evento es un modal (`.event-form-modal`), así que ya
-   no participa del orden: quedan el encabezado, los filtros y la grilla. El
-   stack es flex, así que cada bloque necesita su `order` (sin esto el buscador
-   aparecía arriba del título del módulo). */
-.event-list-header {
-  order: 1;
+   La cabecera (título "Eventos") la pone el panel, así que la barra del módulo
+   y la grilla van después, en orden natural del DOM. */
+.events-grid {
+  order: 3;
 }
 
-.event-filters {
-  order: 2;
-  display: grid;
+/* Barra del módulo: misma disposición que la del roster (acciones con ícono a
+   la izquierda y buscador ocupando el resto). */
+.event-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
 }
 
-.events-grid {
-  order: 3;
+.event-toolbar .list-filters {
+  flex: 1 1 320px;
+  min-width: 240px;
+}
+
+.event-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
 }
 
 /* ── Eventos: tema claro ────────────────────────────────────────────

@@ -705,6 +705,19 @@ abierto del más cercano al más lejano (ícono del tipo, título y el día) y a
 límite, y quien no puede crear eventos no ve el alta: sólo entra a cada evento.
 Clickear el título del módulo lleva a la lista (`#/eventos`).
 
+**La barra del módulo es como la del roster:** el título ("Eventos") lo pone la
+cabecera del panel y abajo va la barra con las acciones a la izquierda (con
+ícono) y el buscador ocupando el resto, más los chips de etiqueta. Antes la tab
+armaba su propia cabecera con el título y el botón de alta al lado.
+
+**Los modales de eventos van por PORTAL.** El panel de contenido tiene
+`backdrop-filter`, y eso lo convierte en el contenedor de los `position: fixed`
+de adentro: el overlay del form (y los de editar inscripción, informe y roster)
+quedaban recortados por el borde del panel —la ventana "se cortaba" y el fondo
+desenfocado tapaba lo que sobresalía—. Con `createPortal` a `document.body` el
+overlay vuelve a cubrir la pantalla y su scroll llega hasta el final (los otros
+módulos ya lo hacían; el form de eventos era el que faltaba).
+
 **Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
 cierre, repetición, ubicación, roster principal, Discord) y los tipos
 (`Sword` raid, `Key` M+, `Trophy` PvP, `Confetti` social) se dibujan con íconos de

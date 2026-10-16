@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   createRoot } from "react-dom/client";
 import {
@@ -3728,7 +3729,6 @@ function EventSummaryCard({
           ) : null}
         </span>
         <span className="event-tile-when">
-          <Calendar aria-hidden="true" weight="fill" />
           {formatDayMonthShort(event.startsAt)} · {formatTime24(event.startsAt)}
           {durationHours ? ` · ${durationHours}` : ""}
         </span>
@@ -3740,15 +3740,17 @@ function EventSummaryCard({
           </span>
         ) : null}
         <span className="event-tile-foot">
-          <span className="event-count total">
-            <Users aria-hidden="true" weight="fill" />
-            {counts.yes}
-            {counts.bench + counts.late > 0
-              ? ` (+${counts.bench + counts.late})`
-              : ""}
-            {event.expectedCount && event.expectedCount > 0
-              ? ` / ${event.expectedCount}`
-              : ""}
+          <span className="event-tile-counts">
+            <span className="event-count total">
+              <Users aria-hidden="true" weight="fill" />
+              {counts.yes}
+              {counts.bench + counts.late > 0
+                ? ` (+${counts.bench + counts.late})`
+                : ""}
+              {event.expectedCount && event.expectedCount > 0
+                ? ` / ${event.expectedCount}`
+                : ""}
+            </span>
           </span>
           <span className={`event-tile-me${mySignup ? "" : " none"}`}>
             {myOption ? `${myOption.emoji} ${myOption.label}` : "Sin anotarte"}
@@ -4707,37 +4709,43 @@ function EventCard({
         </div>
       </article>
 
-      {/* Elección del formato del informe: va acá afuera porque la tarjeta
-          tiene overflow hidden y recortaría cualquier popover. */}
-      {downloadOpen ? (
-        <ReportFormatModal
-          busy={reportBusy}
-          onClose={() => setDownloadOpen(false)}
-          onSelect={(format) => {
-            setDownloadOpen(false);
-            onDownloadReport(event, format);
-          }}
-          title={event.title}
-        />
-      ) : null}
+      {/* Elección del formato del informe: va afuera de la tarjeta (tiene
+          overflow hidden) y por PORTAL, porque el panel tiene backdrop-filter y
+          eso atrapa a los `position: fixed`: el modal quedaba recortado por el
+          borde del panel. */}
+      {downloadOpen
+        ? createPortal(
+            <ReportFormatModal
+              busy={reportBusy}
+              onClose={() => setDownloadOpen(false)}
+              onSelect={(format) => {
+                setDownloadOpen(false);
+                onDownloadReport(event, format);
+              }}
+              title={event.title}
+            />,
+            document.body,
+          )
+        : null}
 
       {/* Edición manual del staff: corrige la inscripción de cualquier miembro
-          (estado, rol, clase/spec y personaje). El botón ✏️ de cada nombre del
-          roster abre este modal. */}
-      {staffEdit ? (
-        <div
-          className="modal-overlay"
-          onClick={() => {
-            setStaffConfirmRemove(false);
-            setStaffEdit(null);
-          }}
-        >
-          <div
-            className="modal modal-wide"
-            onClick={(clickEvent) => clickEvent.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
+          (estado, rol, clase/spec y personaje). El botón de lápiz de cada nombre
+          del roster abre este modal (también por portal). */}
+      {staffEdit
+        ? createPortal(
+            <div
+              className="modal-overlay"
+              onClick={() => {
+                setStaffConfirmRemove(false);
+                setStaffEdit(null);
+              }}
+            >
+              <div
+                className="modal modal-wide"
+                onClick={(clickEvent) => clickEvent.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
             <h4>Editar la inscripción de {staffEdit.username}</h4>
 
             <div className="staff-edit-row">
@@ -4934,20 +4942,23 @@ function EventCard({
                 Cancelar
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {/* Control del roster: quiénes tienen el rol mínimo y todavía no
           respondieron (los que faltan anotarse). */}
-      {rosterOpen ? (
-        <div className="modal-overlay" onClick={() => setRosterOpen(false)}>
-          <div
-            className="modal modal-wide"
-            onClick={(clickEvent) => clickEvent.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
+      {rosterOpen
+        ? createPortal(
+          <div className="modal-overlay" onClick={() => setRosterOpen(false)}>
+            <div
+              className="modal modal-wide"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
             <h4>Roster de {event.title}</h4>
             {rosterLoading ? (
               <p className="modal-note">Cargando el roster…</p>
@@ -5005,9 +5016,11 @@ function EventCard({
                 Cerrar
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -11586,12 +11599,12 @@ function App() {
             <section
               className={`panel content-panel${activeTab === "admin" && activeAdminSection?.tier ? ` content-panel-admin admin-tier-panel-${activeAdminSection.tier}` : ""}`}
             >
-              {/* La tab Eventos arma su propia cabecera (título + botón de
-                  nuevo evento). */}
-              {activeTab === "eventos" ? null : (
-                <div className="section-header">
-                  <div>
-                    <h2
+              {/* Cabecera del módulo: el título de la subsección actual. Eventos
+                  también la usa (antes armaba su propio título con el botón de
+                  nuevo evento al lado; ahora el botón vive en la barra del
+                  módulo, como en el roster). */}
+              <div className="section-header">
+                <div>                    <h2
                       className={
                         activeTab === "admin" && activeAdminSection?.tier
                           ? `admin-section-title tier-${activeAdminSection.tier}`
@@ -11614,11 +11627,9 @@ function App() {
                       {accessTierLabel(activeAdminSection.tier)}
                     </span>
                   ) : null}
-                </div>
-              )}
+              </div>
 
-              {activeTab === "dashboard" ? (
-                <div className="dashboard-stack">
+              {activeTab === "dashboard" ? (                <div className="dashboard-stack">
                   <ServerStats
                     status={widgetStatus}
                     loading={loadingGuildData}
@@ -13784,8 +13795,8 @@ function App() {
                 </div>
               ) : activeTab === "eventos" ? (
                 <div className="dashboard-stack">
-                  {/* Con un evento abierto manda su página: la cabecera del
-                      listado (título + Nuevo) y la lista no se muestran. */}
+                  {/* Con un evento abierto manda su página: la barra de la lista
+                      no se muestra. */}
                   {eventKey ? (
                     <div className="event-page-bar">
                       <button
@@ -13797,43 +13808,27 @@ function App() {
                         Todos los eventos
                       </button>
                     </div>
-                  ) : (
-                    <div className="event-list-header">
-                      <h2>Eventos</h2>
-                      {canAccess("eventos") ? (
-                        <button
-                          className={
-                            showEventForm
-                              ? "ghost-button cancel-button"
-                              : "primary-button"
-                          }
-                          onClick={() =>
-                            showEventForm
-                              ? handleCloseEventForm()
-                              : startNewEvent()
-                          }
-                          type="button"
-                        >
-                          {showEventForm ? "Cancelar" : "+ Nuevo evento"}
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
+                  ) : null}
 
-                  {/* El form es un MODAL: antes se abría abajo de la lista de
-                      eventos y había que scrollear toda la página para
-                      completarlo. */}
-                  {showEventForm ? (
-                    <div
-                      className="modal-overlay event-form-overlay"
-                      onClick={handleCloseEventForm}
-                    >
-                      <div
-                        className="event-form-card event-form-modal"
-                        onClick={(clickEvent) => clickEvent.stopPropagation()}
-                        role="dialog"
-                        aria-modal="true"
-                      >
+                  {/* El form es un MODAL, y va por PORTAL: el panel de contenido
+                      tiene backdrop-filter, y eso convierte al panel en el
+                      contenedor de los `position: fixed` de adentro. Sin el
+                      portal el modal quedaba recortado por el borde del panel
+                      (y el fondo, desenfocado, tapaba lo que sobresalía). */}
+                  {showEventForm
+                    ? createPortal(
+                        <div
+                          className="modal-overlay event-form-overlay"
+                          onClick={handleCloseEventForm}
+                        >
+                          <div
+                            className="event-form-card event-form-modal"
+                            onClick={(clickEvent) =>
+                              clickEvent.stopPropagation()
+                            }
+                            role="dialog"
+                            aria-modal="true"
+                          >
                         <div className="event-form-head">
                           <h3 className="event-form-title">
                             {editingEventId
@@ -14534,8 +14529,10 @@ function App() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ) : null}
+                    </div>,
+                        document.body,
+                      )
+                    : null}
 
                   {eventsLoading ? (
                     <LoadingState
@@ -14580,11 +14577,32 @@ function App() {
                     )
                   ) : (
                     <>
-                      {/* Buscador + orden + filtro por etiqueta en un solo
-                          bloque: el contenedor lleva el `order` para que el
-                          encabezado del módulo quede arriba (el stack es flex). */}
-                      <div className="event-filters">
-                      {events.length > 0 ? (
+                      {/* Barra del módulo, como la del roster: las acciones a
+                          la izquierda (con ícono) y el buscador ocupando el
+                          resto. El título lo pone la cabecera del panel. */}
+                      <div className="event-toolbar">
+                        {canAccess("eventos") ? (
+                          <button
+                            className={
+                              showEventForm
+                                ? "ghost-button cancel-button event-toolbar-button"
+                                : "primary-button event-toolbar-button"
+                            }
+                            onClick={() =>
+                              showEventForm
+                                ? handleCloseEventForm()
+                                : startNewEvent()
+                            }
+                            type="button"
+                          >
+                            {showEventForm ? (
+                              <X aria-hidden="true" size={16} weight="bold" />
+                            ) : (
+                              <Plus aria-hidden="true" size={16} weight="bold" />
+                            )}
+                            {showEventForm ? "Cancelar" : "Nuevo evento"}
+                          </button>
+                        ) : null}
                         <ListFilterBar
                           onOrderChange={setEventOrder}
                           onSearchChange={setEventSearch}
@@ -14592,7 +14610,7 @@ function App() {
                           placeholder="Buscar evento…"
                           search={eventSearch}
                         />
-                      ) : null}
+                      </div>
                       {activeTagOptions.length > 0 || untaggedEvents > 0 ? (
                         <div className="event-tag-filter">
                           <button
@@ -14639,7 +14657,6 @@ function App() {
                           ) : null}
                         </div>
                       ) : null}
-                      </div>
                       {filteredEvents.length === 0 ? (
                         <div className="empty-state">
                           {eventTagFilter.length > 0 || eventSearch.trim()
