@@ -119,6 +119,15 @@ Modificar mi ficha" abre la ficha propia y "Sumar jugador" (solo staff con el
 módulo de raids) busca entre los miembros del servidor que todavía no tienen
 tarjeta.
 
+Los tres grupos de filtros (Estado, Rol, Etiqueta) usan **los mismos chips que el
+resto del hub**: los estados son *chips de color* —el mismo componente que las
+etiquetas—, así que sin seleccionar van tenidos con su color al 22% y al
+seleccionarlos se llenan con el color pleno y el texto de contraste (antes tenían
+colores propios en CSS y al seleccionarlos solo se aclaraban un poco, que es lo
+que se veía distinto al resto de los módulos). Los colores viven en
+`ROSTER_STATUS_FILTERS` (`#35b96f` activo, `#f5b540` bench, `#e5484d` inactivo,
+`#869ed6` sin asignar), los mismos que usa la tarjeta del jugador.
+
 Clases secundarias ("alter"): `alts: [{ className, specName }]` (tope 4) viajan
 en el mismo PUT que la ficha y reemplazan la lista completa. Se guardan en
 `roster_alt_profiles` con clave (guild, persona, clase) y en la web salen como

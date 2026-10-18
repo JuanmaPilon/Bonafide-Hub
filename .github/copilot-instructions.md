@@ -173,6 +173,46 @@ A change is done when:
 6. Docs are updated when applicable.
 7. Feature is validated in development.
 
+## UI Consistency (hub web)
+
+The hub is one app with one visual language. When adding or touching a module,
+reuse the shared pieces instead of inventing a local variant.
+
+Rules:
+
+1. **Module bar** — every list module starts with the panel's own header (the
+   title comes from the panel, not from the module) and then a
+   `.module-toolbar`: actions on the left with a Phosphor icon + label
+   (`.module-toolbar-button`), the search `ListFilterBar` filling the rest and
+   the order select to its right. Filter chips go on their own row below.
+   Never put the primary action inside `ListFilterBar` (it ends up after the
+   search box) and never leave a `ListFilterBar` inside a flex row with its
+   default `width: 100%` / `margin-bottom`.
+2. **Chips** — one chip for the whole hub (`event-filter-chip`):
+   - neutral chip (`Todos`, roles, types): dark surface, muted text, blue tint
+     when active.
+   - **color chip** (`event-filter-chip--color`, used by tags AND roster
+     statuses): tinted at 22% with a 70% border when idle, **solid** with
+     contrast text and a ✓ when selected. The colors are computed in JS
+     (`chipColorVars` → `--chip-tint/--chip-border/--chip-color/--chip-text`),
+     never with `color-mix` or `opacity` (they wash out in light theme).
+3. **Icons** — Phosphor, never emoji, for UI affordances (buttons, labels,
+   types). Emoji are only allowed where they are shared vocabulary with
+   Discord (signup statuses ✅ ⏰ 🪑 ❌, and the emojis the API sends inside the
+   embed).
+4. **Modals** — build on `.modal` + `.modal-head` (icon + title + round close
+   button) + `.admin-save` footer. Render them through `createPortal` to
+   `document.body`: the content panel has `backdrop-filter`, which traps
+   `position: fixed` children and clips the overlay.
+5. **Forms** — `.form-grid` (two columns, `event-form-wide` for full rows) with
+   the label above the control, and the hub's own `.input` / `.select`.
+6. **Light theme** — every new surface needs its light-theme counterpart. Do not
+   write a broad light-theme selector that overrides a component's own computed
+   colors (e.g. color chips): exclude those variants explicitly.
+7. **Empty and loading states** — say "loading" while loading and "empty" only
+   when the data actually arrived; never show "there is nothing" while the list
+   is still being fetched.
+
 ## Learning-First Delivery
 
 When implementing:

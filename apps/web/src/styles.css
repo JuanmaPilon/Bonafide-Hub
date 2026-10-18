@@ -3122,11 +3122,16 @@ a:hover {
   white-space: nowrap;
 }
 
+/* Filtros del roster: la misma fila de chips que el resto de los módulos, con
+   un rótulo chico por grupo (el roster filtra por tres cosas a la vez: estado,
+   rol y etiqueta). No hay colores ni chips propios: los estados son chips de
+   color, el mismo componente que las etiquetas. */
 .roster-filter-chips {
   display: flex;
   flex: 1 1 100%;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 6px 14px;
 }
 
 .roster-filter-group {
@@ -3136,72 +3141,12 @@ a:hover {
   gap: 6px;
 }
 
-.roster-filter-group + .roster-filter-group {
-  margin-left: 4px;
-  padding-left: 10px;
-  border-left: 1px solid rgba(134, 158, 214, 0.18);
-}
-
 .roster-filter-label {
   color: var(--muted);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-}
-
-/* El filtro de estado usa el mismo color que el tag de la tarjeta, así se lee
-   igual en los dos lados. */
-.roster-filter-chips .roster-status-chip--raid,
-.roster-filter-chips .roster-status-chip--raid:hover,
-.roster-filter-chips .roster-status-chip--raid:focus-visible {
-  border-color: rgba(53, 185, 111, 0.5);
-  color: #6ee7a1;
-}
-
-.roster-filter-chips .roster-status-chip--raid.active {
-  border-color: rgba(53, 185, 111, 0.8);
-  background: rgba(53, 185, 111, 0.2);
-  color: #c7ffe0;
-}
-
-.roster-filter-chips .roster-status-chip--bench,
-.roster-filter-chips .roster-status-chip--bench:hover,
-.roster-filter-chips .roster-status-chip--bench:focus-visible {
-  border-color: rgba(245, 181, 64, 0.55);
-  color: #ffd477;
-}
-
-.roster-filter-chips .roster-status-chip--bench.active {
-  border-color: rgba(245, 181, 64, 0.8);
-  background: rgba(245, 181, 64, 0.2);
-  color: #ffe9b8;
-}
-
-.roster-filter-chips .roster-status-chip--unassigned,
-.roster-filter-chips .roster-status-chip--unassigned:hover,
-.roster-filter-chips .roster-status-chip--unassigned:focus-visible {
-  border-color: rgba(134, 158, 214, 0.45);
-  color: #b8c7e6;
-}
-
-.roster-filter-chips .roster-status-chip--unassigned.active {
-  border-color: rgba(134, 158, 214, 0.75);
-  background: rgba(134, 158, 214, 0.2);
-  color: #dbe4f7;
-}
-
-.roster-filter-chips .roster-status-chip--inactive,
-.roster-filter-chips .roster-status-chip--inactive:hover,
-.roster-filter-chips .roster-status-chip--inactive:focus-visible {
-  border-color: rgba(229, 72, 77, 0.5);
-  color: #ff9292;
-}
-
-.roster-filter-chips .roster-status-chip--inactive.active {
-  border-color: rgba(229, 72, 77, 0.8);
-  background: rgba(229, 72, 77, 0.2);
-  color: #ffc9c9;
 }
 
 .roster-total {
@@ -3888,7 +3833,6 @@ a:hover {
 
 /* "Sin asignar": el azul grisáceo del tema oscuro no se lee sobre blanco. */
 :root[data-theme="light"] .roster-status-badge--unassigned,
-:root[data-theme="light"] .roster-filter-chips .roster-status-chip--unassigned,
 :root[data-theme="light"] .roster-status-option--unassigned {
   color: #4d5f85;
 }
@@ -3896,14 +3840,6 @@ a:hover {
 :root[data-theme="light"] .roster-status-badge--unassigned {
   border-color: rgba(77, 95, 133, 0.45);
   background: rgba(77, 95, 133, 0.1);
-}
-
-:root[data-theme="light"]
-  .roster-filter-chips
-  .roster-status-chip--unassigned.active {
-  border-color: rgba(77, 95, 133, 0.55);
-  background: rgba(77, 95, 133, 0.14);
-  color: #2f3f61;
 }
 
 :root[data-theme="light"] .roster-member--unassigned {
@@ -6160,13 +6096,14 @@ select.list-order {
   color: #dce9ff;
 }
 
-/* Chip de etiqueta: SIN seleccionar va tenido (el color del tag al 22% + borde
-   al 70%) con el texto del tema, y al seleccionarlo se llena con el color pleno
-   y el texto de contraste (más el tilde). El cambio "tenue → sólido" se lee al
-   toque y el color queda siempre presente. Los valores los calcula el JS
+/* Chip de COLOR (etiquetas y estados del roster): el mismo componente en todos
+   los módulos. Sin seleccionar va tenido (el color al 22% + borde al 70%) con el
+   texto del tema, y al seleccionarlo se llena con el color pleno y el texto de
+   contraste (más el tilde). El cambio "tenue → sólido" se lee al toque y el
+   color queda siempre presente. Los valores los calcula el JS
    (--chip-tint/--chip-border/--chip-color/--chip-text): nada de color-mix ni de
    opacity, que en modo claro lavaban el chip. */
-.event-filter-chip--tag {
+.event-filter-chip--color {
   border-color: var(--chip-border);
   background: var(--chip-tint);
   color: var(--text);
@@ -6175,44 +6112,38 @@ select.list-order {
     outline-color 0.15s ease-out;
 }
 
-.event-filter-chip--tag:hover,
-.event-filter-chip--tag:focus-visible {
+.event-filter-chip--color:hover,
+.event-filter-chip--color:focus-visible {
   filter: brightness(1.08);
 }
 
-.event-filter-chip--tag.active {
+.event-filter-chip--color.active {
   border-color: var(--chip-color);
   background: var(--chip-color);
   color: var(--chip-text);
   font-weight: 800;
 }
 
-/* Chips sin etiqueta ("Todas", "Sin etiqueta"): en claro el fondo oscuro del
-   tema oscuro los dejaba ilegibles. Se excluyen los chips con color de tag,
-   que ya tienen su propio ajuste. */
+/* Chips sin color (el "Todos", los roles, los tipos de evento): en claro el
+   fondo oscuro del tema oscuro los dejaba ilegibles. Se excluyen los chips de
+   color, que ya tienen su propio ajuste. */
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):not(.roster-status-chip) {
+  .event-filter-chip:not(.event-filter-chip--color) {
   border-color: rgba(120, 140, 175, 0.4);
   background: rgba(255, 255, 255, 0.85);
   color: #3f4f6b;
 }
 
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):not(
-    .roster-status-chip
-  ):hover,
+  .event-filter-chip:not(.event-filter-chip--color):hover,
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):not(
-    .roster-status-chip
-  ):focus-visible {
+  .event-filter-chip:not(.event-filter-chip--color):focus-visible {
   border-color: rgba(120, 140, 175, 0.65);
   color: #101a2e;
 }
 
 :root[data-theme="light"]
-  .event-filter-chip:not(.event-filter-chip--tag):not(
-    .roster-status-chip
-  ).active {
+  .event-filter-chip:not(.event-filter-chip--color).active {
   border-color: #6aa8ff;
   background: rgba(106, 168, 255, 0.2);
   color: #1d3a6b;
@@ -9884,10 +9815,12 @@ select.list-order {
 
 /* Variantes del botón fantasma y superficies chicas que quedaban con el fondo
    oscuro del tema dark: en claro se veían como manchas. Se listan con las
-   MISMAS medidas que el tema oscuro, solo cambia el color. */
+   MISMAS medidas que el tema oscuro, solo cambia el color.
+   Los chips de COLOR quedan afuera: su fondo lo calcula el JS (tenue o sólido
+   según el color) y esta regla los dejaba blancos. */
 :root[data-theme="light"] .ghost-button.cancel-button,
 :root[data-theme="light"] .comunicado-back,
-:root[data-theme="light"] .event-filter-chip,
+:root[data-theme="light"] .event-filter-chip:not(.event-filter-chip--color),
 :root[data-theme="light"] .raid-log-part,
 :root[data-theme="light"] .role-permission-compare-column,
 :root[data-theme="light"] .xp-extras-head {

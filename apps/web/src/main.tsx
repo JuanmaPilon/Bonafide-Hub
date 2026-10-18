@@ -1477,11 +1477,18 @@ function toggleInList(list: string[], key: string): string[] {
 //   asignaron a Raid ni Bench).
 // - `inactive`: se salió del roster; la ficha queda guardada (clase, spec y
 //   alters intactos) y vuelve sola al marcarle un estado.
-const ROSTER_STATUS_FILTERS: Array<{ key: string; label: string }> = [
-  { key: "raid", label: "Activo" },
-  { key: "bench", label: "Bench" },
-  { key: "inactive", label: "Inactivo" },
-  { key: "unassigned", label: "Sin asignar" },
+// Estados del roster como chips de color: el color es el mismo que usa la
+// tarjeta del jugador, y el chip se comporta igual que los de etiqueta (tenue
+// sin seleccionar, sólido al seleccionar).
+const ROSTER_STATUS_FILTERS: Array<{
+  color: string;
+  key: string;
+  label: string;
+}> = [
+  { color: "#35b96f", key: "raid", label: "Activo" },
+  { color: "#f5b540", key: "bench", label: "Bench" },
+  { color: "#e5484d", key: "inactive", label: "Inactivo" },
+  { color: "#869ed6", key: "unassigned", label: "Sin asignar" },
 ];
 
 function rosterStatusLabel(key: string | null): string | null {
@@ -1656,6 +1663,46 @@ function TagsField({
   );
 }
 
+// Chips de color del hub: el MISMO chip para las etiquetas y para los estados
+// del roster. Sin seleccionar va tenido (el color al 22% + borde al 70%) y al
+// seleccionarlo se llena con el color pleno y el texto de contraste, así el
+// cambio "tenue → sólido" se lee al toque y el color queda siempre presente.
+// Los valores los calcula el JS (--chip-*): nada de color-mix ni de opacity, que
+// en modo claro lavaban el chip.
+function chipColorVars(color: string | undefined): CSSProperties {
+  const background = normalizeHexColor(color);
+  return {
+    "--chip-border": tagTint(background, 0.7),
+    "--chip-color": background,
+    "--chip-text": tagTextColor(background),
+    "--chip-tint": tagTint(background, 0.22),
+  } as CSSProperties;
+}
+
+function ColorFilterChip({
+  active,
+  color,
+  label,
+  onToggle,
+}: {
+  active: boolean;
+  color?: string;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      className={`event-filter-chip event-filter-chip--color${active ? " active" : ""}`}
+      onClick={onToggle}
+      style={chipColorVars(color)}
+      type="button"
+    >
+      {active ? "✓ " : ""}
+      {label}
+    </button>
+  );
+}
+
 function EventTagFilterChip({
   active,
   color,
@@ -1670,24 +1717,13 @@ function EventTagFilterChip({
   // Mismo criterio de color que la tarjeta del evento/comunicado (ComunicadoTag):
   // si la etiqueta no tiene color guardado, los dos caen al mismo default, así
   // el filtro y la tarjeta nunca muestran colores distintos.
-  const background = normalizeHexColor(color);
   return (
-    <button
-      className={`event-filter-chip event-filter-chip--tag${active ? " active" : ""}`}
-      onClick={onToggle}
-      style={
-        {
-          "--chip-border": tagTint(background, 0.7),
-          "--chip-color": background,
-          "--chip-text": tagTextColor(background),
-          "--chip-tint": tagTint(background, 0.22),
-        } as CSSProperties
-      }
-      type="button"
-    >
-      {active ? "✓ " : ""}
-      {label}
-    </button>
+    <ColorFilterChip
+      active={active}
+      color={color}
+      label={label}
+      onToggle={onToggle}
+    />
   );
 }
 
@@ -3335,18 +3371,17 @@ function RosterSection({
               Todos
             </button>
             {ROSTER_STATUS_FILTERS.map((status) => (
-              <button
-                className={`event-filter-chip roster-status-chip roster-status-chip--${status.key}${statusFilter.includes(status.key) ? " active" : ""}`}
+              <ColorFilterChip
+                active={statusFilter.includes(status.key)}
+                color={status.color}
                 key={status.key}
-                onClick={() =>
+                label={status.label}
+                onToggle={() =>
                   setStatusFilter((current) =>
                     toggleInList(current, status.key),
                   )
                 }
-                type="button"
-              >
-                {status.label}
-              </button>
+              />
             ))}
           </div>
           <div className="roster-filter-group">
@@ -3371,19 +3406,24 @@ function RosterSection({
               </button>
             ))}
           </div>
-          {availableTags.map((tag) => (
-            <EventTagFilterChip
-              active={tagFilter.includes(tag.label.toLowerCase())}
-              color={tag.color}
-              key={tag.label}
-              label={tag.label}
-              onToggle={() =>
-                setTagFilter((current) =>
-                  toggleInList(current, tag.label.toLowerCase()),
-                )
-              }
-            />
-          ))}
+          {availableTags.length > 0 ? (
+            <div className="roster-filter-group">
+              <span className="roster-filter-label">Etiqueta</span>
+              {availableTags.map((tag) => (
+                <EventTagFilterChip
+                  active={tagFilter.includes(tag.label.toLowerCase())}
+                  color={tag.color}
+                  key={tag.label}
+                  label={tag.label}
+                  onToggle={() =>
+                    setTagFilter((current) =>
+                      toggleInList(current, tag.label.toLowerCase()),
+                    )
+                  }
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
         <span
           className="roster-total"
