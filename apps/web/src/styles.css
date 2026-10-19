@@ -6426,12 +6426,13 @@ select.list-order {
   gap: 10px;
 }
 
-/* Columnas por rol (estilo Raid Helper): no se estiran a la altura de la más
-   alta (cada rol queda con el alto de su gente, sin cajas con vacío de sobra) y
-   el mínimo deja entrar "nick (personaje)" en una línea. */
+/* Grupos por rol: dos paneles por fila (Tank | Healer / Melee | Range) con el
+   ancho justo para que "nick (personaje)" entre en una línea, en vez de cuatro
+   columnas angostas que dejan el último grupo solo en su fila. En una pantalla
+   muy ancha entran los cuatro seguidos. */
 .event-roster-columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
   align-items: start;
   gap: 10px;
 }
@@ -6673,12 +6674,92 @@ select.list-order {
   opacity: 1;
 }
 
-.event-card-actions {
-  display: flex;
-  flex-wrap: wrap;
+/* Cabecera de la página del evento: volver a la izquierda, título centrado y
+   la tuerquita de acciones a la derecha. Las tres columnas son iguales para que
+   el título quede en el centro real del panel, no corrido. */
+.section-header--event {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: flex-end;
+  gap: 12px;
+}
+
+.section-header--event h2 {
+  margin: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Ocupa el lugar de la tuerquita cuando el usuario no puede gestionar el
+   evento, para que el título quede centrado igual. */
+.section-header-spacer {
+  width: 38px;
+}
+
+/* Menú de acciones del evento: mismo patrón que el submenú del nav (caja sólida
+   anclada al botón), con la tuerquita como disparador. */
+.event-menu {
+  position: relative;
+  justify-self: end;
+}
+
+.event-menu-options {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  gap: 2px;
+  min-width: 210px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: #0d1424;
+  box-shadow: 0 18px 40px rgba(4, 8, 18, 0.5);
+}
+
+.event-menu-option {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-menu-option svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.event-menu-option:hover:not(:disabled) {
+  background: rgba(133, 156, 212, 0.12);
+}
+
+.event-menu-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.event-menu-option--danger,
+.event-menu-option--danger svg {
+  color: #ff9b9b;
+}
+
+.event-menu-option--danger:hover:not(:disabled) {
+  background: rgba(229, 72, 77, 0.16);
+}
+
+.event-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: rgba(133, 156, 212, 0.16);
 }
 
 /* ── Eventos: listado compacto y página del evento ──────────────────
@@ -6904,8 +6985,7 @@ select.list-order {
 }
 
 .event-page .event-card-assistance,
-.event-page .event-signup,
-.event-page .event-card-actions {
+.event-page .event-signup {
   grid-column: 2;
 }
 
@@ -6930,8 +7010,7 @@ select.list-order {
   .event-page .event-roster-empty,
   .event-page .event-form-note,
   .event-page .event-card-assistance,
-  .event-page .event-signup,
-  .event-page .event-card-actions {
+  .event-page .event-signup {
     grid-column: auto;
   }
 }
@@ -7132,11 +7211,97 @@ select.list-order {
   align-content: start;
 }
 
-.event-signup-field > span {
+.event-signup-field > span,
+.event-signup-field-label {
   color: var(--muted);
   font-size: 0.75rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+/* Selector de clase/spec con el emoji del servidor: mismo alto y borde que el
+   `.select` del hub, pero el disparador es un botón (un select nativo no puede
+   mostrar imágenes) y el menú se abre flotando por encima de lo que sigue. */
+.emoji-select {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.emoji-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(133, 156, 212, 0.24);
+  background: rgba(10, 16, 31, 0.88);
+  color: var(--text);
+  padding: 11px 12px;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.emoji-select-trigger.empty {
+  color: var(--muted);
+}
+
+.emoji-select-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.emoji-select-trigger > span:not(.emoji-select-caret) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emoji-select-caret {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.emoji-select-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  /* Sólido: con un fondo con alfa se transparenta el contenido de atrás. */
+  background: #0d1424;
+  box-shadow: 0 18px 40px rgba(4, 8, 18, 0.5);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.emoji-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.emoji-select-option:hover {
+  background: rgba(133, 156, 212, 0.12);
+}
+
+.emoji-select-option.active {
+  background: rgba(106, 168, 255, 0.16);
+  color: #cfe0ff;
 }
 
 /* Error de validación de la inscripción (p. ej. falta el nombre de personaje). */
@@ -9966,6 +10131,65 @@ select.list-order {
 
 :root[data-theme="light"] .event-signup-spec {
   background: rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="light"] .emoji-select-trigger {
+  background: var(--surface-input);
+  border-color: rgba(60, 85, 130, 0.28);
+  color: var(--text);
+}
+
+:root[data-theme="light"] .emoji-select-trigger.empty,
+:root[data-theme="light"] .emoji-select-caret {
+  color: #5c6c89;
+}
+
+:root[data-theme="light"] .emoji-select-menu {
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(38, 58, 92, 0.18);
+}
+
+:root[data-theme="light"] .emoji-select-option {
+  color: var(--text);
+}
+
+:root[data-theme="light"] .emoji-select-option:hover {
+  background: rgba(60, 85, 130, 0.1);
+}
+
+:root[data-theme="light"] .emoji-select-option.active {
+  background: rgba(60, 110, 200, 0.14);
+  color: #1b2a45;
+}
+
+:root[data-theme="light"] .event-menu-options {
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(38, 58, 92, 0.18);
+}
+
+:root[data-theme="light"] .event-menu-option {
+  color: var(--text);
+}
+
+:root[data-theme="light"] .event-menu-option svg {
+  color: #5c6c89;
+}
+
+:root[data-theme="light"] .event-menu-option:hover:not(:disabled) {
+  background: rgba(60, 85, 130, 0.1);
+}
+
+:root[data-theme="light"] .event-menu-option--danger,
+:root[data-theme="light"] .event-menu-option--danger svg {
+  color: #b3261e;
+}
+
+:root[data-theme="light"] .event-menu-option--danger:hover:not(:disabled) {
+  background: rgba(229, 72, 77, 0.14);
+}
+
+:root[data-theme="light"] .event-menu-separator {
+  background: rgba(60, 85, 130, 0.16);
 }
 
 :root[data-theme="light"] .event-signup-selected,

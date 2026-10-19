@@ -690,10 +690,20 @@ evento es una **tarjeta compacta** —portada, cuándo empieza, cuánto dura, la
 etiquetas y la asistencia con mi estado— que lleva a su página; el detalle
 completo vive ahí: portada como banner, datos (empieza, termina, cierre,
 requisito de rol), descripción, roster por rol con los estados (bench, tarde, no
-asisten), el panel para anotarse y las acciones de staff (editar, duplicar,
-informe, limpiar ocurrencia, eliminar). Antes cada tarjeta de la grilla traía el
-evento **entero** (roster, panel de inscripción y botones) apilado en una columna
-de 420 px: el listado se volvía una pared y el detalle quedaba apretado.
+asisten) y el panel para anotarse. Las acciones de staff (editar, duplicar,
+informe, limpiar ocurrencia, eliminar) viven en la **tuerquita de la cabecera**,
+no en una fila de botones dentro de la tarjeta. Antes cada tarjeta de la grilla
+traía el evento **entero** (roster, panel de inscripción y botones) apilado en una
+columna de 420 px: el listado se volvía una pared y el detalle quedaba apretado.
+
+**Cabecera de la página:** tres columnas (`auto 1fr auto`) —la vuelta a la lista
+como icon-button a la **izquierda**, el título del evento **centrado** y la
+tuerquita a la derecha—. Las columnas laterales miden lo mismo (38 px, el
+icon-button del hub) y por eso el título queda en el centro real del panel y no
+corrido; quien no gestiona eventos ve un hueco del mismo ancho en lugar de la
+tuerquita. El menú de la tuerquita es una caja sólida anclada al botón (mismo
+patrón que el desplegable del nav) con las acciones separadas de "Eliminar" por
+una línea.
 
 Tres decisiones que no son obvias:
 
@@ -711,10 +721,9 @@ Tres decisiones que no son obvias:
   panel (en la fila del título, como el resto de las acciones de módulo).
 - El ancho se aprovecha con CSS, no moviendo el markup: el cuerpo de la tarjeta
   se vuelve un grid de dos columnas y cada bloque se ubica con `grid-column`
-  (datos y roster a la izquierda; asistencia, inscripción y acciones a la
-  derecha). Así el orden del DOM sigue siendo el mismo que cuando el componente
-  era una tarjeta de la grilla, y en pantallas angostas (≤900 px) vuelve a una
-  sola columna.
+  (datos y roster a la izquierda; asistencia e inscripción a la derecha). Así el
+  orden del DOM sigue siendo el mismo que cuando el componente era una tarjeta de
+  la grilla, y en pantallas angostas (≤900 px) vuelve a una sola columna.
 
 **La portada se ve entera.** El banner mantiene el alto del formato 3:1, pero la
 imagen va con `object-fit: contain` en vez de `cover`: recortar el arte de una
@@ -730,9 +739,22 @@ uno por botón con su etiqueta: antes eran círculos con un emoji), después
 ocupaba media pantalla de alto— y al final el **personaje**. Cambiar de rol
 limpia la clase y la spec (el catálogo del rol anterior no aplica).
 
-**Las columnas del roster no se estiran**: cada rol queda con el alto de su gente
-(antes la columna más corta —2 tanks— se estiraba a la altura de la más larga,
-con el resto del recuadro vacío).
+**Clase y spec muestran el emoji del servidor, no un emoji unicode.** Un
+`<select>` nativo no puede dibujar imágenes, así que son un botón con el emoji
+elegido + un menú (`EmojiSelect`): cada opción trae el emoji custom que el staff
+mapeó (spec: `emojiId` de la fila de `RaidSpec`; clase: el grupo `class` del
+Mapeo, o `GuildRoster.classEmojis` para quien no es staff, que no puede leer el
+Mapeo) y cae al unicode de la clase si el emoji se borró en Discord. El menú va
+por **portal** con `position: fixed` anclado al botón: la tarjeta del evento tiene
+`overflow: hidden` y un desplegable largo quedaba recortado. Se cierra con click
+afuera y con Escape, y sigue al botón si la página se mueve.
+
+**Los grupos del roster van de a dos**: cada rol es un panel y entran **dos por
+fila** (Tank | Healer / Melee | Range), con el ancho justo para que
+"nick (personaje)" entre en una línea. Antes eran cuatro columnas angostas y el
+cuarto rol quedaba solo en una fila con el nombre partido en dos renglones. Cada
+panel mantiene el alto de su gente (no se estira al del más largo) y los estados
+siguen uno por fila debajo del roster.
 
 **Menú del nav y página del evento.** La tab **Eventos** del nav superior es un
 desplegable (como Raids y Admin) pero **dinámico**: arriba el alta

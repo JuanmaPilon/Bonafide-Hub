@@ -212,6 +212,17 @@ Rules:
 7. **Empty and loading states** — say "loading" while loading and "empty" only
    when the data actually arrived; never show "there is nothing" while the list
    is still being fetched.
+8. **Page header of a single record** (one event, one member): back button on
+   the left, title centered, actions in a gear (`GearSix`) on the right that
+   opens a solid anchored menu. The side columns must measure the same so the
+   title sits on the panel's real center, and users without permission get a
+   spacer instead of the gear.
+9. **Custom dropdowns** (anything that shows images, e.g. class/spec with the
+   server emoji): a trigger styled like `.select` plus a menu, never a native
+   `<select>`. Render the menu through `createPortal` with `position: fixed`
+   anchored to the trigger — cards use `overflow: hidden` and long menus get
+   clipped. It closes on click-outside and Escape, and follows the trigger on
+   scroll.
 
 ## Learning-First Delivery
 
