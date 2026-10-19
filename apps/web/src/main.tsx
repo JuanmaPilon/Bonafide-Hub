@@ -4493,8 +4493,6 @@ function EventCard({
   async function openRoster(): Promise<void> {
     setRosterOpen(true);
     setRosterFilters(["missing"]);
-    setRosterSelected([]);
-    setReminderResult(null);
     await loadRoster();
   }
 
@@ -4940,40 +4938,34 @@ function EventCard({
             <p className="event-card-desc">{event.description.trim()}</p>
           ) : null}
           <div className="event-card-assistance">
-            <span className="event-info-label">
-              <Users aria-hidden="true" weight="fill" />
-              Asistencia
-            </span>
-            <div className="event-card-counts">
-              {/* El total lleva el contador de control cuando el evento tiene rol
-                  mínimo: "confirmados (+tentativos) / esperados". Se clickea para
-                  ver quiénes faltan (staff). */}
-              {event.expectedCount && event.expectedCount > 0 ? (
+            <div className="event-card-assistance-head">
+              <span className="event-info-label">
+                <Users aria-hidden="true" weight="fill" />
+                Asistencia
+              </span>
+              {canManage && (event.expectedCount ?? 0) > 0 ? (
                 <button
-                  className="event-count total roster-goal"
-                  disabled={!canManage}
+                  className="ghost-button small"
                   onClick={() => void openRoster()}
-                  title={
-                    canManage
-                      ? "Ver quiénes faltan anotarse"
-                      : "Control del roster (solo staff)"
-                  }
                   type="button"
                 >
-                  👥 {counts.yes}
-                  {counts.bench + counts.late > 0
-                    ? ` (+${counts.bench + counts.late})`
-                    : ""}
-                  {` / ${event.expectedCount}`}
+                  <ListChecks aria-hidden="true" size={16} weight="fill" />
+                  Ver asistencias
                 </button>
-              ) : (
-                <span className="event-count total">
-                  👥 {counts.yes}
-                  {counts.bench + counts.late > 0
-                    ? ` (+${counts.bench + counts.late})`
-                    : ""}
-                </span>
-              )}
+              ) : null}
+            </div>
+            <div className="event-card-counts">
+              {/* El total lleva el contador de control cuando el evento tiene rol
+                  mínimo: "confirmados (+tentativos) / esperados". */}
+              <span className="event-count total">
+                👥 {counts.yes}
+                {counts.bench + counts.late > 0
+                  ? ` (+${counts.bench + counts.late})`
+                  : ""}
+                {event.expectedCount && event.expectedCount > 0
+                  ? ` / ${event.expectedCount}`
+                  : ""}
+              </span>
               {SIGNUP_OPTIONS.map((option) => (
                 <span className={`event-count ${option.key}`} key={option.key}>
                   {option.emoji} {counts[option.key]}
@@ -5571,17 +5563,36 @@ function EventCard({
         : null}
 
       {/* Control del roster: quiénes tienen el rol mínimo y todavía no
-          respondieron (los que faltan anotarse). */}
+          respondieron. Es de sólo lectura —los tildes y el recordatorio viven en
+          la página—, acá se miran los tres grupos con sus filtros. */}
       {rosterOpen
         ? createPortal(
           <div className="modal-overlay" onClick={() => setRosterOpen(false)}>
             <div
-              className="modal modal-wide"
+              className="modal"
               onClick={(clickEvent) => clickEvent.stopPropagation()}
               role="dialog"
               aria-modal="true"
             >
-            <h4>Roster de {event.title}</h4>
+            <header className="modal-head">
+              <h4>
+                <ListChecks aria-hidden="true" weight="fill" />
+                Asistencias de {event.title}
+              </h4>
+              <button
+                aria-label="Cerrar"
+                className="icon-button"
+                onClick={() => setRosterOpen(false)}
+                title="Cerrar"
+                type="button"
+              >
+                <X
+                  aria-hidden="true"
+                  className="icon-button-icon"
+                  weight="bold"
+                />
+              </button>
+            </header>
             {rosterLoading ? (
               <p className="modal-note">Cargando el roster…</p>
             ) : null}
@@ -5625,8 +5636,6 @@ function EventCard({
                         setRosterOpen(false);
                         onOpenProfile(userId);
                       }}
-                      onToggle={toggleRosterSelected}
-                      selected={rosterSelected}
                       title={
                         rosterFilters.length !== 1
                           ? `Faltan (${roster.missing.length})`
@@ -5675,7 +5684,7 @@ function EventCard({
                 </div>
               </>
             ) : null}
-            <div className="form-actions roster-footer">
+            <div className="admin-save">
               <button
                 className="ghost-button"
                 onClick={() => setRosterOpen(false)}
@@ -5683,40 +5692,6 @@ function EventCard({
               >
                 Cerrar
               </button>
-              {roster && roster.missing.length > 0 && !signupsClosed ? (
-                <div className="roster-remind-bar">
-                  <button
-                    className="ghost-button small"
-                    onClick={() =>
-                      setRosterSelected(
-                        rosterSelected.length === roster.missing.length
-                          ? []
-                          : roster.missing.map((member) => member.userId),
-                      )
-                    }
-                    type="button"
-                  >
-                    {rosterSelected.length === roster.missing.length
-                      ? "No seleccionar a nadie"
-                      : "Seleccionar a los que faltan"}
-                  </button>
-                  <button
-                    className="primary-button small"
-                    disabled={reminding || rosterSelected.length === 0}
-                    onClick={() => void sendReminders()}
-                    title="Le llega un MD del bot"
-                    type="button"
-                  >
-                    <BellRinging aria-hidden="true" size={16} weight="fill" />
-                    {reminding
-                      ? "Enviando…"
-                      : `Recordar a ${rosterSelected.length}`}
-                  </button>
-                </div>
-              ) : null}
-              {reminderResult ? (
-                <span className="roster-remind-result">{reminderResult}</span>
-              ) : null}
             </div>
               </div>
             </div>,

@@ -6310,6 +6310,24 @@ select.list-order {
   gap: 10px;
 }
 
+/* "Asistencia" y, a la derecha, el botón que abre el detalle: misma cabecera que
+   el resto de los bloques con acción. En la página la columna es angosta, así que
+   el botón puede bajar solo si no entra. */
+.event-card-assistance-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.event-card-assistance-head .ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
 /* Los que faltan anotarse, en la página del evento: misma fila de nombres que
    el modal pero sin caja, porque vive adentro de la tarjeta del evento. */
 .event-card-missing {
@@ -6377,25 +6395,6 @@ select.list-order {
   border-color: rgba(255, 180, 84, 0.55);
 }
 
-/* Chip del total: cuando el evento tiene rol mínimo se vuelve un BOTÓN que abre
-   el roster (quiénes faltan anotarse). Mantiene el verde del total y avisa que
-   se puede clickear con el hover y el cursor. */
-.event-count.total.roster-goal {
-  color: var(--text);
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 140ms ease;
-}
-
-.event-count.total.roster-goal:hover:not(:disabled) {
-  border-color: rgba(124, 227, 139, 0.85);
-}
-
-.event-count.total.roster-goal:disabled {
-  cursor: default;
-  opacity: 0.75;
-}
-
 /* Modal del roster: filtros arriba y los nombres en chips/línea. */
 .event-roster-summary {
   display: flex;
@@ -6456,15 +6455,8 @@ select.list-order {
   min-width: 0;
 }
 
-/* Recordatorio por MD: vive en el pie del modal, a la derecha de "Cerrar". */
-.roster-footer {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: space-between;
-}
-
+/* Recordatorio por MD: los botones van en la página del evento, debajo de la
+   lista de los que faltan (el modal de asistencias ya no lo hace). */
 .roster-remind-bar {
   display: flex;
   flex-wrap: wrap;

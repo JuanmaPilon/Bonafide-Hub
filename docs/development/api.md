@@ -852,7 +852,7 @@ evento va siempre a una sala de voz y los eventos viejos con
 La clase la usan los `.module-toggle` viejos, pero un switch que no era
 `.module-toggle` quedaba siempre gris: la lógica cambiaba y el dibujo no.
 
-**El control del roster tiene filtros.** El modal del contador (`N/M`) abre en
+**El control del roster tiene filtros.** El botón **Ver asistencias** abre en
 **Faltan** (lo único accionable: a quién hay que ir a buscar) y deja cambiar a
 Confirmados, Bench o Todos. Los filtros son **combinables** y cada grupo tiene su
 color (mismo chip de color del hub: naranja faltan, verde confirmados, ámbar
@@ -860,21 +860,28 @@ bench); "Todos" limpia la selección y muestra los tres grupos con su rótulo. L
 confirmados y el bench salen de las inscripciones del evento; los que faltan, de
 `GET .../events/:eventId/roster`.
 
+**La ventana de asistencias es de sólo lectura.** El botón **Ver asistencias**
+(en la cabecera del bloque `Asistencia`, para staff) abre el modal con los
+filtros y los tres grupos; los nombres son links al perfil y el pie tiene solo
+`Cerrar`. Los tildes y el recordatorio **no** viven acá: se sacaron del modal para
+que exista un solo lugar donde se elige a quién avisar (la lista de la página) y
+para que la ventana quede de consulta. Por eso el modal dejó de ser `modal-wide`:
+sin el pie de acciones, 520 px alcanzan y se lee más parejo.
+
 **Los que faltan se ven en la página, no solo en el modal.** En la columna
 derecha de la página del evento —entre los contadores de asistencia y "Mi
 inscripción", que era el hueco que quedaba— el staff ve la lista **Faltan
-anotarse (N)** con el mismo tilde por nombre y los mismos botones de recordatorio,
-así no hay que abrir el modal para ver a quién falta y avisarle. Va **sin caja y
-sin filtros**: es la parte accionable, el detalle (confirmados, bench, filtros
-combinados) sigue en el modal. Por eso el roster se pide al entrar en la página,
-no recién al abrirlo (`loadRoster`, compartido con `openRoster`).
+anotarse (N)** con un tilde por nombre y los botones de recordatorio. Va **sin
+caja y sin filtros**: es la parte accionable, el detalle (confirmados, bench,
+filtros combinados) sigue en el modal. Por eso el roster se pide al entrar en la
+página, no recién al abrirlo (`loadRoster`, compartido con `openRoster`).
 
-**Recordatorio por MD.** En el grupo de los que faltan cada nombre tiene un
+**Recordatorio por MD.** En la lista de los que faltan cada nombre tiene un
 tilde: el staff elige a mano y el botón `Recordar a N` manda
 `POST .../events/:eventId/remind`. Las dos acciones (`Seleccionar a los que
-faltan` y `Recordar a N`) viven en el pie del modal, a la derecha de `Cerrar`:
-los nombres usan todo el ancho y el resultado del envío aparece como una línea
-chica abajo. El MD lo manda **el API** con el token del bot
+faltan` y `Recordar a N`) están al pie de esa lista, en la página, y el resultado
+del envío aparece como una línea chica al lado. El MD lo manda **el API** con el
+token del bot
 (`sendDirectMessage`), no el bot: el mensaje es firme y explica que anotarse deja
 armar el roster con tiempo y organizar grupos y bench, que anotarse a tiempo es
 parte del compromiso, y que no hacerlo puede costar el puesto de esa noche y
