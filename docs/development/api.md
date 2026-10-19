@@ -814,8 +814,29 @@ acciones usan el pie estándar (`.admin-save`: línea arriba y `Cancelar` +
 de adentro: el overlay del form (y los de editar inscripción, informe y roster)
 quedaban recortados por el borde del panel —la ventana "se cortaba" y el fondo
 desenfocado tapaba lo que sobresalía—. Con `createPortal` a `document.body` el
-overlay vuelve a cubrir la pantalla y su scroll llega hasta el final (los otros
-módulos ya lo hacían; el form de eventos era el que faltaba).
+overlay vuelve a cubrir la pantalla y su scroll llega hasta el final. Todos los
+overlays del hub pasan por el helper `ModalPortal` (`main.tsx`): el panel de
+contenido (y el de Admin, que además tiene `overflow: hidden`) recorta cualquier
+`position: fixed` que viva adentro, así que el modal de la ficha del roster y el
+de la frase del loro también se montaban mal.
+
+**El form es minimalista.** Los toggles ("Pedir personaje", recordatorios,
+repetición, pausa, limpieza al completar, publicación en Discord) son switches
+chicos en una fila (`FormSwitch`, `.form-switch`), no tarjetas
+(`.module-toggle`): esas eran para el panel de configuración y en el form
+ocupaban media ventana. La imagen también se achicó: miniatura a la izquierda
+(104×66) + "Subir"/URL a la derecha, con la biblioteca en tiras de 64 px debajo
+en vez del preview grande con su bloque aparte. Los recordatorios son sólo
+**24 h y 2 h** (el API rechaza cualquier otra hora) y la **ubicación externa del
+Scheduled Event se sacó**: el evento va siempre a una sala de voz y los eventos
+viejos con `entityType: external` se normalizan al guardarse.
+
+**La recurrencia se publica X días antes, no al cerrar la ocurrencia.** Al
+completarse (o al tocar "Limpiar ocurrencia") el molde se archiva y se mueve a su
+próxima fecha **sin publicar nada en Discord**; el scheduler
+(`runEventRecurrenceSync`) lo publica cuando entra en su ventana
+(`recurrencePublishDaysBefore`). Antes `resetSeriesOccurrence` republicaba el
+aviso en el acto, así que la serie aparecía de nuevo apenas terminaba la raid.
 
 **Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
 cierre, repetición, ubicación, roster principal, Discord) y los tipos

@@ -32,6 +32,7 @@ import {
   Heart,
   HourglassSimple,
   IdentificationCard,
+  ImageSquare,
   Key,
   Lightning,
   ListChecks,
@@ -642,6 +643,47 @@ function LoadingState({ label = "Cargando…" }: { label?: string }) {
   );
 }
 
+// Los overlays van SIEMPRE por portal al body: el panel de contenido tiene
+// `backdrop-filter`, y eso lo convierte en el contenedor de los
+// `position: fixed` de adentro. Sin el portal el fondo del modal desenfoca
+// sólo el recuadro del panel en vez de toda la página.
+function ModalPortal({ children }: { children: ReactNode }) {
+  return createPortal(children, document.body);
+}
+
+// Switch chico para los formularios: una fila con el interruptor y su rótulo,
+// sin la caja grande de `.module-toggle` (pensada para paneles de configuración).
+function FormSwitch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className={`form-switch${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
+    >
+      <span className="module-switch">
+        <input
+          checked={checked}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+          type="checkbox"
+        />
+        <span aria-hidden="true" className="module-switch-track">
+          <span className="module-switch-thumb" />
+        </span>
+      </span>
+      <span className="form-switch-label">{label}</span>
+    </label>
+  );
+}
+
 // Tarjeta de álbum de Karuta (Colección). Un álbum de Karuta tiene una
 // imagen por página (ka muestra "Showing page N of M"), así que mostrarlas
 // todas apiladas hacía la tarjeta enorme y deformaba la grilla. Esta tarjeta
@@ -832,6 +874,9 @@ function KarpindomoWidget({
 }
 
 // Valores por defecto de la sección "Publicar en Discord" del form.
+// `entityType` queda siempre en "voice": el Scheduled Event con ubicación
+// externa se sacó de la UI (no se usaba) y el API sigue aceptándolo para los
+// eventos viejos.
 function defaultEventDiscord() {
   return {
     createScheduledEvent: false,
@@ -874,7 +919,6 @@ const SIGNUP_OPTIONS: Array<{
 // inicio). Con rol mínimo elegido, el bot menciona en el canal del aviso a
 // quienes tienen el rol y todavía no se anotaron.
 const REMINDER_HOUR_OPTIONS: Array<{ hours: number; label: string }> = [
-  { hours: 48, label: "48 h antes" },
   { hours: 24, label: "24 h antes" },
   { hours: 2, label: "2 h antes" },
 ];
@@ -2326,14 +2370,15 @@ function RosterSheet({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-modal="true"
-        className="modal roster-sheet"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <h4>{memberName}</h4>
+    <ModalPortal>
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          aria-modal="true"
+          className="modal roster-sheet"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <h4>{memberName}</h4>
         {/* Sin este aviso, lo que se ve precargado se lee como si ya fuera la
             ficha guardada. */}
         {seedClass ? (
@@ -2500,8 +2545,9 @@ function RosterSheet({
             Eliminar ficha
           </button>
         ) : null}
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -3738,16 +3784,17 @@ function RosterAddPlayerModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-modal="true"
-        className="modal roster-add-modal"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <h4>Sumar jugador</h4>
-        <input
-          autoFocus
+    <ModalPortal>
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          aria-modal="true"
+          className="modal roster-add-modal"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <h4>Sumar jugador</h4>
+          <input
+            autoFocus
           className="list-search"
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar por nombre o usuario…"
@@ -3786,8 +3833,9 @@ function RosterAddPlayerModal({
             ))
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -3809,50 +3857,52 @@ function ReportFormatModal({
   title: string;
 }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-modal="true"
-        className="modal report-format-modal"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <h4>Descargar informe</h4>
-        <p className="confirm-message">{title}</p>
-        <div className="report-format-options">
-          <button
-            className="report-format-option"
-            disabled={busy}
-            onClick={() => onSelect("csv")}
-            type="button"
-          >
-            <span aria-hidden="true" className="report-format-icon">
-              📄
-            </span>
-            <strong>CSV</strong>
-          </button>
-          <button
-            className="report-format-option"
-            disabled={busy}
-            onClick={() => onSelect("pdf")}
-            type="button"
-          >
-            <span aria-hidden="true" className="report-format-icon">
-              📕
-            </span>
-            <strong>PDF</strong>
-          </button>
-        </div>
-        <div className="form-actions">
-          <button
-            className="ghost-button cancel-button"
-            onClick={onClose}
-            type="button"
-          >
-            Cancelar
-          </button>
+    <ModalPortal>
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          aria-modal="true"
+          className="modal report-format-modal"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <h4>Descargar informe</h4>
+          <p className="confirm-message">{title}</p>
+          <div className="report-format-options">
+            <button
+              className="report-format-option"
+              disabled={busy}
+              onClick={() => onSelect("csv")}
+              type="button"
+            >
+              <span aria-hidden="true" className="report-format-icon">
+                📄
+              </span>
+              <strong>CSV</strong>
+            </button>
+            <button
+              className="report-format-option"
+              disabled={busy}
+              onClick={() => onSelect("pdf")}
+              type="button"
+            >
+              <span aria-hidden="true" className="report-format-icon">
+                📕
+              </span>
+              <strong>PDF</strong>
+            </button>
+          </div>
+          <div className="form-actions">
+            <button
+              className="ghost-button cancel-button"
+              onClick={onClose}
+              type="button"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -7790,51 +7840,53 @@ function DailyMessageModal({
   }, [onClose]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        aria-modal="true"
-        className="modal"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <header className="modal-head">
-          <h4>
-            <Quotes weight="fill" aria-hidden="true" />
-            {message ? "Editar frase" : "Nueva frase"}
-          </h4>
-          <button
-            aria-label="Cerrar"
-            className="icon-button"
-            onClick={onClose}
-            title="Cerrar"
-            type="button"
-          >
-            <X aria-hidden="true" className="icon-button-icon" weight="bold" />
-          </button>
-        </header>
-        <textarea
-          autoFocus
-          className="textarea"
-          onChange={(event) => setContent(event.target.value)}
-          placeholder="Lo que va a decir el loro…"
-          rows={4}
-          value={content}
-        />
-        <div className="admin-save">
-          <button className="ghost-button small" onClick={onClose} type="button">
-            Cancelar
-          </button>
-          <button
-            className="primary-button"
-            disabled={saving || !content.trim()}
-            onClick={() => onSave(content)}
-            type="button"
-          >
-            {saving ? "Guardando…" : "Guardar frase"}
-          </button>
+    <ModalPortal>
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          aria-modal="true"
+          className="modal"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <header className="modal-head">
+            <h4>
+              <Quotes weight="fill" aria-hidden="true" />
+              {message ? "Editar frase" : "Nueva frase"}
+            </h4>
+            <button
+              aria-label="Cerrar"
+              className="icon-button"
+              onClick={onClose}
+              title="Cerrar"
+              type="button"
+            >
+              <X aria-hidden="true" className="icon-button-icon" weight="bold" />
+            </button>
+          </header>
+          <textarea
+            autoFocus
+            className="textarea"
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Lo que va a decir el loro…"
+            rows={4}
+            value={content}
+          />
+          <div className="admin-save">
+            <button className="ghost-button small" onClick={onClose} type="button">
+              Cancelar
+            </button>
+            <button
+              className="primary-button"
+              disabled={saving || !content.trim()}
+              onClick={() => onSave(content)}
+              type="button"
+            >
+              {saving ? "Guardando…" : "Guardar frase"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -9582,8 +9634,10 @@ function App() {
         createScheduledEvent:
           event.discordEventConfig?.createScheduledEvent ??
           Boolean(event.discordEventId),
-        entityType: event.discordEventConfig?.entityType ?? "voice",
-        location: event.discordEventConfig?.location ?? "",
+        // El Scheduled Event va siempre a una sala de voz: la ubicación
+        // externa se sacó del form y los eventos viejos se normalizan acá.
+        entityType: "voice",
+        location: "",
         publishChannelId: event.publishChannelId ?? "",
         publishMessage:
           event.discordEventConfig?.publishMessage ??
@@ -9635,8 +9689,10 @@ function App() {
         createScheduledEvent:
           event.discordEventConfig?.createScheduledEvent ??
           Boolean(event.discordEventId),
-        entityType: event.discordEventConfig?.entityType ?? "voice",
-        location: event.discordEventConfig?.location ?? "",
+        // El Scheduled Event va siempre a una sala de voz: la ubicación
+        // externa se sacó del form y los eventos viejos se normalizan acá.
+        entityType: "voice",
+        location: "",
         publishChannelId: event.publishChannelId ?? "",
         publishMessage:
           event.discordEventConfig?.publishMessage ??
@@ -11995,31 +12051,32 @@ function App() {
                   )}
                 </div>
               ) : (
-                <div className="section-header">
-                  <div>
-                    <h2
-                      className={
-                        activeTab === "admin" && activeAdminSection?.tier
-                          ? `admin-section-title tier-${activeAdminSection.tier}`
-                          : undefined
-                      }
-                    >
-                      {activeTab === "admin"
-                        ? (activeAdminSection?.label ?? panelTitle(activeTab))
-                        : currentSectionTitle(
-                            activeTab,
-                            sectionFor(activeTab),
-                            panelTitle(activeTab),
-                          )}
-                    </h2>
-                  </div>
+                <div className="section-header section-header--center">
+                  <span className="section-header-spacer" />
+                  <h2
+                    className={
+                      activeTab === "admin" && activeAdminSection?.tier
+                        ? `admin-section-title tier-${activeAdminSection.tier}`
+                        : undefined
+                    }
+                  >
+                    {activeTab === "admin"
+                      ? (activeAdminSection?.label ?? panelTitle(activeTab))
+                      : currentSectionTitle(
+                          activeTab,
+                          sectionFor(activeTab),
+                          panelTitle(activeTab),
+                        )}
+                  </h2>
                   {activeTab === "admin" && activeAdminSection?.tier ? (
                     <span
                       className={`admin-nav-tier tier-${activeAdminSection.tier}`}
                     >
                       {accessTierLabel(activeAdminSection.tier)}
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="section-header-spacer" />
+                  )}
                 </div>
               )}
 
@@ -14419,444 +14476,293 @@ function App() {
                               ))}
                             </select>
                           </label>
-                          {/* OJO: el estado visual del switch lo da la clase
-                            "checked" en el label (el input está oculto). */}
-                          <label
-                            className={`module-toggle event-reminder-toggle${
-                              eventForm.characterEnabled ? " checked" : ""
-                            }`}
-                          >
-                            <span className="module-toggle-text">
-                              <strong>Pedir nombre de personaje</strong>
+                          {/* Inscripción, recordatorios y repetición: switches
+                            chicos en una sola fila, sin las cajas grandes de
+                            `.module-toggle`. */}
+                          <div className="event-form-wide event-switch-row">
+                            <FormSwitch
+                              checked={eventForm.characterEnabled}
+                              label="Pedir personaje"
+                              onChange={(checked) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  characterEnabled: checked,
+                                }))
+                              }
+                            />
+                            <span
+                              aria-hidden="true"
+                              className="event-switch-divider"
+                            />
+                            <span className="event-switch-hint">
+                              Recordatorios
                             </span>
-                            <span className="module-switch">
-                              <input
-                                type="checkbox"
-                                checked={eventForm.characterEnabled}
-                                onChange={(event) =>
+                            {REMINDER_HOUR_OPTIONS.map((option) => (
+                              <FormSwitch
+                                checked={eventForm.reminderHours.includes(
+                                  option.hours,
+                                )}
+                                disabled={!eventForm.requiredRoleId.trim()}
+                                key={option.hours}
+                                label={option.label}
+                                onChange={(checked) =>
                                   setEventForm((current) => ({
                                     ...current,
-                                    characterEnabled: event.target.checked,
+                                    reminderHours: checked
+                                      ? [
+                                          ...current.reminderHours.filter(
+                                            (hours) => hours !== option.hours,
+                                          ),
+                                          option.hours,
+                                        ]
+                                      : current.reminderHours.filter(
+                                          (hours) => hours !== option.hours,
+                                        ),
                                   }))
                                 }
                               />
-                              <span
-                                className="module-switch-track"
-                                aria-hidden="true"
-                              >
-                                <span className="module-switch-thumb" />
-                              </span>
-                            </span>
-                          </label>
-                          <div className="event-form-wide event-reminders">
-                            <span className="event-reminders-title">
-                              Recordatorios de asistencia
-                            </span>
-                            <div className="event-reminders-options">
-                              {REMINDER_HOUR_OPTIONS.map((option) => {
-                                const checked =
-                                  eventForm.reminderHours.includes(
-                                    option.hours,
-                                  );
-                                const disabled =
-                                  !eventForm.requiredRoleId.trim();
-                                return (
-                                  <label
-                                    className={`module-toggle event-reminder-toggle${checked ? " checked" : ""}${disabled ? " disabled" : ""}`}
-                                    key={option.hours}
-                                  >
-                                    <span className="module-toggle-text">
-                                      <strong>⏰ {option.label}</strong>
-                                    </span>
-                                    <span className="module-switch">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        disabled={disabled}
-                                        onChange={() =>
-                                          setEventForm((current) => ({
-                                            ...current,
-                                            reminderHours: checked
-                                              ? current.reminderHours.filter(
-                                                  (hours) =>
-                                                    hours !== option.hours,
-                                                )
-                                              : [
-                                                  ...current.reminderHours,
-                                                  option.hours,
-                                                ],
-                                          }))
-                                        }
-                                      />
-                                      <span
-                                        className="module-switch-track"
-                                        aria-hidden="true"
-                                      >
-                                        <span className="module-switch-thumb" />
-                                      </span>
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div className="event-form-wide event-recurrence">
-                            <span className="event-reminders-title">
-                              Repetición y estado
-                            </span>
-                            <div className="event-recurrence-options">
-                              <label
-                                className={`module-toggle event-reminder-toggle${eventForm.recurrenceEnabled ? " checked" : ""}`}
-                              >
-                                <span className="module-toggle-text">
-                                  <strong>🔁 Repetir automáticamente</strong>
-                                </span>
-                                <span className="module-switch">
-                                  <input
-                                    type="checkbox"
-                                    checked={eventForm.recurrenceEnabled}
-                                    onChange={(event) =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        recurrenceEnabled: event.target.checked,
-                                        recurrenceEveryDays:
-                                          event.target.checked &&
-                                          !current.recurrenceEveryDays
-                                            ? "7"
-                                            : current.recurrenceEveryDays,
-                                      }))
-                                    }
-                                  />
-                                  <span
-                                    className="module-switch-track"
-                                    aria-hidden="true"
-                                  >
-                                    <span className="module-switch-thumb" />
-                                  </span>
-                                </span>
-                              </label>
-                              {editingEventId ? (
-                                <label
-                                  className={`module-toggle event-reminder-toggle${eventForm.paused ? " checked" : ""}`}
-                                >
-                                  <span className="module-toggle-text">
-                                    <strong>⏸️ Pausar evento</strong>
-                                  </span>
-                                  <span className="module-switch">
-                                    <input
-                                      type="checkbox"
-                                      checked={eventForm.paused}
-                                      onChange={(event) =>
-                                        setEventForm((current) => ({
-                                          ...current,
-                                          paused: event.target.checked,
-                                        }))
-                                      }
-                                    />
-                                    <span
-                                      className="module-switch-track"
-                                      aria-hidden="true"
-                                    >
-                                      <span className="module-switch-thumb" />
-                                    </span>
-                                  </span>
-                                </label>
-                              ) : null}
-                            </div>
-                            {eventForm.recurrenceEnabled ? (
-                              <div className="event-recurrence-days-row">
-                                <label className="event-recurrence-days">
-                                  <span>Cada (días)</span>
-                                  <input
-                                    className="input"
-                                    type="number"
-                                    min="1"
-                                    max="365"
-                                    value={eventForm.recurrenceEveryDays}
-                                    onChange={(event) =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        recurrenceEveryDays: event.target.value,
-                                      }))
-                                    }
-                                  />
-                                </label>
-                                <label className="event-recurrence-days">
-                                  <span>Publicar (días antes)</span>
-                                  <input
-                                    className="input"
-                                    type="number"
-                                    min="1"
-                                    max="365"
-                                    value={
-                                      eventForm.recurrencePublishDaysBefore
-                                    }
-                                    onChange={(event) =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        recurrencePublishDaysBefore:
-                                          event.target.value,
-                                      }))
-                                    }
-                                  />
-                                </label>
-                              </div>
+                            ))}
+                            <span
+                              aria-hidden="true"
+                              className="event-switch-divider"
+                            />
+                            <FormSwitch
+                              checked={eventForm.recurrenceEnabled}
+                              label="Repetir"
+                              onChange={(checked) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  recurrenceEnabled: checked,
+                                  recurrenceEveryDays:
+                                    checked && !current.recurrenceEveryDays
+                                      ? "7"
+                                      : current.recurrenceEveryDays,
+                                }))
+                              }
+                            />
+                            {editingEventId ? (
+                              <FormSwitch
+                                checked={eventForm.paused}
+                                label="Pausar"
+                                onChange={(checked) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    paused: checked,
+                                  }))
+                                }
+                              />
+                            ) : null}
+                            {eventForm.discord.createScheduledEvent ||
+                            eventForm.discord.publishMessage ? (
+                              <FormSwitch
+                                checked={eventForm.discordCleanupOnComplete}
+                                label="Borrar de Discord al completar"
+                                onChange={(checked) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    discordCleanupOnComplete: checked,
+                                  }))
+                                }
+                              />
                             ) : null}
                           </div>
+                          {eventForm.recurrenceEnabled ? (
+                            <div className="event-form-wide event-recurrence-days-row">
+                              <label className="event-recurrence-days">
+                                <span>Cada (días)</span>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="1"
+                                  max="365"
+                                  value={eventForm.recurrenceEveryDays}
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      recurrenceEveryDays: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="event-recurrence-days">
+                                <span>Publicar (días antes)</span>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="1"
+                                  max="365"
+                                  value={eventForm.recurrencePublishDaysBefore}
+                                  onChange={(event) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      recurrencePublishDaysBefore:
+                                        event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                            </div>
+                          ) : null}
                           <div className="event-form-wide event-image-editor">
                             <span className="event-image-editor-label">
                               Imagen
                             </span>
-                            {eventForm.imageUrl ? (
-                              <div className="event-image-preview">
+                            <div className="event-image-row">
+                              {eventForm.imageUrl ? (
                                 <img
-                                  src={eventForm.imageUrl}
                                   alt="Imagen del evento"
+                                  className="event-image-thumb"
+                                  src={eventForm.imageUrl}
                                 />
-                                <button
-                                  className="ghost-button danger"
-                                  onClick={() =>
-                                    setEventForm((current) => ({
-                                      ...current,
-                                      imageUrl: "",
-                                    }))
-                                  }
-                                  type="button"
-                                >
-                                  Quitar imagen
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="event-image-empty">
-                                Sin imagen seleccionada.
-                              </div>
-                            )}
-                            <div className="event-image-controls">
-                              <input
-                                className="input"
-                                value={
-                                  eventForm.imageUrl.startsWith("data:")
-                                    ? ""
-                                    : eventForm.imageUrl
-                                }
-                                onChange={(event) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    imageUrl: event.target.value,
-                                  }))
-                                }
-                                placeholder="URL o imagen"
-                              />
-                              <label className="primary-button event-upload-button">
-                                {uploadingImage ? "Subiendo…" : "Subir imagen"}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  hidden
-                                  onChange={(event) =>
-                                    void handleImageFileChange(event)
-                                  }
-                                />
-                              </label>
-                            </div>
-                            <div className="event-image-library">
-                              <strong>Biblioteca</strong>
-                              {eventImagesLoading ? (
-                                <span className="muted-text">Cargando…</span>
-                              ) : eventImages.length === 0 ? (
-                                <span className="muted-text">Vacía.</span>
                               ) : (
-                                <div className="event-image-library-grid">
-                                  {eventImages.map((image) => (
-                                    <div
-                                      className="event-image-library-item"
-                                      key={image.id}
-                                    >
-                                      <img
-                                        src={image.dataUrl}
-                                        alt={image.name ?? "Imagen"}
-                                        onClick={() =>
-                                          setEventForm((current) => ({
-                                            ...current,
-                                            imageUrl: image.dataUrl,
-                                          }))
-                                        }
-                                      />
-                                      <button
-                                        className="event-image-library-delete"
-                                        onClick={() =>
-                                          void handleDeleteEventImage(image)
-                                        }
-                                        title="Eliminar de la biblioteca"
-                                        type="button"
-                                      >
-                                        ✕
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
+                                <span className="event-image-thumb empty">
+                                  <ImageSquare aria-hidden="true" weight="fill" />
+                                </span>
                               )}
+                              <div className="event-image-actions">
+                                <div className="event-image-controls">
+                                  <label className="ghost-button small event-upload-button">
+                                    {uploadingImage ? "Subiendo…" : "Subir"}
+                                    <input
+                                      accept="image/*"
+                                      hidden
+                                      onChange={(event) =>
+                                        void handleImageFileChange(event)
+                                      }
+                                      type="file"
+                                    />
+                                  </label>
+                                  <input
+                                    className="input"
+                                    onChange={(event) =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        imageUrl: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="…o pegar una URL"
+                                    value={
+                                      eventForm.imageUrl.startsWith("data:")
+                                        ? ""
+                                        : eventForm.imageUrl
+                                    }
+                                  />
+                                  {eventForm.imageUrl ? (
+                                    <button
+                                      aria-label="Quitar imagen"
+                                      className="icon-button"
+                                      onClick={() =>
+                                        setEventForm((current) => ({
+                                          ...current,
+                                          imageUrl: "",
+                                        }))
+                                      }
+                                      title="Quitar imagen"
+                                      type="button"
+                                    >
+                                      <Trash
+                                        aria-hidden="true"
+                                        className="icon-button-icon"
+                                        weight="fill"
+                                      />
+                                    </button>
+                                  ) : null}
+                                </div>
+                                {eventImages.length > 0 ? (
+                                  <div className="event-image-library-grid">
+                                    {eventImages.map((image) => (
+                                      <div
+                                        className="event-image-library-item"
+                                        key={image.id}
+                                      >
+                                        <img
+                                          alt={image.name ?? "Imagen"}
+                                          onClick={() =>
+                                            setEventForm((current) => ({
+                                              ...current,
+                                              imageUrl: image.dataUrl,
+                                            }))
+                                          }
+                                          src={image.dataUrl}
+                                        />
+                                        <button
+                                          aria-label="Eliminar de la biblioteca"
+                                          className="event-image-library-delete"
+                                          onClick={() =>
+                                            void handleDeleteEventImage(image)
+                                          }
+                                          title="Eliminar de la biblioteca"
+                                          type="button"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         </div>
                         <div className="event-form-wide event-discord-editor">
                           <span className="event-image-editor-label">
-                            📢 Publicar en Discord
+                            Publicar en Discord
                           </span>
-                          <label
-                            className={`module-toggle event-discord-toggle${eventForm.discord.createScheduledEvent ? " checked" : ""}`}
-                          >
-                            <span className="module-toggle-text">
-                              <strong>Crear Scheduled Event</strong>
-                              <small>
-                                Aparece en el panel Eventos de Discord, con RSVP
-                                nativo.
-                              </small>
-                            </span>
-                            <span className="module-switch">
-                              <input
-                                type="checkbox"
-                                checked={eventForm.discord.createScheduledEvent}
-                                onChange={(event) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    discord: {
-                                      ...current.discord,
-                                      createScheduledEvent:
-                                        event.target.checked,
-                                    },
-                                  }))
-                                }
-                              />
-                              <span
-                                className="module-switch-track"
-                                aria-hidden="true"
-                              >
-                                <span className="module-switch-thumb" />
-                              </span>
-                            </span>
-                          </label>
+                          <div className="event-switch-row">
+                            <FormSwitch
+                              checked={eventForm.discord.createScheduledEvent}
+                              label="Scheduled Event"
+                              onChange={(checked) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  discord: {
+                                    ...current.discord,
+                                    createScheduledEvent: checked,
+                                  },
+                                }))
+                              }
+                            />
+                            <FormSwitch
+                              checked={eventForm.discord.publishMessage}
+                              label="Aviso en un canal"
+                              onChange={(checked) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  discord: {
+                                    ...current.discord,
+                                    publishMessage: checked,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
                           {eventForm.discord.createScheduledEvent ? (
-                            <div className="event-discord-row">
-                              <div className="event-signup-role-row">
-                                <button
-                                  className={`event-status-btn role${eventForm.discord.entityType === "voice" ? " active" : ""}`}
-                                  onClick={() =>
-                                    setEventForm((current) => ({
-                                      ...current,
-                                      discord: {
-                                        ...current.discord,
-                                        entityType: "voice",
-                                      },
-                                    }))
-                                  }
-                                  type="button"
-                                >
-                                  🔉 Sala de voz
-                                </button>
-                                <button
-                                  className={`event-status-btn role${eventForm.discord.entityType === "external" ? " active" : ""}`}
-                                  onClick={() =>
-                                    setEventForm((current) => ({
-                                      ...current,
-                                      discord: {
-                                        ...current.discord,
-                                        entityType: "external",
-                                      },
-                                    }))
-                                  }
-                                  type="button"
-                                >
-                                  📍 Externo (con ubicación)
-                                </button>
-                              </div>
-                              {eventForm.discord.entityType === "voice" ? (
-                                <label>
-                                  <span>Sala de voz del evento</span>
-                                  <select
-                                    className="select"
-                                    value={eventForm.discord.voiceChannelId}
-                                    onChange={(event) =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        discord: {
-                                          ...current.discord,
-                                          voiceChannelId: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    <option value="">
-                                      Seleccionar sala de voz…
-                                    </option>
-                                    {voiceChannels.map((channel) => (
-                                      <option
-                                        key={channel.id}
-                                        value={channel.id}
-                                      >
-                                        {channel.name}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              ) : (
-                                <label>
-                                  <span>
-                                    Ubicación (ej: en juego, sala de Raid…)
-                                  </span>
-                                  <input
-                                    className="input"
-                                    value={eventForm.discord.location}
-                                    onChange={(event) =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        discord: {
-                                          ...current.discord,
-                                          location: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                    placeholder="Ej: World of Warcraft"
-                                    maxLength={100}
-                                  />
-                                </label>
-                              )}
-                            </div>
-                          ) : null}
-                          <label
-                            className={`module-toggle event-discord-toggle${eventForm.discord.publishMessage ? " checked" : ""}`}
-                          >
-                            <span className="module-toggle-text">
-                              <strong>Publicar un aviso</strong>
-                              <small>
-                                Publica un embed del evento en un canal de
-                                texto.
-                              </small>
-                            </span>
-                            <span className="module-switch">
-                              <input
-                                type="checkbox"
-                                checked={eventForm.discord.publishMessage}
+                            <label className="event-discord-field">
+                              <span>Sala de voz del evento</span>
+                              <select
+                                className="select"
+                                value={eventForm.discord.voiceChannelId}
                                 onChange={(event) =>
                                   setEventForm((current) => ({
                                     ...current,
                                     discord: {
                                       ...current.discord,
-                                      publishMessage: event.target.checked,
+                                      voiceChannelId: event.target.value,
                                     },
                                   }))
                                 }
-                              />
-                              <span
-                                className="module-switch-track"
-                                aria-hidden="true"
                               >
-                                <span className="module-switch-thumb" />
-                              </span>
-                            </span>
-                          </label>
+                                <option value="">Seleccionar sala de voz…</option>
+                                {voiceChannels.map((channel) => (
+                                  <option key={channel.id} value={channel.id}>
+                                    {channel.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
                           {eventForm.discord.publishMessage ? (
-                            <label>
+                            <label className="event-discord-field">
                               <span>Canal donde publicar</span>
                               <select
                                 className="select"
@@ -14871,46 +14777,13 @@ function App() {
                                   }))
                                 }
                               >
-                                <option value="">
-                                  Seleccionar canal de texto…
-                                </option>
+                                <option value="">Seleccionar canal de texto…</option>
                                 {textChannels.map((channel) => (
                                   <option key={channel.id} value={channel.id}>
                                     {channel.name}
                                   </option>
                                 ))}
                               </select>
-                            </label>
-                          ) : null}
-                          {eventForm.discord.createScheduledEvent ||
-                          eventForm.discord.publishMessage ? (
-                            <label
-                              className={`module-toggle event-reminder-toggle${eventForm.discordCleanupOnComplete ? " checked" : ""}`}
-                            >
-                              <span className="module-toggle-text">
-                                <strong>
-                                  🧹 Eliminar ocurrencia al completar
-                                </strong>
-                              </span>
-                              <span className="module-switch">
-                                <input
-                                  type="checkbox"
-                                  checked={eventForm.discordCleanupOnComplete}
-                                  onChange={(event) =>
-                                    setEventForm((current) => ({
-                                      ...current,
-                                      discordCleanupOnComplete:
-                                        event.target.checked,
-                                    }))
-                                  }
-                                />
-                                <span
-                                  className="module-switch-track"
-                                  aria-hidden="true"
-                                >
-                                  <span className="module-switch-thumb" />
-                                </span>
-                              </span>
                             </label>
                           ) : null}
                         </div>

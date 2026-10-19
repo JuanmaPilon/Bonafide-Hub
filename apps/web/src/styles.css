@@ -6670,19 +6670,36 @@ select.list-order {
 }
 
 /* Cabecera de la página del evento: volver a la izquierda, título centrado y
-   la tuerquita de acciones a la derecha. Las tres columnas son iguales para que
-   el título quede en el centro real del panel, no corrido. */
+   la tuerquita de acciones a la derecha. */
+.section-header--event .icon-button {
+  justify-self: start;
+}
+
+.section-header--event .event-menu {
+  justify-self: end;
+}
+
+/* Cabeceras de módulo con el título centrado: la página de un evento y el
+   resto de los módulos comparten la misma grilla de tres columnas, así el
+   título queda en el centro real del panel y no corrido por el badge de la
+   derecha (ni por el botón de volver del evento). */
+.section-header--center,
 .section-header--event {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
 }
 
+.section-header--center h2,
 .section-header--event h2 {
   margin: 0;
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+.section-header--center .admin-nav-tier {
+  justify-self: end;
 }
 
 /* Título + etiquetas del evento en el centro de la cabecera: las etiquetas van
@@ -7041,75 +7058,54 @@ select.list-order {
   line-height: 1.35;
 }
 
-/* Recordatorios de asistencia (form). El título va AL LADO de los toggles (y no
-   arriba) para que la sección ocupe una sola fila. */
-.event-reminders {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 6px 12px;
-}
-
-.event-reminders-title {
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.event-reminders-options {
+/* Filas de switches del form de eventos: chicos, en línea y con aire, en vez
+   de una tarjeta grande por opción. */
+.event-switch-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 8px 18px;
 }
 
-/* Cada recordatorio es un toggle compacto con el mismo switch que usa el
-   resto de la app (module-switch), para mantener la UI armonizada. */
-.event-reminder-toggle {
-  flex: 1 1 150px;
-  padding: 6px 10px;
+.event-switch-hint {
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
-/* En pantallas angostas el título arriba y los toggles abajo, como antes. */
-@media (max-width: 720px) {
-  .event-reminders,
-  .event-recurrence {
-    grid-template-columns: 1fr;
-  }
+.event-switch-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(133, 156, 212, 0.3);
 }
 
-.event-reminder-toggle.disabled {
+.form-switch,
+.form-grid label.form-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  color: var(--text);
+}
+
+.form-switch.disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.event-reminder-toggle.disabled .module-switch input {
-  cursor: not-allowed;
+.form-switch-label {
+  white-space: nowrap;
 }
 
-/* Repetición automática + pausa (mismo lenguaje visual que los recordatorios). */
-.event-recurrence {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 6px 12px;
-}
-
-.event-recurrence-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
+/* Inputs de la repetición: dos campos cortos en su propia fila. */
 .event-recurrence-days-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  /* El título y los toggles van en la primera fila (2 columnas): los inputs de
-     días ocupan el ancho completo en la fila de abajo. */
-  grid-column: 1 / -1;
+  gap: 12px;
 }
 
 .event-recurrence-days {
-  max-width: 190px;
+  width: 120px;
 }
 
 .event-deadline.closed {
@@ -7465,9 +7461,9 @@ select.list-order {
   background: rgba(12, 19, 37, 0.4);
 }
 
-.event-discord-row {
+.event-discord-field {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .form-check {
@@ -7501,7 +7497,9 @@ select.list-order {
   padding: 2px 8px;
 }
 
-/* Editor de imagen del formulario de eventos (subida + biblioteca) */
+/* Editor de imagen del formulario de eventos: miniatura + acciones en la misma
+   fila, con la biblioteca debajo en tiras chicas (antes el preview grande y el
+   bloque de la biblioteca se comían media ventana). */
 .event-image-editor {
   display: grid;
   gap: 10px;
@@ -7512,26 +7510,35 @@ select.list-order {
   color: var(--muted);
 }
 
-.event-image-preview {
+.event-image-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.event-image-thumb {
+  flex-shrink: 0;
+  width: 104px;
+  height: 66px;
+  border-radius: 10px;
+  border: 1px solid rgba(134, 158, 214, 0.25);
+  object-fit: contain;
+  background: rgba(10, 16, 31, 0.6);
+}
+
+.event-image-thumb.empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border-style: dashed;
+}
+
+.event-image-actions {
   display: grid;
   gap: 8px;
-  justify-items: start;
-}
-
-.event-image-preview img {
-  max-width: 100%;
-  max-height: 220px;
-  border-radius: 12px;
-  border: 1px solid rgba(134, 158, 214, 0.25);
-  object-fit: cover;
-}
-
-.event-image-empty {
-  padding: 14px;
-  border-radius: 10px;
-  border: 1px dashed rgba(136, 159, 216, 0.3);
-  color: var(--muted);
-  font-size: 0.85rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .event-image-controls {
@@ -7543,7 +7550,7 @@ select.list-order {
 
 .event-image-controls .input {
   flex: 1;
-  min-width: 200px;
+  min-width: 180px;
 }
 
 .event-upload-button {
@@ -7551,20 +7558,17 @@ select.list-order {
   white-space: nowrap;
 }
 
-.event-image-library {
-  display: grid;
-  gap: 8px;
-}
-
 .event-image-library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 64px));
+  gap: 6px;
+  max-height: 148px;
+  overflow-y: auto;
 }
 
 .event-image-library-item {
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(134, 158, 214, 0.25);
   aspect-ratio: 16 / 9;
@@ -7580,10 +7584,10 @@ select.list-order {
 
 .event-image-library-delete {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7591,7 +7595,7 @@ select.list-order {
   border: none;
   background: rgba(8, 13, 24, 0.75);
   color: #ff8a5c;
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   cursor: pointer;
 }
 
@@ -10199,7 +10203,7 @@ select.list-order {
 
 :root[data-theme="light"] .event-signup-selected,
 :root[data-theme="light"] .event-image-library-item,
-:root[data-theme="light"] .event-image-preview {
+:root[data-theme="light"] .event-image-thumb {
   background: rgba(255, 255, 255, 0.75);
 }
 

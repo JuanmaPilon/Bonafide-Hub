@@ -201,22 +201,27 @@ Rules:
    Discord (signup statuses ✅ ⏰ 🪑 ❌, and the emojis the API sends inside the
    embed).
 4. **Modals** — build on `.modal` + `.modal-head` (icon + title + round close
-   button) + `.admin-save` footer. Render them through `createPortal` to
-   `document.body`: the content panel has `backdrop-filter`, which traps
-   `position: fixed` children and clips the overlay.
+   button) + `.admin-save` footer. Wrap them in the `ModalPortal` helper (a
+   `createPortal` to `document.body`): the content panel has `backdrop-filter`,
+   which traps `position: fixed` children, so without it the overlay blurs just
+   the panel box instead of the whole page (and Admin's `overflow: hidden`
+   clips it).
 5. **Forms** — `.form-grid` (two columns, `event-form-wide` for full rows) with
-   the label above the control, and the hub's own `.input` / `.select`.
+   the label above the control, and the hub's own `.input` / `.select`. Options
+   that are on/off are a small `FormSwitch` in a `.event-switch-row`, never a
+   `.module-toggle` card (those belong to the configuration panel).
 6. **Light theme** — every new surface needs its light-theme counterpart. Do not
    write a broad light-theme selector that overrides a component's own computed
    colors (e.g. color chips): exclude those variants explicitly.
 7. **Empty and loading states** — say "loading" while loading and "empty" only
    when the data actually arrived; never show "there is nothing" while the list
    is still being fetched.
-8. **Page header of a single record** (one event, one member): back button on
-   the left, title centered, actions in a gear (`GearSix`) on the right that
-   opens a solid anchored menu. The side columns must measure the same so the
-   title sits on the panel's real center, and users without permission get a
-   spacer instead of the gear.
+8. **Page header** — a single record (one event, one member) and every module
+   use the same centered header: `section-header--center` /
+   `section-header--event` (three columns, title in the middle). Back button on
+   the left, the gear (`GearSix`) on the right. The side columns must measure
+   the same so the title sits on the panel's real center, and users without
+   permission get a spacer instead of the gear.
 9. **Custom dropdowns** (anything that shows images, e.g. class/spec with the
    server emoji): a trigger styled like `.select` plus a menu, never a native
    `<select>`. Render the menu through `createPortal` with `position: fixed`

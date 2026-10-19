@@ -1453,10 +1453,39 @@ async function createRecurrenceCopy(
   );
 }
 
+// Publica el molde de una serie (aviso y/o Scheduled Event) con su config
+// guardada. No se usa al cerrar una ocurrencia: la ocurrencia siguiente se
+// publica recién cuando entra en su ventana ("publicar X días antes"), igual
+// que las copias que crea el scheduler.
+async function publishSeriesHead(
+  event: HubEvent,
+): Promise<{ error?: string; event: HubEvent }> {
+  const discordOpts: EventDiscordOptions = {
+    createScheduledEvent:
+      event.discordEventConfig?.createScheduledEvent ?? false,
+    entityType: event.discordEventConfig?.entityType ?? "voice",
+    location: event.discordEventConfig?.location,
+    publishChannelId: event.publishChannelId,
+    publishMessage:
+      (event.discordEventConfig?.publishMessage ?? false) &&
+      Boolean(event.publishChannelId),
+    recurrence: (event.discordEventConfig?.recurrence ??
+      "none") as EventRecurrence,
+    voiceChannelId: event.voiceChannelId,
+  };
+  const validationError = validateDiscordOptions(discordOpts);
+  if (validationError) {
+    return { error: validationError, event };
+  }
+  const synced = await syncAndStoreEventDiscord({ discordOpts, event });
+  return { error: synced.discordError, event: synced.event ?? event };
+}
+
 // Cierra la ocurrencia de una serie sin matar la serie: borra su rastro en
 // Discord, la archiva en el historial (con su roster) y mueve el molde a su
-// próxima fecha, re-publicándola con la config guardada. Lo usan el botón
-// "Limpiar ocurrencia" y el toggle "eliminar ocurrencia al completar".
+// próxima fecha. La ocurrencia nueva NO se publica acá: la publica el
+// scheduler cuando entra en su ventana ("publicar X días antes"). Lo usan el
+// botón "Limpiar ocurrencia" y el toggle "eliminar ocurrencia al completar".
 async function resetSeriesOccurrence(
   guildId: string,
   event: HubEvent,
@@ -1526,41 +1555,15 @@ async function resetSeriesOccurrence(
     startsAt: nextStartsAt,
   });
 
-  let discordError: string | undefined;
-  let savedEvent = updated;
-  if (updated) {
-    const hadMessage = (event.discordMessageIds ?? []).length > 0;
-    const discordOpts: EventDiscordOptions = {
-      createScheduledEvent:
-        event.discordEventConfig?.createScheduledEvent ??
-        Boolean(event.discordEventId),
-      entityType: event.discordEventConfig?.entityType ?? "voice",
-      location: event.discordEventConfig?.location,
-      publishChannelId: event.publishChannelId,
-      publishMessage: hadMessage && Boolean(event.publishChannelId),
-      recurrence: (event.discordEventConfig?.recurrence ??
-        "none") as EventRecurrence,
-      voiceChannelId: event.voiceChannelId,
-    };
-    if (discordOpts.createScheduledEvent || discordOpts.publishMessage) {
-      const validationError = validateDiscordOptions(discordOpts);
-      if (validationError) {
-        discordError = validationError;
-      } else {
-        const synced = await syncAndStoreEventDiscord({
-          discordOpts,
-          event: updated,
-        });
-        discordError = synced.discordError;
-        if (synced.event) {
-          savedEvent = synced.event;
-        }
-      }
-    }
-  }
+  // El molde queda en su próxima fecha SIN aviso publicado: lo publica el
+  // scheduler cuando entra en la ventana de "publicar X días antes". Antes se
+  // republicaba acá mismo y la serie aparecía en Discord apenas terminaba la
+  // ocurrencia anterior.
+  const discordError = undefined;
+  const savedEvent = updated;
 
   console.log(
-    `[eventos] ocurrencia cerrada "${event.title}": archivada=${Boolean(archived)} inscripciones=${signupsBefore} próxima=${nextStartsAt.toISOString()} fallosDiscord=${cleanup.failed.length}`,
+    `[eventos] ocurrencia cerrada "${event.title}": archivada=${Boolean(archived)} inscripciones=${signupsBefore} proxima=${nextStartsAt.toISOString()} fallosDiscord=${cleanup.failed.length}`,
   );
 
   return {
@@ -1706,6 +1709,32 @@ async function runEventRecurrenceSync(): Promise<void> {
         Math.max(1, head.recurrencePublishDaysBefore ?? 1) * DAY_MS;
       let nextAt = head.recurrenceNextAt;
       let changed = false;
+
+      // 0) El molde quedó movido por el cierre de su ocurrencia: se publica
+      // recién ahora, cuando entra en la ventana (X días antes). Sin esto la
+      // serie se republicaba apenas terminaba la raid anterior.
+      const headPending =
+        (head.discordMessageIds ?? []).length === 0 && !head.discordEventId;
+      const headPublishes =
+        Boolean(head.publishChannelId) ||
+        head.discordEventConfig?.createScheduledEvent === true;
+      if (
+        headPending &&
+        headPublishes &&
+        head.startsAt.getTime() > Date.now() &&
+        head.startsAt.getTime() - publishBeforeMs <= Date.now()
+      ) {
+        const published = await publishSeriesHead(head);
+        if (published.error) {
+          console.error(
+            `[eventos] no se pudo publicar la serie "${head.title}": ${published.error}`,
+          );
+        } else {
+          console.log(
+            `[eventos] recurrencia: publicada la ocurrencia de "${head.title}" para ${head.startsAt.toISOString()}`,
+          );
+        }
+      }
 
       // 1) Ocurrencias cuya fecha ya pasó (API caída mucho tiempo): las
       // salteamos para no crear eventos viejos.
@@ -2479,8 +2508,11 @@ export function refreshAllPublishedAnnouncements(): void {
   })();
 }
 
-// Horas de recordatorio válidas (p. ej. 48, 24, 2). Normaliza: números
-// finitos entre 1 y 720 (30 días), sin duplicados y ordenados.
+// Horas de recordatorio válidas: las dos que ofrece el form (24 h y 2 h antes).
+// Normaliza: sin duplicados y ordenadas de mayor a menor. Un evento viejo que
+// tenía 48 h se queda sin ese recordatorio al guardarse.
+const REMINDER_HOURS = [24, 2] as const;
+
 function normalizeReminderHours(value: unknown): number[] {
   if (!Array.isArray(value)) {
     return [];
@@ -2490,11 +2522,12 @@ function normalizeReminderHours(value: unknown): number[] {
     if (typeof item !== "number" || !Number.isFinite(item)) {
       continue;
     }
-    if (item >= 1 && item <= 720) {
-      hours.add(Math.round(item));
+    const hour = Math.round(item);
+    if ((REMINDER_HOURS as readonly number[]).includes(hour)) {
+      hours.add(hour);
     }
   }
-  return Array.from(hours).sort((a, b) => a - b);
+  return Array.from(hours).sort((a, b) => b - a);
 }
 
 // Días de recurrencia válidos (1 a 365). null = sin recurrencia.
