@@ -16,6 +16,11 @@
   --rlb-list-fade: rgba(7, 13, 24, 0.92);
   --rlb-scroll-thumb: rgba(148, 172, 228, 0.38);
   --panel-border: rgba(124, 152, 216, 0.24);
+  /* Ancho de la estructura: la barra de navegación y el contenido de la página
+     usan el MISMO valor, así los bordes de las cajas quedan alineados con el
+     logo y con el chip del usuario. Se subió de 1320 a 1680 cuando la nav sumó
+     Torneos y Sugerencias: con 1320 la barra ya no entraba en una línea. */
+  --shell-max: 1680px;
   --text: #edf2ff;
   --muted: #b2bdd8;
   --accent: #6aa8ff;
@@ -108,7 +113,7 @@ a:hover {
 }
 
 .landing-main {
-  max-width: 1320px;
+  max-width: var(--shell-max);
   width: 100%;
   margin: 0 auto;
 }
@@ -222,7 +227,7 @@ a:hover {
 }
 
 .topbar-inner {
-  max-width: 1320px;
+  max-width: var(--shell-max);
   margin: 0 auto;
   padding: 14px 24px;
   display: flex;
@@ -274,6 +279,19 @@ a:hover {
 
 .nav-link:hover {
   color: var(--text);
+}
+
+/* Con la nav completa (9 ítems) el ancho crítico es la barra: un poco menos de
+   aire entre ítems la mantiene en una sola línea en pantallas grandes antes de
+   que tenga que bajar a dos. */
+@media (max-width: 1640px) {
+  .top-nav {
+    gap: 2px;
+  }
+
+  .nav-link {
+    padding: 8px 10px;
+  }
 }
 
 .nav-link.active {
@@ -624,7 +642,7 @@ a:hover {
 }
 
 .page {
-  max-width: 1320px;
+  max-width: var(--shell-max);
   margin: 0 auto;
   padding: 28px 24px 48px;
 }
@@ -7078,6 +7096,9 @@ select.list-order {
 .event-page .event-card-image-wrap {
   position: relative;
   aspect-ratio: 3 / 1;
+  /* Con la estructura más ancha, el 3:1 crecía hasta comerse media pantalla:
+     se corta acá y la imagen se sigue viendo entera (`contain`). */
+  max-height: 460px;
   overflow: hidden;
   background: #0b1226;
 }

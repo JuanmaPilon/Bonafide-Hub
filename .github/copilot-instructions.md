@@ -231,6 +231,12 @@ Rules:
    anchored to the trigger — cards use `overflow: hidden` and long menus get
    clipped. It closes on click-outside and Escape, and follows the trigger on
    scroll.
+10. **Shell width** — `.topbar-inner`, `.page` and `.landing-main` share
+    `--shell-max` (one variable). Never hardcode a max-width on one of them:
+    the nav and the content have to line up on the same left/right edge. Adding
+    nav items widens the header first — check it still fits on one line before
+    bumping the variable, and cap what grows with the width (the event banner
+    stops at 460px).
 
 ## Learning-First Delivery
 
