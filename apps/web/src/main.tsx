@@ -11675,7 +11675,14 @@ function App() {
   ];
 
   useEffect(() => {
-    if (activeTab === "admin" && !adminEnabled) {
+    // Mientras los permisos de admin están en camino no se decide nada: antes
+    // la guarda corría con `adminAccess` en null, así que entrar directo a
+    // `#/admin/...` (o refrescar ahí) te devolvía al Dashboard.
+    if (
+      activeTab === "admin" &&
+      adminAccess !== null &&
+      !adminEnabled
+    ) {
       setActiveTab("dashboard");
       return;
     }
@@ -11688,7 +11695,13 @@ function App() {
     ) {
       setActiveTab("dashboard");
     }
-  }, [activeTab, adminEnabled, config.enabledModules, configLoaded]);
+  }, [
+    activeTab,
+    adminAccess,
+    adminEnabled,
+    config.enabledModules,
+    configLoaded,
+  ]);
 
   useEffect(() => {
     const onHashChange = (): void => {
