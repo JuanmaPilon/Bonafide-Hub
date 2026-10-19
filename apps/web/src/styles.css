@@ -4408,11 +4408,12 @@ a:hover {
   gap: 24px;
 }
 
-/* Las dos listas de seguimiento van lado a lado: el ancho lo fijan las columnas
-   y no la cantidad de miembros, así las tres cajas de Inicio ocupan lo mismo. */
+/* Las listas de seguimiento van lado a lado: el ancho lo fijan las columnas y no
+   la cantidad de miembros, así las cajas de Home ocupan lo mismo. Con el ancho
+   del panel entran las tres; si no, bajan a dos y después a una. */
 .home-secondary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 24px;
 }
 

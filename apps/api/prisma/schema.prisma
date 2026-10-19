@@ -629,6 +629,25 @@ model XpProfile {
   @@map("xp_profiles")
 }
 
+// Actividad de XP por mes calendario (`YYYY-MM`, en UTC). `xp_profiles` guarda
+// el acumulado histórico; este es el corte del mes, que alimenta el ranking de
+// "más activos del mes" de Home. Cada mes arranca vacío solo, sin borrar nada:
+// los meses anteriores quedan como historial.
+model XpMonthlyProfile {
+  guildId      String
+  userId       String
+  month        String
+  xp           Int      @default(0)
+  messageCount Int      @default(0)
+  voiceMinutes Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@id([guildId, userId, month])
+  @@index([guildId, month, xp])
+  @@map("xp_monthly_profiles")
+}
+
 model AuditLogEntry {
   id          String   @id @default(cuid())
   guildId     String

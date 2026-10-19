@@ -23,6 +23,12 @@ export type AddXpResult = {
   xp: number;
 };
 
+// Clave del mes calendario en UTC: `YYYY-MM`. El ranking mensual de Home se
+// apoya en esto, así que el corte es siempre UTC (no la zona del servidor).
+export function xpMonthKey(date = new Date()): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 function toXpProfile(record: {
   guildId: string;
   level: number;
@@ -129,6 +135,32 @@ export async function addXp(input: {
     },
   });
 
+  // Corte del mes: el total histórico no sirve para premiar a quien se sumó
+  // ahora, así que la misma XP se acumula también en el mes en curso.
+  const month = xpMonthKey();
+  await prisma.xpMonthlyProfile.upsert({
+    where: {
+      guildId_userId_month: {
+        guildId: input.guildId,
+        month,
+        userId: input.userId,
+      },
+    },
+    update: {
+      messageCount: { increment: source === "message" ? 1 : 0 },
+      voiceMinutes: { increment: source === "voice" ? 1 : 0 },
+      xp: { increment: safeAmount },
+    },
+    create: {
+      guildId: input.guildId,
+      messageCount: source === "message" ? 1 : 0,
+      month,
+      userId: input.userId,
+      voiceMinutes: source === "voice" ? 1 : 0,
+      xp: safeAmount,
+    },
+  });
+
   return {
     level: nextLevel,
     leveledUp: nextLevel > previousLevel,
@@ -188,6 +220,49 @@ export async function getLeaderboard(
     voiceMinutes: record.voiceMinutes,
     xp: record.xp,
   }));
+}
+
+/**
+ * Ranking del mes en curso (o del mes que se pida): top de XP sumando chat y
+ * voz. El nivel y la última identidad conocida salen de `XpProfile`, porque el
+ * corte mensual solo guarda la actividad.
+ */
+export async function getMonthlyLeaderboard(
+  guildId: string,
+  options: { limit?: number; month?: string } = {},
+): Promise<LeaderboardEntry[]> {
+  const month = options.month ?? xpMonthKey();
+  const records = await prisma.xpMonthlyProfile.findMany({
+    orderBy: [{ xp: "desc" }, { messageCount: "desc" }, { userId: "asc" }],
+    take: Math.min(25, Math.max(1, options.limit ?? 5)),
+    where: { guildId, month, xp: { gt: 0 } },
+  });
+
+  if (records.length === 0) {
+    return [];
+  }
+
+  const profiles = await prisma.xpProfile.findMany({
+    where: { guildId, userId: { in: records.map((record) => record.userId) } },
+  });
+  const profilesByUser = new Map(
+    profiles.map((profile) => [profile.userId, profile]),
+  );
+
+  return records.map((record, index) => {
+    const profile = profilesByUser.get(record.userId);
+
+    return {
+      lastKnownAvatarUrl: profile?.lastKnownAvatarUrl ?? undefined,
+      lastKnownName: profile?.lastKnownName ?? undefined,
+      level: profile?.level ?? 0,
+      messageCount: record.messageCount,
+      rank: index + 1,
+      userId: record.userId,
+      voiceMinutes: record.voiceMinutes,
+      xp: record.xp,
+    };
+  });
 }
 
 // Guarda la última identidad vista de cada miembro (nombre + avatar) en los

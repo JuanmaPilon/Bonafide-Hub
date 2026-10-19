@@ -236,6 +236,7 @@ import {
   addXp,
   deleteXpProfiles,
   getLeaderboard,
+  getMonthlyLeaderboard,
   getXpProfile,
   importXpEntries,
   listXpGuildIds,
@@ -245,6 +246,7 @@ import {
   saveLeaderboardIdentities,
   setXpLevel,
   type XpImportEntry,
+  xpMonthKey,
 } from "./services/xp-store.js";
 import {
   buildClearCookie,
@@ -4611,6 +4613,37 @@ export function buildApp() {
       ok: true,
       guildId: params.guildId,
       leaderboard: enrichedLeaderboard,
+    };
+  });
+
+  // Ranking del mes: es el que muestra Home ("más activos del mes"). Va aparte
+  // del leaderboard histórico y se arma con el corte mensual de XP.
+  app.get("/guilds/:guildId/xp/leaderboard/monthly", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const month = xpMonthKey();
+    const monthly = await getMonthlyLeaderboard(params.guildId, {
+      limit: 5,
+      month,
+    });
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      leaderboard: await enrichLeaderboardWithMembers(params.guildId, monthly),
+      month,
     };
   });
 

@@ -118,6 +118,7 @@ import {
   getLeaderboard,
   getMe,
   getMemberProfile,
+  getMonthlyLeaderboard,
   getPublicLeaderboard,
   getXpConfig,
   deleteKarutaCard,
@@ -5808,7 +5809,7 @@ const TAB_SECTIONS: Partial<
 
 function tabLabel(tab: HubTab): string {
   if (tab === "home") {
-    return "Inicio";
+    return "Home";
   }
 
   if (tab === "dashboard") {
@@ -5863,7 +5864,7 @@ function currentSectionTitle(
 
 function panelTitle(tab: HubTab): string {
   if (tab === "home") {
-    return "Inicio";
+    return "Home";
   }
 
   if (tab === "dashboard") {
@@ -7839,8 +7840,35 @@ function EventReportModal({
 // Acento de los raid leads: el dorado de Raid Officer, el mismo del resto de la
 // app. El de los boosters lo pone el CSS del grid (es una sola lista).
 const HOME_LEAD_ACCENT = "201, 138, 27";
-// Fila de miembro de Inicio: la comparten el podio y los raid leads (mismo alto,
-// mismo avatar, mismo nombre linkeado al perfil; cambia el acento).
+
+const HOME_MONTH_NAMES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+// "2026-10" → "octubre". El mes del corte viene del API tal cual (`YYYY-MM`), así
+// que no se arma un Date: ese se cruzaría de mes por la zona horaria.
+function monthName(month: string | null): string | null {
+  if (!month) {
+    return null;
+  }
+
+  return HOME_MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? null;
+}
+
+// Fila de miembro de Home: la comparten el podio, los raid leads y los más
+// activos del mes (mismo alto, mismo avatar, mismo nombre linkeado al perfil;
+// cambia el acento).
 function HomeMemberRow({
   accent,
   member,
@@ -7886,8 +7914,9 @@ function HomeMemberRow({
 }
 
 // Inicio: la tarjeta principal es la de los boosters (los que bancan el server),
-// y abajo van las dos de seguimiento —el podio por XP y los raid leads—. Las
-// tres usan el mismo encabezado y las mismas filas que el resto de la app.
+// y abajo van las tres de seguimiento —el podio por XP, los raid leads y los más
+// activos del mes—. Las cuatro usan el mismo encabezado y las mismas filas que el
+// resto de la app.
 function HomeView({
   boostCount,
   boosters,
@@ -7896,6 +7925,9 @@ function HomeView({
   leads,
   leadsLoading,
   loading,
+  monthlyLeaders,
+  monthlyLeadersLoading,
+  monthlyMonth,
   onOpenProfile,
   username,
 }: {
@@ -7906,11 +7938,15 @@ function HomeView({
   leads: GuildMemberCard[];
   leadsLoading: boolean;
   loading: boolean;
+  monthlyLeaders: LeaderboardEntry[];
+  monthlyLeadersLoading: boolean;
+  monthlyMonth: string | null;
   // Abre el perfil del miembro clickeado (podio, boosters y raid leads).
   onOpenProfile: (userId: string) => void;
   username: string | null;
 }) {
   const top5 = leaderboard.slice(0, 5);
+  const monthlyMonthLabel = monthName(monthlyMonth);
 
   return (
     <div className="home-view">
@@ -8031,6 +8067,42 @@ function HomeView({
                   key={lead.userId}
                   member={lead}
                   onOpenProfile={onOpenProfile}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel content-panel home-panel">
+          <div className="section-header">
+            <div>
+              <h2>Activos del mes</h2>
+              <p>
+                Top 5 de {monthlyMonthLabel ?? "este mes"} por XP de chat y voz.
+              </p>
+            </div>
+          </div>
+          {monthlyLeadersLoading ? (
+            <LoadingState label="Cargando activos del mes…" />
+          ) : monthlyLeaders.length === 0 ? (
+            <p className="admin-empty">
+              Aún no hay actividad registrada este mes.
+            </p>
+          ) : (
+            <div className="home-member-list">
+              {monthlyLeaders.map((entry) => (
+                <HomeMemberRow
+                  accent={`var(--podium-${entry.rank}-rgb)`}
+                  key={entry.userId}
+                  member={{
+                    avatarUrl: entry.avatarUrl,
+                    nickname: entry.nickname,
+                    userId: entry.userId,
+                    username: entry.username ?? "",
+                  }}
+                  meta={`${entry.xp} XP`}
+                  onOpenProfile={onOpenProfile}
+                  rank={PODIUM_LABELS[entry.rank - 1] ?? String(entry.rank)}
                 />
               ))}
             </div>
@@ -8538,10 +8610,14 @@ function App() {
   const [boostersLoading, setBoostersLoading] = useState(true);
   const [raidLeads, setRaidLeads] = useState<GuildMemberCard[]>([]);
   const [raidLeadsLoading, setRaidLeadsLoading] = useState(true);
+  const [monthlyLeaders, setMonthlyLeaders] = useState<LeaderboardEntry[]>([]);
+  const [monthlyMonth, setMonthlyMonth] = useState<string | null>(null);
+  const [monthlyLeadersLoading, setMonthlyLeadersLoading] = useState(true);
   // Guild de los datos que están en pantalla: al cambiar de guild hay que
   // limpiar, al cambiar de pestaña no.
   const boostersGuildRef = useRef<string | null>(null);
   const raidLeadsGuildRef = useRef<string | null>(null);
+  const monthlyLeadersGuildRef = useRef<string | null>(null);
   const [gamesLoading, setGamesLoading] = useState(true);
   const dashboardGuildRef = useRef<string | null>(null);
   const gameTrackRef = useRef<HTMLDivElement | null>(null);
@@ -11802,6 +11878,44 @@ function App() {
     };
   }, [activeTab, selectedGuildId]);
 
+  // Más activos del mes: mismo criterio que los raid leads. Es un corte mensual,
+  // así que no depende de la fecha de carga: cambia solo cuando cambia el mes.
+  useEffect(() => {
+    if (activeTab !== "home" || !selectedGuildId) {
+      return;
+    }
+
+    const sameGuild = monthlyLeadersGuildRef.current === selectedGuildId;
+    monthlyLeadersGuildRef.current = selectedGuildId;
+    if (!sameGuild) {
+      setMonthlyLeaders([]);
+      setMonthlyLeadersLoading(true);
+    }
+
+    let cancelled = false;
+    getMonthlyLeaderboard(selectedGuildId)
+      .then((monthly) => {
+        if (!cancelled) {
+          setMonthlyLeaders(monthly.entries);
+          setMonthlyMonth(monthly.month);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && !sameGuild) {
+          setMonthlyLeaders([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setMonthlyLeadersLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedGuildId]);
+
   // Juegos del server: los mide el bot con las presencias. Un fallo acá deja
   // el dashboard sin las portadas, nada más.
   //
@@ -12236,6 +12350,9 @@ function App() {
             leads={raidLeads}
             leadsLoading={raidLeadsLoading}
             loading={loadingGuildData || boostersLoading}
+            monthlyLeaders={monthlyLeaders}
+            monthlyLeadersLoading={monthlyLeadersLoading}
+            monthlyMonth={monthlyMonth}
             onOpenProfile={openMemberProfile}
             username={username}
           />

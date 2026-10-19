@@ -475,10 +475,11 @@ XP:
 1. `GET /guilds/:guildId/xp-config`
 2. `PATCH /guilds/:guildId/xp-config`
 3. `GET /guilds/:guildId/xp/leaderboard`
-4. `GET /guilds/:guildId/xp/export`
-5. `POST /guilds/:guildId/xp/import`
-6. `POST /guilds/:guildId/xp/reset-all`
-7. `POST /guilds/:guildId/xp/sync`
+4. `GET /guilds/:guildId/xp/leaderboard/monthly` (top 5 del mes en curso, para Home; devuelve `month` en `YYYY-MM`)
+5. `GET /guilds/:guildId/xp/export`
+6. `POST /guilds/:guildId/xp/import`
+7. `POST /guilds/:guildId/xp/reset-all`
+8. `POST /guilds/:guildId/xp/sync`
 
 ### Piezas compartidas del panel Admin
 
@@ -656,23 +657,33 @@ Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`
 
-Inicio: la tarjeta principal son los **boosters** (los que bancan el server, con
+Home: la tarjeta principal son los **boosters** (los que bancan el server, con
 el acento de Nitro, el contador de boosts y una tarjeta por miembro —
-`.home-member-card`— porque es lo que más se mira) y abajo van dos de
-seguimiento, lado a lado (`.home-secondary`, media pantalla cada una y apiladas
-abajo de 1020 px): el **podio** por XP (top 5, con el color de rango de cada
-puesto —las variables `--podium-*`— y el del nivel en el nombre) y los **raid
-leads** (`GET /guilds/:guildId/raid-leads`), que son los que tienen el rol de Raid
-Officer mapeado en el roster —liviano a propósito: avatar, nick y usuario, porque
-la fila solo muestra quiénes son—. Los leads salen ordenados por XP, de mayor a
-menor (y sin perfil de XP al final), así el orden se lee igual que el del podio y
-no baila entre cargas. Las tres cajas ocupan el ancho completo sin
+`.home-member-card`— porque es lo que más se mira) y abajo van tres de
+seguimiento, lado a lado (`.home-secondary`, `auto-fit` de 300 px: entran las tres,
+y si el panel se angosta bajan a dos y después a una): el **podio** por XP (top 5,
+con el color de rango de cada puesto —las variables `--podium-*`— y el del nivel en
+el nombre), los **raid leads** (`GET /guilds/:guildId/raid-leads`), que son los que
+tienen el rol de Raid Officer mapeado en el roster —liviano a propósito: avatar,
+nick y usuario, porque la fila solo muestra quiénes son—, y los **activos del mes**
+(`GET /guilds/:guildId/xp/leaderboard/monthly`). Los leads salen ordenados por XP,
+de mayor a menor (y sin perfil de XP al final), así el orden se lee igual que el
+del podio y no baila entre cargas. Las cajas ocupan el ancho completo sin
 importar cuántos miembros haya: la grilla de tarjetas usa `auto-fit` (con
-`auto-fill` las columnas sobrantes quedaban vacías a la derecha) y las dos listas
+`auto-fill` las columnas sobrantes quedaban vacías a la derecha) y las listas
 comparten la misma fila (`.home-member-row`, con el acento del grupo en
-`--home-member-rgb`), así que no hay dos UI para lo mismo. Ni los boosters ni los
-raid leads se borran al salir de Inicio (solo al cambiar de guild): aparecer de
-golpe después de esperar la respuesta era peor.
+`--home-member-rgb`), así que no hay dos UI para lo mismo. Ninguna de las listas se
+borra al salir de Home (solo al cambiar de guild): aparecer de golpe después de
+esperar la respuesta era peor.
+
+**Los activos del mes son un corte, no el acumulado.** `xp_profiles` guarda el
+total histórico, que siempre premia a los que están desde el principio; por eso
+`addXp` escribe **también** en `xp_monthly_profiles` (clave guild + persona + mes
+`YYYY-MM` en UTC). El mes arranca vacío solo, sin borrar nada: el ranking de Home
+es el top 5 del mes en curso (chat + voz, que es la misma XP) y los meses
+anteriores quedan como historial. El nivel y el nombre/avatar salen de
+`xp_profiles`, que es donde vive la identidad conocida. La pestaña se llama
+**Home** (la ruta ya era `home`).
 
 Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
 
@@ -1058,6 +1069,7 @@ Tablas:
 18. `event_images` — biblioteca de imágenes del módulo (data URL)
 19. `roster_profiles` — ficha principal del roster (clase, spec, offs, tags)
 20. `roster_alt_profiles` — clases secundarias ("alter") de una persona: clave (guild, persona, clase). No cuentan para ningún total.
+21. `xp_monthly_profiles` — el corte del mes (guild, persona, `YYYY-MM`): XP, mensajes y minutos de voz de ese mes. Es lo que alimenta el ranking "Activos del mes" de Home; lo escribe `addXp` junto con el perfil histórico y nunca se borra (cada mes arranca con filas nuevas).
 
 Campos relevantes de `guild_configs`:
 

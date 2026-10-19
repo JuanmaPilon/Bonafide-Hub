@@ -188,6 +188,7 @@ el log del backfill dice cuántos mensajes de otros bots vio y cuántos traían 
 7. Multiplicadores de XP por rol.
 8. Cap de nivel (`maxLevel`; 0 = sin límite).
 9. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
+10. Cada suma de XP (mensaje o voz) se acumula también en el corte del mes (`xp_monthly_profiles`, ver [api](./api.md)): es lo que muestra el ranking "Activos del mes" de Home.
 
 ## 5. Variables de entorno del bot
 

@@ -880,6 +880,25 @@ export type PublicLeaderboardEntry = {
   username: string | null;
 };
 
+export type MonthlyLeaderboard = {
+  entries: LeaderboardEntry[];
+  // Mes del corte (`YYYY-MM`), tal como lo devuelve el API.
+  month: string;
+};
+
+export async function getMonthlyLeaderboard(
+  guildId: string,
+): Promise<MonthlyLeaderboard> {
+  const data = await requestJson<{
+    leaderboard: LeaderboardEntry[];
+    month: string;
+  }>(`/guilds/${guildId}/xp/leaderboard/monthly`, {
+    method: "GET",
+  });
+
+  return { entries: data.leaderboard, month: data.month };
+}
+
 // Leaderboard público para la landing (sin sesión).
 export async function getPublicLeaderboard(): Promise<
   PublicLeaderboardEntry[]
