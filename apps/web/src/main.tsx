@@ -4159,6 +4159,55 @@ function EventActionsMenu({
   );
 }
 
+// Lista de nombres del control del roster (confirmados, bench o los que
+// faltan). Cada nombre abre el perfil; en "Todos" cada grupo lleva su rótulo.
+function RosterNameList({
+  empty,
+  entries,
+  onOpen,
+  title,
+}: {
+  empty: string;
+  entries: Array<{ bench?: boolean; label: string; userId: string }>;
+  onOpen: (userId: string) => void;
+  title?: string;
+}) {
+  if (entries.length === 0 && !empty) {
+    return null;
+  }
+  return (
+    <div className="roster-name-group">
+      {title ? (
+        <span className="roster-name-group-title">
+          {title} ({entries.length})
+        </span>
+      ) : null}
+      {entries.length === 0 ? (
+        <p className="modal-note">{empty}</p>
+      ) : (
+        <div className="event-roster-missing">
+          {entries.map((entry) => (
+            <button
+              className={`member-link${entry.bench ? " roster-missing-bench" : ""}`}
+              key={entry.userId}
+              onClick={() => onOpen(entry.userId)}
+              title={
+                entry.bench
+                  ? "Ver su perfil (está en bench)"
+                  : "Ver su perfil"
+              }
+              type="button"
+            >
+              {entry.bench ? "🪑 " : ""}
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EventCard({
   canManage,
   classEmojis,
@@ -4280,9 +4329,24 @@ function EventCard({
   const [rosterOpen, setRosterOpen] = useState(false);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
+  // Qué lista se está mirando en el modal del roster. Arranca en "faltan":
+  // es lo único accionable (a quién hay que ir a buscar).
+  const [rosterFilter, setRosterFilter] = useState<
+    "all" | "bench" | "confirmed" | "missing"
+  >("missing");
+
+  // Listas del control del roster: los confirmados y el bench salen de las
+  // inscripciones del evento; los que faltan, del roster esperado (API).
+  const confirmedSignups = event.signups.filter(
+    (signup) => signup.status === "yes",
+  );
+  const benchSignups = event.signups.filter(
+    (signup) => signup.status === "bench",
+  );
 
   async function openRoster(): Promise<void> {
     setRosterOpen(true);
+    setRosterFilter("missing");
     if (roster || rosterLoading) {
       return;
     }
@@ -5312,44 +5376,120 @@ function EventCard({
             {rosterError ? <p className="modal-note">{rosterError}</p> : null}
             {roster ? (
               <>
-                <div className="event-roster-summary">
-                  <span className="event-count total">
-                    👥 {roster.confirmedCount} confirmados
-                  </span>
-                  {roster.benchCount > 0 ? (
-                    <span className="event-count bench">
-                      🪑 {roster.benchCount} en bench
-                    </span>
-                  ) : null}
-                  {roster.missing.length > 0 ? (
-                    <span className="event-count late">
-                      ⏳ Faltan {roster.missing.length}
-                    </span>
-                  ) : null}
+                {/* Filtros del roster. Por defecto "Faltan" (a quién hay que
+                    ir a buscar); el resto es para revisar cómo viene el armado. */}
+                <div className="event-filter-chips">
+                  {(
+                    [
+                      [
+                        "missing",
+                        `Faltan ${roster.missing.length}`,
+                        "⏳",
+                      ],
+                      [
+                        "confirmed",
+                        `Confirmados ${confirmedSignups.length}`,
+                        "✅",
+                      ],
+                      ["bench", `Bench ${benchSignups.length}`, "🪑"],
+                      [
+                        "all",
+                        `Todos ${new Set([...confirmedSignups, ...benchSignups].map((signup) => signup.userId)).size + roster.missing.length}`,
+                        "",
+                      ],
+                    ] as const
+                  ).map(([key, label, emoji]) => (
+                    <button
+                      className={`event-filter-chip${rosterFilter === key ? " active" : ""}`}
+                      key={key}
+                      onClick={() => setRosterFilter(key)}
+                      type="button"
+                    >
+                      {emoji ? `${emoji} ` : ""}
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                {/* Si no falta nadie no se muestra nada: sin mensajes de relleno. */}
-                {roster.missing.length > 0 ? (
-                  <div className="event-roster-missing">
-                    {roster.missing.map((member) => (
-                      <button
-                        className={`member-link${member.bench ? " roster-missing-bench" : ""}`}
-                        key={member.userId}
-                        onClick={() => {
-                          setRosterOpen(false);
-                          onOpenProfile(member.userId);
-                        }}
-                        title={
-                          member.bench
-                            ? "Ver su perfil (está en bench)"
-                            : "Ver su perfil"
-                        }
-                        type="button"
-                      >
-                        {member.bench ? "🪑 " : ""}
-                        {member.username}
-                      </button>
-                    ))}
-                  </div>
+                {rosterFilter === "missing" ? (
+                  <RosterNameList
+                    empty="No falta nadie."
+                    entries={roster.missing.map((member) => ({
+                      bench: member.bench,
+                      label: member.username,
+                      userId: member.userId,
+                    }))}
+                    onOpen={(userId) => {
+                      setRosterOpen(false);
+                      onOpenProfile(userId);
+                    }}
+                  />
+                ) : null}
+                {rosterFilter === "confirmed" ? (
+                  <RosterNameList
+                    empty="Nadie confirmó todavía."
+                    entries={confirmedSignups.map((signup) => ({
+                      label: signup.username,
+                      userId: signup.userId,
+                    }))}
+                    onOpen={(userId) => {
+                      setRosterOpen(false);
+                      onOpenProfile(userId);
+                    }}
+                  />
+                ) : null}
+                {rosterFilter === "bench" ? (
+                  <RosterNameList
+                    empty="No hay nadie en bench."
+                    entries={benchSignups.map((signup) => ({
+                      label: signup.username,
+                      userId: signup.userId,
+                    }))}
+                    onOpen={(userId) => {
+                      setRosterOpen(false);
+                      onOpenProfile(userId);
+                    }}
+                  />
+                ) : null}
+                {rosterFilter === "all" ? (
+                  <>
+                    <RosterNameList
+                      empty="No falta nadie."
+                      entries={roster.missing.map((member) => ({
+                        bench: member.bench,
+                        label: member.username,
+                        userId: member.userId,
+                      }))}
+                      onOpen={(userId) => {
+                        setRosterOpen(false);
+                        onOpenProfile(userId);
+                      }}
+                      title="Faltan"
+                    />
+                    <RosterNameList
+                      empty="Nadie confirmó todavía."
+                      entries={confirmedSignups.map((signup) => ({
+                        label: signup.username,
+                        userId: signup.userId,
+                      }))}
+                      onOpen={(userId) => {
+                        setRosterOpen(false);
+                        onOpenProfile(userId);
+                      }}
+                      title="Confirmados"
+                    />
+                    <RosterNameList
+                      empty="No hay nadie en bench."
+                      entries={benchSignups.map((signup) => ({
+                        label: signup.username,
+                        userId: signup.userId,
+                      }))}
+                      onOpen={(userId) => {
+                        setRosterOpen(false);
+                        onOpenProfile(userId);
+                      }}
+                      title="Bench"
+                    />
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -14647,65 +14787,74 @@ function App() {
                                     }
                                   />
                                 ) : null}
-                                {eventForm.discord.createScheduledEvent ? (
-                                  <label className="event-option-field">
-                                    <span>Sala de voz</span>
-                                    <select
-                                      className="select"
-                                      onChange={(event) =>
-                                        setEventForm((current) => ({
-                                          ...current,
-                                          discord: {
-                                            ...current.discord,
-                                            voiceChannelId: event.target.value,
-                                          },
-                                        }))
-                                      }
-                                      value={eventForm.discord.voiceChannelId}
-                                    >
-                                      <option value="">
-                                        Seleccionar sala de voz…
-                                      </option>
-                                      {voiceChannels.map((channel) => (
-                                        <option
-                                          key={channel.id}
-                                          value={channel.id}
+                                {eventForm.discord.createScheduledEvent ||
+                                eventForm.discord.publishMessage ? (
+                                  <div className="event-option-fields">
+                                    {eventForm.discord.publishMessage ? (
+                                      <label className="event-option-field">
+                                        <span>Canal de publicación</span>
+                                        <select
+                                          className="select"
+                                          onChange={(event) =>
+                                            setEventForm((current) => ({
+                                              ...current,
+                                              discord: {
+                                                ...current.discord,
+                                                publishChannelId:
+                                                  event.target.value,
+                                              },
+                                            }))
+                                          }
+                                          value={
+                                            eventForm.discord.publishChannelId
+                                          }
                                         >
-                                          {channel.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                ) : null}
-                                {eventForm.discord.publishMessage ? (
-                                  <label className="event-option-field">
-                                    <span>Canal</span>
-                                    <select
-                                      className="select"
-                                      onChange={(event) =>
-                                        setEventForm((current) => ({
-                                          ...current,
-                                          discord: {
-                                            ...current.discord,
-                                            publishChannelId: event.target.value,
-                                          },
-                                        }))
-                                      }
-                                      value={eventForm.discord.publishChannelId}
-                                    >
-                                      <option value="">
-                                        Seleccionar canal de texto…
-                                      </option>
-                                      {textChannels.map((channel) => (
-                                        <option
-                                          key={channel.id}
-                                          value={channel.id}
+                                          <option value="">
+                                            Seleccionar canal…
+                                          </option>
+                                          {textChannels.map((channel) => (
+                                            <option
+                                              key={channel.id}
+                                              value={channel.id}
+                                            >
+                                              {channel.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    ) : null}
+                                    {eventForm.discord.createScheduledEvent ? (
+                                      <label className="event-option-field">
+                                        <span>Sala de voz</span>
+                                        <select
+                                          className="select"
+                                          onChange={(event) =>
+                                            setEventForm((current) => ({
+                                              ...current,
+                                              discord: {
+                                                ...current.discord,
+                                                voiceChannelId:
+                                                  event.target.value,
+                                              },
+                                            }))
+                                          }
+                                          value={eventForm.discord.voiceChannelId}
                                         >
-                                          {channel.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
+                                          <option value="">
+                                            Seleccionar sala de voz…
+                                          </option>
+                                          {voiceChannels.map((channel) => (
+                                            <option
+                                              key={channel.id}
+                                              value={channel.id}
+                                            >
+                                              {channel.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    ) : null}
+                                  </div>
                                 ) : null}
                               </div>
                             </div>

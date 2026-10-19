@@ -838,6 +838,16 @@ evento va siempre a una sala de voz y los eventos viejos con
 La clase la usan los `.module-toggle` viejos, pero un switch que no era
 `.module-toggle` quedaba siempre gris: la lógica cambiaba y el dibujo no.
 
+**El control del roster tiene filtros.** El modal del contador (`N/M`) abre en
+**Faltan** (lo único accionable: a quién hay que ir a buscar) y deja cambiar a
+Confirmados, Bench o Todos con los mismo chips del hub (`event-filter-chip`).
+Los confirmados y el bench salen de las inscripciones del evento; los que faltan,
+de `GET .../events/:eventId/roster`. Los nombres siguen abriendo el perfil.
+
+**Los modales son opacos.** La superficie de `.modal` es `--modal-surface` y no
+`--panel`: con el panel semitransparente, sobre una portada colorida se leía el
+contenido de atrás a través de la ventana.
+
 **La recurrencia se publica X días antes, no al cerrar la ocurrencia.** Al
 completarse (o al tocar "Limpiar ocurrencia") el molde se archiva y se mueve a su
 próxima fecha **sin publicar nada en Discord**; el scheduler

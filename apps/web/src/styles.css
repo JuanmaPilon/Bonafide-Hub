@@ -9,6 +9,9 @@
   /* Version opaca de --panel, para las cajas donde el texto de atras se
      transparenta y estorba la lectura (ej. el modal de un comunicado). */
   --panel-solid: #0f0f1c;
+  /* Superficie de las ventanas modales: opaca del todo, para que lo de atrás
+     no se lea a través cuando hay una portada o una imagen debajo. */
+  --modal-surface: #10101f;
   /* Scroll de las listas del análisis y el degradado que avisa que hay más. */
   --rlb-list-fade: rgba(7, 13, 24, 0.92);
   --rlb-scroll-thumb: rgba(148, 172, 228, 0.38);
@@ -1066,7 +1069,9 @@ a:hover {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
-  background: var(--panel);
+  /* Opaco: el panel de contenido ya es semitransparente y, sobre una portada
+     colorida, el modal dejaba leer lo de atrás (se veía "traslúcido"). */
+  background: var(--modal-surface);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
   padding: 20px;
@@ -6386,11 +6391,30 @@ select.list-order {
   opacity: 0.75;
 }
 
-/* Modal del roster: resumen arriba y los nombres que faltan en chips. */
+/* Modal del roster: filtros arriba y los nombres en chips/línea. */
 .event-roster-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Fila de chips de filtro (misma familia que el resto del hub). */
+.event-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.roster-name-group {
+  display: grid;
+  gap: 6px;
+}
+
+.roster-name-group-title {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .event-roster-missing {
@@ -7093,11 +7117,20 @@ select.list-order {
   gap: 8px 16px;
 }
 
+/* Cuando el grupo tiene selects (canal, sala de voz) van en su propia fila,
+   debajo de los switches y alineados entre sí. */
+.event-option-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  width: 100%;
+}
+
 .event-option-field {
   display: grid;
   gap: 6px;
-  flex: 1 1 170px;
-  max-width: 260px;
+  flex: 1 1 210px;
+  max-width: 320px;
 }
 
 .event-option-field > span {
@@ -9711,6 +9744,7 @@ select.list-order {
   --bg-2: #c6d5ea;
   --panel: rgba(255, 255, 255, 0.94);
   --panel-solid: #ffffff;
+  --modal-surface: #ffffff;
   --panel-border: rgba(48, 77, 122, 0.32);
   --text: #101a2e;
   --muted: #3f4f6b;
