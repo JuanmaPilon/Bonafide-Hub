@@ -6437,10 +6437,19 @@ select.list-order {
   flex-shrink: 0;
 }
 
-/* Bloque del recordatorio por MD: acciones y el resultado, sin caja. */
-.roster-remind {
+.roster-control {
   display: grid;
-  gap: 6px;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Recordatorio por MD: vive en el pie del modal, a la derecha de "Cerrar". */
+.roster-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
 }
 
 .roster-remind-bar {
@@ -6456,14 +6465,12 @@ select.list-order {
   gap: 8px;
 }
 
-.roster-remind-note,
 .roster-remind-result {
   color: var(--muted);
+  flex-basis: 100%;
   font-size: 0.8rem;
-}
-
-.roster-remind-result {
-  color: var(--text);
+  order: 3;
+  text-align: right;
 }
 
 /* El bench del roster también cuenta en el evento: se marca para que no se

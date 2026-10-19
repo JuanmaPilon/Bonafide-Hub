@@ -848,7 +848,10 @@ confirmados y el bench salen de las inscripciones del evento; los que faltan, de
 
 **Recordatorio por MD.** En el grupo de los que faltan cada nombre tiene un
 tilde: el staff elige a mano y el botón `Recordar a N` manda
-`POST .../events/:eventId/remind`. El MD lo manda **el API** con el token del bot
+`POST .../events/:eventId/remind`. Las dos acciones (`Seleccionar a los que
+faltan` y `Recordar a N`) viven en el pie del modal, a la derecha de `Cerrar`:
+los nombres usan todo el ancho y el resultado del envío aparece como una línea
+chica abajo. El MD lo manda **el API** con el token del bot
 (`sendDirectMessage`), no el bot: el mensaje es firme y explica que anotarse deja
 armar el roster con tiempo y organizar grupos y bench, que anotarse a tiempo es
 parte del compromiso, y que no hacerlo puede costar el puesto de esa noche y

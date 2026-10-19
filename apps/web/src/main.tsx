@@ -5517,112 +5517,70 @@ function EventCard({
                     Todos
                   </button>
                 </div>
-                {(rosterFilters.length === 0 ||
-                  rosterFilters.includes("missing")) ? (
-                  <RosterNameList
-                    entries={roster.missing.map((member) => ({
-                      bench: member.bench,
-                      label: member.username,
-                      userId: member.userId,
-                    }))}
-                    onOpen={(userId) => {
-                      setRosterOpen(false);
-                      onOpenProfile(userId);
-                    }}
-                    onToggle={toggleRosterSelected}
-                    selected={rosterSelected}
-                    title={
-                      rosterFilters.length !== 1
-                        ? `Faltan (${roster.missing.length})`
-                        : undefined
-                    }
-                  />
-                ) : null}
-                {(rosterFilters.length === 0 ||
-                  rosterFilters.includes("confirmed")) ? (
-                  <RosterNameList
-                    empty="Nadie confirmó todavía."
-                    entries={confirmedSignups.map((signup) => ({
-                      label: signup.username,
-                      userId: signup.userId,
-                    }))}
-                    onOpen={(userId) => {
-                      setRosterOpen(false);
-                      onOpenProfile(userId);
-                    }}
-                    title={
-                      rosterFilters.length !== 1
-                        ? `Confirmados (${confirmedSignups.length})`
-                        : undefined
-                    }
-                  />
-                ) : null}
-                {(rosterFilters.length === 0 ||
-                  rosterFilters.includes("bench")) ? (
-                  <RosterNameList
-                    empty="No hay nadie en bench."
-                    entries={benchSignups.map((signup) => ({
-                      label: signup.username,
-                      userId: signup.userId,
-                    }))}
-                    onOpen={(userId) => {
-                      setRosterOpen(false);
-                      onOpenProfile(userId);
-                    }}
-                    title={
-                      rosterFilters.length !== 1
-                        ? `Bench (${benchSignups.length})`
-                        : undefined
-                    }
-                  />
-                ) : null}
-                {roster.missing.length > 0 && !signupsClosed ? (
-                  <div className="roster-remind">
-                    <div className="roster-remind-bar">
-                      <button
-                        className="ghost-button small"
-                        onClick={() =>
-                          setRosterSelected(
-                            rosterSelected.length === roster.missing.length
-                              ? []
-                              : roster.missing.map((member) => member.userId),
-                          )
-                        }
-                        type="button"
-                      >
-                        {rosterSelected.length === roster.missing.length
-                          ? "No seleccionar a nadie"
-                          : "Seleccionar a los que faltan"}
-                      </button>
-                      <button
-                        className="primary-button small"
-                        disabled={reminding || rosterSelected.length === 0}
-                        onClick={() => void sendReminders()}
-                        type="button"
-                      >
-                        <BellRinging
-                          aria-hidden="true"
-                          size={16}
-                          weight="fill"
-                        />
-                        {reminding
-                          ? "Enviando…"
-                          : `Recordar a ${rosterSelected.length}`}
-                      </button>
-                    </div>
-                    <span className="roster-remind-note">
-                      Les llega un MD del bot para que se anoten.
-                    </span>
-                    {reminderResult ? (
-                      <span className="roster-remind-result">
-                        {reminderResult}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
+                <div className="roster-control">
+                  {(rosterFilters.length === 0 ||
+                    rosterFilters.includes("missing")) ? (
+                    <RosterNameList
+                      entries={roster.missing.map((member) => ({
+                        bench: member.bench,
+                        label: member.username,
+                        userId: member.userId,
+                      }))}
+                      onOpen={(userId) => {
+                        setRosterOpen(false);
+                        onOpenProfile(userId);
+                      }}
+                      onToggle={toggleRosterSelected}
+                      selected={rosterSelected}
+                      title={
+                        rosterFilters.length !== 1
+                          ? `Faltan (${roster.missing.length})`
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                  {(rosterFilters.length === 0 ||
+                    rosterFilters.includes("confirmed")) ? (
+                    <RosterNameList
+                      empty="Nadie confirmó todavía."
+                      entries={confirmedSignups.map((signup) => ({
+                        label: signup.username,
+                        userId: signup.userId,
+                      }))}
+                      onOpen={(userId) => {
+                        setRosterOpen(false);
+                        onOpenProfile(userId);
+                      }}
+                      title={
+                        rosterFilters.length !== 1
+                          ? `Confirmados (${confirmedSignups.length})`
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                  {(rosterFilters.length === 0 ||
+                    rosterFilters.includes("bench")) ? (
+                    <RosterNameList
+                      empty="No hay nadie en bench."
+                      entries={benchSignups.map((signup) => ({
+                        label: signup.username,
+                        userId: signup.userId,
+                      }))}
+                      onOpen={(userId) => {
+                        setRosterOpen(false);
+                        onOpenProfile(userId);
+                      }}
+                      title={
+                        rosterFilters.length !== 1
+                          ? `Bench (${benchSignups.length})`
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                </div>
               </>
             ) : null}
-            <div className="form-actions">
+            <div className="form-actions roster-footer">
               <button
                 className="ghost-button"
                 onClick={() => setRosterOpen(false)}
@@ -5630,6 +5588,40 @@ function EventCard({
               >
                 Cerrar
               </button>
+              {roster && roster.missing.length > 0 && !signupsClosed ? (
+                <div className="roster-remind-bar">
+                  <button
+                    className="ghost-button small"
+                    onClick={() =>
+                      setRosterSelected(
+                        rosterSelected.length === roster.missing.length
+                          ? []
+                          : roster.missing.map((member) => member.userId),
+                      )
+                    }
+                    type="button"
+                  >
+                    {rosterSelected.length === roster.missing.length
+                      ? "No seleccionar a nadie"
+                      : "Seleccionar a los que faltan"}
+                  </button>
+                  <button
+                    className="primary-button small"
+                    disabled={reminding || rosterSelected.length === 0}
+                    onClick={() => void sendReminders()}
+                    title="Le llega un MD del bot"
+                    type="button"
+                  >
+                    <BellRinging aria-hidden="true" size={16} weight="fill" />
+                    {reminding
+                      ? "Enviando…"
+                      : `Recordar a ${rosterSelected.length}`}
+                  </button>
+                </div>
+              ) : null}
+              {reminderResult ? (
+                <span className="roster-remind-result">{reminderResult}</span>
+              ) : null}
             </div>
               </div>
             </div>,
