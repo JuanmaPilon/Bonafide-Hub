@@ -376,8 +376,7 @@ a:hover {
 }
 
 .nav-sublink-event,
-.nav-sublink-new,
-.nav-sublink-all {
+.nav-sublink-new {
   justify-content: flex-start;
   gap: 8px;
 }
@@ -399,13 +398,6 @@ a:hover {
 .nav-sublink-new {
   color: var(--text);
   font-weight: 600;
-}
-
-.nav-sublink-all {
-  margin-top: 2px;
-  border-top: 1px solid rgba(134, 158, 214, 0.18);
-  border-radius: 0 0 8px 8px;
-  color: var(--muted);
 }
 
 .nav-submenu-empty {

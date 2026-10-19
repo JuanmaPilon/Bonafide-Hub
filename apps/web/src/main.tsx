@@ -8285,8 +8285,9 @@ function App() {
     return [...byLabel.values()];
   }, [events]);
 
-  // Menú del nav: los eventos abiertos, del más cercano al más lejano (los
-  // cerrados viven en Admin → Eventos). El submenú se scrollea si hay muchos.
+  // Menú del nav: los eventos abiertos (los próximos), del más cercano al más
+  // lejano; los cerrados viven en Admin → Eventos. La lista completa se abre
+  // clickeando "Eventos" en el nav. El submenú se scrollea si hay muchos.
   const navEventMenu = useMemo(
     () =>
       events
@@ -12015,18 +12016,6 @@ function App() {
                               No hay eventos próximos.
                             </span>
                           ) : null}
-                          <button
-                            className="nav-sublink nav-sublink-all"
-                            onClick={goToEventsList}
-                            type="button"
-                          >
-                            <CardsThree
-                              aria-hidden="true"
-                              weight="fill"
-                              className="nav-sublink-icon"
-                            />
-                            Ver todos los eventos
-                          </button>
                         </>
                       ) : (
                         visibleSections?.map((section) => (

@@ -772,11 +772,11 @@ siguen uno por fila debajo del roster.
 
 **Menú del nav y página del evento.** La tab **Eventos** del nav superior es un
 desplegable (como Raids y Admin) pero **dinámico**: arriba el alta
-(`＋ Nuevo evento`, sólo con permiso del módulo `eventos`), después cada evento
-abierto del más cercano al más lejano (título y el día) y al final "Ver todos los
-eventos". El menú se scrollea (máx. 460 px) en vez de crecer sin límite, y quien
-no puede crear eventos no ve el alta: sólo entra a cada evento. Clickear el título
-del módulo lleva a la lista (`#/eventos`).
+(`＋ Nuevo evento`, sólo con permiso del módulo `eventos`) y después cada evento
+abierto del más cercano al más lejano (título y el día). El menú se scrollea
+(máx. 460 px) en vez de crecer sin límite, y quien no puede crear eventos no ve
+el alta: sólo entra a cada evento. La lista completa (`#/eventos`) se abre
+clickeando el título del módulo, que es la única puerta a "todos los eventos".
 
 Ojo con **cuándo se carga la lista**: el menú se abre desde cualquier módulo, así
 que la lista se pide con el módulo habilitado y no sólo al entrar a la tab. Antes
