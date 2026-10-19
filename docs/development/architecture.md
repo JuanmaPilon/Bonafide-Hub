@@ -32,8 +32,9 @@
 3. `apps/web`
 
 - UI de Guild Hub (React + Vite)
-- Inicio (tarjeta de boosters al frente y, debajo, el podio por XP y los raid leads
-  lado a lado), dashboard, comunicados, raids (roster y logs), eventos, karuta,
+- Inicio (tarjeta de boosters al frente y, debajo, el podio por nivel, los raid
+  leads y los más activos del mes), dashboard, comunicados, raids (roster y logs),
+  eventos, karuta, torneos (por ahora sólo el cartel de "Bajo mantenimiento"),
   sugerencias y panel admin
 - En el panel admin, "Plantillas" es el catálogo de tipos de evento y "Eventos" el
   historial en **calendario** (mes con una tarjeta por evento, buscador con salto

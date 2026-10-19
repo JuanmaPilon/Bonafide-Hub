@@ -249,6 +249,7 @@ type HubTab =
   | "raids"
   | "eventos"
   | "karuta"
+  | "torneos"
   | "perfil"
   | "sugerencias"
   | "admin";
@@ -260,6 +261,7 @@ const VALID_TABS: HubTab[] = [
   "raids",
   "eventos",
   "karuta",
+  "torneos",
   "perfil",
   "sugerencias",
   "admin",
@@ -298,6 +300,11 @@ const HUB_MODULES: Array<{
     key: "karuta",
     label: "Karuta",
     description: "Cartas raras, colecciones y guía de comandos de Karuta.",
+  },
+  {
+    key: "torneos",
+    label: "Torneos",
+    description: "Torneos de la comunidad (en mantenimiento).",
   },
   {
     key: "sugerencias",
@@ -5901,6 +5908,10 @@ function tabLabel(tab: HubTab): string {
     return "Karuta";
   }
 
+  if (tab === "torneos") {
+    return "Torneos";
+  }
+
   if (tab === "perfil") {
     return "Perfil";
   }
@@ -5954,6 +5965,10 @@ function panelTitle(tab: HubTab): string {
 
   if (tab === "karuta") {
     return "Karuta";
+  }
+
+  if (tab === "torneos") {
+    return "Torneos";
   }
 
   if (tab === "perfil") {
@@ -14402,6 +14417,11 @@ function App() {
                       </div>
                     </>
                   )}
+                </div>
+              ) : activeTab === "torneos" ? (
+                <div className="module-maintenance">
+                  <HourglassSimple aria-hidden="true" weight="fill" />
+                  <h3>Bajo mantenimiento</h3>
                 </div>
               ) : activeTab === "sugerencias" ? (
                 <div className="suggestions-view">
