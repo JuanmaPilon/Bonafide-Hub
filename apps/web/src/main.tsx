@@ -4759,6 +4759,7 @@ function EventCard({
           </div>
         )}
         <div className="event-card-body">
+          <div className="event-card-main">
           {/* El título y las etiquetas viven en la cabecera del panel: acá sólo
               quedan los estados, y la fila se omite si no hay ninguno. */}
           {paused || event.status !== "scheduled" ? (
@@ -4922,49 +4923,6 @@ function EventCard({
           {event.description?.trim() ? (
             <p className="event-card-desc">{event.description.trim()}</p>
           ) : null}
-          <div className="event-card-assistance">
-            <span className="event-info-label">
-              <Users aria-hidden="true" weight="fill" />
-              Asistencia
-            </span>
-            <div className="event-card-counts">
-              {/* El total lleva el contador de control cuando el evento tiene rol
-                  mínimo: "confirmados (+tentativos) / esperados". Se clickea para
-                  ver quiénes faltan (staff). */}
-              {event.expectedCount && event.expectedCount > 0 ? (
-                <button
-                  className="event-count total roster-goal"
-                  disabled={!canManage}
-                  onClick={() => void openRoster()}
-                  title={
-                    canManage
-                      ? "Ver quiénes faltan anotarse"
-                      : "Control del roster (solo staff)"
-                  }
-                  type="button"
-                >
-                  👥 {counts.yes}
-                  {counts.bench + counts.late > 0
-                    ? ` (+${counts.bench + counts.late})`
-                    : ""}
-                  {` / ${event.expectedCount}`}
-                </button>
-              ) : (
-                <span className="event-count total">
-                  👥 {counts.yes}
-                  {counts.bench + counts.late > 0
-                    ? ` (+${counts.bench + counts.late})`
-                    : ""}
-                </span>
-              )}
-              {SIGNUP_OPTIONS.map((option) => (
-                <span className={`event-count ${option.key}`} key={option.key}>
-                  {option.emoji} {counts[option.key]}
-                </span>
-              ))}
-            </div>
-          </div>
-
           {event.signups.length > 0 ? (
             <div className="event-roster">
               {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
@@ -5034,6 +4992,53 @@ function EventCard({
               · ❌ NO).
             </div>
           ) : null}
+          </div>
+          {/* Columna derecha de la página: la asistencia con mi inscripción
+              pegadas arriba, sin esperar a que la izquierda termine la fila. */}
+          <div className="event-card-side">
+            <div className="event-card-assistance">
+              <span className="event-info-label">
+                <Users aria-hidden="true" weight="fill" />
+                Asistencia
+              </span>
+              <div className="event-card-counts">
+                {/* El total lleva el contador de control cuando el evento tiene
+                    rol mínimo: "confirmados (+tentativos) / esperados". Se
+                    clickea para ver quiénes faltan (staff). */}
+                {event.expectedCount && event.expectedCount > 0 ? (
+                  <button
+                    className="event-count total roster-goal"
+                    disabled={!canManage}
+                    onClick={() => void openRoster()}
+                    title={
+                      canManage
+                        ? "Ver quiénes faltan anotarse"
+                        : "Control del roster (solo staff)"
+                    }
+                    type="button"
+                  >
+                    👥 {counts.yes}
+                    {counts.bench + counts.late > 0
+                      ? ` (+${counts.bench + counts.late})`
+                      : ""}
+                    {` / ${event.expectedCount}`}
+                  </button>
+                ) : (
+                  <span className="event-count total">
+                    👥 {counts.yes}
+                    {counts.bench + counts.late > 0
+                      ? ` (+${counts.bench + counts.late})`
+                      : ""}
+                  </span>
+                )}
+                {SIGNUP_OPTIONS.map((option) => (
+                  <span className={`event-count ${option.key}`} key={option.key}>
+                    {option.emoji} {counts[option.key]}
+                  </span>
+                ))}
+              </div>
+            </div>
+
           {meId && !isPoll ? (
             <div className="event-signup">
               {signupsClosed ? (
@@ -5253,6 +5258,7 @@ function EventCard({
               )}
             </div>
           ) : null}
+          </div>
         </div>
       </article>
 
