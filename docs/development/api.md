@@ -822,14 +822,21 @@ de la frase del loro también se montaban mal.
 
 **El form es minimalista.** Los toggles ("Pedir personaje", recordatorios,
 repetición, pausa, limpieza al completar, publicación en Discord) son switches
-chicos en una fila (`FormSwitch`, `.form-switch`), no tarjetas
-(`.module-toggle`): esas eran para el panel de configuración y en el form
-ocupaban media ventana. La imagen también se achicó: miniatura a la izquierda
-(104×66) + "Subir"/URL a la derecha, con la biblioteca en tiras de 64 px debajo
-en vez del preview grande con su bloque aparte. Los recordatorios son sólo
-**24 h y 2 h** (el API rechaza cualquier otra hora) y la **ubicación externa del
-Scheduled Event se sacó**: el evento va siempre a una sala de voz y los eventos
-viejos con `entityType: external` se normalizan al guardarse.
+chicos (`FormSwitch`, `.form-switch`) agrupados por tema en `.event-options`:
+una fila por grupo con el rótulo a la izquierda (Inscripción, Repetición,
+Discord, Imagen) y los controles en línea, sin caja ni fondo. Antes cada opción
+era una tarjeta `.module-toggle` y "Publicar en Discord" vivía en su propio
+recuadro con borde: mucho alto y cajas dentro de cajas. La imagen va como una
+fila más: miniatura a la izquierda (104×66) + "Subir"/URL, con la biblioteca en
+tiras de 64 px debajo. Los recordatorios son sólo **24 h y 2 h** (el API rechaza
+cualquier otra hora) y la **ubicación externa del Scheduled Event se sacó**: el
+evento va siempre a una sala de voz y los eventos viejos con
+`entityType: external` se normalizan al guardarse.
+
+**El switch se pinta desde el `:checked` del input**, no desde una clase
+`.checked` en el label (`.module-switch input:checked + .module-switch-track`).
+La clase la usan los `.module-toggle` viejos, pero un switch que no era
+`.module-toggle` quedaba siempre gris: la lógica cambiaba y el dibujo no.
 
 **La recurrencia se publica X días antes, no al cerrar la ocurrencia.** Al
 completarse (o al tocar "Limpiar ocurrencia") el molde se archiva y se mueve a su

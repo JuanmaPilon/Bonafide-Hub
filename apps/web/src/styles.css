@@ -5780,7 +5780,12 @@ textarea {
   height: 14px;
 }
 
-.event-form-modal .module-toggle.checked .module-switch-thumb {
+.event-form-modal .module-toggle.checked .module-switch-thumb,
+.event-form-modal
+  .module-switch
+  input:checked
+  + .module-switch-track
+  .module-switch-thumb {
   transform: translateX(16px);
 }
 
@@ -7058,8 +7063,60 @@ select.list-order {
   line-height: 1.35;
 }
 
-/* Filas de switches del form de eventos: chicos, en línea y con aire, en vez
-   de una tarjeta grande por opción. */
+/* Opciones del form agrupadas por tema: una fila por grupo con el rótulo a la
+   izquierda y los controles en línea. Sin caja ni fondo, así no queda un bloque
+   adentro de otro. */
+.event-options {
+  display: grid;
+  gap: 12px;
+}
+
+.event-option-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 14px;
+}
+
+.event-option-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-top: 6px;
+}
+
+.event-option-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.event-option-field {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 170px;
+  max-width: 260px;
+}
+
+.event-option-field > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .event-option-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-option-label {
+    padding-top: 0;
+  }
+}
+
+/* Filas de switches: chicos, en línea y con aire, en vez de una tarjeta grande
+   por opción. */
 .event-switch-row {
   display: flex;
   flex-wrap: wrap;
@@ -7095,17 +7152,6 @@ select.list-order {
 
 .form-switch-label {
   white-space: nowrap;
-}
-
-/* Inputs de la repetición: dos campos cortos en su propia fila. */
-.event-recurrence-days-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.event-recurrence-days {
-  width: 120px;
 }
 
 .event-deadline.closed {
@@ -7451,21 +7497,6 @@ select.list-order {
   margin: 0 0 12px;
 }
 
-/* Publicación en Discord (editor del form de evento + estado en tarjeta) */
-.event-discord-editor {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid rgba(134, 158, 214, 0.22);
-  border-radius: 14px;
-  background: rgba(12, 19, 37, 0.4);
-}
-
-.event-discord-field {
-  display: grid;
-  gap: 6px;
-}
-
 .form-check {
   display: flex;
   align-items: flex-start;
@@ -7499,21 +7530,13 @@ select.list-order {
 
 /* Editor de imagen del formulario de eventos: miniatura + acciones en la misma
    fila, con la biblioteca debajo en tiras chicas (antes el preview grande y el
-   bloque de la biblioteca se comían media ventana). */
-.event-image-editor {
-  display: grid;
-  gap: 10px;
-}
-
-.event-image-editor-label {
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
+   bloque de la biblioteca se comían media ventana). El rótulo lo pone la fila
+   de opciones. */
 .event-image-row {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  min-width: 0;
 }
 
 .event-image-thumb {
@@ -8189,11 +8212,16 @@ select.list-order {
 /* Encendido = VERDE, el mismo tono que el otro switch de la app
    (`.raid-watcher-switch`, #35b96f). Antes era un gradiente azul→naranja y
    quedaban switches de dos colores distintos según la pantalla. El apagado
-   usa el mismo gris que el otro switch (alfa 0.35). */
+   usa el mismo gris que el otro switch (alfa 0.35).
+   Se pinta desde el `:checked` del input y no desde una clase en el label: así
+   funciona también en los switches chicos de los formularios (`.form-switch`),
+   que no son `.module-toggle`. */
+.module-switch input:checked + .module-switch-track,
 .module-toggle.checked .module-switch-track {
   background: #35b96f;
 }
 
+.module-switch input:checked + .module-switch-track .module-switch-thumb,
 .module-toggle.checked .module-switch-thumb {
   transform: translateX(20px);
 }
@@ -10123,8 +10151,7 @@ select.list-order {
 }
 
 :root[data-theme="light"] .event-roster-column,
-:root[data-theme="light"] .event-roster-group,
-:root[data-theme="light"] .event-discord-editor {
+:root[data-theme="light"] .event-roster-group {
   background: rgba(223, 233, 246, 0.55);
 }
 
@@ -10146,6 +10173,12 @@ select.list-order {
   background: var(--surface-input);
   border-color: rgba(60, 85, 130, 0.28);
   color: var(--text);
+}
+
+/* El track apagado necesita más contraste sobre fondo claro (sin esto el
+   switch se ve como una pastilla blanca y no se nota si está prendido). */
+:root[data-theme="light"] .module-switch-track {
+  background: rgba(60, 85, 130, 0.32);
 }
 
 :root[data-theme="light"] .emoji-select-trigger.empty,

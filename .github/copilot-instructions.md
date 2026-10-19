@@ -208,8 +208,11 @@ Rules:
    clips it).
 5. **Forms** — `.form-grid` (two columns, `event-form-wide` for full rows) with
    the label above the control, and the hub's own `.input` / `.select`. Options
-   that are on/off are a small `FormSwitch` in a `.event-switch-row`, never a
-   `.module-toggle` card (those belong to the configuration panel).
+   that are on/off are a small `FormSwitch` grouped by theme in `.event-options`
+   (one row per group, label on the left, no box around the group), never a
+   `.module-toggle` card (those belong to the configuration panel). The switch
+   is painted from the input's `:checked`, not from a `.checked` class: a switch
+   outside `.module-toggle` looked off while its state was on.
 6. **Light theme** — every new surface needs its light-theme counterpart. Do not
    write a broad light-theme selector that overrides a component's own computed
    colors (e.g. color chips): exclude those variants explicitly.

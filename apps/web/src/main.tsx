@@ -14476,138 +14476,242 @@ function App() {
                               ))}
                             </select>
                           </label>
-                          {/* Inscripción, recordatorios y repetición: switches
-                            chicos en una sola fila, sin las cajas grandes de
-                            `.module-toggle`. */}
-                          <div className="event-form-wide event-switch-row">
-                            <FormSwitch
-                              checked={eventForm.characterEnabled}
-                              label="Pedir personaje"
-                              onChange={(checked) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  characterEnabled: checked,
-                                }))
-                              }
-                            />
-                            <span
-                              aria-hidden="true"
-                              className="event-switch-divider"
-                            />
-                            <span className="event-switch-hint">
-                              Recordatorios
-                            </span>
-                            {REMINDER_HOUR_OPTIONS.map((option) => (
-                              <FormSwitch
-                                checked={eventForm.reminderHours.includes(
-                                  option.hours,
-                                )}
-                                disabled={!eventForm.requiredRoleId.trim()}
-                                key={option.hours}
-                                label={option.label}
-                                onChange={(checked) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    reminderHours: checked
-                                      ? [
-                                          ...current.reminderHours.filter(
-                                            (hours) => hours !== option.hours,
-                                          ),
-                                          option.hours,
-                                        ]
-                                      : current.reminderHours.filter(
-                                          (hours) => hours !== option.hours,
-                                        ),
-                                  }))
-                                }
-                              />
-                            ))}
-                            <span
-                              aria-hidden="true"
-                              className="event-switch-divider"
-                            />
-                            <FormSwitch
-                              checked={eventForm.recurrenceEnabled}
-                              label="Repetir"
-                              onChange={(checked) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  recurrenceEnabled: checked,
-                                  recurrenceEveryDays:
-                                    checked && !current.recurrenceEveryDays
-                                      ? "7"
-                                      : current.recurrenceEveryDays,
-                                }))
-                              }
-                            />
-                            {editingEventId ? (
-                              <FormSwitch
-                                checked={eventForm.paused}
-                                label="Pausar"
-                                onChange={(checked) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    paused: checked,
-                                  }))
-                                }
-                              />
-                            ) : null}
-                            {eventForm.discord.createScheduledEvent ||
-                            eventForm.discord.publishMessage ? (
-                              <FormSwitch
-                                checked={eventForm.discordCleanupOnComplete}
-                                label="Borrar de Discord al completar"
-                                onChange={(checked) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    discordCleanupOnComplete: checked,
-                                  }))
-                                }
-                              />
-                            ) : null}
-                          </div>
-                          {eventForm.recurrenceEnabled ? (
-                            <div className="event-form-wide event-recurrence-days-row">
-                              <label className="event-recurrence-days">
-                                <span>Cada (días)</span>
-                                <input
-                                  className="input"
-                                  type="number"
-                                  min="1"
-                                  max="365"
-                                  value={eventForm.recurrenceEveryDays}
-                                  onChange={(event) =>
+                          {/* Opciones agrupadas por tema, sin cajas: una fila
+                              por grupo con los switches en línea. */}
+                          <div className="event-form-wide event-options">
+                            <div className="event-option-row">
+                              <span className="event-option-label">
+                                Inscripción
+                              </span>
+                              <div className="event-option-controls">
+                                <FormSwitch
+                                  checked={eventForm.characterEnabled}
+                                  label="Pedir personaje"
+                                  onChange={(checked) =>
                                     setEventForm((current) => ({
                                       ...current,
-                                      recurrenceEveryDays: event.target.value,
+                                      characterEnabled: checked,
                                     }))
                                   }
                                 />
-                              </label>
-                              <label className="event-recurrence-days">
-                                <span>Publicar (días antes)</span>
-                                <input
-                                  className="input"
-                                  type="number"
-                                  min="1"
-                                  max="365"
-                                  value={eventForm.recurrencePublishDaysBefore}
-                                  onChange={(event) =>
-                                    setEventForm((current) => ({
-                                      ...current,
-                                      recurrencePublishDaysBefore:
-                                        event.target.value,
-                                    }))
-                                  }
+                                <span
+                                  aria-hidden="true"
+                                  className="event-switch-divider"
                                 />
-                              </label>
+                                <span className="event-switch-hint">
+                                  Recordatorios
+                                </span>
+                                {REMINDER_HOUR_OPTIONS.map((option) => (
+                                  <FormSwitch
+                                    checked={eventForm.reminderHours.includes(
+                                      option.hours,
+                                    )}
+                                    disabled={!eventForm.requiredRoleId.trim()}
+                                    key={option.hours}
+                                    label={option.label}
+                                    onChange={(checked) =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        reminderHours: checked
+                                          ? [
+                                              ...current.reminderHours.filter(
+                                                (hours) =>
+                                                  hours !== option.hours,
+                                              ),
+                                              option.hours,
+                                            ]
+                                          : current.reminderHours.filter(
+                                              (hours) =>
+                                                hours !== option.hours,
+                                            ),
+                                      }))
+                                    }
+                                  />
+                                ))}
+                              </div>
                             </div>
-                          ) : null}
-                          <div className="event-form-wide event-image-editor">
-                            <span className="event-image-editor-label">
-                              Imagen
-                            </span>
-                            <div className="event-image-row">
+                            <div className="event-option-row">
+                              <span className="event-option-label">
+                                Repetición
+                              </span>
+                              <div className="event-option-controls">
+                                <FormSwitch
+                                  checked={eventForm.recurrenceEnabled}
+                                  label="Repetir"
+                                  onChange={(checked) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      recurrenceEnabled: checked,
+                                      recurrenceEveryDays:
+                                        checked && !current.recurrenceEveryDays
+                                          ? "7"
+                                          : current.recurrenceEveryDays,
+                                    }))
+                                  }
+                                />
+                                {editingEventId ? (
+                                  <FormSwitch
+                                    checked={eventForm.paused}
+                                    label="Pausar"
+                                    onChange={(checked) =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        paused: checked,
+                                      }))
+                                    }
+                                  />
+                                ) : null}
+                                {eventForm.recurrenceEnabled ? (
+                                  <>
+                                    <label className="event-option-field">
+                                      <span>Cada (días)</span>
+                                      <input
+                                        className="input"
+                                        max="365"
+                                        min="1"
+                                        onChange={(event) =>
+                                          setEventForm((current) => ({
+                                            ...current,
+                                            recurrenceEveryDays:
+                                              event.target.value,
+                                          }))
+                                        }
+                                        type="number"
+                                        value={eventForm.recurrenceEveryDays}
+                                      />
+                                    </label>
+                                    <label className="event-option-field">
+                                      <span>Publicar (días antes)</span>
+                                      <input
+                                        className="input"
+                                        max="365"
+                                        min="1"
+                                        onChange={(event) =>
+                                          setEventForm((current) => ({
+                                            ...current,
+                                            recurrencePublishDaysBefore:
+                                              event.target.value,
+                                          }))
+                                        }
+                                        type="number"
+                                        value={
+                                          eventForm.recurrencePublishDaysBefore
+                                        }
+                                      />
+                                    </label>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="event-option-row">
+                              <span className="event-option-label">Discord</span>
+                              <div className="event-option-controls">
+                                <FormSwitch
+                                  checked={
+                                    eventForm.discord.createScheduledEvent
+                                  }
+                                  label="Scheduled Event"
+                                  onChange={(checked) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      discord: {
+                                        ...current.discord,
+                                        createScheduledEvent: checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                                <FormSwitch
+                                  checked={eventForm.discord.publishMessage}
+                                  label="Aviso en un canal"
+                                  onChange={(checked) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      discord: {
+                                        ...current.discord,
+                                        publishMessage: checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                                {eventForm.discord.createScheduledEvent ||
+                                eventForm.discord.publishMessage ? (
+                                  <FormSwitch
+                                    checked={eventForm.discordCleanupOnComplete}
+                                    label="Borrar al completar"
+                                    onChange={(checked) =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        discordCleanupOnComplete: checked,
+                                      }))
+                                    }
+                                  />
+                                ) : null}
+                                {eventForm.discord.createScheduledEvent ? (
+                                  <label className="event-option-field">
+                                    <span>Sala de voz</span>
+                                    <select
+                                      className="select"
+                                      onChange={(event) =>
+                                        setEventForm((current) => ({
+                                          ...current,
+                                          discord: {
+                                            ...current.discord,
+                                            voiceChannelId: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                      value={eventForm.discord.voiceChannelId}
+                                    >
+                                      <option value="">
+                                        Seleccionar sala de voz…
+                                      </option>
+                                      {voiceChannels.map((channel) => (
+                                        <option
+                                          key={channel.id}
+                                          value={channel.id}
+                                        >
+                                          {channel.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                ) : null}
+                                {eventForm.discord.publishMessage ? (
+                                  <label className="event-option-field">
+                                    <span>Canal</span>
+                                    <select
+                                      className="select"
+                                      onChange={(event) =>
+                                        setEventForm((current) => ({
+                                          ...current,
+                                          discord: {
+                                            ...current.discord,
+                                            publishChannelId: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                      value={eventForm.discord.publishChannelId}
+                                    >
+                                      <option value="">
+                                        Seleccionar canal de texto…
+                                      </option>
+                                      {textChannels.map((channel) => (
+                                        <option
+                                          key={channel.id}
+                                          value={channel.id}
+                                        >
+                                          {channel.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="event-option-row">
+                              <span className="event-option-label">Imagen</span>
+                              <div className="event-image-row">
                               {eventForm.imageUrl ? (
                                 <img
                                   alt="Imagen del evento"
@@ -14703,89 +14807,7 @@ function App() {
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="event-form-wide event-discord-editor">
-                          <span className="event-image-editor-label">
-                            Publicar en Discord
-                          </span>
-                          <div className="event-switch-row">
-                            <FormSwitch
-                              checked={eventForm.discord.createScheduledEvent}
-                              label="Scheduled Event"
-                              onChange={(checked) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  discord: {
-                                    ...current.discord,
-                                    createScheduledEvent: checked,
-                                  },
-                                }))
-                              }
-                            />
-                            <FormSwitch
-                              checked={eventForm.discord.publishMessage}
-                              label="Aviso en un canal"
-                              onChange={(checked) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  discord: {
-                                    ...current.discord,
-                                    publishMessage: checked,
-                                  },
-                                }))
-                              }
-                            />
                           </div>
-                          {eventForm.discord.createScheduledEvent ? (
-                            <label className="event-discord-field">
-                              <span>Sala de voz del evento</span>
-                              <select
-                                className="select"
-                                value={eventForm.discord.voiceChannelId}
-                                onChange={(event) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    discord: {
-                                      ...current.discord,
-                                      voiceChannelId: event.target.value,
-                                    },
-                                  }))
-                                }
-                              >
-                                <option value="">Seleccionar sala de voz…</option>
-                                {voiceChannels.map((channel) => (
-                                  <option key={channel.id} value={channel.id}>
-                                    {channel.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          ) : null}
-                          {eventForm.discord.publishMessage ? (
-                            <label className="event-discord-field">
-                              <span>Canal donde publicar</span>
-                              <select
-                                className="select"
-                                value={eventForm.discord.publishChannelId}
-                                onChange={(event) =>
-                                  setEventForm((current) => ({
-                                    ...current,
-                                    discord: {
-                                      ...current.discord,
-                                      publishChannelId: event.target.value,
-                                    },
-                                  }))
-                                }
-                              >
-                                <option value="">Seleccionar canal de texto…</option>
-                                {textChannels.map((channel) => (
-                                  <option key={channel.id} value={channel.id}>
-                                    {channel.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          ) : null}
                         </div>
                         <div className="admin-save">
                           <button
