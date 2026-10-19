@@ -6415,11 +6415,17 @@ select.list-order {
   gap: 8px 14px;
 }
 
-/* Nombre + tilde para elegir a quién recordarle que se anote. */
+/* Nombre + tilde para elegir a quién recordarle que se anote. Todo el bloque es
+   un label: tocar el nombre también marca el tilde (no abre el perfil). */
 .roster-pick {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  cursor: pointer;
+}
+
+.roster-pick .member-link {
+  cursor: pointer;
 }
 
 .roster-pick-box {

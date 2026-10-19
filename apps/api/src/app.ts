@@ -7510,11 +7510,11 @@ export function buildApp() {
       "",
       "Todavía no te anotaste a este evento.",
       "",
-      "Anotarte nos deja armar el roster con tiempo, saber con quiénes contamos y organizar grupos y bench antes de la noche. Sin tu respuesta el lugar queda libre y el staff tiene que decidir a ciegas.",
+      "Anotarte nos deja armar el roster con tiempo, saber con quiénes contamos y organizar grupos y bench antes de la noche. Sin tu respuesta el lugar queda libre y los oficiales tienen que decidir a ciegas.",
       "",
       "Anotarse a tiempo también habla de tu compromiso con el grupo: es la forma más simple de mostrar que contás con los demás.",
       "",
-      "Si no te anotás, no podemos reservarte el puesto de esa noche; y si se repite, el staff puede tomar medidas.",
+      "Si no te anotás, no podemos reservarte el puesto de esa noche; y si se repite, los oficiales pueden tomar medidas.",
     ];
 
     const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");

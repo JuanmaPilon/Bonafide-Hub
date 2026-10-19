@@ -852,7 +852,7 @@ tilde: el staff elige a mano y el botón `Recordar a N` manda
 (`sendDirectMessage`), no el bot: el mensaje es firme y explica que anotarse deja
 armar el roster con tiempo y organizar grupos y bench, que anotarse a tiempo es
 parte del compromiso, y que no hacerlo puede costar el puesto de esa noche y
-—si se repite— medidas del staff. No se puede mandar si el evento no está
+—si se repite— medidas de los oficiales. No se puede mandar si el evento no está
 programado o si ya cerró la inscripción, y hay un tope de 25 por pedido (uno por
 miembro, Discord castiga las ráfagas). Los nombres siguen abriendo el perfil.
 

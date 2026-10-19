@@ -4189,9 +4189,9 @@ function RosterNameList({
         <p className="modal-note">{empty}</p>
       ) : (
         <div className="event-roster-missing">
-          {entries.map((entry) => (
-            <span className="roster-pick" key={entry.userId}>
-              {onToggle ? (
+          {entries.map((entry) =>
+            onToggle ? (
+              <label className="roster-pick" key={entry.userId}>
                 <input
                   aria-label={`Seleccionar a ${entry.label}`}
                   checked={selected?.includes(entry.userId) ?? false}
@@ -4199,9 +4199,18 @@ function RosterNameList({
                   onChange={() => onToggle(entry.userId)}
                   type="checkbox"
                 />
-              ) : null}
+                <span
+                  className={`member-link${entry.bench ? " roster-missing-bench" : ""}`}
+                  title={entry.bench ? "Está en bench" : "Elegir para avisarle"}
+                >
+                  {entry.bench ? "🪑 " : ""}
+                  {entry.label}
+                </span>
+              </label>
+            ) : (
               <button
                 className={`member-link${entry.bench ? " roster-missing-bench" : ""}`}
+                key={entry.userId}
                 onClick={() => onOpen(entry.userId)}
                 title={
                   entry.bench
@@ -4213,8 +4222,8 @@ function RosterNameList({
                 {entry.bench ? "🪑 " : ""}
                 {entry.label}
               </button>
-            </span>
-          ))}
+            ),
+          )}
         </div>
       )}
     </div>
