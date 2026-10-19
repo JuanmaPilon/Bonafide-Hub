@@ -75,6 +75,7 @@ import {
 import { saveRaidLogAlias } from "./services/raid-log-aliases-store.js";
 import {
   listGuildGameActivity,
+  listUserGameActivity,
   recordGameActivity,
 } from "./services/games-activity-store.js";
 import {
@@ -4496,34 +4497,22 @@ export function buildApp() {
 
     // Actividad del miembro: todo lo que el hub ya sabe de esta persona, en la
     // misma llamada. La página de perfil se abre con esto, así no hace falta
-    // cruzar leaderboard, roster y eventos del lado de la web.
+    // cruzar leaderboard ni juegos del lado de la web.
     const month = xpMonthKey();
-    const [
-      xpProfile,
-      rosterProfiles,
-      rosterAlts,
-      signupByStatus,
-      lastSignup,
-      karutaCards,
-    ] = await Promise.all([
+    const [xpProfile, monthlyProfile, games, karutaCards] = await Promise.all([
       prisma.xpProfile.findUnique({
         where: { guildId_userId: { guildId: params.guildId, userId } },
       }),
-      listRosterProfiles(params.guildId),
-      listRosterAlts(params.guildId),
-      prisma.eventSignup.groupBy({
-        _count: { _all: true },
-        by: ["status"],
-        where: { guildId: params.guildId, userId },
-      }),
-      prisma.eventSignup.findFirst({
-        orderBy: { createdAt: "desc" },
-        select: {
-          event: { select: { startsAt: true, title: true } },
-          status: true,
+      prisma.xpMonthlyProfile.findUnique({
+        where: {
+          guildId_userId_month: { guildId: params.guildId, month, userId },
         },
-        where: { guildId: params.guildId, userId },
       }),
+      listUserGameActivity({
+        guildId: params.guildId,
+        limit: 4,
+        userId,
+      }).catch(() => []),
       prisma.karutaCard.count({
         where: {
           guildId: params.guildId,
@@ -4533,48 +4522,23 @@ export function buildApp() {
       }),
     ]);
 
-    // Juegos que el bot vio jugar (una fila por guild + persona + app + día), así
-    // que el conteo es "cuántos días lo vio" y no minutos.
-    const gameActivity = await prisma.memberGameActivity.groupBy({
-      _count: { _all: true },
-      by: ["applicationName"],
-      orderBy: { _count: { applicationName: "desc" } },
-      take: 4,
-      where: { guildId: params.guildId, userId },
-    });
-
     // Puesto en el ranking: cuántos perfiles tienen más XP, más uno. Mismo
     // criterio que el leaderboard (orden por XP acumulada, sin desempate).
-    const [xpRank, monthProfile] = xpProfile
-      ? await Promise.all([
-          prisma.xpProfile.count({
-            where: { guildId: params.guildId, xp: { gt: xpProfile.xp } },
-          }),
-          prisma.xpMonthlyProfile.findUnique({
-            where: {
-              guildId_userId_month: {
-                guildId: params.guildId,
-                month,
-                userId,
-              },
-            },
-          }),
-        ])
-      : [0, null];
+    const xpRank = xpProfile
+      ? await prisma.xpProfile.count({
+          where: { guildId: params.guildId, xp: { gt: xpProfile.xp } },
+        })
+      : 0;
     const monthRank =
-      monthProfile && monthProfile.xp > 0
+      monthlyProfile && monthlyProfile.xp > 0
         ? (await prisma.xpMonthlyProfile.count({
             where: {
               guildId: params.guildId,
               month,
-              xp: { gt: monthProfile.xp },
+              xp: { gt: monthlyProfile.xp },
             },
           })) + 1
         : null;
-
-    const signupCount = (status: string): number =>
-      signupByStatus.find((entry) => entry.status === status)?._count._all ?? 0;
-    const rosterProfile = rosterProfiles.get(userId) ?? null;
 
     return {
       ok: true,
@@ -4592,38 +4556,17 @@ export function buildApp() {
         userId,
         username: user.username ?? "—",
         activity: {
-          alts: rosterAlts.get(userId) ?? [],
-          events: {
-            bench: signupCount("bench"),
-            confirmed: signupCount("yes"),
-            last: lastSignup
-              ? {
-                  startsAt: lastSignup.event.startsAt.toISOString(),
-                  status: lastSignup.status,
-                  title: lastSignup.event.title,
-                }
-              : null,
-            no: signupCount("no"),
-            total: signupByStatus.reduce(
-              (sum, entry) => sum + entry._count._all,
-              0,
-            ),
-          },
+          games,
           karutaCards,
-          games: gameActivity.map((entry) => ({
-            days: entry._count._all,
-            name: entry.applicationName,
-          })),
-          month: monthProfile
+          month: monthlyProfile
             ? {
-                messageCount: monthProfile.messageCount,
+                messageCount: monthlyProfile.messageCount,
                 month,
                 rank: monthRank,
-                voiceMinutes: monthProfile.voiceMinutes,
-                xp: monthProfile.xp,
+                voiceMinutes: monthlyProfile.voiceMinutes,
+                xp: monthlyProfile.xp,
               }
             : null,
-          roster: rosterProfile,
           xp: xpProfile
             ? {
                 level: xpProfile.level,

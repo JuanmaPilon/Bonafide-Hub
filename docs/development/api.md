@@ -42,7 +42,7 @@ Canales / roles / miembros de Discord:
 1. `GET /guilds/:guildId/channels`
 2. `GET /guilds/:guildId/roles`
 3. `GET /guilds/:guildId/members`
-4. `GET /guilds/:guildId/members/:userId` (perfil: identidad de Discord **+ `activity`** con XP y puesto, corte del mes, ficha del roster con alters, eventos, cartas de Karuta y juegos vistos)
+4. `GET /guilds/:guildId/members/:userId` (perfil: identidad de Discord **+ `activity`** con XP y puesto, corte del mes, cartas de Karuta y juegos más jugados)
 
 Config guild: `GET/PATCH /guilds/:guildId/config`
 
@@ -692,20 +692,22 @@ anteriores quedan como historial. El nivel y el nombre/avatar salen de
 página ocupa el ancho de la estructura (`--shell-max`), como el resto de los
 módulos: arriba una sola tarjeta de identidad (portada de Discord o el color de
 acento, avatar, nombre, `@usuario`, booster, antigüedad, cartas raras, los roles
-con su color y el nivel con el puesto en el ranking) y abajo los bloques de
-actividad en dos columnas —**Actividad en Discord** (XP total, mensajes, horas de
-voz y XP del mes, más el detalle del mes con su puesto), **Ficha del roster**
-(clase + spec con el emoji del servidor, offs, etiquetas con su color y alters),
-**Eventos** (cuántos se anotó, cuántos confirmó, bench y no asistió, y el último)
-y **Juegos** (los que el bot vio, con la cantidad de días)—. Los bloques que no
-tienen datos no se muestran: quien no tiene ficha o no se anotó nunca no ve una
-caja vacía.
+con su color y el nivel con el puesto en el ranking) y abajo dos bloques —
+**Actividad en Discord** (XP total, mensajes, horas de voz y XP del mes, más el
+detalle del mes con su puesto) y **Juegos más jugados** (la portada de cada juego
+—el icono de la app en Discord, que resuelve el mismo caché de portadas del
+dashboard— con los días que se lo vio)—. Si no hay juegos registrados, Actividad
+ocupa todo el ancho.
 
 Todo eso viene en **una sola llamada** (`activity` en el perfil), así la página no
-cruza leaderboard, roster y eventos por su cuenta: sin eso, el perfil dependía de
-que el leaderboard estuviera cargado y un miembro sin XP aparecía sin números.
-Los juegos salen de `member_game_activity`, que guarda **una fila por día** (no
-minutos): el número que se muestra es "días que se lo vio jugando".
+cruza leaderboard ni juegos por su cuenta: sin eso, el perfil dependía de que el
+leaderboard estuviera cargado y un miembro sin XP aparecía sin números. Los juegos
+salen de `member_game_activity`, que guarda **una fila por día** (no minutos): el
+número que se muestra es "días que se lo vio jugando".
+
+La portada de Discord es apaisada, así que el banner toma un alto proporcional
+(`clamp(240px, 18vw, 320px)`): con un alto fijo quedaba petizo al ensanchar la
+página.
 
 Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
 

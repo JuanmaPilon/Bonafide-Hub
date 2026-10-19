@@ -4020,7 +4020,9 @@ a:hover {
 }
 
 .profile-hero-banner {
-  height: 190px;
+  /* La portada de Discord es apaisada: con la página a todo el ancho, 190 px
+     quedaban petizos. Se toma un alto proporcional con techo y piso. */
+  height: clamp(240px, 18vw, 320px);
   background: linear-gradient(
     135deg,
     rgba(54, 89, 185, 0.55),
@@ -4099,11 +4101,12 @@ a:hover {
   padding: 14px 24px 20px;
 }
 
-/* Los bloques de actividad: dos por fila (con cuatro bloques quedan dos filas
-   parejas), y una sola columna en pantallas chicas. */
+/* Los bloques de actividad: uno al lado del otro cuando hay más de uno (con
+   `auto-fit`, un bloque solo ocupa todo el ancho) y en una columna en pantallas
+   chicas. */
 .profile-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -4201,59 +4204,51 @@ a:hover {
   font-size: 0.78rem;
 }
 
-/* Clase y spec de la ficha: el mismo par emoji + texto del roster, con el color
-   de la clase en el borde. */
-.profile-ficha {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(var(--profile-ficha-rgb, 106, 168, 255), 0.4);
-  background: rgba(var(--profile-ficha-rgb, 106, 168, 255), 0.08);
-  align-self: start;
-}
-
-.profile-ficha strong {
-  font-size: 0.95rem;
-}
-
-.profile-ficha span {
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.profile-ficha-off {
-  color: var(--muted);
-  font-size: 0.75rem;
-  font-style: italic;
-}
-
-.profile-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.profile-tag {
-  cursor: default;
+/* Juegos más jugados: la portada del juego (el icono de la app en Discord) con
+   el nombre y los días que se lo vio. Las tarjetas se reparten solas. */
+.profile-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 12px;
 }
 
 .profile-game {
-  display: inline-flex;
-  align-items: baseline;
+  display: grid;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: rgba(12, 19, 37, 0.55);
-  font-size: 0.85rem;
+  justify-items: center;
+  text-align: center;
 }
 
-.profile-game em {
+.profile-game-cover {
+  width: 100%;
+  max-width: 120px;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(12, 19, 37, 0.55);
+  object-fit: cover;
+}
+
+.profile-game-cover-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.profile-game-cover-placeholder svg {
+  width: 26px;
+  height: 26px;
+}
+
+.profile-game-name {
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.profile-game-days {
   color: var(--muted);
   font-size: 0.75rem;
-  font-style: normal;
 }
 
 .profile-roles {
@@ -10131,7 +10126,7 @@ select.list-order {
 :root[data-theme="light"] .karuta-drop-card,
 :root[data-theme="light"] .profile-badge,
 :root[data-theme="light"] .profile-stat,
-:root[data-theme="light"] .profile-game,
+:root[data-theme="light"] .profile-game-cover,
 :root[data-theme="light"] .rr-panel-card,
 :root[data-theme="light"] .rr-job,
 :root[data-theme="light"] .audit-row,

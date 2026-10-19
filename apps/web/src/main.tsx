@@ -14248,8 +14248,6 @@ function App() {
                       const activity = profile.activity;
                       const xp = activity?.xp ?? null;
                       const month = activity?.month ?? null;
-                      const rosterFicha = activity?.roster ?? null;
-                      const events = activity?.events ?? null;
                       const games = activity?.games ?? [];
                       const voiceLabel = (minutes: number): string => {
                         const hours = Math.floor(minutes / 60);
@@ -14396,121 +14394,6 @@ function App() {
                               )}
                             </section>
 
-                            {rosterFicha ? (
-                              <section className="profile-panel">
-                                <span className="profile-panel-head">
-                                  <Sword aria-hidden="true" weight="fill" />
-                                  Ficha del roster
-                                </span>
-                                <span
-                                  className="profile-ficha"
-                                  style={
-                                    {
-                                      "--profile-ficha-rgb": tagRgb(
-                                        classColor(rosterFicha.className) ??
-                                          "#6aa8ff",
-                                      ).join(", "),
-                                    } as CSSProperties
-                                  }
-                                >
-                                  <DiscordEmojiImage
-                                    animated={Boolean(
-                                      classEmojis[rosterFicha.className]
-                                        ?.animated,
-                                    )}
-                                    emojiId={
-                                      classEmojis[rosterFicha.className]?.emojiId
-                                    }
-                                    fallback={
-                                      classEmojis[rosterFicha.className]
-                                        ?.unicode ??
-                                      classEmoji(rosterFicha.className)
-                                    }
-                                    name={rosterFicha.className}
-                                    size={18}
-                                  />
-                                  <strong>{rosterFicha.specName}</strong>
-                                  <span>{rosterFicha.className}</span>
-                                  {rosterFicha.active ? null : (
-                                    <em className="profile-ficha-off">
-                                      inactivo
-                                    </em>
-                                  )}
-                                </span>
-                                {rosterFicha.offSpecs.length > 0 ? (
-                                  <p className="profile-panel-note">
-                                    Offs: {rosterFicha.offSpecs.join(" · ")}
-                                  </p>
-                                ) : null}
-                                {rosterFicha.tags.length > 0 ? (
-                                  <div className="profile-tags">
-                                    {rosterFicha.tags.map((tag) => (
-                                      <span
-                                        className="event-filter-chip event-filter-chip--color profile-tag"
-                                        key={tag.label}
-                                        style={chipColorVars(tag.color)}
-                                      >
-                                        {tag.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
-                                {activity.alts.length > 0 ? (
-                                  <p className="profile-panel-note">
-                                    Alters:{" "}
-                                    {activity.alts
-                                      .map(
-                                        (alt) =>
-                                          `${alt.specName} ${alt.className}`,
-                                      )
-                                      .join(" · ")}
-                                  </p>
-                                ) : null}
-                              </section>
-                            ) : null}
-
-                            <section className="profile-panel">
-                              <span className="profile-panel-head">
-                                <CalendarDots
-                                  aria-hidden="true"
-                                  weight="fill"
-                                />
-                                Eventos
-                              </span>
-                              {events && events.total > 0 ? (
-                                <>
-                                  <div className="profile-stats">
-                                    <div className="profile-stat">
-                                      <strong>{events.total}</strong>
-                                      <span>Anotado</span>
-                                    </div>
-                                    <div className="profile-stat">
-                                      <strong>{events.confirmed}</strong>
-                                      <span>Confirmó</span>
-                                    </div>
-                                    <div className="profile-stat">
-                                      <strong>{events.bench}</strong>
-                                      <span>Bench</span>
-                                    </div>
-                                    <div className="profile-stat">
-                                      <strong>{events.no}</strong>
-                                      <span>No asistió</span>
-                                    </div>
-                                  </div>
-                                  {events.last ? (
-                                    <p className="profile-panel-note">
-                                      Último: {events.last.title} ·{" "}
-                                      {formatDate24(events.last.startsAt)}
-                                    </p>
-                                  ) : null}
-                                </>
-                              ) : (
-                                <p className="profile-panel-note">
-                                  Todavía no se anotó a ningún evento.
-                                </p>
-                              )}
-                            </section>
-
                             {games.length > 0 ? (
                               <section className="profile-panel">
                                 <span className="profile-panel-head">
@@ -14518,17 +14401,36 @@ function App() {
                                     aria-hidden="true"
                                     weight="fill"
                                   />
-                                  Juegos
+                                  Juegos más jugados
                                 </span>
-                                <div className="profile-tags">
+                                <div className="profile-games">
                                   {games.map((game) => (
-                                    <span
+                                    <article
                                       className="profile-game"
                                       key={game.name}
                                     >
-                                      {game.name}
-                                      <em>{game.days}d</em>
-                                    </span>
+                                      {game.coverUrl ? (
+                                        <img
+                                          alt=""
+                                          className="profile-game-cover"
+                                          src={game.coverUrl}
+                                        />
+                                      ) : (
+                                        <span className="profile-game-cover profile-game-cover-placeholder">
+                                          <GameController
+                                            aria-hidden="true"
+                                            weight="fill"
+                                          />
+                                        </span>
+                                      )}
+                                      <span className="profile-game-name">
+                                        {game.name}
+                                      </span>
+                                      <span className="profile-game-days">
+                                        {game.days}{" "}
+                                        {game.days === 1 ? "día" : "días"}
+                                      </span>
+                                    </article>
                                   ))}
                                 </div>
                               </section>

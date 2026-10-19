@@ -307,8 +307,7 @@ function resolveApplicationImage(
 export async function listGuildGameActivity(input: {
   days: number;
   guildId: string;
-}): Promise<GuildGameActivity[]> {
-  const since = activityDay(
+}): Promise<GuildGameActivity[]> {  const since = activityDay(
     new Date(Date.now() - (input.days - 1) * DAY_MS),
   );
   const rows = (await prisma.memberGameActivity.findMany({
@@ -422,4 +421,94 @@ export async function listGuildGameActivity(input: {
     .slice(0, MAX_GAMES);
 
   return games;
+}
+
+export type UserGameActivity = {
+  coverUrl?: string;
+  // Días distintos en los que se lo vio jugando.
+  days: number;
+  name: string;
+};
+
+// Los juegos de UNA persona (para el perfil). Reusa el mismo agrupado que la
+// grilla del dashboard: por nombre base, sin las apps que no son juegos, y con
+// la portada resuelta por id/nombre. Se ordena por días jugados, que es lo que
+// interesa cuando se mira a una sola persona.
+export async function listUserGameActivity(input: {
+  guildId: string;
+  limit?: number;
+  userId: string;
+}): Promise<UserGameActivity[]> {
+  const rows = (await prisma.memberGameActivity.findMany({
+    select: { applicationId: true, applicationName: true, day: true },
+    where: { guildId: input.guildId, userId: input.userId },
+  })) as Array<Omit<ActivityRow, "userId">>;
+
+  const byGame = new Map<
+    string,
+    {
+      activeDays: Set<string>;
+      byApplication: Map<string, number>;
+      nameCounts: Map<string, number>;
+      rawNames: Set<string>;
+    }
+  >();
+  for (const row of rows) {
+    const applicationId = row.applicationId;
+    const key = gameBaseKey(row.applicationName);
+    if (!applicationId || !key) {
+      continue;
+    }
+    const entry = byGame.get(key) ?? {
+      activeDays: new Set<string>(),
+      byApplication: new Map<string, number>(),
+      nameCounts: new Map<string, number>(),
+      rawNames: new Set<string>(),
+    };
+    const cleanName =
+      stripTrailingTags(row.applicationName) || row.applicationName;
+    entry.nameCounts.set(cleanName, (entry.nameCounts.get(cleanName) ?? 0) + 1);
+    entry.rawNames.add(row.applicationName);
+    entry.activeDays.add(row.day);
+    entry.byApplication.set(
+      applicationId,
+      (entry.byApplication.get(applicationId) ?? 0) + 1,
+    );
+    byGame.set(key, entry);
+  }
+
+  const index = await loadCoverHashes();
+  return [...byGame.entries()]
+    .filter(([key]) => !NON_GAME_APPLICATIONS.has(key))
+    .map(([, entry]) => {
+      const ids = [...entry.byApplication.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([id]) => id);
+      const names = [...entry.nameCounts.entries()]
+        .sort(
+          (a, b) =>
+            b[1] - a[1] ||
+            a[0].length - b[0].length ||
+            a[0].localeCompare(b[0]),
+        )
+        .map(([name]) => name);
+      let coverUrl: string | undefined;
+      for (const id of ids) {
+        coverUrl = resolveApplicationImage(
+          id,
+          [...names, ...entry.rawNames],
+          index,
+        );
+        if (coverUrl) {
+          break;
+        }
+      }
+      return {
+        coverUrl,
+        days: entry.activeDays.size,
+        name: names[0] ?? ids[0] ?? "",
+      };
+    })
+    .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name))
+    .slice(0, Math.min(MAX_GAMES, Math.max(1, input.limit ?? 4)));
 }

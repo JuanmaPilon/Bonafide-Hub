@@ -428,24 +428,11 @@ export type SessionResponse = {
 
 export type MemberProfile = {
   accentColor: number | null;
-  // Todo lo que el hub ya sabe de la persona (XP, ficha del roster, eventos y
-  // cartas). Viene en la misma llamada que la identidad de Discord.
+  // Todo lo que el hub ya sabe de la persona (XP, corte del mes, cartas y
+  // juegos). Viene en la misma llamada que la identidad de Discord.
   activity: {
-    alts: Array<{
-      className: string;
-      game: string;
-      offSpecs: string[];
-      specName: string;
-    }>;
-    events: {
-      bench: number;
-      confirmed: number;
-      last: { startsAt: string; status: string; title: string } | null;
-      no: number;
-      total: number;
-    };
     // Días en que el bot vio cada juego (una fila por día, no minutos).
-    games: Array<{ days: number; name: string }>;
+    games: Array<{ coverUrl?: string; days: number; name: string }>;
     karutaCards: number;
     month: {
       messageCount: number;
@@ -453,14 +440,6 @@ export type MemberProfile = {
       rank: number | null;
       voiceMinutes: number;
       xp: number;
-    } | null;
-    roster: {
-      active: boolean;
-      className: string;
-      game: string;
-      offSpecs: string[];
-      specName: string;
-      tags: Array<{ color: string; label: string }>;
     } | null;
     xp: {
       level: number;
