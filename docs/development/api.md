@@ -840,9 +840,21 @@ La clase la usan los `.module-toggle` viejos, pero un switch que no era
 
 **El control del roster tiene filtros.** El modal del contador (`N/M`) abre en
 **Faltan** (lo único accionable: a quién hay que ir a buscar) y deja cambiar a
-Confirmados, Bench o Todos con los mismo chips del hub (`event-filter-chip`).
-Los confirmados y el bench salen de las inscripciones del evento; los que faltan,
-de `GET .../events/:eventId/roster`. Los nombres siguen abriendo el perfil.
+Confirmados, Bench o Todos. Los filtros son **combinables** y cada grupo tiene su
+color (mismo chip de color del hub: naranja faltan, verde confirmados, ámbar
+bench); "Todos" limpia la selección y muestra los tres grupos con su rótulo. Los
+confirmados y el bench salen de las inscripciones del evento; los que faltan, de
+`GET .../events/:eventId/roster`.
+
+**Recordatorio por MD.** En el grupo de los que faltan cada nombre tiene un
+tilde: el staff elige a mano y el botón `Recordar a N` manda
+`POST .../events/:eventId/remind`. El MD lo manda **el API** con el token del bot
+(`sendDirectMessage`), no el bot: el mensaje es firme y explica que anotarse deja
+armar el roster con tiempo y organizar grupos y bench, que anotarse a tiempo es
+parte del compromiso, y que no hacerlo puede costar el puesto de esa noche y
+—si se repite— medidas del staff. No se puede mandar si el evento no está
+programado o si ya cerró la inscripción, y hay un tope de 25 por pedido (uno por
+miembro, Discord castiga las ráfagas). Los nombres siguen abriendo el perfil.
 
 **Los modales son opacos.** La superficie de `.modal` es `--modal-surface` y no
 `--panel`: con el panel semitransparente, sobre una portada colorida se leía el
@@ -978,7 +990,8 @@ sobre el archivo ya reducido, con margen para el base64.
 10. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
 11. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
 12. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
-13. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
+13. `POST /guilds/:guildId/events/:eventId/remind` (recordatorio por MD a los que faltan anotarse; recibe `{ userIds }` y devuelve `{ sent, failed }`)
+14. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
 
 ## 4. Endpoint interno para bot
 

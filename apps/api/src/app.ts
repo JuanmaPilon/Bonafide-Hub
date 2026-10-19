@@ -7496,6 +7496,47 @@ export function buildApp() {
       : { error: result.error, notified: false };
   }
 
+  // MD al que todavía no se anotó: no es un recordatorio de "falta poco" sino
+  // uno de compromiso. Lo dispara el staff desde el control del roster, para
+  // quien eligió a mano.
+  async function sendSignupReminderDm(
+    event: HubEvent,
+    userId: string,
+  ): Promise<{ error?: string; ok: boolean }> {
+    const startsAtUnix = Math.floor(event.startsAt.getTime() / 1000);
+    const blocks: string[] = [
+      `**${event.title}**`,
+      `🗓️ <t:${startsAtUnix}:F> · <t:${startsAtUnix}:R>`,
+      "",
+      "Todavía no te anotaste a este evento.",
+      "",
+      "Anotarte nos deja armar el roster con tiempo, saber con quiénes contamos y organizar grupos y bench antes de la noche. Sin tu respuesta el lugar queda libre y el staff tiene que decidir a ciegas.",
+      "",
+      "Anotarse a tiempo también habla de tu compromiso con el grupo: es la forma más simple de mostrar que contás con los demás.",
+      "",
+      "Si no te anotás, no podemos reservarte el puesto de esa noche; y si se repite, el staff puede tomar medidas.",
+    ];
+
+    const webBase = env.FRONTEND_APP_URL?.trim().replace(/\/+$/, "");
+    if (webBase) {
+      blocks.push(
+        "",
+        `[🌐 Anotarme](${webBase}/#/eventos/${encodeURIComponent(event.id)})`,
+      );
+    }
+
+    return sendDirectMessage(userId, {
+      embeds: [
+        {
+          color: 0xffb454,
+          description: blocks.join("\n"),
+          footer: { text: "Bonafide Hub · Eventos" },
+          title: "📋 Nos falta tu anotación",
+        },
+      ],
+    });
+  }
+
   // ── Edición manual de inscripciones por el staff ───────────────────
   // El staff con acceso al módulo de eventos puede corregir la inscripción de
   // CUALQUIER miembro: estado, rol, clase/spec, personaje y nota. Sirve para
@@ -7691,6 +7732,93 @@ export function buildApp() {
         notified,
         notifyError,
       };
+    },
+  );
+
+  // Recordatorio por MD a los que todavía no se anotaron. El staff elige a mano
+  // desde el control del roster (no se manda a todos de una: es un mensaje
+  // firme y personal, no una notificación masiva).
+  app.post(
+    "/guilds/:guildId/events/:eventId/remind",
+    async (request, reply) => {
+      const session = await requireSession(request);
+      if (!session) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+
+      const params = request.params as { eventId?: string; guildId?: string };
+      if (!params.guildId || !params.eventId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+
+      if (!(await canManageModule(session, params.guildId, "eventos"))) {
+        return reply.code(403).send({ ok: false, error: "Forbidden" });
+      }
+
+      const event = await getEvent(params.guildId, params.eventId);
+      if (!event) {
+        return reply
+          .code(404)
+          .send({ ok: false, error: "Evento no encontrado" });
+      }
+      if (event.status !== "scheduled") {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "El evento ya no está programado." });
+      }
+      if (
+        event.signupDeadline &&
+        event.signupDeadline.getTime() < Date.now()
+      ) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Ya cerró la inscripción." });
+      }
+
+      const body = (request.body ?? {}) as { userIds?: unknown };
+      const userIds = Array.isArray(body.userIds)
+        ? [
+            ...new Set(
+              body.userIds.filter(
+                (id): id is string => typeof id === "string" && id.length > 0,
+              ),
+            ),
+          ]
+        : [];
+      if (userIds.length === 0) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "No elegiste a quién avisarle." });
+      }
+      // Tope por pedido: el MD es uno por miembro y Discord castiga las ráfagas.
+      const MAX_REMINDERS = 25;
+      if (userIds.length > MAX_REMINDERS) {
+        return reply.code(400).send({
+          ok: false,
+          error: `Máximo ${MAX_REMINDERS} recordatorios por vez.`,
+        });
+      }
+
+      const failed: Array<{ error: string; userId: string }> = [];
+      let sent = 0;
+      for (const userId of userIds) {
+        const result = await sendSignupReminderDm(event, userId);
+        if (result.ok) {
+          sent += 1;
+        } else {
+          failed.push({ error: result.error ?? "Error desconocido", userId });
+        }
+      }
+
+      if (sent > 0) {
+        await logAdminAction(session, params.guildId, "event:signup-remind", {
+          details: `Recordatorio de anotarse a "${event.title}": ${sent} MD${failed.length > 0 ? ` (${failed.length} sin entregar)` : ""}`,
+          targetId: params.eventId,
+          targetType: "event",
+        });
+      }
+
+      return { ok: true, guildId: params.guildId, failed, sent };
     },
   );
 

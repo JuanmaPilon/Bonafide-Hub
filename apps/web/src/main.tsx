@@ -15,6 +15,7 @@ import {
 import {
   ArrowLeft,
   ArrowsClockwise,
+  BellRinging,
   Broadcast,
   Calendar,
   CalendarDots,
@@ -103,6 +104,7 @@ import {
   getAuditLogs,
   getEventAttendance,
   getEventRoster,
+  remindEventSignups,
   getGuildBoosters,
   getGuildGameActivity,
   getRaidLeads,
@@ -4160,16 +4162,21 @@ function EventActionsMenu({
 }
 
 // Lista de nombres del control del roster (confirmados, bench o los que
-// faltan). Cada nombre abre el perfil; en "Todos" cada grupo lleva su rótulo.
+// faltan). Cada nombre abre el perfil; cuando la lista es la de los que faltan,
+// además tiene un tilde para elegirlos y mandarles el recordatorio por MD.
 function RosterNameList({
   empty,
   entries,
   onOpen,
+  onToggle,
+  selected,
   title,
 }: {
-  empty: string;
+  empty?: string;
   entries: Array<{ bench?: boolean; label: string; userId: string }>;
   onOpen: (userId: string) => void;
+  onToggle?: (userId: string) => void;
+  selected?: string[];
   title?: string;
 }) {
   if (entries.length === 0 && !empty) {
@@ -4177,36 +4184,80 @@ function RosterNameList({
   }
   return (
     <div className="roster-name-group">
-      {title ? (
-        <span className="roster-name-group-title">
-          {title} ({entries.length})
-        </span>
-      ) : null}
+      {title ? <span className="roster-name-group-title">{title}</span> : null}
       {entries.length === 0 ? (
         <p className="modal-note">{empty}</p>
       ) : (
         <div className="event-roster-missing">
           {entries.map((entry) => (
-            <button
-              className={`member-link${entry.bench ? " roster-missing-bench" : ""}`}
-              key={entry.userId}
-              onClick={() => onOpen(entry.userId)}
-              title={
-                entry.bench
-                  ? "Ver su perfil (está en bench)"
-                  : "Ver su perfil"
-              }
-              type="button"
-            >
-              {entry.bench ? "🪑 " : ""}
-              {entry.label}
-            </button>
+            <span className="roster-pick" key={entry.userId}>
+              {onToggle ? (
+                <input
+                  aria-label={`Seleccionar a ${entry.label}`}
+                  checked={selected?.includes(entry.userId) ?? false}
+                  className="roster-pick-box"
+                  onChange={() => onToggle(entry.userId)}
+                  type="checkbox"
+                />
+              ) : null}
+              <button
+                className={`member-link${entry.bench ? " roster-missing-bench" : ""}`}
+                onClick={() => onOpen(entry.userId)}
+                title={
+                  entry.bench
+                    ? "Ver su perfil (está en bench)"
+                    : "Ver su perfil"
+                }
+                type="button"
+              >
+                {entry.bench ? "🪑 " : ""}
+                {entry.label}
+              </button>
+            </span>
           ))}
         </div>
       )}
     </div>
   );
 }
+
+// Filtros del control del roster, con el color de cada grupo (el mismo lenguaje
+// que los chips de color del hub).
+type RosterModalFilter = "bench" | "confirmed" | "missing";
+
+const ROSTER_MODAL_FILTERS: Array<{
+  color: string;
+  count: (
+    roster: EventRoster,
+    confirmed: number,
+    bench: number,
+  ) => number;
+  emoji: string;
+  key: RosterModalFilter;
+  label: string;
+}> = [
+  {
+    color: "#ffb454",
+    count: (roster) => roster.missing.length,
+    emoji: "⏳",
+    key: "missing",
+    label: "Faltan",
+  },
+  {
+    color: "#35b96f",
+    count: (_roster, confirmed) => confirmed,
+    emoji: "✅",
+    key: "confirmed",
+    label: "Confirmados",
+  },
+  {
+    color: "#f5b540",
+    count: (_roster, _confirmed, bench) => bench,
+    emoji: "🪑",
+    key: "bench",
+    label: "Bench",
+  },
+];
 
 function EventCard({
   canManage,
@@ -4329,11 +4380,16 @@ function EventCard({
   const [rosterOpen, setRosterOpen] = useState(false);
   const [rosterLoading, setRosterLoading] = useState(false);
   const [rosterError, setRosterError] = useState<string | null>(null);
-  // Qué lista se está mirando en el modal del roster. Arranca en "faltan":
-  // es lo único accionable (a quién hay que ir a buscar).
-  const [rosterFilter, setRosterFilter] = useState<
-    "all" | "bench" | "confirmed" | "missing"
-  >("missing");
+  // Qué listas se están mirando en el modal del roster: se combinan y arrancan
+  // en "faltan" (es lo único accionable: a quién hay que ir a buscar). Sin
+  // ninguna elegida se ven los tres grupos.
+  const [rosterFilters, setRosterFilters] = useState<RosterModalFilter[]>([
+    "missing",
+  ]);
+  // A quiénes se les va a mandar el recordatorio por MD (sólo los que faltan).
+  const [rosterSelected, setRosterSelected] = useState<string[]>([]);
+  const [reminding, setReminding] = useState(false);
+  const [reminderResult, setReminderResult] = useState<string | null>(null);
 
   // Listas del control del roster: los confirmados y el bench salen de las
   // inscripciones del evento; los que faltan, del roster esperado (API).
@@ -4344,9 +4400,61 @@ function EventCard({
     (signup) => signup.status === "bench",
   );
 
+  function toggleRosterFilter(key: RosterModalFilter): void {
+    setRosterFilters((current) =>
+      current.includes(key)
+        ? current.filter((entry) => entry !== key)
+        : [...current, key],
+    );
+  }
+
+  function toggleRosterSelected(userId: string): void {
+    setRosterSelected((current) =>
+      current.includes(userId)
+        ? current.filter((entry) => entry !== userId)
+        : [...current, userId],
+    );
+  }
+
+  async function sendReminders(): Promise<void> {
+    if (rosterSelected.length === 0) {
+      return;
+    }
+    setReminding(true);
+    setReminderResult(null);
+    try {
+      const result = await remindEventSignups(
+        event.guildId,
+        event.id,
+        rosterSelected,
+      );
+      const parts: string[] = [];
+      if (result.sent > 0) {
+        parts.push(
+          `Recordatorio enviado a ${result.sent} ${result.sent === 1 ? "miembro" : "miembros"}.`,
+        );
+      }
+      if (result.failed.length > 0) {
+        parts.push(
+          `No se pudo avisar a ${result.failed.length} (${result.failed[0].error}).`,
+        );
+      }
+      setReminderResult(parts.join(" ") || "No se envió ningún recordatorio.");
+      setRosterSelected([]);
+    } catch (error) {
+      setReminderResult(
+        error instanceof Error ? error.message : "No se pudo mandar el aviso.",
+      );
+    } finally {
+      setReminding(false);
+    }
+  }
+
   async function openRoster(): Promise<void> {
     setRosterOpen(true);
-    setRosterFilter("missing");
+    setRosterFilters(["missing"]);
+    setRosterSelected([]);
+    setReminderResult(null);
     if (roster || rosterLoading) {
       return;
     }
@@ -5376,43 +5484,33 @@ function EventCard({
             {rosterError ? <p className="modal-note">{rosterError}</p> : null}
             {roster ? (
               <>
-                {/* Filtros del roster. Por defecto "Faltan" (a quién hay que
-                    ir a buscar); el resto es para revisar cómo viene el armado. */}
+                {/* Filtros del roster: se combinan entre sí y arrancan en
+                    "Faltan" (a quién hay que ir a buscar). Sin ninguno
+                    seleccionado se ven los tres grupos. */}
                 <div className="event-filter-chips">
-                  {(
-                    [
-                      [
-                        "missing",
-                        `Faltan ${roster.missing.length}`,
-                        "⏳",
-                      ],
-                      [
-                        "confirmed",
-                        `Confirmados ${confirmedSignups.length}`,
-                        "✅",
-                      ],
-                      ["bench", `Bench ${benchSignups.length}`, "🪑"],
-                      [
-                        "all",
-                        `Todos ${new Set([...confirmedSignups, ...benchSignups].map((signup) => signup.userId)).size + roster.missing.length}`,
-                        "",
-                      ],
-                    ] as const
-                  ).map(([key, label, emoji]) => (
-                    <button
-                      className={`event-filter-chip${rosterFilter === key ? " active" : ""}`}
-                      key={key}
-                      onClick={() => setRosterFilter(key)}
-                      type="button"
-                    >
-                      {emoji ? `${emoji} ` : ""}
-                      {label}
-                    </button>
+                  {ROSTER_MODAL_FILTERS.map((entry) => (
+                    <ColorFilterChip
+                      active={
+                        rosterFilters.length === 0 ||
+                        rosterFilters.includes(entry.key)
+                      }
+                      color={entry.color}
+                      key={entry.key}
+                      label={`${entry.emoji} ${entry.label} ${entry.count(roster, confirmedSignups.length, benchSignups.length)}`}
+                      onToggle={() => toggleRosterFilter(entry.key)}
+                    />
                   ))}
+                  <button
+                    className={`event-filter-chip${rosterFilters.length === 0 ? " active" : ""}`}
+                    onClick={() => setRosterFilters([])}
+                    type="button"
+                  >
+                    Todos
+                  </button>
                 </div>
-                {rosterFilter === "missing" ? (
+                {(rosterFilters.length === 0 ||
+                  rosterFilters.includes("missing")) ? (
                   <RosterNameList
-                    empty="No falta nadie."
                     entries={roster.missing.map((member) => ({
                       bench: member.bench,
                       label: member.username,
@@ -5422,9 +5520,17 @@ function EventCard({
                       setRosterOpen(false);
                       onOpenProfile(userId);
                     }}
+                    onToggle={toggleRosterSelected}
+                    selected={rosterSelected}
+                    title={
+                      rosterFilters.length !== 1
+                        ? `Faltan (${roster.missing.length})`
+                        : undefined
+                    }
                   />
                 ) : null}
-                {rosterFilter === "confirmed" ? (
+                {(rosterFilters.length === 0 ||
+                  rosterFilters.includes("confirmed")) ? (
                   <RosterNameList
                     empty="Nadie confirmó todavía."
                     entries={confirmedSignups.map((signup) => ({
@@ -5435,9 +5541,15 @@ function EventCard({
                       setRosterOpen(false);
                       onOpenProfile(userId);
                     }}
+                    title={
+                      rosterFilters.length !== 1
+                        ? `Confirmados (${confirmedSignups.length})`
+                        : undefined
+                    }
                   />
                 ) : null}
-                {rosterFilter === "bench" ? (
+                {(rosterFilters.length === 0 ||
+                  rosterFilters.includes("bench")) ? (
                   <RosterNameList
                     empty="No hay nadie en bench."
                     entries={benchSignups.map((signup) => ({
@@ -5448,48 +5560,56 @@ function EventCard({
                       setRosterOpen(false);
                       onOpenProfile(userId);
                     }}
+                    title={
+                      rosterFilters.length !== 1
+                        ? `Bench (${benchSignups.length})`
+                        : undefined
+                    }
                   />
                 ) : null}
-                {rosterFilter === "all" ? (
-                  <>
-                    <RosterNameList
-                      empty="No falta nadie."
-                      entries={roster.missing.map((member) => ({
-                        bench: member.bench,
-                        label: member.username,
-                        userId: member.userId,
-                      }))}
-                      onOpen={(userId) => {
-                        setRosterOpen(false);
-                        onOpenProfile(userId);
-                      }}
-                      title="Faltan"
-                    />
-                    <RosterNameList
-                      empty="Nadie confirmó todavía."
-                      entries={confirmedSignups.map((signup) => ({
-                        label: signup.username,
-                        userId: signup.userId,
-                      }))}
-                      onOpen={(userId) => {
-                        setRosterOpen(false);
-                        onOpenProfile(userId);
-                      }}
-                      title="Confirmados"
-                    />
-                    <RosterNameList
-                      empty="No hay nadie en bench."
-                      entries={benchSignups.map((signup) => ({
-                        label: signup.username,
-                        userId: signup.userId,
-                      }))}
-                      onOpen={(userId) => {
-                        setRosterOpen(false);
-                        onOpenProfile(userId);
-                      }}
-                      title="Bench"
-                    />
-                  </>
+                {roster.missing.length > 0 && !signupsClosed ? (
+                  <div className="roster-remind">
+                    <div className="roster-remind-bar">
+                      <button
+                        className="ghost-button small"
+                        onClick={() =>
+                          setRosterSelected(
+                            rosterSelected.length === roster.missing.length
+                              ? []
+                              : roster.missing.map((member) => member.userId),
+                          )
+                        }
+                        type="button"
+                      >
+                        {rosterSelected.length === roster.missing.length
+                          ? "No seleccionar a nadie"
+                          : "Seleccionar a los que faltan"}
+                      </button>
+                      <button
+                        className="primary-button small"
+                        disabled={reminding || rosterSelected.length === 0}
+                        onClick={() => void sendReminders()}
+                        type="button"
+                      >
+                        <BellRinging
+                          aria-hidden="true"
+                          size={16}
+                          weight="fill"
+                        />
+                        {reminding
+                          ? "Enviando…"
+                          : `Recordar a ${rosterSelected.length}`}
+                      </button>
+                    </div>
+                    <span className="roster-remind-note">
+                      Les llega un MD del bot para que se anoten.
+                    </span>
+                    {reminderResult ? (
+                      <span className="roster-remind-result">
+                        {reminderResult}
+                      </span>
+                    ) : null}
+                  </div>
                 ) : null}
               </>
             ) : null}

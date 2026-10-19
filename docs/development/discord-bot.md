@@ -140,7 +140,10 @@ el bot maneja los clicks con mensajes efímeros y guarda por API interna:
    evento de ese payload trae `benchRoleId` (el rol de Bench del roster) cuando el
    evento es de WoW: los dos roles suman a la hora de contar, avisar y listar,
    porque el bench es parte del roster. En el informe el bench va en un campo
-   aparte, para que no se lea como si faltara el core.
+   aparte, para que no se lea como si faltara el core. El **recordatorio manual**
+   de "anotate" (`POST .../events/:eventId/remind`) no pasa por acá: lo manda el
+   API con `sendDirectMessage` (token del bot) cuando el staff lo pide desde el
+   control del roster.
 
 ### Karuta (cartas raras y wishlists)
 

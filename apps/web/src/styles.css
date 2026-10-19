@@ -6412,7 +6412,52 @@ select.list-order {
 .event-roster-missing {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px 14px;
+}
+
+/* Nombre + tilde para elegir a quién recordarle que se anote. */
+.roster-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-pick-box {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Bloque del recordatorio por MD: acciones y el resultado, sin caja. */
+.roster-remind {
+  display: grid;
+  gap: 6px;
+}
+
+.roster-remind-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.roster-remind-bar .primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roster-remind-note,
+.roster-remind-result {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.roster-remind-result {
+  color: var(--text);
 }
 
 /* El bench del roster también cuenta en el evento: se marca para que no se

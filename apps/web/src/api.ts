@@ -1514,6 +1514,22 @@ export async function getEventRoster(
   );
 }
 
+// Recordatorio por MD a los que todavía no se anotaron (el staff elige a mano).
+// Devuelve cuántos salieron y, por cada uno que Discord rechazó, el motivo.
+export async function remindEventSignups(
+  guildId: string,
+  eventId: string,
+  userIds: string[],
+): Promise<{ failed: Array<{ error: string; userId: string }>; sent: number }> {
+  return requestJson<{
+    failed: Array<{ error: string; userId: string }>;
+    sent: number;
+  }>(`/guilds/${guildId}/events/${encodeURIComponent(eventId)}/remind`, {
+    body: JSON.stringify({ userIds }),
+    method: "POST",
+  });
+}
+
 // ── Roster de raids ─────────────────────────────────────────────────
 
 export type RosterRankKey = "bench" | "guild" | "raid";
