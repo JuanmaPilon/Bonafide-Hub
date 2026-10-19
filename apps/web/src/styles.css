@@ -4004,31 +4004,39 @@ a:hover {
 }
 
 /* Perfil de usuario */
+/* Perfil de un miembro. Ocupa el ancho de la estructura, como el resto de los
+   módulos: arriba la identidad en una sola tarjeta (portada + avatar + nombre +
+   roles) y abajo los bloques de actividad, que se reparten solos. */
 .profile-view {
   display: grid;
   gap: 16px;
 }
 
-.profile-card {
+.profile-hero {
   overflow: hidden;
   border-radius: 18px;
   border: 1px solid var(--panel-border);
   background: var(--panel);
-  max-width: 720px;
 }
 
-.profile-banner {
-  height: 240px;
-  display: flex;
-  align-items: flex-end;
-  padding: 18px 24px;
+.profile-hero-banner {
+  height: 190px;
   background: linear-gradient(
     135deg,
     rgba(54, 89, 185, 0.55),
     rgba(223, 90, 61, 0.4)
   );
-  background-size: cover;
   background-position: center;
+  background-size: cover;
+}
+
+.profile-hero-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 18px;
+  padding: 0 24px;
+  margin-top: -52px;
 }
 
 .profile-avatar {
@@ -4040,18 +4048,102 @@ a:hover {
   background: var(--panel);
 }
 
-.profile-body {
-  padding: 16px 20px 20px;
-  display: grid;
-  gap: 12px;
-}
-
-.profile-body h3 {
-  margin: 0;
-}
-
-.profile-username {
+/* Sin avatar de Discord (la persona salió del server o no tiene foto): la
+   inicial en el mismo círculo, en vez de un <img> roto. */
+.profile-avatar-placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted);
+  font-size: 2.4rem;
+  font-weight: 700;
+}
+
+.profile-hero-identity {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 8px;
+  min-width: 0;
+}
+
+.profile-hero-identity h3 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+}
+
+/* Puesto en el ranking, a la derecha de la identidad (no compite con el nombre:
+   el número va en el tamaño del título y el rótulo chico debajo). */
+.profile-hero-level {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  margin-left: auto;
+  padding-bottom: 10px;
+  text-align: right;
+}
+
+.profile-hero-level strong {
+  font-size: 1.15rem;
+}
+
+.profile-hero-level span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.profile-hero-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 24px 20px;
+}
+
+/* Los bloques de actividad: dos por fila (con cuatro bloques quedan dos filas
+   parejas), y una sola columna en pantallas chicas. */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.profile-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+}
+
+.profile-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.profile-panel-head svg {
+  width: 16px;
+  height: 16px;
+}
+
+.profile-panel-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .profile-badges {
@@ -4061,6 +4153,9 @@ a:hover {
 }
 
 .profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
@@ -4077,8 +4172,14 @@ a:hover {
 
 .profile-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .profile-stat {
@@ -4092,12 +4193,67 @@ a:hover {
 }
 
 .profile-stat strong {
-  font-size: 1.6rem;
+  font-size: 1.4rem;
 }
 
 .profile-stat span {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+}
+
+/* Clase y spec de la ficha: el mismo par emoji + texto del roster, con el color
+   de la clase en el borde. */
+.profile-ficha {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--profile-ficha-rgb, 106, 168, 255), 0.4);
+  background: rgba(var(--profile-ficha-rgb, 106, 168, 255), 0.08);
+  align-self: start;
+}
+
+.profile-ficha strong {
+  font-size: 0.95rem;
+}
+
+.profile-ficha span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.profile-ficha-off {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profile-tag {
+  cursor: default;
+}
+
+.profile-game {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(12, 19, 37, 0.55);
+  font-size: 0.85rem;
+}
+
+.profile-game em {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: normal;
 }
 
 .profile-roles {
@@ -9975,6 +10131,7 @@ select.list-order {
 :root[data-theme="light"] .karuta-drop-card,
 :root[data-theme="light"] .profile-badge,
 :root[data-theme="light"] .profile-stat,
+:root[data-theme="light"] .profile-game,
 :root[data-theme="light"] .rr-panel-card,
 :root[data-theme="light"] .rr-job,
 :root[data-theme="light"] .audit-row,

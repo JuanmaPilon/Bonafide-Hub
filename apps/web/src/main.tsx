@@ -14244,97 +14244,299 @@ function App() {
                       No se pudo cargar el perfil.
                     </div>
                   ) : (
-                    <div className="profile-card">
-                      <div
-                        className="profile-banner"
-                        style={
-                          profile.bannerUrl
-                            ? { backgroundImage: `url(${profile.bannerUrl})` }
-                            : profile.accentColor
-                              ? {
-                                  backgroundColor: `#${profile.accentColor.toString(16).padStart(6, "0")}`,
-                                }
-                              : undefined
-                        }
-                      >
-                        <img
-                          className="profile-avatar"
-                          src={
-                            profile.avatarUrl ?? profile.serverAvatarUrl ?? ""
-                          }
-                          alt={profile.displayName}
-                        />
-                      </div>
-                      <div className="profile-body">
-                        <h3>{profile.displayName}</h3>
-                        <span className="profile-username">
-                          @{profile.username}
-                        </span>
-                        <div className="profile-badges">
-                          {profile.isBooster ? (
-                            <span className="profile-badge booster">
-                              💎 Booster
-                            </span>
-                          ) : null}
-                          {profile.joinedAt ? (
-                            <span className="profile-badge">
-                              <Calendar weight="fill" aria-hidden="true" />
-                              Desde {formatDate24(profile.joinedAt)}
-                            </span>
-                          ) : null}
-                        </div>
-                        {(() => {
-                          const entry = leaderboard.find(
-                            (candidate) => candidate.userId === profile.userId,
-                          );
-                          if (!entry) {
-                            return null;
-                          }
-                          const voiceMinutes = entry.voiceMinutes;
-                          const hours = Math.floor(voiceMinutes / 60);
-                          const minutes = voiceMinutes % 60;
-                          return (
-                            <div className="profile-stats">
-                              <div className="profile-stat">
-                                <strong>{entry.level}</strong>
-                                <span>Nivel</span>
-                              </div>
-                              <div className="profile-stat">
-                                <strong>{entry.xp}</strong>
-                                <span>XP</span>
-                              </div>
-                              <div className="profile-stat">
-                                <strong>{entry.messageCount}</strong>
-                                <span>Mensajes</span>
-                              </div>
-                              <div className="profile-stat">
-                                <strong>
-                                  {hours > 0
-                                    ? `${hours}h ${minutes}m`
-                                    : `${minutes}m`}
-                                </strong>
-                                <span>Voz</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                        {profile.roles.length > 0 ? (
-                          <div className="profile-roles">
-                            {profile.roles.map((role) => (
-                              <span
-                                className={roleChipClass(role)}
-                                key={role.id}
-                                style={roleChipStyle(role)}
-                              >
-                                <span className="role-chip-name">
-                                  {role.name}
+                    (() => {
+                      const activity = profile.activity;
+                      const xp = activity?.xp ?? null;
+                      const month = activity?.month ?? null;
+                      const rosterFicha = activity?.roster ?? null;
+                      const events = activity?.events ?? null;
+                      const games = activity?.games ?? [];
+                      const voiceLabel = (minutes: number): string => {
+                        const hours = Math.floor(minutes / 60);
+                        return hours > 0
+                          ? `${hours}h ${minutes % 60}m`
+                          : `${minutes}m`;
+                      };
+
+                      return (
+                        <>
+                          <section className="profile-hero">
+                            <div
+                              className="profile-hero-banner"
+                              style={
+                                profile.bannerUrl
+                                  ? {
+                                      backgroundImage: `url(${profile.bannerUrl})`,
+                                    }
+                                  : profile.accentColor
+                                    ? {
+                                        backgroundColor: `#${profile.accentColor
+                                          .toString(16)
+                                          .padStart(6, "0")}`,
+                                      }
+                                    : undefined
+                              }
+                            />
+                            <div className="profile-hero-main">
+                              {profile.avatarUrl ? (
+                                <img
+                                  className="profile-avatar"
+                                  src={profile.avatarUrl}
+                                  alt={profile.displayName}
+                                />
+                              ) : profile.serverAvatarUrl ? (
+                                <img
+                                  className="profile-avatar"
+                                  src={profile.serverAvatarUrl}
+                                  alt={profile.displayName}
+                                />
+                              ) : (
+                                <span className="profile-avatar profile-avatar-placeholder">
+                                  {profile.displayName.slice(0, 1).toUpperCase()}
                                 </span>
+                              )}
+                              <div className="profile-hero-identity">
+                                <h3>{profile.displayName}</h3>
+                                <span className="profile-username">
+                                  @{profile.username}
+                                </span>
+                                <div className="profile-badges">
+                                  {profile.isBooster ? (
+                                    <span className="profile-badge booster">
+                                      💎 Booster
+                                    </span>
+                                  ) : null}
+                                  {profile.joinedAt ? (
+                                    <span className="profile-badge">
+                                      <Calendar
+                                        aria-hidden="true"
+                                        weight="fill"
+                                      />
+                                      Desde {formatDate24(profile.joinedAt)}
+                                    </span>
+                                  ) : null}
+                                  {activity.karutaCards > 0 ? (
+                                    <span className="profile-badge">
+                                      <CardsThree
+                                        aria-hidden="true"
+                                        weight="fill"
+                                      />
+                                      {activity.karutaCards}{" "}
+                                      {activity.karutaCards === 1
+                                        ? "carta rara"
+                                        : "cartas raras"}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                              {xp ? (
+                                <div className="profile-hero-level">
+                                  <strong>Nivel {xp.level}</strong>
+                                  <span>#{xp.rank} del ranking</span>
+                                </div>
+                              ) : null}
+                            </div>
+                            {profile.roles.length > 0 ? (
+                              <div className="profile-hero-roles">
+                                {profile.roles.map((role) => (
+                                  <span
+                                    className={roleChipClass(role)}
+                                    key={role.id}
+                                    style={roleChipStyle(role)}
+                                  >
+                                    <span className="role-chip-name">
+                                      {role.name}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </section>
+
+                          <div className="profile-grid">
+                            <section className="profile-panel">
+                              <span className="profile-panel-head">
+                                <Trophy aria-hidden="true" weight="fill" />
+                                Actividad en Discord
                               </span>
-                            ))}
+                              {xp ? (
+                                <>
+                                  <div className="profile-stats">
+                                    <div className="profile-stat">
+                                      <strong>{xp.xp}</strong>
+                                      <span>XP total</span>
+                                    </div>
+                                    <div className="profile-stat">
+                                      <strong>{xp.messageCount}</strong>
+                                      <span>Mensajes</span>
+                                    </div>
+                                    <div className="profile-stat">
+                                      <strong>
+                                        {voiceLabel(xp.voiceMinutes)}
+                                      </strong>
+                                      <span>En voz</span>
+                                    </div>
+                                    <div className="profile-stat">
+                                      <strong>
+                                        {month ? month.xp : "—"}
+                                      </strong>
+                                      <span>XP del mes</span>
+                                    </div>
+                                  </div>
+                                  <p className="profile-panel-note">
+                                    {month && month.xp > 0
+                                      ? `Este mes lleva ${month.messageCount} mensajes y ${voiceLabel(month.voiceMinutes)} en voz${month.rank ? ` · #${month.rank} del mes` : ""}.`
+                                      : "Sin actividad registrada este mes."}
+                                  </p>
+                                </>
+                              ) : (
+                                <p className="profile-panel-note">
+                                  Todavía no tiene XP registrado.
+                                </p>
+                              )}
+                            </section>
+
+                            {rosterFicha ? (
+                              <section className="profile-panel">
+                                <span className="profile-panel-head">
+                                  <Sword aria-hidden="true" weight="fill" />
+                                  Ficha del roster
+                                </span>
+                                <span
+                                  className="profile-ficha"
+                                  style={
+                                    {
+                                      "--profile-ficha-rgb": tagRgb(
+                                        classColor(rosterFicha.className) ??
+                                          "#6aa8ff",
+                                      ).join(", "),
+                                    } as CSSProperties
+                                  }
+                                >
+                                  <DiscordEmojiImage
+                                    animated={Boolean(
+                                      classEmojis[rosterFicha.className]
+                                        ?.animated,
+                                    )}
+                                    emojiId={
+                                      classEmojis[rosterFicha.className]?.emojiId
+                                    }
+                                    fallback={
+                                      classEmojis[rosterFicha.className]
+                                        ?.unicode ??
+                                      classEmoji(rosterFicha.className)
+                                    }
+                                    name={rosterFicha.className}
+                                    size={18}
+                                  />
+                                  <strong>{rosterFicha.specName}</strong>
+                                  <span>{rosterFicha.className}</span>
+                                  {rosterFicha.active ? null : (
+                                    <em className="profile-ficha-off">
+                                      inactivo
+                                    </em>
+                                  )}
+                                </span>
+                                {rosterFicha.offSpecs.length > 0 ? (
+                                  <p className="profile-panel-note">
+                                    Offs: {rosterFicha.offSpecs.join(" · ")}
+                                  </p>
+                                ) : null}
+                                {rosterFicha.tags.length > 0 ? (
+                                  <div className="profile-tags">
+                                    {rosterFicha.tags.map((tag) => (
+                                      <span
+                                        className="event-filter-chip event-filter-chip--color profile-tag"
+                                        key={tag.label}
+                                        style={chipColorVars(tag.color)}
+                                      >
+                                        {tag.label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+                                {activity.alts.length > 0 ? (
+                                  <p className="profile-panel-note">
+                                    Alters:{" "}
+                                    {activity.alts
+                                      .map(
+                                        (alt) =>
+                                          `${alt.specName} ${alt.className}`,
+                                      )
+                                      .join(" · ")}
+                                  </p>
+                                ) : null}
+                              </section>
+                            ) : null}
+
+                            <section className="profile-panel">
+                              <span className="profile-panel-head">
+                                <CalendarDots
+                                  aria-hidden="true"
+                                  weight="fill"
+                                />
+                                Eventos
+                              </span>
+                              {events && events.total > 0 ? (
+                                <>
+                                  <div className="profile-stats">
+                                    <div className="profile-stat">
+                                      <strong>{events.total}</strong>
+                                      <span>Anotado</span>
+                                    </div>
+                                    <div className="profile-stat">
+                                      <strong>{events.confirmed}</strong>
+                                      <span>Confirmó</span>
+                                    </div>
+                                    <div className="profile-stat">
+                                      <strong>{events.bench}</strong>
+                                      <span>Bench</span>
+                                    </div>
+                                    <div className="profile-stat">
+                                      <strong>{events.no}</strong>
+                                      <span>No asistió</span>
+                                    </div>
+                                  </div>
+                                  {events.last ? (
+                                    <p className="profile-panel-note">
+                                      Último: {events.last.title} ·{" "}
+                                      {formatDate24(events.last.startsAt)}
+                                    </p>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <p className="profile-panel-note">
+                                  Todavía no se anotó a ningún evento.
+                                </p>
+                              )}
+                            </section>
+
+                            {games.length > 0 ? (
+                              <section className="profile-panel">
+                                <span className="profile-panel-head">
+                                  <GameController
+                                    aria-hidden="true"
+                                    weight="fill"
+                                  />
+                                  Juegos
+                                </span>
+                                <div className="profile-tags">
+                                  {games.map((game) => (
+                                    <span
+                                      className="profile-game"
+                                      key={game.name}
+                                    >
+                                      {game.name}
+                                      <em>{game.days}d</em>
+                                    </span>
+                                  ))}
+                                </div>
+                              </section>
+                            ) : null}
                           </div>
-                        ) : null}
-                      </div>
-                    </div>
+                        </>
+                      );
+                    })()
                   )}
                 </div>
               ) : activeTab === "comunicados" ? (

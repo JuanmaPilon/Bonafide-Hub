@@ -42,7 +42,7 @@ Canales / roles / miembros de Discord:
 1. `GET /guilds/:guildId/channels`
 2. `GET /guilds/:guildId/roles`
 3. `GET /guilds/:guildId/members`
-4. `GET /guilds/:guildId/members/:userId`
+4. `GET /guilds/:guildId/members/:userId` (perfil: identidad de Discord **+ `activity`** con XP y puesto, corte del mes, ficha del roster con alters, eventos, cartas de Karuta y juegos vistos)
 
 Config guild: `GET/PATCH /guilds/:guildId/config`
 
@@ -687,6 +687,25 @@ es el top 5 del mes en curso (chat + voz, que es la misma XP) y los meses
 anteriores quedan como historial. El nivel y el nombre/avatar salen de
 `xp_profiles`, que es donde vive la identidad conocida. La pestaña se llama
 **Home** (la ruta ya era `home`).
+
+**El perfil de un miembro junta todo lo que el hub ya sabe de esa persona.** La
+página ocupa el ancho de la estructura (`--shell-max`), como el resto de los
+módulos: arriba una sola tarjeta de identidad (portada de Discord o el color de
+acento, avatar, nombre, `@usuario`, booster, antigüedad, cartas raras, los roles
+con su color y el nivel con el puesto en el ranking) y abajo los bloques de
+actividad en dos columnas —**Actividad en Discord** (XP total, mensajes, horas de
+voz y XP del mes, más el detalle del mes con su puesto), **Ficha del roster**
+(clase + spec con el emoji del servidor, offs, etiquetas con su color y alters),
+**Eventos** (cuántos se anotó, cuántos confirmó, bench y no asistió, y el último)
+y **Juegos** (los que el bot vio, con la cantidad de días)—. Los bloques que no
+tienen datos no se muestran: quien no tiene ficha o no se anotó nunca no ve una
+caja vacía.
+
+Todo eso viene en **una sola llamada** (`activity` en el perfil), así la página no
+cruza leaderboard, roster y eventos por su cuenta: sin eso, el perfil dependía de
+que el leaderboard estuviera cargado y un miembro sin XP aparecía sin números.
+Los juegos salen de `member_game_activity`, que guarda **una fila por día** (no
+minutos): el número que se muestra es "días que se lo vio jugando".
 
 Auditoría (solo owner, readonly): `GET /guilds/:guildId/audit-logs`
 
