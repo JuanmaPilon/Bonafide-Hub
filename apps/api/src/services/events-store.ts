@@ -1055,20 +1055,83 @@ export async function getEventPlayerCharacter(
   return character;
 }
 
-// Datos recordados del jugador (los usa el bot para saber si el personaje que
-// tiene sirve para la clase que está eligiendo).
+// Datos recordados del jugador, para que el asistente del bot no le pregunte
+// clase y spec en cada evento: la ficha del roster (clase + spec, del mismo
+// juego) o, si no tiene ficha, cómo se anotó la última vez. El rol sale del
+// catálogo, porque la ficha no lo guarda.
+// `character` es el personaje recordado (con SU clase: el bot compara las dos
+// para saber si el nombre viejo sigue sirviendo).
+export type EventPlayerMemory = {
+  character?: string;
+  role?: string;
+  spec?: string;
+  wowClass?: string;
+};
+
 export async function getEventPlayerProfile(
   guildId: string,
   userId: string,
-): Promise<{ character?: string; wowClass?: string }> {
-  const record = await prisma.eventPlayerProfile.findUnique({
-    where: { guildId_userId: { guildId, userId } },
-    select: { character: true, wowClass: true },
-  });
-  return {
-    character: record?.character?.trim() || undefined,
-    wowClass: record?.wowClass?.trim() || undefined,
+  game?: string,
+): Promise<EventPlayerMemory> {
+  const [saved, profile, lastSignup] = await Promise.all([
+    prisma.eventPlayerProfile.findUnique({
+      where: { guildId_userId: { guildId, userId } },
+      select: { character: true, wowClass: true },
+    }),
+    prisma.rosterProfile.findUnique({
+      where: { guildId_userId: { guildId, userId } },
+      select: { className: true, game: true, specName: true },
+    }),
+    prisma.eventSignup.findFirst({
+      where: {
+        event: game ? { game } : undefined,
+        guildId,
+        userId,
+        wowClass: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { role: true, spec: true, wowClass: true },
+    }),
+  ]);
+
+  const memory: EventPlayerMemory = {
+    wowClass: saved?.wowClass?.trim() || undefined,
   };
+
+  // 1) La ficha del roster: es la clase y la spec que el miembro mantiene al
+  // día para raidear. Sólo vale si es del mismo juego que el evento.
+  const profileGame = profile?.game?.trim();
+  const profileClass = profile?.className?.trim();
+  const profileSpec = profile?.specName?.trim();
+  if (profileClass && profileSpec && (!game || profileGame === game)) {
+    const specs = await listRaidSpecs(guildId, game ?? profileGame);
+    const row = specs.find(
+      (spec) =>
+        spec.className === profileClass && spec.specName === profileSpec,
+    );
+    if (row) {
+      memory.wowClass = profileClass;
+      memory.role = row.role;
+      memory.spec = profileSpec;
+    }
+  }
+
+  // 2) Sin ficha (o una spec que ya no está en el catálogo): la última
+  // inscripción del mismo juego recuerda cómo se anotó.
+  if (!memory.spec && lastSignup?.wowClass) {
+    memory.wowClass = lastSignup.wowClass;
+    memory.role = lastSignup.role ?? undefined;
+    memory.spec = lastSignup.spec ?? undefined;
+  }
+
+  // El personaje recordado sólo sirve para la clase con la que se anotó: si el
+  // jugador cambió de clase (o la ficha dice otra) juega otro PJ y el bot se lo
+  // vuelve a pedir.
+  if (sameClass(saved?.wowClass, memory.wowClass)) {
+    memory.character = saved?.character?.trim() || undefined;
+  }
+
+  return memory;
 }
 
 // Guarda (o borra, con null) el personaje recordado del jugador.

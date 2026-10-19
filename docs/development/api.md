@@ -737,7 +737,14 @@ Tarde / Bench / No asisto), después el **rol** (Tank / Healer / Melee / Range,
 uno por botón con su etiqueta: antes eran círculos con un emoji), después
 **clase** y **spec** en dos desplegables —el catálogo entero como grilla de chips
 ocupaba media pantalla de alto— y al final el **personaje**. Cambiar de rol
-limpia la clase y la spec (el catálogo del rol anterior no aplica).
+limpia la clase y la spec.
+
+**El catálogo no se recorta por rol.** El desplegable de clase ofrece **todas**
+las clases del juego y el de spec **todas las de esa clase** (las del rol
+seleccionado primero). Antes la clase se filtraba por el rol que se estaba
+mirando, así que en "Tank" aparecían seis clases y una sola spec por clase; el
+rol ahora se **deriva** de la spec elegida (`chooseSpec` lo ajusta: Druid →
+Feral deja el rol en Melee).
 
 **Clase y spec muestran el emoji del servidor, no un emoji unicode.** Un
 `<select>` nativo no puede dibujar imágenes, así que son un botón con el emoji
@@ -748,6 +755,13 @@ Mapeo) y cae al unicode de la clase si el emoji se borró en Discord. El menú v
 por **portal** con `position: fixed` anclado al botón: la tarjeta del evento tiene
 `overflow: hidden` y un desplegable largo quedaba recortado. Se cierra con click
 afuera y con Escape, y sigue al botón si la página se mueve.
+
+**El título y las etiquetas van en la cabecera.** En el cuerpo de la tarjeta el
+título estaba repetido justo debajo del banner (que ya lo muestra dibujado en la
+portada), así que se sacó: el título es el `h2` del panel y las etiquetas
+(`ComunicadoTag`) van a su costado, en la misma fila centrada. En el cuerpo queda
+sólo la fila de **estados** (Pausado / Completado / Cerradas), y se omite cuando
+no hay ninguno.
 
 **Los grupos del roster van de a dos**: cada rol es un panel y entran **dos por
 fila** (Tank | Healer / Melee | Range), con el ancho justo para que
@@ -941,7 +955,7 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 7. `POST /internal/guilds/:guildId/karuta/grabs` (transferencia de posesión de una carta rara)
 8. `POST /internal/guilds/:guildId/karuta/cards` / `.../cards/burn` / `.../transfers` / `.../albums`
 9. `GET /internal/guilds/:guildId/events/specs?game=<juego>` (roles del juego + catálogo: alimenta el asistente de inscripción del bot)
-10. `GET /internal/guilds/:guildId/events/:eventId` (evento con sus inscripciones: el bot decide si abre el asistente o aplica el estado directo). Con `?userId=` agrega `event.playerCharacter` (el personaje recordado de ese jugador)
+10. `GET /internal/guilds/:guildId/events/:eventId` (evento con sus inscripciones: el bot decide si abre el asistente o aplica el estado directo). Con `?userId=` agrega lo que ya sabemos de ese jugador: `event.playerCharacter` / `event.playerCharacterClass` (personaje recordado y su clase) y `event.playerClass` / `event.playerSpec` / `event.playerRole` (cómo se anotó la última vez)
 11. `PUT /internal/guilds/:guildId/events/:eventId/signups` / `DELETE .../signups` / `DELETE .../signups/reset`
 12. `GET /internal/guilds/:guildId/events/control` (recordatorios e informes pendientes)
 13. `POST /internal/guilds/:guildId/events/:eventId/reminders-sent` / `.../report-sent`
@@ -984,7 +998,7 @@ Tablas:
 12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)
 13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`). Con `recurrenceEnabled` el evento es el **molde** de una serie: cada `recurrenceEveryDays` el motor crea una ocurrencia (evento nuevo con el mismo título, publicado `recurrencePublishDaysBefore` días antes). `POST /guilds/:g/events/:id/reset-occurrence` limpia la ocurrencia (avisos + recordatorios en Discord, inscripciones y marcadores) y mueve el molde a la próxima fecha libre de la serie, sin perder la serie.
 14. `event_signups` — inscripciones por evento y usuario (`status`, `role`, `wowClass`, `spec`, `character`)
-15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild
+15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild (con la clase con la que lo usó; la clase/spec del asistente salen de `roster_profiles` y, si no hay ficha, de la última `event_signups`)
 16. `event_player_characters` — PJ de un miembro ya confirmados en el cruce de asistencia de los logs (clave normalizada del nombre que figura en Warcraft Logs)
 17. `raid_specs` — catálogo de clases/specs por guild y JUEGO (`game`, `role`, `className`, `specName`, emoji custom)
 18. `event_images` — biblioteca de imágenes del módulo (data URL)

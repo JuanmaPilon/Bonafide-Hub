@@ -4295,17 +4295,36 @@ function EventCard({
     ? `${hoursFromMinutes(event.durationMinutes)} hs`
     : undefined;
 
-  // Clases presentes en el rol que se está explorando (con sus specs).
+  // Todas las clases del catálogo del juego (con sus specs). El rol NO recorta
+  // la lista: filtrando por rol el desplegable mostraba sólo las clases que
+  // cumplen ese rol, y elegida la clase aparecía una única spec. El rol se
+  // deriva de la spec elegida.
   const catalogClasses = useMemo(() => {
-    const rows = specs.filter((entry) => entry.role === catalogRole);
     const classes = new Map<string, RaidSpec[]>();
-    for (const row of rows) {
+    for (const row of specs) {
       const list = classes.get(row.className) ?? [];
       list.push(row);
       classes.set(row.className, list);
     }
     return [...classes.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [catalogRole, specs]);
+  }, [specs]);
+
+  // Specs de la clase elegida: primero las del rol que se está mirando (es el
+  // atajo del flujo del bot) y después el resto, para no esconder las off-spec.
+  const classSpecs = useMemo(() => {
+    if (!wowClass) {
+      return [];
+    }
+    return specs
+      .filter((row) => row.className === wowClass)
+      .sort((left, right) => {
+        const leftMatch = left.role === catalogRole ? 0 : 1;
+        const rightMatch = right.role === catalogRole ? 0 : 1;
+        return (
+          leftMatch - rightMatch || left.specName.localeCompare(right.specName)
+        );
+      });
+  }, [catalogRole, specs, wowClass]);
 
   // Spec actualmente elegido en el formulario (para mostrar su emoji).
   const currentSpecRow = specs.find(
@@ -4508,35 +4527,31 @@ function EventCard({
           </div>
         )}
         <div className="event-card-body">
-          <div className="event-card-head">
-            <strong>{event.title}</strong>
-            <div className="event-card-badges">
-              {paused ? (
-                <span className="event-card-status paused">
-                  <Pause aria-hidden="true" weight="fill" />
-                  Pausado
-                </span>
-              ) : null}
-              {event.status !== "scheduled" ? (
-                <span className={`event-card-status ${event.status}`}>
-                  {event.status === "cancelled" ? "Cancelado" : "Completado"}
-                </span>
-              ) : null}
-              {event.signupDeadline && signupsClosed && !paused ? (
-                <span className="event-card-status closed">
-                  <LockSimple aria-hidden="true" weight="fill" />
-                  Cerradas
-                </span>
-              ) : null}
-              {(event.tags ?? []).map((tag) => (
-                <ComunicadoTag
-                  color={tag.color}
-                  key={tag.label}
-                  label={tag.label}
-                />
-              ))}
+          {/* El título y las etiquetas viven en la cabecera del panel: acá sólo
+              quedan los estados, y la fila se omite si no hay ninguno. */}
+          {paused || event.status !== "scheduled" ? (
+            <div className="event-card-head">
+              <div className="event-card-badges">
+                {paused ? (
+                  <span className="event-card-status paused">
+                    <Pause aria-hidden="true" weight="fill" />
+                    Pausado
+                  </span>
+                ) : null}
+                {event.status !== "scheduled" ? (
+                  <span className={`event-card-status ${event.status}`}>
+                    {event.status === "cancelled" ? "Cancelado" : "Completado"}
+                  </span>
+                ) : null}
+                {event.signupDeadline && signupsClosed && !paused ? (
+                  <span className="event-card-status closed">
+                    <LockSimple aria-hidden="true" weight="fill" />
+                    Cerradas
+                  </span>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
           {/* Misma info que el aviso de Discord (mismos emojis y etiquetas),
             para que la web y el canal cuenten lo mismo. */}
           <div className="event-info-grid">
@@ -4891,7 +4906,7 @@ function EventCard({
                           </div>
                         ) : catalogClasses.length === 0 ? (
                           <div className="event-signup-no-catalog">
-                            Todavía no hay clases cargadas para ese rol.
+                            Todavía no hay clases cargadas para ese juego.
                           </div>
                         ) : (
                           <div className="event-signup-fields">
@@ -4900,18 +4915,6 @@ function EventCard({
                               onChange={(className) => {
                                 setWowClass(className);
                                 setSpec("");
-                                setRole(catalogRole);
-                                // La clase ya dice el rol: si el rol del
-                                // catálogo no era el que se estaba mirando, se
-                                // acomoda solo.
-                                const first = specs.find(
-                                  (row) =>
-                                    row.className === className &&
-                                    row.role === catalogRole,
-                                );
-                                if (first) {
-                                  setRole(first.role);
-                                }
                               }}
                               options={catalogClasses.map(([className]) => ({
                                 emoji: classEmojiFor(className),
@@ -4926,35 +4929,25 @@ function EventCard({
                               disabled={!wowClass}
                               label="Spec"
                               onChange={(specName) => {
-                                const chosen = specs.find(
-                                  (row) =>
-                                    row.role === role &&
-                                    row.className === wowClass &&
-                                    row.specName === specName,
+                                const chosen = classSpecs.find(
+                                  (row) => row.specName === specName,
                                 );
                                 if (chosen) {
                                   chooseSpec(chosen);
                                 }
                               }}
-                              options={specs
-                                .filter(
-                                  (row) =>
-                                    row.role === role &&
-                                    row.className === wowClass,
-                                )
-                                .map((row) => ({
-                                  emoji: {
-                                    animated: row.animated,
-                                    emojiId: row.emojiId,
-                                    emojiName: row.emojiName,
-                                    unicode: row.emojiUnicode,
-                                  },
-                                  fallback:
-                                    row.emojiUnicode ??
-                                    classEmoji(row.className),
-                                  label: row.specName,
-                                  value: row.specName,
-                                }))}
+                              options={classSpecs.map((row) => ({
+                                emoji: {
+                                  animated: row.animated,
+                                  emojiId: row.emojiId,
+                                  emojiName: row.emojiName,
+                                  unicode: row.emojiUnicode,
+                                },
+                                fallback:
+                                  row.emojiUnicode ?? classEmoji(row.className),
+                                label: row.specName,
+                                value: row.specName,
+                              }))}
                               placeholder={
                                 wowClass ? "Elegir…" : "Elegí una clase"
                               }
@@ -11971,7 +11964,22 @@ function App() {
                       weight="bold"
                     />
                   </button>
-                  <h2>{pageEvent ? pageEvent.title : panelTitle("eventos")}</h2>
+                  <div className="section-header-event-main">
+                    <h2>
+                      {pageEvent ? pageEvent.title : panelTitle("eventos")}
+                    </h2>
+                    {pageEvent?.tags?.length ? (
+                      <div className="event-card-badges">
+                        {pageEvent.tags.map((tag) => (
+                          <ComunicadoTag
+                            color={tag.color}
+                            key={tag.label}
+                            label={tag.label}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   {pageEvent && canAccess("eventos") ? (
                     <EventActionsMenu
                       busy={reportBusyEventId === pageEvent.id}

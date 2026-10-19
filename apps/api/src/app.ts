@@ -7728,13 +7728,17 @@ export function buildApp() {
           .code(404)
           .send({ ok: false, error: "Evento no encontrado" });
       }
-      // Con `?userId=` el bot recibe además el personaje RECORDADO de ese
-      // jugador y la CLASE con la que lo recordó, así puede exigirlo solo
-      // cuando de verdad falta (no pedirlo a quien ya lo cargó en otro evento,
-      // pero sí volver a pedirlo si cambió de clase: juega otro personaje).
+      // Con `?userId=` el bot recibe además lo que ya sabemos del jugador:
+      // personaje recordado (y su clase) y la clase/spec/rol con los que se
+      // anotó la última vez, así no se los vuelve a preguntar en cada evento y
+      // sólo los pide cuando cambia de clase.
       const query = request.query as { userId?: string };
       const profile = query.userId
-        ? await getEventPlayerProfile(params.guildId, query.userId)
+        ? await getEventPlayerProfile(
+            params.guildId,
+            query.userId,
+            event.game,
+          )
         : {};
       return {
         ok: true,
@@ -7743,6 +7747,9 @@ export function buildApp() {
           ...event,
           playerCharacter: profile.character ?? null,
           playerCharacterClass: profile.wowClass ?? null,
+          playerClass: profile.wowClass ?? null,
+          playerRole: profile.role ?? null,
+          playerSpec: profile.spec ?? null,
         },
       };
     },

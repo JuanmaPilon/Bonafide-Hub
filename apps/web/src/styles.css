@@ -6207,11 +6207,6 @@ select.list-order {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  justify-content: space-between;
-}
-
-.event-card-head strong {
-  font-size: 1.05rem;
 }
 
 .event-card-badges {
@@ -6688,6 +6683,16 @@ select.list-order {
   margin: 0;
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+/* Título + etiquetas del evento en el centro de la cabecera: las etiquetas van
+   al costado del título, no repetidas abajo junto a la portada. */
+.section-header-event-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 /* Ocupa el lugar de la tuerquita cuando el usuario no puede gestionar el

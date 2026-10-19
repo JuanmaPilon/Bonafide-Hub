@@ -92,6 +92,12 @@ type RemoteEvent = {
     // Clase con la que recordó ese personaje. Si no coincide con la clase que
     // elige ahora, el nombre viejo no sirve (juega otro personaje).
     playerCharacterClass?: string | null;
+    // Clase, spec y rol con los que se anotó la última vez (ficha del roster o
+    // última inscripción del mismo juego): si ya los tenemos, el estado directo
+    // no vuelve a abrir el asistente.
+    playerClass?: string | null;
+    playerRole?: string | null;
+    playerSpec?: string | null;
     signups?: RemoteSignup[];
     status?: string;
   };
@@ -623,7 +629,16 @@ async function handleQuickStatus(
   const needsWizard =
     status === "yes" || status === "bench" || status === "late";
 
-  if (needsWizard && !mine?.wowClass) {
+  // Lo que ya sabemos del jugador: su inscripción en ESTE evento o, si es la
+  // primera vez que toca este evento, cómo se anotó la última vez (ficha del
+  // roster o última inscripción del mismo juego). Así el estado directo no le
+  // vuelve a pedir clase y spec en cada raid; para cambiarlas está el botón
+  // "Clase y spec", que abre el asistente.
+  const knownClass = mine?.wowClass ?? event.playerClass ?? undefined;
+  const knownSpec = mine?.spec ?? event.playerSpec ?? undefined;
+  const knownRole = mine?.role ?? event.playerRole ?? undefined;
+
+  if (needsWizard && !knownClass) {
     await startRoleWizard(interaction, guildId, eventId, status);
     return;
   }
@@ -632,11 +647,11 @@ async function handleQuickStatus(
   // todavía; se lo pedimos con el modal (obligatorio) y la inscripción se
   // completa cuando lo envía. Solo para los estados que van al roster: quien
   // marca "no asisto" no necesita personaje.
-  if (needsWizard && needsCharacter(event, userId, mine?.wowClass)) {
+  if (needsWizard && needsCharacter(event, userId, knownClass)) {
     pendingSignups.set(pendingKey(userId, eventId), {
-      className: mine?.wowClass,
-      role: mine?.role,
-      specName: mine?.spec,
+      className: knownClass,
+      role: knownRole,
+      specName: knownSpec,
       status,
     });
     await openCharacterModal(interaction, eventId, { required: true });
@@ -644,15 +659,15 @@ async function handleQuickStatus(
   }
 
   const result = await putSignup({
-    character: usableCharacter(event, userId, mine?.wowClass),
+    character: usableCharacter(event, userId, knownClass),
     guildId,
     eventId,
-    role: mine?.role,
-    spec: mine?.spec,
+    role: knownRole,
+    spec: knownSpec,
     status,
     userId,
     username,
-    wowClass: mine?.wowClass,
+    wowClass: knownClass,
   });
   if (!result.ok) {
     await replyOnce(
@@ -661,9 +676,13 @@ async function handleQuickStatus(
     );
     return;
   }
+  // Se muestra con qué quedó anotado: si lo recordamos, se ve de dónde salió.
+  const detail = knownClass
+    ? ` · **${knownClass}${knownSpec ? ` — ${knownSpec}` : ""}**`
+    : "";
   await replyOnce(
     interaction,
-    `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}**. ✅`,
+    `Registrado: **${STATUS_TITLE[status] ?? "Asistir"}**${detail}. ✅`,
   );
 }
 
