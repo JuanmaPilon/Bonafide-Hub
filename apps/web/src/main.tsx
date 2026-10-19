@@ -7987,7 +7987,7 @@ function HomeView({
           <div className="section-header">
             <div>
               <h2>Podio del servidor</h2>
-              <p>Top 5 activos en el servidor.</p>
+              <p>Top 5 por nivel.</p>
             </div>
           </div>
           {loading ? (
@@ -8010,7 +8010,7 @@ function HomeView({
                     // al @id cuando no hay nick ni usuario.
                     username: entry.username ?? "",
                   }}
-                  meta={`Nivel ${entry.level} · ${entry.xp} XP`}
+                  meta={`Nivel ${entry.level}`}
                   nameStyle={colorFor(entry.level)}
                   onOpenProfile={onOpenProfile}
                   rank={PODIUM_LABELS[entry.rank - 1] ?? String(entry.rank)}

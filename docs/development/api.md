@@ -661,12 +661,15 @@ Home: la tarjeta principal son los **boosters** (los que bancan el server, con
 el acento de Nitro, el contador de boosts y una tarjeta por miembro —
 `.home-member-card`— porque es lo que más se mira) y abajo van tres de
 seguimiento, lado a lado (`.home-secondary`, `auto-fit` de 300 px: entran las tres,
-y si el panel se angosta bajan a dos y después a una): el **podio** por XP (top 5,
-con el color de rango de cada puesto —las variables `--podium-*`— y el del nivel en
-el nombre), los **raid leads** (`GET /guilds/:guildId/raid-leads`), que son los que
+y si el panel se angosta bajan a dos y después a una): el **podio** por nivel (top
+5 —"Top 5 por nivel"—, con el color de rango de cada puesto —las variables
+`--podium-*`—, el del nivel en el nombre y la fila mostrando **solo el nivel**: el
+XP es la medida del corte mensual, no de este), los **raid leads**
+(`GET /guilds/:guildId/raid-leads`), que son los que
 tienen el rol de Raid Officer mapeado en el roster —liviano a propósito: avatar,
 nick y usuario, porque la fila solo muestra quiénes son—, y los **activos del mes**
-(`GET /guilds/:guildId/xp/leaderboard/monthly`). Los leads salen ordenados por XP,
+(`GET /guilds/:guildId/xp/leaderboard/monthly` —"Top 5 personas más activas en el
+mes"—, que sí muestra el XP ganado en el mes). Los leads salen ordenados por XP,
 de mayor a menor (y sin perfil de XP al final), así el orden se lee igual que el
 del podio y no baila entre cargas. Las cajas ocupan el ancho completo sin
 importar cuántos miembros haya: la grilla de tarjetas usa `auto-fit` (con
