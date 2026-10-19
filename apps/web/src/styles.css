@@ -7029,11 +7029,9 @@ select.list-order {
 }
 
 /* La página del evento usa el ancho completo: la portada pasa a banner y el
-   detalle se abre en dos columnas. Cada una es su propia pila (el orden del DOM
-   no cambia): a la izquierda los datos y el roster, a la derecha la asistencia y
-   mi inscripción. Antes las columnas compartían las filas del grid y, con el
-   roster largo, la inscripción caía mucho más abajo que los contadores: quedaba
-   un hueco en el medio. */
+   detalle se abre en dos columnas (a la izquierda los datos y el roster; a la
+   derecha la asistencia, mi inscripción y las acciones). El orden del DOM queda
+   igual y lo resuelve el grid: así no hay que mover el markup de la tarjeta. */
 .event-page .event-card {
   border-radius: 18px;
 }
@@ -7076,15 +7074,21 @@ select.list-order {
   grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
   gap: 12px 22px;
   padding: 16px;
-  align-items: start;
 }
 
-.event-page .event-card-main,
-.event-page .event-card-side {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  min-width: 0;
+.event-page .event-card-head,
+.event-page .event-info-grid,
+.event-page .event-card-desc,
+.event-page .event-deadline,
+.event-page .event-roster,
+.event-page .event-roster-empty,
+.event-page .event-form-note {
+  grid-column: 1;
+}
+
+.event-page .event-card-assistance,
+.event-page .event-signup {
+  grid-column: 2;
 }
 
 .event-page .event-card-assistance {
@@ -7098,6 +7102,18 @@ select.list-order {
 @media (max-width: 900px) {
   .event-page .event-card-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .event-page .event-card-head,
+  .event-page .event-info-grid,
+  .event-page .event-card-desc,
+  .event-page .event-deadline,
+  .event-page .event-roster,
+  .event-page .event-roster-empty,
+  .event-page .event-form-note,
+  .event-page .event-card-assistance,
+  .event-page .event-signup {
+    grid-column: auto;
   }
 }
 

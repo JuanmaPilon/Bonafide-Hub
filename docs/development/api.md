@@ -733,15 +733,11 @@ Tres decisiones que no son obvias:
   roster que quedó de esa noche. El título de la página y de la pestaña del
   navegador es el del **evento**, con la vuelta a la lista en la cabecera del
   panel (en la fila del título, como el resto de las acciones de módulo).
-- El ancho se aprovecha con CSS y con dos pilas, no moviendo la tarjeta de sitio:
-  el cuerpo se vuelve un grid de dos columnas y cada columna es su propio grid con
-  lo suyo —`.event-card-main` (estados, datos, descripción y roster) y
-  `.event-card-side` (asistencia e inscripción)—. Antes las columnas compartían
-  las filas del grid: con el roster largo, la inscripción esperaba a que la
-  izquierda terminara y quedaba un hueco grande entre los contadores y el
-  formulario. Con las pilas, la derecha arranca arriba y baja sola. En pantallas
-  angostas (≤900 px) vuelve a una sola columna (primero el detalle y el roster, y
-  al final la asistencia con la inscripción).
+- El ancho se aprovecha con CSS, no moviendo el markup: el cuerpo de la tarjeta
+  se vuelve un grid de dos columnas y cada bloque se ubica con `grid-column`
+  (datos y roster a la izquierda; asistencia e inscripción a la derecha). Así el
+  orden del DOM sigue siendo el mismo que cuando el componente era una tarjeta de
+  la grilla, y en pantallas angostas (≤900 px) vuelve a una sola columna.
 
 **La portada se ve entera.** El banner mantiene el alto del formato 3:1, pero la
 imagen va con `object-fit: contain` en vez de `cover`: recortar el arte de una
