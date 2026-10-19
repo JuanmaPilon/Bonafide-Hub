@@ -6310,6 +6310,18 @@ select.list-order {
   gap: 10px;
 }
 
+/* Los que faltan anotarse, en la página del evento: misma fila de nombres que
+   el modal pero sin caja, porque vive adentro de la tarjeta del evento. */
+.event-card-missing {
+  display: grid;
+  gap: 8px;
+}
+
+.event-card-missing-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .event-card-desc {
   margin: 0;
   color: var(--muted);
@@ -7087,6 +7099,7 @@ select.list-order {
 }
 
 .event-page .event-card-assistance,
+.event-page .event-card-missing,
 .event-page .event-signup {
   grid-column: 2;
 }
@@ -7112,6 +7125,7 @@ select.list-order {
   .event-page .event-roster-empty,
   .event-page .event-form-note,
   .event-page .event-card-assistance,
+  .event-page .event-card-missing,
   .event-page .event-signup {
     grid-column: auto;
   }

@@ -860,6 +860,15 @@ bench); "Todos" limpia la selección y muestra los tres grupos con su rótulo. L
 confirmados y el bench salen de las inscripciones del evento; los que faltan, de
 `GET .../events/:eventId/roster`.
 
+**Los que faltan se ven en la página, no solo en el modal.** En la columna
+derecha de la página del evento —entre los contadores de asistencia y "Mi
+inscripción", que era el hueco que quedaba— el staff ve la lista **Faltan
+anotarse (N)** con el mismo tilde por nombre y los mismos botones de recordatorio,
+así no hay que abrir el modal para ver a quién falta y avisarle. Va **sin caja y
+sin filtros**: es la parte accionable, el detalle (confirmados, bench, filtros
+combinados) sigue en el modal. Por eso el roster se pide al entrar en la página,
+no recién al abrirlo (`loadRoster`, compartido con `openRoster`).
+
 **Recordatorio por MD.** En el grupo de los que faltan cada nombre tiene un
 tilde: el staff elige a mano y el botón `Recordar a N` manda
 `POST .../events/:eventId/remind`. Las dos acciones (`Seleccionar a los que

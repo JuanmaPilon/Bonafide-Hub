@@ -4410,6 +4410,19 @@ function EventCard({
     (signup) => signup.status === "bench",
   );
 
+  // El control del roster también vive en la página (el hueco de la columna
+  // derecha), así que los que faltan se piden al entrar en vez de esperar a que
+  // alguien abra el modal. Sólo staff: el endpoint es staff-only.
+  const rosterInline = canManage && (event.expectedCount ?? 0) > 0;
+  const rosterRequestedRef = useRef(false);
+  useEffect(() => {
+    if (!rosterInline || rosterRequestedRef.current) {
+      return;
+    }
+    rosterRequestedRef.current = true;
+    void loadRoster();
+  }, [rosterInline]);
+
   function toggleRosterFilter(key: RosterModalFilter): void {
     setRosterFilters((current) =>
       current.includes(key)
@@ -4460,11 +4473,7 @@ function EventCard({
     }
   }
 
-  async function openRoster(): Promise<void> {
-    setRosterOpen(true);
-    setRosterFilters(["missing"]);
-    setRosterSelected([]);
-    setReminderResult(null);
+  async function loadRoster(): Promise<void> {
     if (roster || rosterLoading) {
       return;
     }
@@ -4479,6 +4488,14 @@ function EventCard({
     } finally {
       setRosterLoading(false);
     }
+  }
+
+  async function openRoster(): Promise<void> {
+    setRosterOpen(true);
+    setRosterFilters(["missing"]);
+    setRosterSelected([]);
+    setReminderResult(null);
+    await loadRoster();
   }
 
   // Quitar la inscripción de otro miembro es destructivo: pide confirmación.
@@ -4964,6 +4981,83 @@ function EventCard({
               ))}
             </div>
           </div>
+
+          {/* Los que faltan anotarse, en el hueco de la columna derecha (entre
+            los contadores y mi inscripción). Sin caja ni filtros: es la parte
+            accionable del control del roster; el detalle sigue en el modal. */}
+          {rosterInline ? (
+            <div className="event-card-missing">
+            <span className="event-info-label">
+              <UserPlus aria-hidden="true" weight="fill" />
+              Faltan anotarse
+              {roster ? ` (${roster.missing.length})` : ""}
+            </span>
+            {rosterLoading ? (
+              <span className="event-card-missing-note">Cargando…</span>
+            ) : rosterError ? (
+              <span className="event-card-missing-note">{rosterError}</span>
+            ) : roster ? (
+              roster.missing.length === 0 ? (
+                <span className="event-card-missing-note">
+                  Están todos anotados.
+                </span>
+              ) : (
+                <>
+                  <RosterNameList
+                    entries={roster.missing.map((member) => ({
+                      bench: member.bench,
+                      label: member.username,
+                      userId: member.userId,
+                    }))}
+                    onOpen={onOpenProfile}
+                    onToggle={toggleRosterSelected}
+                    selected={rosterSelected}
+                  />
+                  {!signupsClosed ? (
+                    <div className="roster-remind-bar">
+                      <button
+                        className="ghost-button small"
+                        onClick={() =>
+                          setRosterSelected(
+                            rosterSelected.length === roster.missing.length
+                              ? []
+                              : roster.missing.map((member) => member.userId),
+                          )
+                        }
+                        type="button"
+                      >
+                        {rosterSelected.length === roster.missing.length
+                          ? "No seleccionar a nadie"
+                          : "Seleccionar a los que faltan"}
+                      </button>
+                      <button
+                        className="primary-button small"
+                        disabled={reminding || rosterSelected.length === 0}
+                        onClick={() => void sendReminders()}
+                        title="Le llega un MD del bot"
+                        type="button"
+                      >
+                        <BellRinging
+                          aria-hidden="true"
+                          size={16}
+                          weight="fill"
+                        />
+                        {reminding
+                          ? "Enviando…"
+                          : `Recordar a ${rosterSelected.length}`}
+                      </button>
+                      {reminderResult ? (
+                        <span className="roster-remind-result">
+                          {reminderResult}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              )
+            ) : null}
+          </div>
+          ) : null}
 
           {event.signups.length > 0 ? (
             <div className="event-roster">
