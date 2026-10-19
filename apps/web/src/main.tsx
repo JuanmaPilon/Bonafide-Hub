@@ -7841,31 +7841,6 @@ function EventReportModal({
 // app. El de los boosters lo pone el CSS del grid (es una sola lista).
 const HOME_LEAD_ACCENT = "201, 138, 27";
 
-const HOME_MONTH_NAMES = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
-
-// "2026-10" → "octubre". El mes del corte viene del API tal cual (`YYYY-MM`), así
-// que no se arma un Date: ese se cruzaría de mes por la zona horaria.
-function monthName(month: string | null): string | null {
-  if (!month) {
-    return null;
-  }
-
-  return HOME_MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? null;
-}
-
 // Fila de miembro de Home: la comparten el podio, los raid leads y los más
 // activos del mes (mismo alto, mismo avatar, mismo nombre linkeado al perfil;
 // cambia el acento).
@@ -7927,7 +7902,6 @@ function HomeView({
   loading,
   monthlyLeaders,
   monthlyLeadersLoading,
-  monthlyMonth,
   onOpenProfile,
   username,
 }: {
@@ -7940,13 +7914,11 @@ function HomeView({
   loading: boolean;
   monthlyLeaders: LeaderboardEntry[];
   monthlyLeadersLoading: boolean;
-  monthlyMonth: string | null;
   // Abre el perfil del miembro clickeado (podio, boosters y raid leads).
   onOpenProfile: (userId: string) => void;
   username: string | null;
 }) {
   const top5 = leaderboard.slice(0, 5);
-  const monthlyMonthLabel = monthName(monthlyMonth);
 
   return (
     <div className="home-view">
@@ -8077,9 +8049,7 @@ function HomeView({
           <div className="section-header">
             <div>
               <h2>Activos del mes</h2>
-              <p>
-                Top 5 de {monthlyMonthLabel ?? "este mes"} por XP de chat y voz.
-              </p>
+              <p>Top 5 personas más activas en el mes.</p>
             </div>
           </div>
           {monthlyLeadersLoading ? (
@@ -8611,7 +8581,6 @@ function App() {
   const [raidLeads, setRaidLeads] = useState<GuildMemberCard[]>([]);
   const [raidLeadsLoading, setRaidLeadsLoading] = useState(true);
   const [monthlyLeaders, setMonthlyLeaders] = useState<LeaderboardEntry[]>([]);
-  const [monthlyMonth, setMonthlyMonth] = useState<string | null>(null);
   const [monthlyLeadersLoading, setMonthlyLeadersLoading] = useState(true);
   // Guild de los datos que están en pantalla: al cambiar de guild hay que
   // limpiar, al cambiar de pestaña no.
@@ -11897,7 +11866,6 @@ function App() {
       .then((monthly) => {
         if (!cancelled) {
           setMonthlyLeaders(monthly.entries);
-          setMonthlyMonth(monthly.month);
         }
       })
       .catch(() => {
@@ -12352,7 +12320,6 @@ function App() {
             loading={loadingGuildData || boostersLoading}
             monthlyLeaders={monthlyLeaders}
             monthlyLeadersLoading={monthlyLeadersLoading}
-            monthlyMonth={monthlyMonth}
             onOpenProfile={openMemberProfile}
             username={username}
           />
