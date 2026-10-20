@@ -12259,6 +12259,118 @@ function App() {
     (section) => section.key === sectionFor("admin"),
   );
 
+  // Un tab de la barra. Se usa dos veces: los módulos van en el nav y Admin va
+  // al lado del perfil, separado de ellos.
+  const renderNavTab = (tab: HubTab): ReactNode => {
+    const isEvents = tab === "eventos";
+    const sections = TAB_SECTIONS[tab];
+    const visibleSections =
+      tab === "admin"
+        ? sections
+            ?.filter(
+              (section) =>
+                !section.module || canAccess(section.module),
+            )
+            .sort(
+              (left, right) =>
+                ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
+                ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
+            )
+        : sections;
+    // Eventos arma su propio menú (dinámico, con los eventos): es la
+    // forma de saltar de un evento a otro sin pasar por la lista.
+    const hasMenu = Boolean(visibleSections) || isEvents;
+    return (
+      <div
+        className={`nav-item${tab === "admin" ? " nav-item--admin" : ""}`}
+        key={tab}
+      >
+        <button
+          className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
+          onClick={
+            isEvents
+              ? goToEventsList
+              : hasMenu
+                ? undefined
+                : () => setActiveTab(tab)
+          }
+          type="button"
+        >
+          {tabLabel(tab)}
+          {hasMenu ? (
+            <span aria-hidden="true" className="nav-caret">
+              ▾
+            </span>
+          ) : null}
+        </button>
+        {/* Módulo con sub-secciones: al pasar el mouse (o al enfocar
+            con teclado) el nav ofrece cada página. */}
+        {hasMenu ? (
+          <div
+            className={`nav-submenu${isEvents ? " nav-submenu-events" : ""}`}
+          >
+            {isEvents ? (
+              <>
+                {canAccess("eventos") ? (
+                  <button
+                    className="nav-sublink nav-sublink-new"
+                    onClick={startNewEvent}
+                    type="button"
+                  >
+                    <Plus
+                      aria-hidden="true"
+                      weight="bold"
+                      className="nav-sublink-icon"
+                    />
+                    Nuevo evento
+                  </button>
+                ) : null}
+                {navEventMenu.map((entry) => (
+                  <button
+                    className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
+                    key={entry.id}
+                    onClick={() => openEvent(entry)}
+                    type="button"
+                  >
+                    <span className="nav-sublink-label">
+                      {entry.title}
+                    </span>
+                    <span className="nav-sublink-meta">
+                      {formatDayMonthShort(entry.startsAt)}
+                    </span>
+                  </button>
+                ))}
+                {navEventMenu.length === 0 && !eventsLoading ? (
+                  <span className="nav-submenu-empty">
+                    No hay eventos próximos.
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              visibleSections?.map((section) => (
+                <button
+                  className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
+                  key={section.key}
+                  onClick={() => goToSection(tab, section.key)}
+                  type="button"
+                >
+                  {section.label}
+                  {tab === "admin" && section.tier ? (
+                    <span
+                      className={`admin-nav-tier tier-${section.tier}`}
+                    >
+                      {accessTierLabel(section.tier)}
+                    </span>
+                  ) : null}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className="app-shell">
       <ToastViewport toasts={toasts} />
@@ -12289,115 +12401,14 @@ function App() {
           </button>
 
           <nav className="top-nav">
-            {visibleTabs.map((tab) => {
-              const isEvents = tab === "eventos";
-              const sections = TAB_SECTIONS[tab];
-              const visibleSections =
-                tab === "admin"
-                  ? sections
-                      ?.filter(
-                        (section) =>
-                          !section.module || canAccess(section.module),
-                      )
-                      .sort(
-                        (left, right) =>
-                          ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
-                          ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
-                      )
-                  : sections;
-              // Eventos arma su propio menú (dinámico, con los eventos): es la
-              // forma de saltar de un evento a otro sin pasar por la lista.
-              const hasMenu = Boolean(visibleSections) || isEvents;
-              return (
-                <div className="nav-item" key={tab}>
-                  <button
-                    className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
-                    onClick={
-                      isEvents
-                        ? goToEventsList
-                        : hasMenu
-                          ? undefined
-                          : () => setActiveTab(tab)
-                    }
-                    type="button"
-                  >
-                    {tabLabel(tab)}
-                    {hasMenu ? (
-                      <span aria-hidden="true" className="nav-caret">
-                        ▾
-                      </span>
-                    ) : null}
-                  </button>
-                  {/* Módulo con sub-secciones: al pasar el mouse (o al enfocar
-                      con teclado) el nav ofrece cada página. */}
-                  {hasMenu ? (
-                    <div
-                      className={`nav-submenu${isEvents ? " nav-submenu-events" : ""}`}
-                    >
-                      {isEvents ? (
-                        <>
-                          {canAccess("eventos") ? (
-                            <button
-                              className="nav-sublink nav-sublink-new"
-                              onClick={startNewEvent}
-                              type="button"
-                            >
-                              <Plus
-                                aria-hidden="true"
-                                weight="bold"
-                                className="nav-sublink-icon"
-                              />
-                              Nuevo evento
-                            </button>
-                          ) : null}
-                          {navEventMenu.map((entry) => (
-                            <button
-                              className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
-                              key={entry.id}
-                              onClick={() => openEvent(entry)}
-                              type="button"
-                            >
-                              <span className="nav-sublink-label">
-                                {entry.title}
-                              </span>
-                              <span className="nav-sublink-meta">
-                                {formatDayMonthShort(entry.startsAt)}
-                              </span>
-                            </button>
-                          ))}
-                          {navEventMenu.length === 0 && !eventsLoading ? (
-                            <span className="nav-submenu-empty">
-                              No hay eventos próximos.
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        visibleSections?.map((section) => (
-                          <button
-                            className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
-                            key={section.key}
-                            onClick={() => goToSection(tab, section.key)}
-                            type="button"
-                          >
-                            {section.label}
-                            {tab === "admin" && section.tier ? (
-                              <span
-                                className={`admin-nav-tier tier-${section.tier}`}
-                              >
-                                {accessTierLabel(section.tier)}
-                              </span>
-                            ) : null}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+            {visibleTabs
+              .filter((tab) => tab !== "admin")
+              .map(renderNavTab)}
           </nav>
 
           <div className="topbar-user">
+            {/* Admin va al lado del perfil, separado de los módulos. */}
+            {visibleTabs.includes("admin") ? renderNavTab("admin") : null}
             {guilds.length > 1 ? (
               <select
                 className="select guild-select"

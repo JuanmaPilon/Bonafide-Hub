@@ -237,6 +237,9 @@ Rules:
     nav items widens the header first — check it still fits on one line before
     bumping the variable, and cap what grows with the width (the event banner
     stops at 460px).
+11. **Admin lives next to the profile**, not with the modules: it renders inside
+    `.topbar-user` (`.nav-item--admin`), with its submenu anchored to the right
+    (`right: 0`) so it doesn't leave the screen. The nav holds only modules.
 
 ## Learning-First Delivery
 

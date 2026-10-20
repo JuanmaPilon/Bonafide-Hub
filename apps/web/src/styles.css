@@ -324,6 +324,19 @@ a:hover {
   display: flex;
 }
 
+/* Admin cierra la barra a la izquierda del perfil (vive dentro de
+   .topbar-user), no pegado al último módulo. */
+.nav-item--admin {
+  margin-left: 0;
+}
+
+/* El submenú de Admin se abre hacia la izquierda: está al final de la barra y
+   con `left: 0` se saldría de la pantalla. */
+.topbar-user .nav-submenu {
+  left: auto;
+  right: 0;
+}
+
 .nav-caret {
   margin-left: 5px;
   font-size: 0.65rem;
