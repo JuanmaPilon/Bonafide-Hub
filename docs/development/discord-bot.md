@@ -64,6 +64,16 @@
 
 ### Salas de voz dinámicas
 
+Al entrar al canal creador (`dynamicVoiceCreateChannelId`) el bot abre una sala
+propia, mueve a la persona y borra la sala cuando queda vacía.
+
+**Dónde se crean:** justo **debajo del canal creador**, no arriba del AFK. La
+posición es `posición del creador + 1 + las salas temporales que ya hay en esa
+categoría`, así las salas se apilan en el orden en que se crean (con
+`creador + 1` a secas, cada sala nueva aparecía arriba de las anteriores). Se
+usa `position` (el índice dentro de la categoría), nunca `rawPosition`:
+`setPosition` trabaja en índices y Discord deja huecos al borrar canales.
+
 Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 
 1. `/desperuanizar` — oculta la sala a los roles vetados (`bannedVoiceRoleIds`); agrega el sufijo ` 🚫🇵🇪` al nombre.

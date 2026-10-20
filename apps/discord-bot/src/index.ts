@@ -691,8 +691,12 @@ function startReminderScheduler(): void {
 async function createDynamicVoiceChannelForMember(newState: {
   guild: {
     id: string;
-    afkChannelId?: string | null;
     channels: {
+      cache?: {
+        get: (
+          channelId: string,
+        ) => { parentId?: string | null } | undefined;
+      };
       create: (options: {
         name: string;
         type: ChannelType.GuildVoice;
@@ -707,7 +711,11 @@ async function createDynamicVoiceChannelForMember(newState: {
     };
   };
   channelId: string | null;
-  channel: { parentId?: string | null; isVoiceBased: () => boolean } | null;
+  channel: {
+    parentId?: string | null;
+    position?: number;
+    isVoiceBased: () => boolean;
+  } | null;
   member?: { displayName: string; id: string } | null;
   setChannel: (channelId: string) => Promise<unknown>;
 }): Promise<void> {
@@ -726,24 +734,24 @@ async function createDynamicVoiceChannelForMember(newState: {
     return;
   }
 
-  // Dónde va la sala nueva. El canal AFK está casi siempre en la misma
-  // categoría que el canal creador, y la sala va justo ARRIBA de él: para eso
-  // pasamos el ÍNDICE del AFK dentro de la categoría (no `rawPosition`), porque
-  // `setPosition` trabaja en índices y Discord deja HUECOS al borrar canales
-  // (visto en producción: 0, 2, 3, 4, 6 → pasar `rawPosition - 1` mandaba la
-  // sala al último lugar, o sea DEBAJO del AFK: el caso intermitente que
-  // reportó el usuario). Si el AFK no está en la misma categoría, va al
-  // principio de la categoría del canal creador.
-  let targetPosition = 0;
-  if (newState.guild.afkChannelId) {
-    const afkChannel = await newState.guild.channels
-      .fetch(newState.guild.afkChannelId)
-      .catch(() => null);
-    if (hasRelativePosition(afkChannel)) {
-      const sameParent =
-        (afkChannel.parentId ?? null) === (creatorChannel.parentId ?? null);
-      targetPosition = sameParent ? Math.max(afkChannel.position, 0) : 0;
+  // Dónde va la sala nueva: justo DEBAJO del canal creador. Como Discord
+  // inserta en el índice indicado y corre el resto, la posición es la del
+  // creador + 1 + las salas temporales que ya existen en esa categoría: así las
+  // salas se apilan en el orden en que se crean (sin esto, cada sala nueva
+  // quedaba arriba de las anteriores).
+  // Se usa `position` (el índice dentro de la categoría), no `rawPosition`:
+  // `setPosition` trabaja en índices y Discord deja HUECOS al borrar canales.
+  let targetPosition = 1;
+  if (hasRelativePosition(creatorChannel)) {
+    const temporaryIds = new Set(guildConfig.temporaryVoiceChannelIds ?? []);
+    let existingInCategory = 0;
+    for (const id of temporaryIds) {
+      const room = newState.guild.channels.cache?.get(id);
+      if (room && (room.parentId ?? null) === (creatorChannel.parentId ?? null)) {
+        existingInCategory += 1;
+      }
     }
+    targetPosition = Math.max(creatorChannel.position, 0) + 1 + existingInCategory;
   }
 
   const createdChannel = await newState.guild.channels.create({
