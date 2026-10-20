@@ -231,6 +231,15 @@ async function sendToChannel(
 // Envía el/los recordatorio(s) vencidos de un evento y marca las horas como
 // enviadas en el API. Si no hay nadie que avisar igual se marca (nada que
 // hacer).
+//
+// `recentReminders` es la red de seguridad: si el API no guarda el marcador
+// (por ejemplo, porque la hora del aviso ya no existe en la config), el mismo
+// recordatorio volvía a salir en cada pasada — cada 60 s, para siempre. Con
+// esto, un mismo aviso (evento + horas) no se repite antes de
+// REMINDER_RESEND_MS, aunque el marcador no se haya guardado.
+const recentReminders = new Map<string, number>();
+const REMINDER_RESEND_MS = 6 * 60 * 60 * 1000;
+
 async function processReminder(
   guild: Guild,
   item: { dueHours: number[]; event: RemoteEvent },
@@ -239,6 +248,11 @@ async function processReminder(
   const roleId = event.requiredRoleId;
   const channelId = event.publishChannelId;
   if (!roleId || !channelId) {
+    return;
+  }
+  const reminderKey = `${event.id}:${[...item.dueHours].sort((a, b) => a - b).join(",")}`;
+  const lastSentAt = recentReminders.get(reminderKey) ?? 0;
+  if (Date.now() - lastSentAt < REMINDER_RESEND_MS) {
     return;
   }
   try {
@@ -282,6 +296,7 @@ async function processReminder(
       hours: item.dueHours,
       messageIds: reminderMessageIds,
     });
+    recentReminders.set(reminderKey, Date.now());
     console.log(
       `[event-control] Recordatorio enviado (${item.dueHours.join("/")}h) para "${event.title}" — ${missing.length} sin anotar`,
     );

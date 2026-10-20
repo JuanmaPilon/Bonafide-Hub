@@ -518,6 +518,32 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
   return records.map((record) => toEvent(record, roster));
 }
 
+// Horas de recordatorio que existen hoy: las dos que ofrece el form (24 h y
+// 2 h antes). Vive acá y no en el endpoint porque la lista de vencidos y el
+// "ya se envió" tienen que hablar del MISMO conjunto: cuando el normalizador
+// descartaba horas que la lista sí devolvía (un evento viejo con 48 h), el bot
+// mandaba el aviso y el marcador nunca se guardaba → el recordatorio se repetía
+// cada minuto.
+export const EVENT_REMINDER_HOURS = [24, 2] as const;
+
+// Deja solo horas válidas, sin duplicados y de mayor a menor.
+export function normalizeEventReminderHours(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const hours = new Set<number>();
+  for (const item of value) {
+    if (typeof item !== "number" || !Number.isFinite(item)) {
+      continue;
+    }
+    const hour = Math.round(item);
+    if ((EVENT_REMINDER_HOURS as readonly number[]).includes(hour)) {
+      hours.add(hour);
+    }
+  }
+  return Array.from(hours).sort((a, b) => b - a);
+}
+
 // Eventos próximos que ya tienen un recordatorio "vencido" por enviar (falta
 // X horas para startsAt y ese aviso todavía no se mandó). El bot los consume
 // periódicamente para avisar en el canal del aviso a quienes tienen el rol
@@ -537,7 +563,10 @@ export async function listReminderDueEvents(
     if (!event.requiredRoleId || !event.publishChannelId) {
       continue;
     }
-    if (event.reminderHours.length === 0) {
+    // Un evento viejo puede tener 48 h guardadas: se ignora esa hora en vez de
+    // devolverla (no hay forma de marcarla como enviada).
+    const reminderHours = normalizeEventReminderHours(event.reminderHours);
+    if (reminderHours.length === 0) {
       continue;
     }
     const startsMs = event.startsAt.getTime();
@@ -550,7 +579,7 @@ export async function listReminderDueEvents(
     if (deadlineMs !== undefined && nowMs > deadlineMs) {
       continue;
     }
-    const dueHours = event.reminderHours.filter((hours) => {
+    const dueHours = reminderHours.filter((hours) => {
       if (event.reminderSentHours.includes(hours)) {
         return false;
       }
@@ -784,7 +813,10 @@ export async function updateEvent(
 }
 
 // Marca como enviados ciertos recordatorios (horas) de un evento. Devuelve
-// el evento actualizado o null si no existe.
+// el evento actualizado o null si no existe. Las horas se guardan tal como las
+// reporta el bot (deduplicadas y redondeadas, sin filtrar): si el bot mandó un
+// aviso, el marcador tiene que quedar guardado aunque esa hora ya no esté en el
+// form. Filtrarlas acá dejaba al bot repitiendo el aviso para siempre.
 export async function markEventRemindersSent(
   guildId: string,
   eventId: string,
@@ -799,7 +831,12 @@ export async function markEventRemindersSent(
     return null;
   }
   const mergedHours = Array.from(
-    new Set([...current.reminderSentHours, ...hours]),
+    new Set([
+      ...current.reminderSentHours,
+      ...hours
+        .filter((hour) => Number.isFinite(hour))
+        .map((hour) => Math.round(hour)),
+    ]),
   );
   const mergedMessages = Array.from(
     new Set([...current.reminderMessageIds, ...messageIds]),

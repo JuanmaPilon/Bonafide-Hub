@@ -109,6 +109,23 @@ PresenceUpdate (intent GuildPresences, ya habilitado)
    miembro usa la misma tabla para sus **juegos más jugados** (ahí ordena por
    días, que es lo que importa cuando se mira a una persona).
 
+### Recordatorios de asistencia: el marcador y la lista tienen que hablar de lo mismo
+
+El bot recibe los recordatorios vencidos por `GET /internal/.../events/control`
+y avisa que ya los mandó por `POST /internal/.../events/:id/reminders-sent`. Si
+esas dos cosas no coinciden, el recordatorio **se repite en cada pasada** (cada
+60 s, para siempre): pasó con eventos viejos que tenían **48 h** guardadas
+mientras el marcador solo aceptaba 24 h y 2 h, así que nunca se guardaba nada.
+
+Dos defensas, en ese orden:
+
+1. La lista de vencidos filtra las horas con el **mismo** normalizador que el
+   form (`normalizeEventReminderHours` en `events-store`), y el marcador guarda
+   las horas tal como las reporta el bot (sin filtro): si el aviso salió, queda
+   registrado.
+2. El bot no repite el mismo aviso (evento + horas) antes de 6 h, aunque el API
+   no haya guardado el marcador.
+
 ### Inscripciones a eventos (Módulo X)
 
 El API publica el aviso-embed del evento con botones (`eventsign:{eventId}:{accion}`);

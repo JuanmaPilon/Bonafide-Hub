@@ -135,6 +135,7 @@ import {
   markEventRemindersSent,
   markEventReportSent,
   markEventSignupClosed,
+  normalizeEventReminderHours,
   resetEventOccurrence,
   resetSignup,
   setEventDiscordInfo,
@@ -2511,27 +2512,11 @@ export function refreshAllPublishedAnnouncements(): void {
   })();
 }
 
-// Horas de recordatorio válidas: las dos que ofrece el form (24 h y 2 h antes).
-// Normaliza: sin duplicados y ordenadas de mayor a menor. Un evento viejo que
-// tenía 48 h se queda sin ese recordatorio al guardarse.
-const REMINDER_HOURS = [24, 2] as const;
-
-function normalizeReminderHours(value: unknown): number[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const hours = new Set<number>();
-  for (const item of value) {
-    if (typeof item !== "number" || !Number.isFinite(item)) {
-      continue;
-    }
-    const hour = Math.round(item);
-    if ((REMINDER_HOURS as readonly number[]).includes(hour)) {
-      hours.add(hour);
-    }
-  }
-  return Array.from(hours).sort((a, b) => b - a);
-}
+// Horas de recordatorio válidas al guardar el evento: las dos que ofrece el
+// form (24 h y 2 h antes). Un evento viejo que tenía 48 h se queda sin ese
+// recordatorio al guardarse. La lista de válidas y el normalizador viven en
+// `events-store` porque la lista de vencidos usa el mismo conjunto.
+const normalizeReminderHours = normalizeEventReminderHours;
 
 // Días de recurrencia válidos (1 a 365). null = sin recurrencia.
 function normalizeRecurrenceDays(value: unknown): number | null {
