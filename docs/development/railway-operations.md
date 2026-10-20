@@ -168,6 +168,19 @@ El costo sale del cómputo de los servicios siempre encendidos: `API`, `Bot` y
    El `soft` avisa por email; el `hard` corta. El hard no puede ser menor al soft.
 3. El consumo se sigue en la misma pantalla de Usage.
 
+#### Memory: lo que hay que mirar
+
+La memoria es la línea más cara del proyecto. Los dos consumidores con
+crecimiento no acotado eran:
+
+1. **El cache de mensajes de discord.js** (bot): guarda en RAM cada mensaje que
+   ve y no lo suelta, así que la RAM sube hasta el próximo reinicio. El bot no
+   lee mensajes del cache (el historial se pide con `fetch`), así que
+   `MessageManager: 0` en `makeCache` no le saca nada.
+2. **El cache de análisis de raid logs** (API): cada entrada es una noche entera
+   (pulls, daño por jugador, muertes y consumibles), varios MB. Se bajó de 100
+   entradas / 10 min a **8 / 5 min**.
+
 #### Network Egress: qué lo genera y qué se hizo para bajarlo
 
 Es tráfico que **sale** del servicio: respuestas HTTP a la web, llamadas a

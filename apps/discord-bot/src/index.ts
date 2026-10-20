@@ -9,6 +9,7 @@ import {
   Events,
   GatewayIntentBits,
   Message,
+  Options,
   Partials,
   PermissionFlagsBits,
   type Guild,
@@ -78,8 +79,16 @@ const client = new Client({
     GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.MessageContent,
+  GatewayIntentBits.MessageContent,
   ],
+  // discord.js guarda en memoria CADA mensaje que ve y no lo suelta: en un
+  // server activo eso crece hasta reiniciar el proceso (era la RAM que subía
+  // día a día). El bot no lee mensajes del cache: el historial se pide con
+  // `fetch`, que sigue funcionando igual.
+  makeCache: Options.cacheWithLimits({
+  ...Options.DefaultMakeCacheSettings,
+  MessageManager: 0,
+  }),
   partials: [Partials.Message, Partials.Channel],
 });
 

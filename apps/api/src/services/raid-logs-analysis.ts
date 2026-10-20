@@ -214,8 +214,12 @@ type FightResult = {
   }>;
 };
 
-const ANALYSIS_CACHE_TTL_MS = 10 * 60 * 1000;
-const ANALYSIS_CACHE_LIMIT = 100;
+const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000;
+// Cada entrada es el análisis de una noche entera (pulls, daño por jugador,
+// muertes y consumibles): varios MB en RAM. Guardar 100 era quedarse con
+// cientos de MB de noches que nadie está mirando; con 8 alcanza para las que se
+// abren seguidas.
+const ANALYSIS_CACHE_LIMIT = 8;
 const ANALYSIS_CONCURRENCY = 3;
 // Dos reports de la misma noche marcan el mismo pull con unos segundos de
 // diferencia (cada uno arranca su reloj en un momento distinto).
