@@ -8034,13 +8034,23 @@ export function buildApp() {
         ...event,
         benchRoleId: benchRoleForGame(event.game, rankRoles.bench),
       });
+      // La portada del evento es una data URL (hasta ~1 MB en base64) y el bot
+      // no la usa: este endpoint se pide cada minuto, así que mandarla era
+      // egress puro.
+      const forBot = <T extends { game?: string; imageUrl?: string }>(
+        event: T,
+      ) => {
+        const { imageUrl: _imageUrl, ...rest } = withBench(event);
+        void _imageUrl;
+        return rest;
+      };
       return {
         ok: true,
         guildId: params.guildId,
-        reports: reports.map(withBench),
+        reports: reports.map(forBot),
         reminders: reminders.map((item) => ({
           ...item,
-          event: withBench(item.event),
+          event: forBot(item.event),
         })),
         // A dónde va el informe de asistencia (se configura en el panel): un
         // canal de texto, sin menciones.

@@ -126,6 +126,12 @@ Dos defensas, en ese orden:
 2. El bot no repite el mismo aviso (evento + horas) antes de 6 h, aunque el API
    no haya guardado el marcador.
 
+**La lista de miembros se cachea.** `guild.members.fetch()` sin argumentos baja
+la guild entera por REST (varios MB), y el control corre cada minuto: se pide una
+vez cada 2 minutos y el roster por rol se reusa dentro de la misma pasada. Un
+bucle de recordatorios, además de spamear el canal, multiplicaba ese gasto de
+egress.
+
 ### Inscripciones a eventos (Módulo X)
 
 El API publica el aviso-embed del evento con botones (`eventsign:{eventId}:{accion}`);

@@ -112,11 +112,17 @@ Conviene tenerlo claro porque cambia dónde mirar cuando algo no aparece:
 
 1. **Detectar reports nuevos es manual**: se dispara desde **Raids → Logs**
    ("Escanear"). No hay ningún proceso que recorra la guild de Warcraft Logs solo.
-2. **Refrescar los logs que ya están guardados es automático**: el scheduler de la
-   API los revisa cada 5 minutos (`apps/api/src/services/raid-logs-sync.ts`), así el
+2. **Refrescar los logs EN CURSO es automático**: el scheduler de la API los
+   revisa cada 5 minutos (`apps/api/src/services/raid-logs-sync.ts`), así el
    estado (en vivo / terminado), la cantidad de pulls y el resultado avanzan sin
-   que nadie apriete nada. Ese sync **no crea** logs nuevos y **saltea** los que
-   quedaron en estado `failed`: esos se reintentan con un escaneo manual.
+   que nadie apriete nada. Solo toca los que están en `new`/`live` y hace como
+   mucho **4 refrescos por pasada**.
+
+   Un log ya terminado (`synced`) **no** se refresca solo: cada refresco baja el
+   report completo de Warcraft Logs (varios MB), y bajarlo cada 5 minutos para
+   siempre era el mayor gasto de egress del proyecto. Los terminados se
+   actualizan a mano con **"Actualizar log"**. Tampoco entran los `failed`: esos
+   se reintentan con un escaneo manual.
 
 Revisar los logs de Railway de `API` al solicitar un escaneo:
 
@@ -161,6 +167,32 @@ El costo sale del cómputo de los servicios siempre encendidos: `API`, `Bot` y
 2. Por CLI: `railway usage limit set --target workspace --soft <aviso> --hard <tope>`.
    El `soft` avisa por email; el `hard` corta. El hard no puede ser menor al soft.
 3. El consumo se sigue en la misma pantalla de Usage.
+
+#### Network Egress: qué lo genera y qué se hizo para bajarlo
+
+Es tráfico que **sale** del servicio: respuestas HTTP a la web, llamadas a
+Discord y a Warcraft Logs. Un flujo periódico que baja datos grandes se nota al
+toque en la gráfica (escalones que suben y quedan).
+
+Lo que más pesa, de mayor a menor:
+
+1. **Reports de Warcraft Logs** (varios MB cada uno). Se bajan al escanear, al
+   apretar "Actualizar log" y —esto era el gasto grande— por el sync automático
+   de logs ya terminados cada 5 minutos. Ahora el sync solo toca los que están
+   en curso y como mucho 4 por pasada.
+2. **La lista de miembros de Discord** (`GET /guilds/:g/members`, ~1000 por
+   página). La pide la web con un cache de 4 minutos en la API, y el bot la pide
+   para armar los recordatorios con un cache de 2 minutos (antes la volvía a
+   bajar por cada evento: `guild.members.fetch()` sin argumentos).
+3. **La portada del evento** es una data URL de hasta ~1 MB y viajaba al bot en
+   `GET /internal/.../events/control`, que se pide cada minuto. El bot no la usa:
+   ya no se manda.
+4. **Assets de la web** (bundle) e imágenes: los sirve el servicio `Web`.
+
+Para saber **qué servicio** gasta, Railway muestra el detalle por servicio en
+*Usage → Network Egress* (y cada servicio tiene su propia gráfica en
+*Observability*). Un pico del `Bot` apunta a Discord; uno de la `API`, a Warcraft
+Logs o a la web.
 
 ### Cloudflare (DNS/CDN delante del dominio)
 

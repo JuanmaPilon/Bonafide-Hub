@@ -144,17 +144,44 @@ async function postAction(
   }
 }
 
+// Cache de la lista de miembros por guild. `guild.members.fetch()` sin
+// argumentos baja TODOS los miembros por REST (varios MB con una guild grande)
+// y el control corre cada minuto: sin cache, cada evento con recordatorio o
+// informe volvía a pedir la lista entera. 2 minutos es suficiente para que una
+// pasada use la misma foto y la siguiente la refresque.
+const MEMBERS_CACHE_MS = 2 * 60 * 1000;
+const membersFetchedAt = new Map<string, number>();
+
+async function ensureMembersLoaded(guild: Guild): Promise<boolean> {
+  const fetchedAt = membersFetchedAt.get(guild.id) ?? 0;
+  const cacheComplete =
+    guild.members.cache.size > 0 &&
+    guild.members.cache.size >= guild.memberCount;
+  // Si discord.js ya tiene la guild completa y la foto es reciente, no se
+  // vuelve a pedir.
+  if (cacheComplete && Date.now() - fetchedAt < MEMBERS_CACHE_MS) {
+    return true;
+  }
+  try {
+    await guild.members.fetch();
+    membersFetchedAt.set(guild.id, Date.now());
+    return true;
+  } catch (error) {
+    console.warn(
+      `[event-control] No se pudieron listar miembros de ${guild.id}: ${getErrorMessage(error)}`,
+    );
+    // Si ya había una lista (aunque vieja), se usa: es mejor que quedarse sin
+    // roster y mandar un aviso a nadie.
+    return cacheComplete;
+  }
+}
+
 // Miembros de la guild que tienen el rol indicado (con su displayName).
 async function fetchMembersWithRole(
   guild: Guild,
   roleId: string,
 ): Promise<Array<{ displayName: string; id: string }>> {
-  try {
-    await guild.members.fetch();
-  } catch (error) {
-    console.warn(
-      `[event-control] No se pudieron listar miembros de ${guild.id}: ${getErrorMessage(error)}`,
-    );
+  if (!(await ensureMembersLoaded(guild))) {
     return [];
   }
   const role = guild.roles.cache.get(roleId);
@@ -171,22 +198,37 @@ async function fetchMembersWithRole(
 // rol de Bench del roster. El bench es parte del roster (cuenta y se avisa),
 // pero va marcado para que el informe y el recordatorio no lo mezclen con el
 // core. Quien tiene los dos roles cuenta como core.
+const rosterCache = new Map<
+  string,
+  {
+    at: number;
+    members: Array<{ bench: boolean; displayName: string; id: string }>;
+  }
+>();
+
 export async function fetchRosterMembers(
   guild: Guild,
   requiredRoleId: string,
   benchRoleId?: string,
 ): Promise<Array<{ bench: boolean; displayName: string; id: string }>> {
+  const benchRole = benchRoleId?.trim();
+  const cacheKey = `${guild.id}:${requiredRoleId}:${benchRole ?? ""}`;
+  const cached = rosterCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < MEMBERS_CACHE_MS) {
+    return cached.members;
+  }
   const required = await fetchMembersWithRole(guild, requiredRoleId);
   const core = required.map((member) => ({ ...member, bench: false }));
-  const benchRole = benchRoleId?.trim();
-  if (!benchRole || benchRole === requiredRoleId) {
-    return core;
+  let members = core;
+  if (benchRole && benchRole !== requiredRoleId) {
+    const coreIds = new Set(core.map((member) => member.id));
+    const bench = (await fetchMembersWithRole(guild, benchRole))
+      .filter((member) => !coreIds.has(member.id))
+      .map((member) => ({ ...member, bench: true }));
+    members = [...core, ...bench];
   }
-  const coreIds = new Set(core.map((member) => member.id));
-  const bench = (await fetchMembersWithRole(guild, benchRole))
-    .filter((member) => !coreIds.has(member.id))
-    .map((member) => ({ ...member, bench: true }));
-  return [...core, ...bench];
+  rosterCache.set(cacheKey, { at: Date.now(), members });
+  return members;
 }
 
 // Quienes tienen rol (mínimo o bench) y NO tienen ninguna inscripción.
