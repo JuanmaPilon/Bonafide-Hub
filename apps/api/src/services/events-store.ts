@@ -467,7 +467,7 @@ function toEvent(
     game: record.game,
     guildId: record.guildId,
     id: record.id,
-    imageUrl: record.imageUrl ?? undefined,
+    imageUrl: publicEventImage(record),
     paused: record.paused,
     pollHours: record.pollHours ?? undefined,
     publishChannelId: record.publishChannelId ?? undefined,
@@ -516,6 +516,50 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
   });
   const roster = await rosterClassesFor(records, guildId);
   return records.map((record) => toEvent(record, roster));
+}
+
+// Ruta pública de la portada de un evento. La imagen se guarda como data URL
+// (Discord la necesita así para el embed), pero mandarla embebida en cada
+// respuesta era el mayor gasto de egress del proyecto: una portada son hasta
+// ~14 MB de base64, y la lista las manda todas juntas. La web la pide por esta
+// ruta y el navegador la cachea (`?v=` cambia cuando cambia el evento).
+export function eventImagePath(
+  guildId: string,
+  eventId: string,
+  updatedAt: Date,
+): string {
+  return `/public/guilds/${encodeURIComponent(guildId)}/events/${encodeURIComponent(eventId)}/image?v=${updatedAt.getTime()}`;
+}
+
+// Lo que ve el cliente: la ruta en vez de la data URL. Una URL externa pegada a
+// mano se deja igual.
+function publicEventImage(record: {
+  guildId: string;
+  id: string;
+  imageUrl: string | null;
+  updatedAt: Date;
+}): string | undefined {
+  const value = record.imageUrl;
+  if (!value) {
+    return undefined;
+  }
+  return value.startsWith("data:")
+    ? eventImagePath(record.guildId, record.id, record.updatedAt)
+    : value;
+}
+
+// La data URL de verdad (solo para Discord y para el endpoint que sirve la
+// imagen). El resto del API entrega la ruta.
+export async function getEventImageDataUrl(
+  guildId: string,
+  eventId: string,
+): Promise<string | undefined> {
+  const record = await prisma.hubEvent.findFirst({
+    select: { imageUrl: true },
+    where: { guildId, id: eventId },
+  });
+  const value = record?.imageUrl;
+  return value?.startsWith("data:") ? value : undefined;
 }
 
 // Horas de recordatorio que existen hoy: las dos que ofrece el form (24 h y
@@ -1421,9 +1465,7 @@ export type EventImage = {
   updatedAt: Date;
 };
 
-export async function listEventImages(guildId: string): Promise<EventImage[]> {
-  const records = await prisma.eventImage.findMany({
-    where: { guildId },
+export async function listEventImages(guildId: string): Promise<EventImage[]> {  const records = await prisma.eventImage.findMany({    where: { guildId },
     orderBy: { createdAt: "desc" },
   });
   return records.map((record) => ({
@@ -1434,6 +1476,33 @@ export async function listEventImages(guildId: string): Promise<EventImage[]> {
     name: record.name ?? undefined,
     updatedAt: record.updatedAt,
   }));
+}
+
+// Ruta pública de una imagen de la biblioteca y sus bytes. La lista entrega la
+// ruta (no la data URL): la biblioteca viajaba entera en cada apertura del form
+// de eventos.
+export function eventLibraryImagePath(
+  guildId: string,
+  imageId: string,
+): string {
+  return `/public/guilds/${encodeURIComponent(guildId)}/events/images/${encodeURIComponent(imageId)}`;
+}
+
+export async function getEventImageData(
+  guildId: string,
+  imageId: string,
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  const record = await prisma.eventImage.findFirst({
+select: { dataUrl: true },
+where: { guildId, id: imageId },
+  });
+  const match = record?.dataUrl.match(
+/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/,
+  );
+  if (!match) {
+return null;
+  }
+  return { buffer: Buffer.from(match[2], "base64"), mimeType: match[1] };
 }
 
 export async function createEventImage(input: {

@@ -2139,12 +2139,38 @@ export async function applyEventTemplate(
 
 export type EventImage = {
   createdAt: string;
-  dataUrl: string;
+  // Solo viene en la respuesta de una subida (los bytes recién subidos). El
+  // listado entrega `url`: mandar la biblioteca como data URLs era el mayor
+  // gasto de egress del form de eventos.
+  dataUrl?: string;
   guildId: string;
   id: string;
   name?: string;
   updatedAt: string;
+  url?: string;
 };
+
+// Bytes de una imagen de la biblioteca, como data URL, para elegirla como
+// portada del evento (el API guarda portadas como data URL).
+export async function getEventImageDataUrl(
+  guildId: string,
+  imageId: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/public/guilds/${guildId}/events/images/${imageId}`,
+    { method: "GET" },
+  );
+  if (!response.ok) {
+    throw new Error("No se pudo leer la imagen");
+  }
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
 
 export async function getEventImages(guildId: string): Promise<EventImage[]> {
   const data = await requestJson<{ images: EventImage[] }>(

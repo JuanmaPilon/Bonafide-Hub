@@ -132,6 +132,9 @@ import {
   listReminderDueEvents,
   listReportPendingEvents,
   listPublishedUpcomingEvents,
+  eventLibraryImagePath,
+  getEventImageData,
+  getEventImageDataUrl,
   markEventRemindersSent,
   markEventReportSent,
   markEventSignupClosed,
@@ -2309,7 +2312,7 @@ async function syncAndStoreEventDiscord(input: {
     guildIconUrl: await fetchGuildIconUrl(event.guildId),
     guildId: event.guildId,
     gameLabel: resolveGameLabel(eventConfig, event.game),
-    imageUrl: event.imageUrl,
+    imageUrl: await getEventImageDataUrl(event.guildId, event.id),
     options: discordOpts,
     ownRecurrenceEveryDays:
       event.recurrenceEnabled && event.recurrenceEveryDays
@@ -2399,7 +2402,7 @@ async function refreshEventAnnouncement(
       guildIconUrl: await fetchGuildIconUrl(guildId),
       guildId,
       gameLabel: resolveGameLabel(eventConfig, event.game),
-      imageUrl: event.imageUrl,
+      imageUrl: await getEventImageDataUrl(guildId, event.id),
       location:
         event.discordEventConfig?.entityType === "external"
           ? event.discordEventConfig.location
@@ -7156,9 +7159,9 @@ export function buildApp() {
     return { ok: true, guildId: params.guildId, spec };
   });
 
-  // Imagen de un evento por URL pública (sin sesión): Discord la necesita
-  // para renderizar la imagen subida a la web (data URL) dentro del embed.
-  // El id del evento ya es un identificador difícil de adivinar (cuid).
+  // Imagen de un evento por URL pública (sin sesión): la usan el embed de
+  // Discord y la web para mostrar la portada. El id del evento ya es un
+  // identificador difícil de adivinar (cuid) y la respuesta se cachea un día.
   app.get(
     "/public/guilds/:guildId/events/:eventId/image",
     async (request, reply) => {
@@ -7169,8 +7172,10 @@ export function buildApp() {
       if (!params.guildId || !params.eventId) {
         return reply.code(400).send({ ok: false, error: "Missing params" });
       }
-      const event = await getEvent(params.guildId, params.eventId);
-      const imageUrl = event?.imageUrl;
+      const imageUrl = await getEventImageDataUrl(
+        params.guildId,
+        params.eventId,
+      );
       if (!imageUrl?.startsWith("data:image/")) {
         return reply.code(404).send({ ok: false, error: "Not found" });
       }
@@ -7205,8 +7210,41 @@ export function buildApp() {
     }
 
     const images = await listEventImages(params.guildId);
-    return { ok: true, guildId: params.guildId, images };
+    // La biblioteca se pide cada vez que se abre el form: mandar cada imagen
+    // como data URL (hasta ~14 MB cada una) era el gasto más grande de egress.
+    // Va la ruta; los bytes los sirve `/public/.../events/images/:id` y el
+    // navegador los cachea.
+    return {
+      ok: true,
+      guildId: params.guildId,
+      images: images.map((image) => ({
+        createdAt: image.createdAt,
+        id: image.id,
+        name: image.name,
+        url: eventLibraryImagePath(params.guildId as string, image.id),
+      })),
+    };
   });
+
+  // Bytes de una imagen de la biblioteca (sin sesión: la usa la web para
+  // mostrarla y para elegirla como portada).
+  app.get(
+    "/public/guilds/:guildId/events/images/:imageId",
+    async (request, reply) => {
+      const params = request.params as { guildId?: string; imageId?: string };
+      if (!params.guildId || !params.imageId) {
+        return reply.code(400).send({ ok: false, error: "Missing params" });
+      }
+      const image = await getEventImageData(params.guildId, params.imageId);
+      if (!image) {
+        return reply.code(404).send({ ok: false, error: "Not found" });
+      }
+      return reply
+        .header("Content-Type", image.mimeType)
+        .header("Cache-Control", "public, max-age=86400")
+        .send(image.buffer);
+    },
+  );
 
   app.post("/guilds/:guildId/events/images", async (request, reply) => {
     const session = await requireSession(request);
@@ -7249,7 +7287,16 @@ export function buildApp() {
       name: body.name?.trim() || undefined,
     });
 
-    return { ok: true, guildId: params.guildId, image };
+    // Se devuelve también la ruta: quien la sube ya tiene los bytes en memoria,
+    // pero la lista de la biblioteca usa rutas desde ahora.
+    return {
+      ok: true,
+      guildId: params.guildId,
+      image: {
+        ...image,
+        url: eventLibraryImagePath(params.guildId, image.id),
+      },
+    };
   });
 
   app.delete(

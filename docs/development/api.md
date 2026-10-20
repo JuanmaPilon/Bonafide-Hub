@@ -1027,10 +1027,18 @@ mantiene la que ya tiene cacheada.
 lo que se **guarda** no es ese archivo: antes de subirlo se reduce al ancho máximo
 de pantalla (`UPLOAD_IMAGE_MAX_WIDTH`, 1920 px) y se recodifica (WebP; JPEG si no
 hay soporte; PNG si la imagen tiene transparencia, que el JPEG aplanaría a negro).
-Sin esa reducción, subir el límite solo serviría para llenar la base de megas: el
-data URL viaja en la lista de eventos y en la biblioteca. El límite del API
-(`14_000_000` caracteres en el data URL, y `bodyLimit` de 16 MB) está calculado
-sobre el archivo ya reducido, con margen para el base64.
+El límite del API (`14_000_000` caracteres en el data URL, y `bodyLimit` de 16 MB)
+está calculado sobre el archivo ya reducido, con margen para el base64.
+
+**Las imágenes no viajan en las respuestas.** El data URL se guarda (Discord lo
+necesita para el embed), pero la portada de un evento y las imágenes de la
+biblioteca se entregan como **ruta pública con cache de un día**
+(`/public/.../events/:id/image?v=<updatedAt>` y `/public/.../events/images/:id`).
+Con el límite de 10 MB, mandarlas embebidas en cada lista de eventos y en cada
+apertura del form era el mayor gasto de egress del proyecto. La web resuelve la
+ruta con `apiAssetUrl`; al elegir una imagen de la biblioteca pide sus bytes una
+vez (`getEventImageDataUrl` en `api.ts`) porque la portada se sigue guardando como
+data URL.
 
 1. `GET/POST /guilds/:guildId/events`
 2. `GET /guilds/:guildId/events/games` -> `{ games: [{ key, label, roles, configured }] }` (juegos disponibles con sus roles; `configured: false` = roles de plantilla)
@@ -1043,9 +1051,10 @@ sobre el archivo ya reducido, con margen para el base64.
 9. `PATCH/DELETE /guilds/:guildId/events/specs/:specId`
 10. `GET /guilds/:guildId/events/templates` (plantillas disponibles; lo ve el staff de eventos: módulo `eventos`)
 11. `POST /guilds/:guildId/events/templates/:templateKey/apply` (agrega/actualiza ESE juego en `eventGames` y precarga su catálogo sin borrar nada; esto sí es configuración: módulo `config`)
-12. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca de imágenes)
+12. `GET/POST/DELETE /guilds/:guildId/events/images` (biblioteca; el listado entrega `url`, no el data URL)
 13. `POST /guilds/:guildId/events/:eventId/remind` (recordatorio por MD a los que faltan anotarse; recibe `{ userIds }` y devuelve `{ sent, failed }`)
-14. `GET /public/guilds/:guildId/events/:eventId/image` (imagen pública para el embed de Discord)
+14. `GET /public/guilds/:guildId/events/:eventId/image` (portada del evento, cacheada)
+15. `GET /public/guilds/:guildId/events/images/:imageId` (bytes de una imagen de la biblioteca)
 
 ## 4. Endpoint interno para bot
 

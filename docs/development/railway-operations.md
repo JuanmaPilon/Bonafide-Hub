@@ -184,9 +184,14 @@ Lo que más pesa, de mayor a menor:
    página). La pide la web con un cache de 4 minutos en la API, y el bot la pide
    para armar los recordatorios con un cache de 2 minutos (antes la volvía a
    bajar por cada evento: `guild.members.fetch()` sin argumentos).
-3. **La portada del evento** es una data URL de hasta ~1 MB y viajaba al bot en
-   `GET /internal/.../events/control`, que se pide cada minuto. El bot no la usa:
-   ya no se manda.
+3. **Las portadas y las imágenes de la biblioteca de eventos.** Se guardan como
+   data URL (Discord las necesita así para el embed), pero las respuestas del API
+   entregan una **ruta** (`/public/.../events/:id/image` y
+   `/public/.../events/images/:id`) con cache de un día. Antes viajaban embebidas
+   en cada lista de eventos y en cada apertura del form —con el límite de 10 MB
+   por imagen, eso son decenas de MB por request—. El bot tampoco las recibe ya
+   en `events/control`. El uso saliente de la API sigue existiendo: la imagen se
+   guarda como data URL.
 4. **Assets de la web** (bundle) e imágenes: los sirve el servicio `Web`.
 
 Para saber **qué servicio** gasta, Railway muestra el detalle por servicio en

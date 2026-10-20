@@ -104,6 +104,7 @@ import {
   getAuditLogs,
   getEventAttendance,
   getEventRoster,
+  getEventImageDataUrl,
   remindEventSignups,
   getGuildBoosters,
   getGuildGameActivity,
@@ -3938,6 +3939,24 @@ function eventTypeIcon(type: string) {
 // del evento (cuándo es, cómo viene la asistencia y mi estado). Todo el detalle
 // —roster por rol, mi inscripción, acciones de staff— vive en esa página, que es
 // donde entra cómodo; en la grilla cada tarjeta mostraba el evento entero y por
+// La portada de un evento puede venir como ruta del API (`/public/...`, lo
+// normal: así no viaja embebida en cada respuesta) o como data URL / URL
+// externa cuando se acaba de elegir en el form. Para mostrar, siempre se
+// resuelve acá.
+function eventImageSrc(imageUrl: string | undefined | null): string {
+  if (!imageUrl) {
+    return "";
+  }
+  return imageUrl.startsWith("/") ? apiAssetUrl(imageUrl) : imageUrl;
+}
+
+// ¿La portada del form es una imagen NUEVA (data URL o URL pegada)? Si viene
+// como ruta del API significa que no se tocó y no hay que reenviarla: el API
+// conserva la que ya tiene.
+function isNewEventImage(imageUrl: string): boolean {
+  return imageUrl === "" || !imageUrl.startsWith("/public/");
+}
+
 // eso el módulo quedaba apretado.
 function EventSummaryCard({
   event,
@@ -3983,7 +4002,7 @@ function EventSummaryCard({
     >
       <span className="event-tile-cover">
         {event.imageUrl ? (
-          <img alt="" src={event.imageUrl} />
+          <img alt="" src={eventImageSrc(event.imageUrl)} />
         ) : (
           <span aria-hidden="true" className="event-tile-cover-fallback">
             <TypeIcon weight="fill" />
@@ -4767,11 +4786,15 @@ function EventCard({
         {event.imageUrl ? (
           <div
             className="event-card-image-wrap"
-            style={{ "--event-image": `url("${event.imageUrl}")` } as CSSProperties}
+            style={
+              {
+                "--event-image": `url("${eventImageSrc(event.imageUrl)}")`,
+              } as CSSProperties
+            }
           >
             <img
               className="event-card-image"
-              src={event.imageUrl}
+              src={eventImageSrc(event.imageUrl)}
               alt={event.title}
             />
           </div>
@@ -10154,7 +10177,11 @@ function App() {
         name: file.name,
       });
       setEventImages((current) => [image, ...current]);
-      setEventForm((current) => ({ ...current, imageUrl: image.dataUrl }));
+      // La subida devuelve los bytes (los tenemos acá); el listado no.
+      setEventForm((current) => ({
+        ...current,
+        imageUrl: image.dataUrl ?? dataUrl,
+      }));
       pushToast("Imagen subida a la biblioteca.", "success");
     } catch (error) {
       pushToast(
@@ -10164,6 +10191,29 @@ function App() {
     } finally {
       setUploadingImage(false);
       changeEvent.target.value = "";
+    }
+  }
+
+  // Elegir una imagen de la biblioteca como portada. La biblioteca llega con
+  // rutas (no data URLs), así que los bytes se piden recién al elegirla: es la
+  // única que hace falta y el navegador ya la tiene cacheada de la miniatura.
+  async function pickLibraryImage(image: EventImage): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    if (image.dataUrl) {
+      const dataUrl = image.dataUrl;
+      setEventForm((current) => ({ ...current, imageUrl: dataUrl }));
+      return;
+    }
+    try {
+      const dataUrl = await getEventImageDataUrl(selectedGuildId, image.id);
+      setEventForm((current) => ({ ...current, imageUrl: dataUrl }));
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : "No se pudo leer la imagen.",
+        "error",
+      );
     }
   }
 
@@ -10226,7 +10276,11 @@ function App() {
 
     // La imagen se guarda re-encuadrada para que el aviso de Discord no quede
     // más angosto que el resto (ver embed-image.ts).
-    const imageUrl = await padImageForEmbed(eventForm.imageUrl);
+    // Si la portada no se tocó (viene como ruta del API) no se reenvía: mandarla
+    // de vuelta era devolverle al servidor lo mismo que acaba de mandar.
+    const imageUrl = isNewEventImage(eventForm.imageUrl)
+      ? await padImageForEmbed(eventForm.imageUrl)
+      : undefined;
 
     setCreatingEvent(true);
     try {
@@ -15265,7 +15319,7 @@ function App() {
                                 <img
                                   alt="Imagen del evento"
                                   className="event-image-thumb"
-                                  src={eventForm.imageUrl}
+                                  src={eventImageSrc(eventForm.imageUrl)}
                                 />
                               ) : (
                                 <span className="event-image-thumb empty">
@@ -15295,7 +15349,8 @@ function App() {
                                     }
                                     placeholder="…o pegar una URL"
                                     value={
-                                      eventForm.imageUrl.startsWith("data:")
+                                      eventForm.imageUrl.startsWith("data:") ||
+                                      !isNewEventImage(eventForm.imageUrl)
                                         ? ""
                                         : eventForm.imageUrl
                                     }
@@ -15331,12 +15386,12 @@ function App() {
                                         <img
                                           alt={image.name ?? "Imagen"}
                                           onClick={() =>
-                                            setEventForm((current) => ({
-                                              ...current,
-                                              imageUrl: image.dataUrl,
-                                            }))
+                                            void pickLibraryImage(image)
                                           }
-                                          src={image.dataUrl}
+                                          src={
+                                            image.dataUrl ??
+                                            eventImageSrc(image.url)
+                                          }
                                         />
                                         <button
                                           aria-label="Eliminar de la biblioteca"
