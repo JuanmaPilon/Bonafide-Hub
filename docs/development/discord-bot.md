@@ -212,6 +212,38 @@ componentes anidados). Si vuelven a faltar wishlists, comparar el JSON crudo del
 mensaje (`GET /channels/:id/messages`) con lo que espera `parseCardCompanionDrop`:
 el log del backfill dice cuántos mensajes de otros bots vio y cuántos traían `♡`.
 
+### El tono de Karpindomo (frases aleatorias)
+
+Karpindomo es el mayordomo de la comunidad: un capincho que habla en "usted", dice
+"Señor/Senior", arranca con un emoji y cierra con un remate. No es cosmético: es
+la voz del bot en todos los avisos que la gente ve.
+
+Cada aviso sale de un **repertorio** (`pickRandom` sobre un array) en vez de un
+texto fijo, así el servidor no lee la misma frase dos veces:
+
+| Aviso | Dónde | Repertorio |
+| --- | --- | --- |
+| Entrada al servidor | `formatWelcomeMessage` | `WELCOME_TEMPLATES` |
+| Salida, kick o ban | `formatLeaveMessage` | `FAREWELL_TEMPLATES` / `KICK_TEMPLATES` / `BAN_TEMPLATES` (según el audit log) |
+| Subida de nivel | anuncio de rank | `LEVEL_UP_TEMPLATES` |
+| Timer creado | `/settimer` (respuesta privada) | `timerReplies` |
+| Recordatorio de timer | scheduler → DM | `TIMER_TEMPLATES` |
+| Sala trancada / destrancada | `/lock` / `/unlock` | `LOCK_CHANNEL_BUTLER_MESSAGES` / `UNLOCK_CHANNEL_BUTLER_MESSAGES` |
+| Sala oculta / visible | `/desperuanizar` / `/reperuanizar` | `BAN_CHANNEL_BUTLER_MESSAGES` / `UNBAN_CHANNEL_BUTLER_MESSAGES` |
+| Mensaje del loro | `postRandomMessage` | `BUTLER_OPENERS` + la frase que escribió el staff |
+| Burbuja del hub | `KarpindomoWidget` (web) | `KARPINDOMO_LINES` |
+
+Dos reglas para agregar frases:
+
+1. **No perder datos.** El texto puede cambiar entero, pero lo que el aviso
+   informa tiene que seguir estando: el id de la persona (`-# <@id>` en el pie del
+   log de salida, que sobrevive aunque cambie el nick), el motivo del ban o kick
+   (`{reason}`), quién lo hizo (`{moderator}`) y la hora del timer (`<t:…:R>`).
+2. **No cambiar el significado de una respuesta de comando.** Las respuestas
+   efímeras de confirmación o de error dicen lo mismo en todas sus variantes: si
+   el aviso dice que el comando solo sirve dentro de una sala temporal, tiene que
+   entenderse, por más florida que sea la frase.
+
 ## 4. Sistema de XP
 
 1. XP por mensaje (`messageXp`) y por minuto en voz (`voiceXpPerMinute`).

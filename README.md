@@ -28,11 +28,12 @@ Discord, los permisos por rol y el registro de todo lo que se cambió.
 
 ## La app, módulo por módulo
 
-### Inicio
+### Home
 
 La vidriera de la comunidad. Arriba y bien grande, los **boosters** de Nitro (los
-que bancan el server) en tarjetas; abajo, lado a lado, el **podio** con el top 5
-por XP y los **raid leads** (los officers de raid del roster, ordenados por XP).
+que bancan el server) en tarjetas; abajo, tres columnas: el **podio** con el top 5
+por nivel, los **raid leads** (los officers de raid del roster, ordenados por XP) y
+los **activos del mes** (quién más sumó en el mes en curso).
 
 ### Dashboard
 
@@ -77,6 +78,11 @@ CSV o PDF) y el historial. Las imágenes de los avisos se suben desde el hub
 El juego de cartas de la comunidad: qué cartas raras aparecieron (con su print y
 las wishlists), las colecciones de cada uno y una guía de los comandos de Karuta.
 
+### Torneos
+
+El lugar está reservado en el menú con el cartel de **bajo mantenimiento**: la
+pestaña existe, el contenido todavía no.
+
 ### Sugerencias
 
 Un formulario que llega por mensaje privado a los rangos que el staff haya
@@ -85,7 +91,8 @@ elegido.
 ### Panel Admin
 
 Todas las tarjetas de administración, cada una visible solo para el rango que
-corresponde:
+corresponde. En la barra de arriba no está con los módulos: vive al lado del chip
+del perfil, porque no es algo que la comunidad navegue.
 
 | Sección | Para qué |
 | --- | --- |
@@ -103,7 +110,11 @@ corresponde:
 
 ### Perfil, tema y Karpindomo
 
-El chip del usuario abre su perfil (roles con sus colores, booster, antigüedad).
+El chip del usuario abre su **perfil** a todo el ancho: la portada de Discord con
+el avatar, el nombre y los roles con sus colores, el nivel y el puesto en el
+ranking, y dos bloques de actividad: cuánta XP, mensajes y voz lleva (más lo que
+sumó en el mes) y los **juegos más jugados** con sus portadas.
+
 Hay tema claro y oscuro, y una burbuja de chat de **Karpindomo**, el asistente de
 la comunidad, que aparece con frases cada tanto.
 
@@ -133,6 +144,9 @@ quitarse.
 - Los roles y los prefijos de nombre por nivel se sincronizan solos.
 - Las salas de voz temporales se crean al entrar y se borran al quedar vacías.
 - El loro publica sus frases a intervalos aleatorios.
+- Cada aviso de Karpindomo (bienvenida, salida, expulsión, subida de nivel, timer,
+  sala trancada o destrancada) sale con una frase distinta de un repertorio, para
+  que no repita el mismo texto dos veces.
 - Los logs de raid en curso se refrescan cada 5 minutos.
 - Los juegos que se juegan se toman de las presencias de Discord.
 - Los recordatorios de eventos, el cierre de inscripciones y la recurrencia se
@@ -159,7 +173,7 @@ quitarse.
 apps/
   api/           API HTTP, sesiones, persistencia y publicación en Discord
   discord-bot/   Bot: comandos, eventos, XP, música, salas de voz
-  web/           Hub en React (Inicio, Dashboard, Raids, Eventos, Admin)
+  web/           Hub en React (Home, Dashboard, Raids, Eventos, Karuta, Admin…)
 
 docs/
   development/   Documentación técnica y operativa
@@ -186,12 +200,31 @@ cd apps/web && npm install && npm run dev
 El bot tiene un modo de respaldo: si la API no responde, sigue funcionando con la
 configuración local que guarda en disco.
 
+## Cómo se construyó
+
+No salió de un diseño en papel: se construyó por fases, cada una pidiendo la
+anterior (el XP pidió persistencia, el análisis de raid pidió el roster, el
+informe de asistencia pidió eventos y análisis, el perfil pidió todo lo demás).
+Tres ideas sostienen el resto:
+
+- **Una fuente de verdad por dato.** Si el bot y la web pueden cambiar lo mismo,
+  el dato vive en la API y los dos la llaman.
+- **Pasos chicos y verificados contra la app real.** Un cambio de UI no está
+  terminado hasta que se ve bien en pantalla; un cálculo, hasta que se prueba con
+  datos de verdad.
+- **La documentación va en el mismo commit que el código.** Después es documentar
+  otra cosa.
+
+El proceso completo, las fases y las trampas que costaron tiempo están en
+[docs/development/process.md](docs/development/process.md).
+
 ## Documentación
 
 | Documento | Qué vas a encontrar |
 | --- | --- |
-| [docs/README.md](docs/README.md) | Índice de la documentación |
+| [docs/README.md](docs/README.md) | Índice de la documentación y por dónde empezar |
 | [docs/development/architecture.md](docs/development/architecture.md) | Cómo está armado todo y cómo se hablan las piezas |
+| [docs/development/process.md](docs/development/process.md) | Cómo se fue construyendo y qué se aprendió en el camino |
 | [docs/development/api.md](docs/development/api.md) | La app en detalle: qué hace cada módulo de la web y cada endpoint |
 | [docs/development/discord-bot.md](docs/development/discord-bot.md) | El bot: comandos, eventos y automatizaciones |
 | [docs/development/railway-operations.md](docs/development/railway-operations.md) | Despliegue, variables, límites de costo y diagnóstico |

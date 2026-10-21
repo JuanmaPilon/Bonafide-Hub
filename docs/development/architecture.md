@@ -1,5 +1,8 @@
 # Architecture Overview
 
+Cómo está armado el sistema. Para el porqué de las decisiones y el orden en que se
+construyó, ver [process.md](process.md).
+
 ## 1. Componentes
 
 1. `apps/discord-bot`
@@ -23,19 +26,23 @@
 - Logs de raid: sincroniza con Warcraft Logs, analiza la noche y publica en Discord/web
 - Módulo de eventos ("Módulo X"): eventos por juego, inscripciones, publicación en
   Discord (scheduled event + aviso-embed con botones), roster y asistencia
-- Roster de raids: fichas, estados y rangos (lo comparten la web y los raid leads de Inicio)
+- Roster de raids: fichas, estados y rangos (lo comparten la web y los raid leads de Home)
 - Karuta: cartas raras, wishlists y álbumes (con las imágenes cacheadas)
 - Sugerencias: las manda por DM a los rangos configurados
-- Boosters, widget del servidor y raid leads para Inicio
+- Boosters, widget del servidor y raid leads para Home
 - Tareas periódicas que hacen avanzar el estado sin intervención (ver §9)
 
 3. `apps/web`
 
 - UI de Guild Hub (React + Vite)
-- Inicio (tarjeta de boosters al frente y, debajo, el podio por nivel, los raid
-  leads y los más activos del mes), dashboard, comunicados, raids (roster y logs),
-  eventos, karuta, torneos (por ahora sólo el cartel de "Bajo mantenimiento"),
-  sugerencias y panel admin
+- Home (tarjeta de boosters al frente y, debajo, tres tarjetas: el podio por
+  nivel, los raid leads y los activos del mes), dashboard, comunicados, raids
+  (roster y logs), eventos, karuta, torneos (por ahora sólo el cartel de "Bajo
+  mantenimiento"), sugerencias y perfil. Home y Perfil no son módulos apagables:
+  son la puerta y la ficha de cada persona
+- La barra de navegación es **Home + los módulos activos + Admin**. Admin no va
+  entre los módulos: vive al lado del chip del perfil, con su submenú anclado a la
+  derecha (`right: 0`) para no salirse de la pantalla
 - En el panel admin, "Plantillas" es el catálogo de tipos de evento y "Eventos" el
   historial en **calendario** (mes con una tarjeta por evento, buscador con salto
   a los meses con coincidencias y el informe de cada noche en una ventana, con el
@@ -189,6 +196,9 @@ Tablas:
 17. `karuta_cards` / `karuta_card_images` / `karuta_wishlists` — cartas raras, arte cacheado y wishlists
 18. `karuta_albums` / `karuta_album_pages` — álbumes (comando `ka`) y sus páginas cacheadas
 19. `member_game_activity` — 1 fila por persona + juego + día (presencias de Discord)
+20. `xp_monthly_profiles` — XP y contadores por persona y mes; se escribe en la
+    misma operación que `xp_profiles` y alimenta el ranking "Activos del mes" de
+    Home. El perfil histórico no se toca: el corte mensual es una fila aparte
 
 ## 9. Tareas periódicas
 
@@ -199,7 +209,9 @@ multiplique.
 `apps/api`:
 
 1. Cada 1 min — cierre de inscripciones, recurrencia y auto-completado de eventos
-2. Cada 5 min — refresh de los logs de raid ya guardados (`raid-logs-sync.ts`)
+2. Cada 5 min — refresh de los logs de raid **en vivo** (`raid-logs-sync.ts`): sólo
+   `new`/`live` y con tope por pasada (`MAX_REFRESHES_PER_PASS`). Un log ya
+   terminado no se vuelve a bajar: era el grueso del egress
 3. Cada 15 min — imágenes de cartas y álbumes de Karuta (con throttle de 10 min)
 4. Cada 24 h — limpieza de perfiles de XP de quien dejó el servidor
 
@@ -214,6 +226,23 @@ multiplique.
 
 1. Cada 30 s — portadas de los juegos más jugados (con caché en `sessionStorage`)
 2. Cada 60 s — estado del servidor y ranking
+
+## 9.1 Memoria y costo
+
+Dos cosas que no se ven en el código pero explican la mayoría de las decisiones
+de este tipo:
+
+1. **Cache de discord.js.** El cliente descarta `MessageManager`
+   (`Options.cacheWithLimits`): los avisos se editan por id, no hace falta tener
+   los mensajes en memoria, y ese cache crecía hasta reiniciar el proceso.
+2. **Lo que viaja en cada respuesta.** Una imagen embebida como data URL en un
+   payload que se pide cada minuto se paga cada minuto. Las imágenes de eventos se
+   guardan como data URL (Discord las necesita para el embed) pero el API entrega
+   una ruta cacheable (`/public/.../events/:id/image?v=`), y el bot no recibe la
+   portada cuando no cambió.
+3. **Cachés con tope.** El análisis de un log (`ANALYSIS_CACHE_LIMIT = 8`, TTL 5
+   min) y la lista de miembros de la guild en el bot (2 min) existen para no
+   repetir trabajo caro, no para guardar historia.
 
 ## 10. Decisiones operativas
 
@@ -244,13 +273,14 @@ Bot (cada ~2 min) -> lee config + frases habilitadas -> programa un timer aleato
 Web (Raids -> Logs) -> "Escanear": detecta reports NUEVOS de la guild/realm
    -> API consulta Warcraft Logs y guarda/refresca borradores en raid_logs
 
-API (cada 5 min) -> refresca los logs ya guardados: cantidad de pulls, kills y
-   estado (en vivo / terminado). No crea logs nuevos y saltea los que fallaron.
+API (cada 5 min) -> refresca sólo los logs EN VIVO (new/live, con tope por
+   pasada): cantidad de pulls, kills y estado. No crea logs nuevos, saltea los
+   que fallaron y no vuelve a bajar un report terminado.
 
 Web -> acción Publicar -> API envía la entrada agrupada al canal de Discord
 Web -> acción Actualizar -> API refresca y edita el mensaje publicado
 Web -> análisis de la noche -> API pide el detalle del report y lo cruza con los
-   anotados del evento; el resultado se cachea 10 min
+   anotados del evento; el resultado se cachea 5 min (8 análisis)
 Web -> informe del evento (Admin -> Eventos) -> la misma API de asistencia, pero
    pedida por evento: busca el log de esa noche (±14 h) y devuelve quién vino,
    incluidos los del roster esperado que no respondieron (su presencia se cruza
@@ -277,7 +307,11 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
 ```
 
 1. `enabledModules` (guild_configs) decide qué tabs se muestran en la web.
-   Vacío/ausente = todos visibles. Solo el owner lo edita.
+   Vacío/ausente = todos visibles. Solo el owner lo edita. Es una **lista blanca**:
+   un módulo nuevo (Torneos) hay que prenderlo, y la entrada directa por enlace a
+   una pestaña apagada rebota al Dashboard.
+   Home y Perfil no están en la lista: son la puerta y la ficha de cada persona y
+   se ven siempre.
 2. `admin_role_modules` asocia roles de Discord a módulos del Admin
    (config, comunicados, raids, daily, xp, karuta, eventos).
 3. La UI agrupa el staff en tiers para mostrar quién tiene qué:
@@ -286,6 +320,9 @@ Web -> GET /guilds/:guildId/admin-access -> { owner, modules }
    `STAFF_TIER_MODULES` (API) y tienen que coincidir: config/xp → admin,
    daily/karuta → officer, comunicados/eventos/raids → sub officer. Las páginas
    del panel Admin se muestran según el módulo de cada una (`section.module`).
+   La decisión "¿puedo ver Admin?" espera a que `admin-access` responda: si se
+   resuelve mientras la respuesta viaja, entrar a `#/admin/...` (o refrescar ahí)
+   manda al Dashboard.
 4. Los guardados parciales de configuración y los del bot no modifican
    `admin_role_modules`. Esa relación solo se reemplaza cuando el owner guarda
    explícitamente la tarjeta de permisos de staff.
@@ -338,7 +375,7 @@ Inscripción
 Web (Raids -> Roster) -> GET /guilds/:g/roster -> fichas + rangos + clase de cada uno
 Cada persona -> PUT /guilds/:g/roster/me  ("Agregar/Modificar mi ficha")
 Staff -> estado (raid | bench | null) -> API cambia el rol de Discord y registra la acción
-Inicio -> GET /guilds/:g/raid-leads -> los que tienen el rol de Raid Officer, por XP
+Home -> GET /guilds/:g/raid-leads -> los que tienen el rol de Raid Officer, por XP
 ```
 
 1. El estado de la tarjeta es exactamente el rol de Discord que tiene el miembro:
@@ -368,3 +405,33 @@ Web (tab Karuta) -> Raras, Colecciones y la guía de comandos
    Discord expiran y el arte se perdía.
 2. Los umbrales de rareza (print / wishlist) se configuran en el Admin y deciden
    qué entra en la lista de raras.
+
+## 20. Flujo de Home y del perfil
+
+Ninguna de las dos escribe nada: son vistas que juntan lo que ya existe.
+
+```text
+Home -> GET /guilds/:g/boosters          (quién banca el Nitro)
+      -> GET /guilds/:g/xp/leaderboard   (podio: top 5 por nivel)
+      -> GET /guilds/:g/raid-leads       (raid officers, por XP)
+      -> GET /guilds/:g/xp/leaderboard/monthly  (activos del mes)
+      -> GET /guilds/:g/widget           (miembros, online, boosts)
+
+Perfil -> GET /guilds/:g/members/:userId
+      -> identidad y roles: del bot (avatar, banner, roles con color, booster, antigüedad)
+      -> xp, mensajes, minutos en voz y puesto en el ranking: xp_profiles
+      -> activity: { xp, month, games[], karutaCards }
+            month  -> xp_monthly_profiles
+            games  -> member_game_activity, con las portadas que ya usa el dashboard
+            cartas -> karuta_cards
+```
+
+1. El **corte mensual** se escribe cuando se suma XP, no cuando se consulta: por
+   eso `addXp` toca `xp_profiles` y `xp_monthly_profiles` en la misma operación.
+2. Los **juegos más jugados** de una persona ordenan por días jugados (a una
+   persona le importa la constancia); el dashboard de la guild ordena por cuánta
+   gente distinta jugó cada juego.
+3. Las portadas no viven en la base: el API resuelve el `cover_image_hash` de la
+   aplicación de Discord (cache de 24 h) y arma la URL de la CDN; el hub se queda
+   con esas URLs en el navegador para que no aparezcan de golpe al cambiar de
+   pestaña.

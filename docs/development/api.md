@@ -1,5 +1,23 @@
 # API Guide
 
+Cómo está armado el API y **por qué** cada módulo hace lo que hace. No es un
+inventario de rutas: cada bloque cuenta la decisión que hay detrás (qué se guarda,
+qué se valida, qué se delega al bot) y cómo lo consume el hub. Para el mapa
+general, ver [architecture.md](architecture.md).
+
+## Índice
+
+1. [Stack](#1-stack) — con qué está hecho
+2. [Variables de entorno](#2-variables-de-entorno) — qué necesita para arrancar
+3. [Endpoints públicos](#3-endpoints-públicos) — todo lo que pide la web, por módulo
+   - [Análisis de la noche desde el mensaje](#análisis-de-la-noche-desde-el-mensaje)
+   - [Piezas compartidas del panel Admin](#piezas-compartidas-del-panel-admin)
+   - [Módulo de eventos](#módulo-de-eventos-módulo-x)
+4. [Endpoint interno para bot](#4-endpoint-interno-para-bot) — el único canal con el bot
+5. [Auditoría](#5-auditoría) — qué se registra y quién lo lee
+6. [Persistencia Prisma](#6-persistencia-prisma) — las tablas
+7. [Notas de OAuth](#7-notas-de-oauth) — sesiones y cookies
+
 ## 1. Stack
 
 1. Fastify
@@ -49,6 +67,10 @@ Config guild: `GET/PATCH /guilds/:guildId/config`
 Permisos de staff (acceso del Admin del hub): `GET /guilds/:guildId/admin-access` → `{ owner, modules }` (qué módulos del Admin puede ver el usuario según su rol de Discord; el owner siempre tiene todo)
 
 Sugerencias del hub: `POST /guilds/:guildId/suggestions` → la API la envía por DM a los rangos configurados en `suggestionsDmTiers` (`owner`, `admin` y/o `officer`). Si no hay rangos seleccionados, se usa el owner.
+
+Torneos: la pestaña existe en el hub con el cartel de "Bajo mantenimiento" y no
+tiene endpoints todavía. El módulo está en la lista blanca (`enabledModules`), así
+que se prende o se apaga como cualquier otro.
 
 Comunicados:
 
@@ -279,10 +301,12 @@ pulls repetidos, y lo que se suma de los otros queda informado en `source`
 cambia con el idioma del cliente que subió el log.
 
 Análisis de una noche de raids: `GET /guilds/:guildId/raid-logs/:logId/analysis`.
-Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 10
-minutos por entrada y se apoya en dos consultas a la API v1 de Warcraft Logs:
-`tables/summary` (roles) y `events` con `filter=type in ('combatantinfo')`
-(quién estaba en cada pull y qué auras tenía activas).
+Se calcula a pedido (la web lo pide al abrir "Ver análisis"), se cachea 5 minutos
+(8 análisis como máximo en memoria) y se apoya en dos consultas a la API v1 de
+Warcraft Logs: `tables/summary` (roles) y `events` con
+`filter=type in ('combatantinfo')` (quién estaba en cada pull y qué auras tenía
+activas). El cache es corto a propósito: cada análisis pide MBs, y guardar muchos
+termina costando memoria sin que nadie los vuelva a abrir.
 
 Devuelve:
 
@@ -643,7 +667,7 @@ personaje suyo —el recordado o un PJ ya confirmado— aparece en el log), así
 informe puede decir de cada persona si jugó o no sin cruzar los nombres de nuevo
 en la web. Ese cruce de los que no respondieron se hace **en el endpoint** y no en
 el análisis cacheado, porque el roster esperado es del evento y no del log: del
-análisis (cacheado 10 minutos) sale lo caro, que es la llamada a Warcraft Logs.
+análisis (cacheado 5 minutos) sale lo caro, que es la llamada a Warcraft Logs.
 Prueba como mucho dos logs candidatos por cercanía en ±14 h y acepta solo el que
 reconoce ese evento, así abrir el informe no dispara el análisis de otras noches.
 
@@ -1073,6 +1097,12 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 11. `PUT /internal/guilds/:guildId/events/:eventId/signups` / `DELETE .../signups` / `DELETE .../signups/reset`
 12. `GET /internal/guilds/:guildId/events/control` (recordatorios e informes pendientes)
 13. `POST /internal/guilds/:guildId/events/:eventId/reminders-sent` / `.../report-sent`
+
+> **Las horas de los recordatorios tienen una sola fuente.** `GET .../events/control`
+> filtra los vencidos con el mismo normalizador que acepta el form
+> (`normalizeEventReminderHours` en `events-store`) y el marcador guarda las horas
+> tal como las reporta el bot. Cuando la lista aceptaba 48 h y el marcador solo
+> 24 h y 2 h, el aviso salía, no se registraba y se repetía cada minuto.
 
 > **Merge selectivo en el PUT de config**: el bot no conoce todos los campos que administra el hub (módulos, sugerencias, permisos de staff, logs de raid). El PUT interno **solo fusiona los campos propios del bot** (`temporaryVoiceChannelIds`, canales del loro, `defaultRoleId`, `musicRoleIds`, etc.) sobre la config actual. Los campos del hub se preservan y el bot nunca los resetea.
 
