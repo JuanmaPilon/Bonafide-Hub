@@ -67,12 +67,21 @@
 Al entrar al canal creador (`dynamicVoiceCreateChannelId`) el bot abre una sala
 propia, mueve a la persona y borra la sala cuando queda vacía.
 
-**Dónde se crean:** justo **debajo del canal creador**, no arriba del AFK. La
-posición es `posición del creador + 1 + las salas temporales que ya hay en esa
-categoría`, así las salas se apilan en el orden en que se crean (con
-`creador + 1` a secas, cada sala nueva aparecía arriba de las anteriores). Se
-usa `position` (el índice dentro de la categoría), nunca `rawPosition`:
-`setPosition` trabaja en índices y Discord deja huecos al borrar canales.
+**Dónde se crean:** justo **debajo del canal creador**, no arriba del AFK. Si ya
+hay salas pegadas ahí, la nueva se apila al final de ese bloque, así se leen en
+el orden en que se crearon.
+
+La cuenta vive en `services/dynamic-voice-position.ts` y sólo suma las salas
+**contiguas** al creador. Antes se sumaban todas las de la categoría
+(`creador + 1 + todas`), lo que asume que están pegadas al creador: cuando no lo
+están —salas viejas que quedaron arriba del AFK, o un canal que alguien arrastró
+en el medio— la cuenta daba de más y la sala nueva aparecía **debajo de canales
+ajenos**. Con la cuenta contigua, el bloque nuevo arranca pegado al creador y las
+salas viejas quedan abajo hasta que se borren.
+
+Se usa `position` (el índice dentro del grupo de canales de voz de la categoría),
+nunca `rawPosition`: el `create` y el `setPosition` de discord.js trabajan con
+ese índice.
 
 Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 

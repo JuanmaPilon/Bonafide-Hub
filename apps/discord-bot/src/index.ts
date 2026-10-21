@@ -59,6 +59,7 @@ import {
   setXpSyncRequested,
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
+import { temporaryVoicePosition } from "./services/dynamic-voice-position.js";
 import { startEventControlScheduler } from "./services/event-control-service.js";
 import {
   addRemoteXp,
@@ -770,7 +771,9 @@ async function createDynamicVoiceChannelForMember(newState: {
       cache?: {
         get: (
           channelId: string,
-        ) => { parentId?: string | null } | undefined;
+        ) =>
+          | { parentId?: string | null; position?: number }
+          | undefined;
       };
       create: (options: {
         name: string;
@@ -809,24 +812,19 @@ async function createDynamicVoiceChannelForMember(newState: {
     return;
   }
 
-  // Dónde va la sala nueva: justo DEBAJO del canal creador. Como Discord
-  // inserta en el índice indicado y corre el resto, la posición es la del
-  // creador + 1 + las salas temporales que ya existen en esa categoría: así las
-  // salas se apilan en el orden en que se crean (sin esto, cada sala nueva
-  // quedaba arriba de las anteriores).
+  // Dónde va la sala nueva: justo DEBAJO del canal creador, y si ya hay salas
+  // pegadas ahí, al final de ese bloque (así se apilan en el orden en que se
+  // crean). La cuenta está en `temporaryVoicePosition` porque el cálculo tiene
+  // un detalle que ya nos costó caro: sólo suman las salas CONTIGUAS.
   // Se usa `position` (el índice dentro de la categoría), no `rawPosition`:
-  // `setPosition` trabaja en índices y Discord deja HUECOS al borrar canales.
+  // `setPosition` trabaja con ese mismo índice.
   let targetPosition = 1;
   if (hasRelativePosition(creatorChannel)) {
-    const temporaryIds = new Set(guildConfig.temporaryVoiceChannelIds ?? []);
-    let existingInCategory = 0;
-    for (const id of temporaryIds) {
-      const room = newState.guild.channels.cache?.get(id);
-      if (room && (room.parentId ?? null) === (creatorChannel.parentId ?? null)) {
-        existingInCategory += 1;
-      }
-    }
-    targetPosition = Math.max(creatorChannel.position, 0) + 1 + existingInCategory;
+    targetPosition = temporaryVoicePosition(
+      creatorChannel,
+      guildConfig.temporaryVoiceChannelIds ?? [],
+      (channelId) => newState.guild.channels.cache?.get(channelId),
+    );
   }
 
   const createdChannel = await newState.guild.channels.create({
