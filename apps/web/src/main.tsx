@@ -9383,11 +9383,23 @@ function App() {
     };
 
     runRefresh();
-    const refreshTimer = window.setInterval(runRefresh, 20_000);
+
+    // Con la pestaña en segundo plano no se pide nada: el poll de 20 s seguía
+    // corriendo y cada vuelta es egress del API. Al volver el foco se refresca.
+    const runIfVisible = (): void => {
+      if (document.visibilityState === "visible") {
+        runRefresh();
+      }
+    };
+    const refreshTimer = window.setInterval(runIfVisible, 20_000);
+    document.addEventListener("visibilitychange", runIfVisible);
+    window.addEventListener("focus", runIfVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", runIfVisible);
+      window.removeEventListener("focus", runIfVisible);
     };
   }, [activeTab, selectedGuildId]);
 

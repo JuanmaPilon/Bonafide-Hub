@@ -222,10 +222,12 @@ multiplique.
 3. Cada 2 min — barrido del loro (relee la config y reprograma si cambió)
 4. Cada 30 s / 5 s — música: barrido de estados y panel "sonando ahora" (con música activa)
 
-`apps/web` (solo con la pestaña abierta):
+`apps/web` (solo con la pestaña abierta **y visible**): nada de esto corre en
+segundo plano; al volver el foco se refresca de inmediato.
 
 1. Cada 30 s — portadas de los juegos más jugados (con caché en `sessionStorage`)
 2. Cada 60 s — estado del servidor y ranking
+3. Cada 20 s — Karuta (cartas y álbumes), solo mientras se está en esa pestaña
 
 ## 9.1 Memoria y costo
 
