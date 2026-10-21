@@ -25,6 +25,16 @@ general, ver [architecture.md](architecture.md).
 3. Prisma
 4. PostgreSQL
 
+Las respuestas salen **comprimidas** (`@fastify/compress`: brotli primero, gzip de
+respaldo, desde 1 kB). Es la palanca más grande del egress, porque el JSON de
+listas y configs baja casi 10x y el del API es, junto con los assets de la web y
+lo que manda el bot, casi todo lo que sale del proyecto.
+
+> El registro del plugin va **con `await`, antes de declarar las rutas**. El
+> plugin engancha su hook en `onRoute`, así que registrado sin esperar las rutas
+> se crean primero y quedan sin comprimir: responde 200 igual y el problema no se
+> nota hasta mirar la factura.
+
 ## 2. Variables de entorno
 
 Archivo ejemplo: `apps/api/.env.example`

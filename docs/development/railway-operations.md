@@ -119,10 +119,11 @@ Conviene tenerlo claro porque cambia dónde mirar cuando algo no aparece:
    mucho **4 refrescos por pasada**.
 
    Un log ya terminado (`synced`) **no** se refresca solo: cada refresco baja el
-   report completo de Warcraft Logs (varios MB), y bajarlo cada 5 minutos para
-   siempre era el mayor gasto de egress del proyecto. Los terminados se
-   actualizan a mano con **"Actualizar log"**. Tampoco entran los `failed`: esos
-   se reintentan con un escaneo manual.
+   report completo de Warcraft Logs (varios MB) y lo vuelve a analizar, así que
+   tenerlo cada 5 minutos para siempre era el mayor gasto de **memoria y CPU** del
+   proyecto (ese tráfico es de entrada: se ve en RAM, no en egress). Los
+   terminados se actualizan a mano con **"Actualizar log"**. Tampoco entran los
+   `failed`: esos se reintentan con un escaneo manual.
 
 Revisar los logs de Railway de `API` al solicitar un escaneo:
 
@@ -183,34 +184,40 @@ crecimiento no acotado eran:
 
 #### Network Egress: qué lo genera y qué se hizo para bajarlo
 
-Es tráfico que **sale** del servicio: respuestas HTTP a la web, llamadas a
-Discord y a Warcraft Logs. Un flujo periódico que baja datos grandes se nota al
-toque en la gráfica (escalones que suben y quedan).
+Es tráfico que **sale** del servicio hacia internet: respuestas HTTP a la web,
+mensajes y audio hacia Discord. Lo que el servicio **baja** (un report de
+Warcraft Logs, la lista de miembros de Discord, el arte de una carta) es
+**ingress** y no mueve esta línea: reducirlo ahorra RAM, CPU y tiempo, pero no
+egress. Esa confusión cuesta caro, porque lleva a perseguir el número equivocado.
 
-Lo que más pesa, de mayor a menor:
+Lo que sí pesa, de mayor a menor:
 
-1. **Reports de Warcraft Logs** (varios MB cada uno). Se bajan al escanear, al
-   apretar "Actualizar log" y —esto era el gasto grande— por el sync automático
-   de logs ya terminados cada 5 minutos. Ahora el sync solo toca los que están
-   en curso y como mucho 4 por pasada.
-2. **La lista de miembros de Discord** (`GET /guilds/:g/members`, ~1000 por
-   página). La pide la web con un cache de 4 minutos en la API, y el bot la pide
-   para armar los recordatorios con un cache de 2 minutos (antes la volvía a
-   bajar por cada evento: `guild.members.fetch()` sin argumentos).
-3. **Las portadas y las imágenes de la biblioteca de eventos.** Se guardan como
-   data URL (Discord las necesita así para el embed), pero las respuestas del API
-   entregan una **ruta** (`/public/.../events/:id/image` y
-   `/public/.../events/images/:id`) con cache de un día. Antes viajaban embebidas
-   en cada lista de eventos y en cada apertura del form —con el límite de 10 MB
-   por imagen, eso son decenas de MB por request—. El bot tampoco las recibe ya
-   en `events/control`. El uso saliente de la API sigue existiendo: la imagen se
-   guarda como data URL.
-4. **Assets de la web** (bundle) e imágenes: los sirve el servicio `Web`.
+1. **Las respuestas del API al navegador.** Es el grueso y tiene dos
+   multiplicadores propios:
+   - Viajaban **sin comprimir**: Fastify no comprime solo. Ahora
+     `@fastify/compress` (brotli/gzip desde 1 kB) las achica ~10x.
+   - Viajaban **dos veces**: la web pide `/api` y el servicio `Web` lo proxea al
+     API, así que cada byte sale del API y vuelve a salir del servicio Web. Si
+     algún día se apunta la web directo a un subdominio del API, este doble
+     conteo desaparece (hay que resolver cookies y CORS antes).
+2. **El audio del bot.** `@discordjs/voice` manda Opus al canal de voz: a
+   ~128 kbps son ~57 MB por hora de música, y es un piso constante mientras haya
+   algo sonando. Es lo primero a mirar si la curva del bot tiene una meseta alta.
+3. **Los assets de la web** (bundle de ~870 kB crudos): los sirve el servicio
+   `Web`, y `vite preview` no comprime.
+4. **Los mensajes y embeds que manda el API a Discord** al publicar avisos y
+   comunicados: chicos, pero constantes.
+
+Un flujo periódico que baja datos grandes se nota al toque en la gráfica
+(escalones que suben y quedan). Para el **acumulado**, la línea nunca baja: es un
+contador, así que lo que se lee es la **pendiente** (dos puntos y dividir por los
+minutos entre ellos), no el valor final.
 
 Para saber **qué servicio** gasta, Railway muestra el detalle por servicio en
-*Usage → Network Egress* (y cada servicio tiene su propia gráfica en
-*Observability*). Un pico del `Bot` apunta a Discord; uno de la `API`, a Warcraft
-Logs o a la web.
+*Usage → Network Egress* y en *View Cost by Service* (y cada servicio tiene su
+propia gráfica en *Observability*). Un piso alto y constante en el `Bot` es
+audio; escalones en la `API` son navegación (y en la `Web`, lo mismo contado dos
+veces por el proxy).
 
 ### Cloudflare (DNS/CDN delante del dominio)
 

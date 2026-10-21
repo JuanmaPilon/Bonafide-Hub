@@ -80,12 +80,19 @@ repita un aviso dentro de las 6 h aunque el marcador falle.
 
 **Lo que se refresca de más se paga.** La sincronización de logs de raid
 refrescaba *todos* los logs guardados cada 5 minutos, incluidos los de noches
-terminadas: el mismo report bajado entero, para siempre. Railway lo mostró en la
-factura (egress y memoria). Ahora solo se refresca lo que está en vivo, con tope
-por pasada. La misma lección apareció con las imágenes de los eventos: se
+terminadas: el mismo report bajado y analizado entero, para siempre. Railway lo
+mostró en la factura (memoria y CPU). Ahora solo se refresca lo que está en vivo,
+con tope por pasada. La misma lección apareció con las imágenes de los eventos: se
 guardaban como data URL dentro de cada respuesta del control de eventos, y la
 pantalla las pedía cada minuto. Ahora la API entrega una ruta y el navegador
 cachea.
+
+**De qué lado viaja el dato.** Durante meses se persiguió el egress bajando cosas
+que el servicio *descarga* (reports de Warcraft Logs, listas de miembros): eso es
+entrada, se paga en memoria y CPU, no en egress. Lo que sale —y por lo tanto lo
+que mueve esa línea— es lo que el API responde al navegador, lo que manda el bot a
+Discord (audio incluido) y los assets de la web. Ahí es donde estaban las palancas
+de verdad: comprimir las respuestas y dejar de contarlas dos veces por el proxy.
 
 **El cache que crece no se nota hasta que se nota.** El bot guardaba en memoria
 los mensajes que veía (para borrar y editar los avisos) y esa memoria subía hasta

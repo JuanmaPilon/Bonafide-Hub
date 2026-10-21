@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
+import compress from "@fastify/compress";
 import cors from "@fastify/cors";
 import { env } from "./config/env.js";
 import { prisma } from "./db/prisma.js";
@@ -2660,7 +2661,7 @@ async function attendanceForEvent(
   return null;
 }
 
-export function buildApp() {
+export async function buildApp() {
   const app = Fastify({
     logger: true,
     // Permite subir imágenes como data URL. Tiene que dar para el archivo más
@@ -2673,6 +2674,17 @@ export function buildApp() {
     .filter(Boolean);
   const isSecureCookie = env.NODE_ENV === "production";
   const cookieSameSite = env.COOKIE_SAME_SITE;
+
+  // El JSON del hub es lo que domina el egress del servicio y Fastify no
+  // comprime por su cuenta. Brotli primero y gzip como respaldo (zstd queda
+  // afuera: necesita Node 22.15+ y el deploy no lo garantiza).
+  // Se espera el registro a propósito: el plugin engancha su hook en onRoute, así
+  // que tiene que estar cargado ANTES de declarar las rutas (si se registra sin
+  // await, las rutas se crean primero y quedan sin comprimir).
+  await app.register(compress, {
+    encodings: ["br", "gzip"],
+    threshold: 1024,
+  });
 
   void app.register(cors, {
     credentials: true,

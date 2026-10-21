@@ -5,7 +5,7 @@ import { migrateLegacyEventRoles } from "./services/event-games-migration.js";
 import { backfillRaidLogDetails } from "./services/raid-logs-store.js";
 
 async function main(): Promise<void> {
-  const app = buildApp();
+  const app = await buildApp();
 
   try {
     await app.listen({
