@@ -213,24 +213,64 @@ async function resolveLeaveAccount(member: {
   return { globalName: user.globalName, username: user.username };
 }
 
+// Despedidas del mayordomo. `{member}` es la mención, `{name}` el nombre tal
+// como figuraba, `{moderator}` quien aplicó la sanción y `{reason}` el motivo.
+const FAREWELL_TEMPLATES = [
+  "🚪 **Karpindomo abre la puerta.**\n{name} se retiro del servidor.\nLa casa queda mas silenciosa.",
+  "🧳 **Maleta a la vista.**\n{name} se marcho.\nKarpindomo no pregunta, solo anota.",
+  "🕯️ **Se apago una vela.**\n{name} dejo la comunidad.\nKarpindomo deja la puerta entreabierta.",
+  "📋 **Baja en el registro.**\nQueda asentada la salida de {name}.\nKarpindomo usa la misma lapicera que no funciona.",
+  "🪑 **Silla vacia.**\n{name} se retiro.\nKarpindomo la deja ahi por si vuelve.",
+  "🍵 **Te servido en vano.**\n{name} ya no esta.\nKarpindomo se lo toma el mismo, sin rencor.",
+  "🎩 **Karpindomo inclina la cabeza.**\n{name} se retiro del servidor.\nFue un placer, aunque breve.",
+  "🧹 **Barrido de despedida.**\n{name} se fue.\nKarpindomo barre despacio para no hacer ruido.",
+] as const;
+
+const KICK_TEMPLATES = [
+  "⛔ **Karpindomo escolta a la salida.**\n{name} fue expulsado.\nModerador: {moderator}.\nRazon: {reason}.",
+  "🚪 **Puerta con dos llaves.**\n{name} no continua en la casa.\nA cargo: {moderator}.\nMotivo: {reason}.",
+  "🧐 **Karpindomo reviso la lista dos veces.**\nLa expulsion de {name} estaba decidida.\nPor {moderator} · motivo: {reason}.",
+  "📜 **Acta de expulsion.**\nSe retira a {name} del servidor.\nFirmado por {moderator}.\nCausa: {reason}.",
+  "🕯️ **Apagon de sala.**\n{name} fue retirado con justa causa segun {moderator}.\nDetalle: {reason}.",
+  "🎩 **Karpindomo lamenta el tramite.**\n{name} quedo fuera.\nDecision de {moderator} · {reason}.",
+] as const;
+
+const BAN_TEMPLATES = [
+  "🔨 **Karpindomo cierra la puerta con llave.**\n{name} fue baneado.\nModerador: {moderator}.\nRazon: {reason}.",
+  "⛔ **Sin retorno.**\n{name} queda fuera del servidor.\nCargo: {moderator}.\nMotivo: {reason}.",
+  "📜 **Acta de destierro.**\nSe expulsa definitivamente a {name}.\nFirmado por {moderator}.\nCausa: {reason}.",
+  "🗝️ **Karpindomo guarda la llave en el cajon.**\n{name} no vuelve.\nDecision de {moderator} · {reason}.",
+  "🧱 **Muro levantado.**\n{name} ya no tiene entrada.\nAplicado por {moderator}.\nDetalle: {reason}.",
+  "🚫 **La casa dijo basta.**\n{name} fue baneado.\nPor {moderator} · motivo: {reason}.",
+] as const;
+
 function formatLeaveMessage(
   memberName: string,
   memberId: string,
   details: MemberLeaveDetails,
 ): string {
-  if (details.kind === "leave") {
-    return `🚪 **Salida**\n${memberName} se retiro del servidor.`;
-  }
+  const fill = (template: string, withModerator: boolean): string =>
+    template
+      .replaceAll("{name}", memberName)
+      .replaceAll(
+        "{moderator}",
+        withModerator && details.moderatorId
+          ? `<@${details.moderatorId}>`
+          : "no informado",
+      )
+      .replaceAll("{reason}", details.reason?.trim() || "sin razon informada");
 
-  const actionText = details.kind === "kick" ? "expulsado" : "baneado";
-  const actionTitle = details.kind === "kick" ? "Expulsion" : "Ban";
-  const actionEmoji = details.kind === "kick" ? "⛔" : "🔨";
-  const moderatorText = details.moderatorId
-    ? `<@${details.moderatorId}>`
-    : "desconocido";
-  const reasonText = details.reason?.trim() || "sin razon informada";
+  const body =
+    details.kind === "leave"
+      ? fill(pickRandom(FAREWELL_TEMPLATES), false)
+      : fill(
+          pickRandom(details.kind === "kick" ? KICK_TEMPLATES : BAN_TEMPLATES),
+          true,
+        );
 
-  return `${actionEmoji} **${actionTitle}**\nUsuario: <@${memberId}> · ${memberName}\nEstado: ${actionText}\nModerador: ${moderatorText}\nRazon: ${reasonText}.`;
+  // El id va como subtexto: en el canal de logs sirve para rastrear a alguien
+  // que ya no está en el servidor, sin ensuciar el mensaje.
+  return `${body}\n-# <@${memberId}>`;
 }
 
 async function resolveMemberLeaveDetails(
@@ -409,6 +449,16 @@ const TIMER_TEMPLATES = [
   "🫖 Senior, su aviso configurado para {duration} esta listo.",
   "🫖 Senior, Karpindomo notifica que el temporizador de {duration} finalizo.",
   "🫖 Senior, su cita con el timer de {duration} ha llegado.",
+  "⏰ **Campanada de Karpindomo.**\nSe cumplieron {duration}.\nEl mayordomo ya cerro la puerta del reloj.",
+  "🔔 **Toque de campana, Senior.**\n{duration} terminaron de transcurrir.\nKarpindomo se permite insistir.",
+  "⌛ **La arena se agoto.**\n{duration} completados.\nKarpindomo le recuerda que el reloj no espera.",
+  "🎩 **Permiso para molestar.**\n{duration} ya pasaron.\nKarpindomo cumple con avisar antes de que se le pase.",
+  "📜 **Acta de tiempo cumplido.**\n{duration} quedan asentados.\nKarpindomo espera instrucciones.",
+  "🕰️ **El reloj de Karpindomo sono.**\n{duration} ya corrieron.\nSe ruega atender el asunto pendiente.",
+  "🍵 **Pausa terminada.**\nSu timer de {duration} llego a cero.\nKarpindomo le acerca el te y el recordatorio.",
+  "🧐 **Karpindomo consulto el reloj dos veces.**\nCoincide: {duration} ya pasaron.\nNo hay margen para la duda.",
+  "🪄 **Magia temporal agotada.**\n{duration} se consumieron.\nKarpindomo no puede estirar el hechizo.",
+  "📯 **Corneta de aviso.**\n{duration} finalizados, Senior.\nKarpindomo espera que no se le haya pasado.",
 ] as const;
 
 const WELCOME_TEMPLATES = [
@@ -416,6 +466,20 @@ const WELCOME_TEMPLATES = [
   "🎩 **Karpindomo, mayordomo capincho, al servicio.**\nUn placer recibir a <@{memberId}> en el servidor.\nQue tenga una estancia impecable.",
   "🛎️ **Atencion, atencion:** Karpindomo confirma llegada de <@{memberId}>.\nBienvenido a esta distinguida comunidad.",
   "🍵 **Recepcion oficial de Karpindomo.**\n<@{memberId}> ya esta en casa.\nPongase comodo y disfrute la estadia.",
+  "🧹 **Llegó gente, Señor.**\n<@{memberId}> cruzó la puerta.\nKarpindomo ya mandó a lustrar la bienvenida.",
+  "🪑 **Silla reservada.**\n<@{memberId}> se suma a la mesa.\nKarpindomo le corrió la silla y le sirvió el té.",
+  "📯 **Fanfarria de recepción.**\nTenemos a <@{memberId}> entre nosotros.\nKarpindomo toca la corneta con orgullo.",
+  "🎻 **Música de entrada, por favor.**\n<@{memberId}> acaba de llegar.\nKarpindomo dirige la orquesta desde la cocina.",
+  "🧐 **Karpindomo revisa la lista.**\n<@{memberId}> no figuraba… ahora sí.\nBienvenido, Señor, no haga ruido al entrar.",
+  "🌟 **Iluminación de recibidor.**\n<@{memberId}> ya forma parte de la casa.\nKarpindomo bajó las luces para que se vea mejor el ingreso.",
+  "🗝️ **Llave entregada.**\n<@{memberId}> tiene acceso a la comunidad.\nKarpindomo le explica que la llave no se presta.",
+  "🕯️ **Se encendieron las velas.**\n<@{memberId}> entró al salón.\nKarpindomo apagó el ventilador para que no se note el drama.",
+  "☕ **Café para el recién llegado.**\n<@{memberId}> ya está en el servidor.\nKarpindomo no pregunta cómo lo toma: ya lo sabe.",
+  "🥂 **Brindis de bienvenida.**\nPor <@{memberId}>, que se suma a la comunidad.\nKarpindomo levanta la taza de té.",
+  "📋 **Alta en el registro.**\nQueda asentado que <@{memberId}> ingresó.\nKarpindomo usa una lapicera que no funciona pero da prestigio.",
+  "🫡 **Karpindomo cuadra la postura.**\nBienvenido <@{memberId}>.\nSe ruega no tocar el timbre tres veces.",
+  "🪄 **Aparición confirmada.**\n<@{memberId}> materializado en la comunidad.\nKarpindomo finge que no lo vio llegar.",
+  "🧉 **Ronda de bienvenida.**\n<@{memberId}> se suma a la ronda.\nKarpindomo ceba primero y pregunta después.",
 ] as const;
 
 function formatTimerDuration(totalMinutes: number): string {
@@ -513,6 +577,17 @@ const LEVEL_UP_TEMPLATES = [
   "🦆 **El carpincho aprueba.**\n<@{memberId}> subió de rango: {level}.\nSiga elevando el estándar.",
   "🔔 **Campanadas de Karpindomo.**\n<@{memberId}> alcanzó el rango {level}.\nSe lo festeja como corresponde.",
   "🫖 **Asiento reservado.**\n<@{memberId}> ganó el rango {level}.\nKarpindomo ya le guardó lugar en la mesa.",
+  "🧉 **Ronda nueva en la mesa.**\n<@{memberId}> llegó al nivel {level}.\nKarpindomo ceba primero para el ascendido.",
+  "📦 **Llegó el reconocimiento.**\n<@{memberId}> desbloqueó el nivel {level}.\nKarpindomo firma la entrega y pide propina.",
+  "🧹 **Karpindomo barrió el camino.**\n<@{memberId}> avanzó al nivel {level}.\nEl piso queda limpio para el próximo salto.",
+  "🕯️ **Se encendió otra vela.**\n<@{memberId}> alcanzó el nivel {level}.\nEl salón brilla un poco más.",
+  "🎻 **La orquesta cambia de tono.**\n<@{memberId}> subió al nivel {level}.\nKarpindomo dirige con la cuchara.",
+  "🧐 **Verificado dos veces.**\n<@{memberId}> es nivel {level} desde ahora.\nNo hay error en el registro.",
+  "🪄 **Hechizo de progreso.**\n<@{memberId}> pasó al nivel {level}.\nKarpindomo no explica cómo funciona el truco.",
+  "🚪 **Se abrió otra puerta.**\n<@{memberId}> llegó al nivel {level}.\nKarpindomo ya tenía la llave preparada.",
+  "🛎️ **Timbre del ascenso.**\n<@{memberId}> alcanzó el nivel {level}.\nKarpindomo atiende antes del segundo timbre.",
+  "🐹 **El karpincho de la suerte apareció.**\n<@{memberId}> subió al nivel {level}.\nKarpindomo no sabe de dónde salió, pero aplaude.",
+  "📯 **Corneta desafinada, pero corneta al fin.**\n<@{memberId}> llegó al nivel {level}.\nKarpindomo insiste en que fue un do sostenido.",
 ] as const;
 
 let lastLevelUpTemplateIndex: number | undefined;
@@ -1694,6 +1769,13 @@ const BAN_CHANNEL_BUTLER_MESSAGES = [
   "🕯️ Puertas cerradas, señor. {user} dejó esta sala reservada.",
   "🪄 Listo: {user} desperuanizó la sala, ya no es visible para los roles desperuanizados.",
   "🚪 Desperuanizada por {user}. Aquí solo entra quien debe entrar.",
+  "🧉 **Se terminó el compartir.**\n{user} desperuanizó la sala.\nEl mate se ceba solo para los que quedan.",
+  "🛂 **Control migratorio activo.**\n{user} desperuanizó la sala.\nKarpindomo revisa pasaportes en la puerta.",
+  "🫖 **Reserva cerrada por decreto.**\n{user} desperuanizó la sala.\nKarpindomo no discute con el decreto.",
+  "🧱 **Sala blindada.**\n{user} desperuanizó la sala.\nLos roles vetados ven la puerta, no el salón.",
+  "📜 **Acta de exclusión.**\n{user} desperuanizó la sala.\nKarpindomo anota nombres en una lista que no muestra.",
+  "🕶️ **Filtro aplicado.**\n{user} desperuanizó la sala.\nKarpindomo hace como que no ve a los vetados.",
+  "🔐 **Zona restringida.**\n{user} desperuanizó la sala.\nSe ruega no insistir con la tarjeta del otro equipo.",
 ];
 
 const UNBAN_CHANNEL_BUTLER_MESSAGES = [
@@ -1701,6 +1783,13 @@ const UNBAN_CHANNEL_BUTLER_MESSAGES = [
   "🔓 Puertas abiertas de nuevo, señor. {user} la volvió a abrir.",
   "🪄 Reperuanizada por {user}: los roles desperuanizados ya pueden ver esta sala.",
   "🗝️ Listo, {user} reperuanizó la sala, vuelve a estar disponible para todos.",
+  "🧉 **Vuelve el compartir.**\n{user} reperuanizó la sala.\nKarpindomo alcanza el mate sin hacer preguntas.",
+  "🛂 **Se levantó el control.**\n{user} reperuanizó la sala.\nYa no hay que mostrar nada en la puerta.",
+  "🌎 **Frontera abierta.**\n{user} reperuanizó la sala.\nKarpindomo guarda el sello y la lista.",
+  "🎺 **Se tocó la apertura.**\n{user} reperuanizó la sala.\nVuelven todos, con o sin bandera.",
+  "🫖 **Se suman tazas.**\n{user} reperuanizó la sala.\nKarpindomo calcula cuántas faltan.",
+  "🕊️ **Tregua firmada.**\n{user} reperuanizó la sala.\nKarpindomo es testigo y no opina.",
+  "📯 **Corneta de reapertura.**\n{user} reperuanizó la sala.\nEl salón vuelve a estar para todos.",
 ];
 
 // Sufijo que se agrega/quita al nombre de la sala al desperuanizar.
@@ -1754,7 +1843,7 @@ async function handleVoiceBanCommand(
     if (!isTemporary) {
       await interaction.editReply({
         content:
-          "Este comando solo funciona en salas de voz dinámicas creadas por Karpindomo.",
+          "🫖 Este comando solo sirve dentro de una sala temporal de Karpindomo, Senior.",
       });
       return;
     }
@@ -1852,12 +1941,26 @@ const LOCK_CHANNEL_BUTLER_MESSAGES = [
   "🔒 Sala trancada, {user}. Nadie más va a poder entrar.",
   "🗝️ {user} trancó la sala. Los que ya están adentro se quedan, nadie más entra.",
   "🚪 Puerta con llave, señor. {user} dejó esta sala trancada.",
+  "🎩 **Karpindomo giró la llave.**\n{user} trancó la sala.\nLos de adentro se quedan; los de afuera se resignan.",
+  "🛡️ **Sala en modo fortaleza.**\n{user} la trancó.\nKarpindomo vigila el pasillo con una escoba.",
+  "🕯️ **Se apagó el cartel de entrada.**\n{user} trancó la sala.\nKarpindomo atiende por la ventanilla.",
+  "🧱 **Se levantó el muro.**\n{user} trancó la sala.\nKarpindomo trajo los ladrillos sin hacer ruido.",
+  "🫖 **Reserva privada, señor.**\n{user} trancó la sala.\nKarpindomo ya sirvió las tazas contadas.",
+  "🔐 **Cerradura puesta.**\n{user} trancó la sala.\nKarpindomo guarda la copia de la llave donde no la encuentra.",
+  "📜 **Acta de clausura.**\n{user} trancó la sala.\nQueda prohibido golpear la puerta con excusas.",
 ];
 
 const UNLOCK_CHANNEL_BUTLER_MESSAGES = [
   "🔓 Sala destrancada, {user}. Ya puede entrar cualquiera.",
   "🗝️ {user} destrancó la sala. Vuelve a estar abierta para todos.",
   "🚪 Puerta abierta de nuevo, señor. {user} la destrancó.",
+  "🎩 **Karpindomo abrió de par en par.**\n{user} destrancó la sala.\nPasá, que se enfría el té.",
+  "🪄 **Cerrojo afuera.**\n{user} destrancó la sala.\nKarpindomo barrió las migas de la entrada.",
+  "🌟 **Cartel de abierto.**\n{user} destrancó la sala.\nKarpindomo puso la alfombra buena.",
+  "🧉 **Vuelve la ronda.**\n{user} destrancó la sala.\nKarpindomo ceba para todos otra vez.",
+  "🫖 **Se levantó la reserva.**\n{user} destrancó la sala.\nKarpindomo suma tazas a la mesa.",
+  "📯 **Corneta de apertura.**\n{user} destrancó la sala.\nYa no hace falta golpear la puerta.",
+  "🚪 **Sin llave, sin drama.**\n{user} destrancó la sala.\nKarpindomo guarda el manojo y no pregunta.",
 ];
 
 // Sufijo que se agrega/quita al nombre de la sala al trancar.
@@ -2245,8 +2348,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const dueUnix = Math.floor((Date.now() + totalSeconds * 1000) / 1000);
     const repeatText = repeat ? " Este timer se repetira automaticamente." : "";
+    const timerReplies = [
+      `Timer creado. Karpindomo te avisara por DM <t:${dueUnix}:R>.${repeatText}`,
+      `🫖 Anotado, Senior. Karpindomo golpeara su puerta <t:${dueUnix}:R>.${repeatText}`,
+      `🎩 Reloj en marcha. El aviso llega por DM <t:${dueUnix}:R>.${repeatText}`,
+      `📜 Acta de timer firmada. Le escribo <t:${dueUnix}:R>.${repeatText}`,
+      `⏳ Karpindomo ya tiene el reloj de arena dado vuelta: aviso <t:${dueUnix}:R>.${repeatText}`,
+      `🔔 Queda agendado. Su DM llega <t:${dueUnix}:R>.${repeatText}`,
+    ];
     await interaction.reply({
-      content: `Timer creado. Karpindomo te avisara por DM <t:${dueUnix}:R>.${repeatText}`,
+      content: pickRandom(timerReplies),
       ephemeral: true,
     });
     return;

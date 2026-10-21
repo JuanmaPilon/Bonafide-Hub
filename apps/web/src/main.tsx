@@ -825,13 +825,56 @@ function KarutaAlbumCard({
   );
 }
 
-// Frases random de Karpindomo en el widget flotante (humor "anuncios").
+// Frases random de Karpindomo en el widget flotante (humor "anuncios"). Se
+// elige una al abrir la burbuja: mucho texto acá es lo que hace que el chiste
+// no se repita.
 const KARPINDOMO_LINES: string[] = [
   "Señor, hay karpinchos calientes en su zona",
   "Señor, encontré karpinchos dispuestos a farmear con usted",
   "Señor, hay un karpincho soltero a 50 metros de usted",
   "Señor, ¿le interesa un karpincho con doble pinga?",
   "Señor, los karpinchos de su zona lo están esperando",
+  "Señor, el karpincho del vecino volvió a mirar su parrilla",
+  "Señor, hay un karpincho haciendo fila en la puerta de la cocina",
+  "Señor, los karpinchos organizaron una asamblea en su jardín",
+  "Señor, un karpincho se ofreció a cuidarle el auto",
+  "Señor, detecté tres karpinchos y un capincho infiltrado",
+  "Señor, el karpincho dice que no es lo que parece",
+  "Señor, hay un karpincho esperando instrucciones desde el martes",
+  "Señor, los karpinchos piden que baje el precio del pasto",
+  "Señor, un karpincho le robó el mate y no piensa devolverlo",
+  "Señor, hay un karpincho con curriculum en la mano",
+  "Señor, el karpincho insiste con que sabe jugar de healer",
+  "Señor, los karpinchos ya se saben su contraseña del wifi",
+  "Señor, un karpincho le dejó una carta bajo la puerta",
+  "Señor, los karpinchos quieren entrar a la raid y no dan los números",
+  "Señor, hay un karpincho que dice ser su primo",
+  "Señor, el karpincho no vino a la práctica y avisó tarde",
+  "Señor, un karpincho se quedó dormido en el canal de voz",
+  "Señor, los karpinchos votaron y quieren más comida",
+  "Señor, hay un karpincho con planes de expandir el negocio",
+  "Señor, el karpincho jura que vio algo raro en el pantano",
+  "Señor, un karpincho se anotó a la raid sin leer las reglas",
+  "Señor, los karpinchos piden que no los llame roedores",
+  "Señor, el karpincho dice que él solo hacía presencia",
+  "Señor, hay un karpincho vendiendo entradas para su propia fiesta",
+  "Señor, el karpincho sigue esperando que le devuelva la pala",
+  "Señor, un karpincho se ofreció de traductor de portugués",
+  "Señor, los karpinchos ya tienen grupo de WhatsApp y no lo invitaron",
+  "Señor, el karpincho confirma que el pasto estaba mejor antes",
+  "Señor, hay un karpincho agendando reuniones que nadie pidió",
+  "Señor, un karpincho quiere su firma para un trámite dudoso",
+  "Señor, el karpincho dice que el AFK estaba ocupado",
+  "Señor, los karpinchos aprendieron a usar los emojis del servidor",
+  "Señor, el karpincho insiste en que él no fue el del incidente",
+  "Señor, hay un karpincho mirando la pantalla desde hace una hora",
+  "Señor, el karpincho pidió cambio de spec y no avisó al oficial",
+  "Señor, los karpinchos quieren su propio canal de voz",
+  "Señor, un karpincho se quedó con la llave de la sala trancada",
+  "Señor, el karpincho afirma que el log estaba mal subido",
+  "Señor, hay un karpincho que no sabe dónde está parado",
+  "Señor, el karpincho se disfrazó de oficial y casi lo logra",
+  "Señor, los karpinchos dudan de su build",
 ];
 
 // Widget de Karpindomo: un botón flotante estilo burbuja de chat (como los
