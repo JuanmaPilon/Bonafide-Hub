@@ -1019,7 +1019,20 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
   }
 
   if (hasDeleteMethod(channel)) {
-    await channel.delete("Dynamic voice channel empty");
+    // Dos actualizaciones de voz seguidas (la persona sale y el canal queda
+    // vacío) pueden pedir el borrado de la misma sala: la segunda llega cuando
+    // ya no existe y Discord devuelve 10003. Eso no es un error, es el
+    // resultado esperado.
+    await channel.delete("Dynamic voice channel empty").catch((error: unknown) => {
+      const code = (error as { code?: number }).code;
+      if (code !== 10003) {
+        console.warn("[discord-bot] Failed to delete dynamic voice channel", {
+          guildId: channelState.guild.id,
+          channelId,
+          error: getErrorMessage(error),
+        });
+      }
+    });
   }
 
   await removeTemporaryVoiceChannelId(channelState.guild.id, channelId);
