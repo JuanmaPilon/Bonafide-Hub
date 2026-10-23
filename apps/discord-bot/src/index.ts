@@ -427,6 +427,23 @@ function hasParentId(value: unknown): value is { parentId?: string | null } {
   return isObjectRecord(value) && "parentId" in value;
 }
 
+// Nombre y categoría de un canal, para el log: con sólo ids es imposible
+// distinguir dos categorías que se llaman igual.
+function channelPlacementInfo(value: unknown): {
+  id?: string;
+  name?: string;
+  parentId?: string | null;
+} {
+  if (!isObjectRecord(value)) {
+    return {};
+  }
+  return {
+    id: typeof value.id === "string" ? value.id : undefined,
+    name: typeof value.name === "string" ? value.name : undefined,
+    parentId: "parentId" in value ? ((value.parentId as string | null) ?? null) : undefined,
+  };
+}
+
 function isVoiceBasedChannelLike(
   value: unknown,
 ): value is { isVoiceBased: () => boolean; members: { size: number } } {
@@ -825,8 +842,18 @@ async function createDynamicVoiceChannelForMember(newState: {
         get: (
           channelId: string,
         ) =>
-          | { parentId?: string | null; position?: number }
+          | {
+              name?: string;
+              parentId?: string | null;
+              position?: number;
+              type?: ChannelType;
+            }
           | undefined;
+        values?: () => IterableIterator<{
+          id: string;
+          name?: string;
+          type?: ChannelType;
+        }>;
       };
       create: (options: {
         name: string;
@@ -930,20 +957,55 @@ async function createDynamicVoiceChannelForMember(newState: {
   const finalParentId = hasParentId(placed) ? (placed.parentId ?? null) : null;
   const finalPosition = hasRelativePosition(placed) ? placed.position : null;
   const placementOk = parentId === null || finalParentId === parentId;
+
+  // Con sólo ids es imposible distinguir dos categorías con el mismo nombre, que
+  // es justo el caso cuando la sala "aparece en otra categoría": el bot va al
+  // padre del canal configurado, y si ese canal está en una copia, la sala
+  // también. Por eso acá van los NOMBRES, y se avisa si hay categorías repetidas.
+  const cachedChannels = newState.guild.channels.cache;
+  const creatorInfo = channelPlacementInfo(creator);
+  const categoryName = parentId
+    ? cachedChannels?.get(parentId)?.name
+    : undefined;
+  const placedCategoryName = finalParentId
+    ? cachedChannels?.get(finalParentId)?.name
+    : undefined;
+  const duplicateCategories: Array<{ id: string; name?: string }> = [];
+  if (categoryName && cachedChannels?.values) {
+    for (const entry of cachedChannels.values()) {
+      if (
+        entry.type === ChannelType.GuildCategory &&
+        entry.name?.trim().toLowerCase() === categoryName.trim().toLowerCase()
+      ) {
+        duplicateCategories.push({ id: entry.id, name: entry.name });
+      }
+    }
+  }
+
   const placementLog = {
     guildId: newState.guild.id,
     channelId: createdChannel.id,
     creatorChannelId,
-    parentId,
+    creatorChannelName: creatorInfo.name,
+    categoria: { id: parentId, nombre: categoryName },
+    quedoEn: { id: finalParentId, nombre: placedCategoryName },
     targetPosition,
-    finalParentId,
     finalPosition,
     ok: placementOk,
+    categoriasConEseNombre: duplicateCategories.length,
   };
-  if (placementOk) {
-    console.log("[discord-bot] sala dinamica creada", placementLog);
+  if (!placementOk) {
+    console.warn(
+      "[discord-bot] la sala dinamica quedo fuera de su categoria",
+      placementLog,
+    );
+  } else if (duplicateCategories.length > 1) {
+    console.warn(
+      `[discord-bot] hay ${duplicateCategories.length} categorias llamadas "${categoryName}": el canal "${creatorInfo.name}" vive en ${parentId}. Si la sala aparece en la otra, hay que mover el canal Salas o borrar la categoria repetida.`,
+      { categorias: duplicateCategories, canalCreador: creatorChannelId },
+    );
   } else {
-    console.warn("[discord-bot] la sala dinamica quedo fuera de su categoria", placementLog);
+    console.log("[discord-bot] sala dinamica creada", placementLog);
   }
 
   await addTemporaryVoiceChannelId(newState.guild.id, createdChannel.id);
@@ -1036,6 +1098,40 @@ async function maybeDeleteTemporaryVoiceChannel(channelState: {
   }
 
   await removeTemporaryVoiceChannelId(channelState.guild.id, channelId);
+}
+
+// Barrido de salas huérfanas al arrancar. Una sala temporal creada antes de un
+// cambio de ubicación (o cuyo borrado falló) queda en Discord para siempre y
+// desde el cliente parece que el bot "sigue creando salas en el lugar viejo".
+// Acá se borran las vacías y se sacan de la lista las que ya no existen.
+async function sweepOrphanTemporaryVoiceChannels(guild: Guild): Promise<void> {
+  try {
+    const config = await getGuildConfig(guild.id);
+    const ids = [...(config.temporaryVoiceChannelIds ?? [])];
+    if (ids.length === 0) {
+      return;
+    }
+
+    for (const channelId of ids) {
+      await maybeDeleteTemporaryVoiceChannel({ guild, channelId }).catch(
+        () => undefined,
+      );
+    }
+
+    const after = new Set(
+      (await getGuildConfig(guild.id)).temporaryVoiceChannelIds ?? [],
+    );
+    const removed = ids.filter((channelId) => !after.has(channelId)).length;
+    if (removed > 0) {
+      console.log(
+        `[discord-bot] barrido de salas dinamicas: ${removed} de ${ids.length} liberadas (guild ${guild.id})`,
+      );
+    }
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] no se pudo barrer las salas dinamicas: ${getErrorMessage(error)}`,
+    );
+  }
 }
 
 const XP_SYNC_POLL_INTERVAL_MS = 30_000;
@@ -1173,6 +1269,9 @@ client.once(Events.ClientReady, (readyClient) => {
   startKarutaWishlistBackfill();
   startGameActivityReporter();
   trackGuildPresencesAtStartup(readyClient);
+  for (const guild of readyClient.guilds.cache.values()) {
+    void sweepOrphanTemporaryVoiceChannels(guild);
+  }
 });
 
 async function handleXpLevelCommand(
