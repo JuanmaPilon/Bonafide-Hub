@@ -2678,6 +2678,13 @@ async function applyNicknameForLevel(input: {
       return;
     }
 
+    // El dueño del servidor está por encima de cualquier rol, así que Discord
+    // no deja que un bot le cambie el nick (50013). No se intenta: no hay
+    // jerarquía que se pueda corregir para que funcione.
+    if (guild.ownerId && guild.ownerId === input.userId) {
+      return;
+    }
+
     const member = await guild.members.fetch(input.userId).catch(() => null);
     if (!member) {
       return;
@@ -2785,7 +2792,7 @@ async function withDiscordRetry<T>(
       if (status === 50013) {
         // Falta de permisos o jerarquía: no se arregla reintentando.
         console.warn(
-          `[discord-bot] ${label}: Discord rechazó la operación por permisos (50013). Revisá que el rol del bot esté POR ENCIMA del rol y del miembro.`,
+          `[discord-bot] ${label}: Discord rechazó la operación por permisos (50013). Revisá que el rol del bot esté POR ENCIMA del rol y del miembro (al dueño del servidor no se le puede cambiar el nick).`,
         );
         return null;
       }
