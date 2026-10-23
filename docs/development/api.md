@@ -223,6 +223,13 @@ son:
 El escaneo se inicia desde Raids → Logs. Publicar, actualizar, ocultar o
 restaurar una entrada también requiere una acción explícita.
 
+El mensaje que se publica en Discord lo arma el **API** (`buildRaidLogMessage`),
+no el bot: el bot solo recibe el texto. Dice los pulls y los kills de la noche en
+castellano de raid (`⚔️ 12 pulls · 💀 3 kills`), con singular cuando hay uno solo.
+Los datos de Warcraft Logs siguen llamándose `fights` en el código y en la base:
+así los nombra la API de WCL y renombrarlos obligaría a una migración de columnas
+sin ganar nada.
+
 El tablero muestra la **progresión** de la guild por dificultad (N / H / M): bosses
 distintos matados sobre bosses distintos enfrentados, sobre todos los logs. El
 denominador sale del mayor número de bosses vistos en una dificultad (Warcraft

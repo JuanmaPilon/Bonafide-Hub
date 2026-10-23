@@ -5274,7 +5274,7 @@ export async function buildApp() {
       }
 
       await logAdminAction(session, params.guildId, "raid-log:publish", {
-        details: `Log de raid publicado: ${result.parts[0]?.title ?? result.parts[0]?.reportCode} (${result.parts.length} report/s) · ${result.parts.reduce((total, entry) => total + entry.fightCount, 0)} fight/s`,
+        details: `Log de raid publicado: ${result.parts[0]?.title ?? result.parts[0]?.reportCode} (${result.parts.length} report/s) · ${result.parts.reduce((total, entry) => total + entry.fightCount, 0)} pulls`,
         targetType: "raid-log",
         targetId: params.logId,
       });
@@ -5325,7 +5325,7 @@ export async function buildApp() {
       }
 
       console.log(
-        `[raid-logs] refresh de ${params.logId}: ${result.parts.reduce((total, entry) => total + entry.fightCount, 0)} fight/s, mensaje ${result.updated ? "actualizado" : "sin cambios/omitido"}`,
+        `[raid-logs] refresh de ${params.logId}: ${result.parts.reduce((total, entry) => total + entry.fightCount, 0)} pulls, mensaje ${result.updated ? "actualizado" : "sin cambios/omitido"}`,
       );
 
       return {

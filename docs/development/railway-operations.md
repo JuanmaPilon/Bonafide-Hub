@@ -93,6 +93,28 @@ Si la API duerme:
 1. Verificar permisos de Discord (Move Members, Manage Channels).
 2. Verificar jerarquia de rol.
 3. Revisar logs del bot para fallback remoto/local.
+4. Confirmar que el servicio esta corriendo el ultimo commit: un bot con un build
+   viejo se comporta como antes del cambio y parece un bug nuevo.
+
+### Falla el clone del repo (integracion de GitHub)
+
+Railway no guarda el codigo: guarda un token con el que clona el repo en cada
+build. Si ese token queda invalido, el deploy falla aunque el commit exista.
+
+1. Distinguir el error: `failed to clone`, `repository not found` o
+   `authentication` es la integracion; `error TS` o `npm ERR!` es el codigo.
+2. Reconectar: *Project Settings → Integrations → GitHub → Disconnect* y volver a
+   conectar. Es una sola vez por proyecto, no por servicio.
+3. Revisar en **cada** servicio (*Settings → Source*) que sigan en el repo, la
+   rama `main` y su carpeta: `apps/api`, `apps/discord-bot`, `apps/web`. Un Root
+   Directory vacio hace que Railway buildee la raiz del monorepo y falle.
+4. `PRD_DB` no se reconecta: no viene del repo.
+5. Desplegar hacia adelante, nunca reintentar un deploy viejo: los que quedaron
+   en cola durante un incidente arrastran credenciales invalidas y vuelven a
+   fallar.
+6. Rotar secretos **solo** con aviso de impacto. Recordar que
+   `DISCORD_BOT_TOKEN` y `BOT_API_TOKEN` tienen una copia en el Bot y otra en el
+   API: si se rota una, hay que rotar las dos.
 
 ### Los permisos Admin/Officer desaparecen después de un deploy
 

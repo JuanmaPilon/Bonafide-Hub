@@ -673,8 +673,10 @@ export function buildRaidLogMessage(logs: RaidLog[]): string {
   const date = startedAt
     ? new Date(startedAt).toLocaleDateString("es-AR")
     : null;
+  const pullLabel = fights === 1 ? "pull" : "pulls";
+  const killLabel = kills === 1 ? "kill" : "kills";
   lines.push(
-    `⚔️ ${fights} fight/s · 💀 ${kills} kill/s${date ? ` · 📅 ${date}` : ""}`,
+    `⚔️ ${fights} ${pullLabel} · 💀 ${kills} ${killLabel}${date ? ` · 📅 ${date}` : ""}`,
   );
   for (const part of parts) {
     lines.push(part.reportUrl);
