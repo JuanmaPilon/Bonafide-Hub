@@ -59,7 +59,6 @@ import {
   setXpSyncRequested,
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
-import { temporaryVoicePosition } from "./services/dynamic-voice-position.js";
 import {
   stripKnownLevelMarks,
   withLevelMark,
@@ -871,92 +870,80 @@ async function createDynamicVoiceChannelForMember(newState: {
     return;
   }
 
-  // El canal creador se relee de Discord antes de crear la sala. Si el objeto
-  // del cache quedó viejo (por ejemplo, el staff movió "Salas" a una categoría
-  // mientras el bot estaba caído), `parentId` viene desactualizado y la sala
-  // nueva nace sin categoría: aparece suelta al final de la lista.
-  const freshCreator = await newState.guild.channels
-    .fetch(creatorChannelId)
-    .catch(() => null);
+  const fetchChannel = (channelId: string): Promise<unknown> =>
+    newState.guild.channels.fetch(channelId);
+
+  const freshCreator = await fetchChannel(creatorChannelId).catch(() => null);
   const creator = hasRelativePosition(freshCreator)
     ? freshCreator
     : creatorChannel;
-
-  // Dónde va la sala nueva: justo DEBAJO del canal creador, y si ya hay salas
-  // pegadas ahí, al final de ese bloque (así se apilan en el orden en que se
-  // crean). La cuenta está en `temporaryVoicePosition` porque el cálculo tiene
-  // un detalle que ya nos costó caro: sólo suman las salas CONTIGUAS.
-  // Se usa `position` (el índice dentro de la categoría), no `rawPosition`:
-  // `setPosition` trabaja con ese mismo índice.
-  let targetPosition = 1;
-  if (hasRelativePosition(creator)) {
-    targetPosition = temporaryVoicePosition(
-      creator,
-      guildConfig.temporaryVoiceChannelIds ?? [],
-      (channelId) => newState.guild.channels.cache?.get(channelId),
-    );
-  }
-
   const parentId = creator.parentId ?? null;
 
+  // La sala se crea SIN parent y SIN posición a propósito, y después se ubica
+  // en dos pasos explícitos. Mandar `parent` + `position` en el create no es
+  // confiable: en producción la sala terminaba fuera de la categoría, al final
+  // de la lista, como un grupo de voz suelto. Con llamadas separadas cada paso
+  // se puede verificar.
   const createdChannel = await newState.guild.channels.create({
     name: buildTemporaryVoiceChannelName(newState.member.displayName),
     type: ChannelType.GuildVoice,
-    parent: parentId,
-    position: targetPosition,
     reason: `Dynamic voice room for ${newState.member.id}`,
   });
 
-  // Una línea por sala creada: si vuelve a quedar mal ubicada, esto dice con qué
-  // parent y posición se pidió (sin esto hay que adivinar en producción).
-  console.log("[discord-bot] sala dinamica creada", {
+  // 1) A la categoría del creador.
+  if (parentId && hasSetParent(createdChannel)) {
+    await createdChannel
+      .setParent(parentId, { lockPermissions: false })
+      .catch((error: unknown) => {
+        console.warn("[discord-bot] no se pudo mover la sala a su categoria", {
+          guildId: newState.guild.id,
+          channelId: createdChannel.id,
+          parentId,
+          error: getErrorMessage(error),
+        });
+      });
+  }
+
+  // 2) Justo debajo del creador. Se relee el creador porque pudo moverse
+  // mientras se creaba la sala; `position` es el índice dentro de la categoría,
+  // que es lo que espera `setPosition`.
+  const anchor = await fetchChannel(creatorChannelId).catch(() => null);
+  const anchorPosition = hasRelativePosition(anchor)
+    ? Math.max(anchor.position, 0)
+    : hasRelativePosition(creator)
+      ? Math.max(creator.position, 0)
+      : 0;
+  const targetPosition = anchorPosition + 1;
+  if (hasSetPosition(createdChannel)) {
+    await createdChannel.setPosition(targetPosition).catch((error: unknown) => {
+      console.warn("[discord-bot] no se pudo ubicar la sala bajo el creador", {
+        guildId: newState.guild.id,
+        channelId: createdChannel.id,
+        targetPosition,
+        error: getErrorMessage(error),
+      });
+    });
+  }
+
+  // 3) Verificación con datos reales: es lo que dice si quedó donde se pidió.
+  const placed = await fetchChannel(createdChannel.id).catch(() => null);
+  const finalParentId = hasParentId(placed) ? (placed.parentId ?? null) : null;
+  const finalPosition = hasRelativePosition(placed) ? placed.position : null;
+  const placementOk = parentId === null || finalParentId === parentId;
+  const placementLog = {
     guildId: newState.guild.id,
     channelId: createdChannel.id,
     creatorChannelId,
     parentId,
     targetPosition,
-  });
-
-  if (hasSetPosition(createdChannel)) {
-    await createdChannel.setPosition(targetPosition).catch(() => undefined);
-  }
-
-  // `parent` y `position` no siempre quedan aplicados como se piden: visto en
-  // producción, la sala terminaba fuera de la categoría, suelta al final de la
-  // lista. Se relee el canal y, si no quedó donde va, se corrige: primero el
-  // parent y después la posición, que es lo último que manda.
-  if (parentId) {
-    const placed = await newState.guild.channels
-      .fetch(createdChannel.id)
-      .catch(() => null);
-    const placedParentId = hasParentId(placed) ? (placed.parentId ?? null) : null;
-
-    if (placedParentId !== null && placedParentId !== parentId) {
-      console.warn(
-        "[discord-bot] la sala dinamica quedo fuera de su categoria, se reubica",
-        {
-          guildId: newState.guild.id,
-          channelId: createdChannel.id,
-          parentId,
-          quedoEn: placedParentId,
-        },
-      );
-      if (hasSetParent(placed)) {
-        await placed
-          .setParent(parentId, { lockPermissions: false })
-          .catch((error: unknown) => {
-            console.warn("[discord-bot] no se pudo reubicar la sala dinamica", {
-              guildId: newState.guild.id,
-              channelId: createdChannel.id,
-              parentId,
-              error: getErrorMessage(error),
-            });
-          });
-        if (hasSetPosition(placed)) {
-          await placed.setPosition(targetPosition).catch(() => undefined);
-        }
-      }
-    }
+    finalParentId,
+    finalPosition,
+    ok: placementOk,
+  };
+  if (placementOk) {
+    console.log("[discord-bot] sala dinamica creada", placementLog);
+  } else {
+    console.warn("[discord-bot] la sala dinamica quedo fuera de su categoria", placementLog);
   }
 
   await addTemporaryVoiceChannelId(newState.guild.id, createdChannel.id);
@@ -2756,13 +2743,6 @@ async function applyNicknameForLevel(input: {
 
     const guild = await client.guilds.fetch(input.guildId).catch(() => null);
     if (!guild) {
-      return;
-    }
-
-    // El dueño del servidor está por encima de cualquier rol, así que Discord
-    // no deja que un bot le cambie el nick (50013). No se intenta: no hay
-    // jerarquía que se pueda corregir para que funcione.
-    if (guild.ownerId && guild.ownerId === input.userId) {
       return;
     }
 
