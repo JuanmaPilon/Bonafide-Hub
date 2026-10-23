@@ -1090,6 +1090,7 @@ async function syncGuildRoles(guildId: string): Promise<void> {
         guildId,
         level,
         userId: member.id,
+        xpConfig,
       }).catch(() => undefined);
 
       const rolesAboveLevel = allLevelRoleIds.filter((roleId) => {
@@ -2739,13 +2740,14 @@ async function applyNicknameForLevel(input: {
   guildId: string;
   level: number;
   userId: string;
+  xpConfig?: XpConfig;
 }): Promise<void> {
   if (!isRemoteStoreEnabled()) {
     return;
   }
 
   try {
-    const xpConfig = await fetchRemoteXpConfig(input.guildId);
+    const xpConfig = input.xpConfig ?? (await fetchRemoteXpConfig(input.guildId));
     const rule = findNicknameRuleForLevel(xpConfig, input.level);
     const levelMark = rule?.nicknamePrefix?.trim();
     if (!rule || !levelMark) {
@@ -2892,10 +2894,14 @@ async function withDiscordRetry<T>(
 // Aplica los premios de nivel al miembro: PRIMERO los roles y después el
 // prefijo del nick. Va en serie a propósito: en paralelo, Discord rate-limita
 // una de las dos ediciones y el rango quedaba sin asignar.
+// `xpConfig` se pasa desde el sync (que ya la tiene) para no pedirle la misma
+// config a la API una vez por miembro: con 1000 miembros eran 2000 requests
+// por sincronización.
 async function applyMemberLevelRewards(input: {
   guildId: string;
   level: number;
   userId: string;
+  xpConfig?: XpConfig;
 }): Promise<void> {
   // Roles y nick van juntos y EN COLA: son dos escrituras sobre el mismo
   // miembro y Discord rate-limita / pisa la segunda.
@@ -2909,13 +2915,14 @@ async function applyLevelRoles(input: {
   guildId: string;
   level: number;
   userId: string;
+  xpConfig?: XpConfig;
 }): Promise<void> {
   if (!isRemoteStoreEnabled()) {
     return;
   }
 
   try {
-    const xpConfig = await fetchRemoteXpConfig(input.guildId);
+    const xpConfig = input.xpConfig ?? (await fetchRemoteXpConfig(input.guildId));
     const candidateRules = (xpConfig.levelRoles ?? []).filter(
       (rule) => rule.level <= input.level && rule.roleId,
     );
