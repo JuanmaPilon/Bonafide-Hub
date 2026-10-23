@@ -906,6 +906,19 @@ async function createDynamicVoiceChannelForMember(newState: {
     : creatorChannel;
   const parentId = creator.parentId ?? null;
 
+  // Sin categoría: Discord agrupa los canales sueltos al FINAL de la lista, con
+  // un encabezado que parece una categoría y no se puede borrar (no existe como
+  // objeto). Si el canal creador está así, la sala hereda lo mismo y no hay
+  // forma de ubicarla bajo un encabezado que no es una categoría: hay que mover
+  // el canal creador adentro de una.
+  if (parentId === null) {
+    const creatorName = channelPlacementInfo(creator).name;
+    console.warn(
+      `[discord-bot] el canal creador "${creatorName ?? creatorChannelId}" NO esta dentro de una categoria: la sala va a quedar en el grupo suelto del final. Movelo dentro de la categoria que corresponda (Configuracion del servidor > Canales, arrastrarlo) y las salas van a aparecer debajo.`,
+      { guildId: newState.guild.id, creatorChannelId },
+    );
+  }
+
   // La sala se crea SIN parent y SIN posición a propósito, y después se ubica
   // en dos pasos explícitos. Mandar `parent` + `position` en el create no es
   // confiable: en producción la sala terminaba fuera de la categoría, al final
