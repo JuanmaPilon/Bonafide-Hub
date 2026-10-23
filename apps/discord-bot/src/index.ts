@@ -415,6 +415,19 @@ function hasSetPosition(value: unknown): value is {
   return isObjectRecord(value) && typeof value.setPosition === "function";
 }
 
+function hasSetParent(value: unknown): value is {
+  setParent: (
+    channelId: string,
+    options?: { lockPermissions?: boolean },
+  ) => Promise<unknown>;
+} {
+  return isObjectRecord(value) && typeof value.setParent === "function";
+}
+
+function hasParentId(value: unknown): value is { parentId?: string | null } {
+  return isObjectRecord(value) && "parentId" in value;
+}
+
 function isVoiceBasedChannelLike(
   value: unknown,
 ): value is { isVoiceBased: () => boolean; members: { size: number } } {
@@ -824,6 +837,11 @@ async function createDynamicVoiceChannelForMember(newState: {
         reason: string;
       }) => Promise<{
         id: string;
+        parentId?: string | null;
+        setParent?: (
+          channelId: string,
+          options?: { lockPermissions?: boolean },
+        ) => Promise<unknown>;
         setPosition?: (position: number) => Promise<unknown>;
       }>;
       fetch: (channelId: string) => Promise<unknown>;
@@ -853,6 +871,17 @@ async function createDynamicVoiceChannelForMember(newState: {
     return;
   }
 
+  // El canal creador se relee de Discord antes de crear la sala. Si el objeto
+  // del cache quedó viejo (por ejemplo, el staff movió "Salas" a una categoría
+  // mientras el bot estaba caído), `parentId` viene desactualizado y la sala
+  // nueva nace sin categoría: aparece suelta al final de la lista.
+  const freshCreator = await newState.guild.channels
+    .fetch(creatorChannelId)
+    .catch(() => null);
+  const creator = hasRelativePosition(freshCreator)
+    ? freshCreator
+    : creatorChannel;
+
   // Dónde va la sala nueva: justo DEBAJO del canal creador, y si ya hay salas
   // pegadas ahí, al final de ese bloque (así se apilan en el orden en que se
   // crean). La cuenta está en `temporaryVoicePosition` porque el cálculo tiene
@@ -860,24 +889,74 @@ async function createDynamicVoiceChannelForMember(newState: {
   // Se usa `position` (el índice dentro de la categoría), no `rawPosition`:
   // `setPosition` trabaja con ese mismo índice.
   let targetPosition = 1;
-  if (hasRelativePosition(creatorChannel)) {
+  if (hasRelativePosition(creator)) {
     targetPosition = temporaryVoicePosition(
-      creatorChannel,
+      creator,
       guildConfig.temporaryVoiceChannelIds ?? [],
       (channelId) => newState.guild.channels.cache?.get(channelId),
     );
   }
 
+  const parentId = creator.parentId ?? null;
+
   const createdChannel = await newState.guild.channels.create({
     name: buildTemporaryVoiceChannelName(newState.member.displayName),
     type: ChannelType.GuildVoice,
-    parent: creatorChannel.parentId ?? null,
+    parent: parentId,
     position: targetPosition,
     reason: `Dynamic voice room for ${newState.member.id}`,
   });
 
+  // Una línea por sala creada: si vuelve a quedar mal ubicada, esto dice con qué
+  // parent y posición se pidió (sin esto hay que adivinar en producción).
+  console.log("[discord-bot] sala dinamica creada", {
+    guildId: newState.guild.id,
+    channelId: createdChannel.id,
+    creatorChannelId,
+    parentId,
+    targetPosition,
+  });
+
   if (hasSetPosition(createdChannel)) {
     await createdChannel.setPosition(targetPosition).catch(() => undefined);
+  }
+
+  // `parent` y `position` no siempre quedan aplicados como se piden: visto en
+  // producción, la sala terminaba fuera de la categoría, suelta al final de la
+  // lista. Se relee el canal y, si no quedó donde va, se corrige: primero el
+  // parent y después la posición, que es lo último que manda.
+  if (parentId) {
+    const placed = await newState.guild.channels
+      .fetch(createdChannel.id)
+      .catch(() => null);
+    const placedParentId = hasParentId(placed) ? (placed.parentId ?? null) : null;
+
+    if (placedParentId !== null && placedParentId !== parentId) {
+      console.warn(
+        "[discord-bot] la sala dinamica quedo fuera de su categoria, se reubica",
+        {
+          guildId: newState.guild.id,
+          channelId: createdChannel.id,
+          parentId,
+          quedoEn: placedParentId,
+        },
+      );
+      if (hasSetParent(placed)) {
+        await placed
+          .setParent(parentId, { lockPermissions: false })
+          .catch((error: unknown) => {
+            console.warn("[discord-bot] no se pudo reubicar la sala dinamica", {
+              guildId: newState.guild.id,
+              channelId: createdChannel.id,
+              parentId,
+              error: getErrorMessage(error),
+            });
+          });
+        if (hasSetPosition(placed)) {
+          await placed.setPosition(targetPosition).catch(() => undefined);
+        }
+      }
+    }
   }
 
   await addTemporaryVoiceChannelId(newState.guild.id, createdChannel.id);
