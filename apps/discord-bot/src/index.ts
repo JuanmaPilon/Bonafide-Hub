@@ -3022,11 +3022,16 @@ async function applyLevelRoles(input: {
 
     // Plan en el log: sin esto, cuando algo sale mal no hay forma de saber qué
     // regla se evaluó. Fue justo lo que faltó el 15/09/2026.
+    // Sólo se escribe cuando hay algo que cambiar: en un sync sano la mayoría ya
+    // tiene su rol y decenas de líneas con "dar [—] · quitar [—]" tapan los
+    // avisos que sí importan (rol inexistente o por encima del bot, arriba).
     const roleName = (roleId: string): string =>
       guild.roles.cache.get(roleId)?.name ?? roleId;
-    console.log(
-      `[discord-bot] Nivel ${input.level} de <@${input.userId}> (guild ${input.guildId}): regla nivel ${currentRule.level} → dar [${roleIdsToActuallyAdd.map(roleName).join(", ") || "—"}] · quitar [${roleIdsToActuallyRemove.map(roleName).join(", ") || "—"}]`,
-    );
+    if (roleIdsToActuallyAdd.length > 0 || roleIdsToActuallyRemove.length > 0) {
+      console.log(
+        `[discord-bot] Nivel ${input.level} de <@${input.userId}> (guild ${input.guildId}): regla nivel ${currentRule.level} → dar [${roleIdsToActuallyAdd.map(roleName).join(", ") || "—"}] · quitar [${roleIdsToActuallyRemove.map(roleName).join(", ") || "—"}]`,
+      );
+    }
 
     const reason = `Level up to ${input.level}`;
     const expectedRoleIds = new Set(roleIdsToActuallyAdd);
