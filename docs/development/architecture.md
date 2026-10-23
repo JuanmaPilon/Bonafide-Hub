@@ -114,7 +114,7 @@ Bot -> addRemoteXp (API)
 xp_profiles (level, xp, contadores)
    |
    v
-Bot: asigna roles por nivel + prefijo de nickname + anuncio de rank
+Bot: asigna roles por nivel + adorno de nivel al final del nickname + anuncio de rank
    |
    v
 Web: leaderboard con colores/neón, niveles configurables en Admin
@@ -370,6 +370,14 @@ Inscripción
 3. La mención del rol mínimo va pelada en el contenido del mensaje (`<@&rol>`, sin decoración) y se normaliza al refrescar sin re-notificar (`allowed_mentions: { parse: [] }`).
 4. Cambiar el tipo de un evento no borra inscripciones: las que tienen un rol de otro tipo pasan a su icono clásico (o "Sin rol").
 5. El catálogo se guarda por tipo, así cargar emojis de LoL no toca los de WoW.
+6. **La ventana de publicación también se respeta en el hub.** Una serie con
+   "publicar X días antes" crea su molde al agendarse, pero hasta que entra en esa
+   ventana el evento no existe para los miembros: no aparece en la lista, no
+   aparece en el menú del nav y el API rechaza las inscripciones. Quien gestiona
+   eventos sí lo ve, marcado como **Sin publicar**, para poder editarlo. La
+   ventana la decide una sola función (`isEventPendingPublication` en
+   `events-store`), que es la misma que usa el scheduler para saber cuándo
+   publicarlo.
 
 ## 18. Flujo del roster (fichas, estados y raid leads)
 

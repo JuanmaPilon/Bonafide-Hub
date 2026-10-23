@@ -116,7 +116,9 @@ ranking, y dos bloques de actividad: cuánta XP, mensajes y voz lleva (más lo q
 sumó en el mes) y los **juegos más jugados** con sus portadas.
 
 Hay tema claro y oscuro, y una burbuja de chat de **Karpindomo**, el asistente de
-la comunidad, que aparece con frases cada tanto.
+la comunidad, que aparece con frases cada tanto. Su nombre completo es
+**D.E.R.E.K. — Desperuanizador Elegante, Regordete y Educado, Karpindomo**: el
+cargo formal es para el acta, el nombre corto es para el canal.
 
 ## El bot
 

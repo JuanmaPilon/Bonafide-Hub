@@ -336,7 +336,10 @@ export function XpSection({
                       <span className="admin-row-none">Sin rol</span>
                     )}
                     {rule.nicknamePrefix ? (
-                      <span className="xp-rule-prefix" title="Prefijo de nombre">
+                      <span
+                        className="xp-rule-prefix"
+                        title="Adorno del nivel (va al final del nombre)"
+                      >
                         {rule.nicknamePrefix}
                       </span>
                     ) : null}
@@ -576,7 +579,7 @@ export function XpSection({
                       ))}
                     </select>
                   </Field>
-                  <Field label="Prefijo de nombre">
+                  <Field label="Adorno del nivel">
                     <input
                       maxLength={8}
                       onChange={(event) =>
@@ -596,7 +599,7 @@ export function XpSection({
                   <span
                     className="xp-preview-name"
                     style={previewStyle}
-                  >{`${editing.nicknamePrefix ?? ""}${roleName(editingRole)}`}</span>
+                  >{`${roleName(editingRole)} ${editing.nicknamePrefix ?? ""}`.trim()}</span>
                 </div>
 
                 <div className="xp-inline-row">

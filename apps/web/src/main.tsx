@@ -26,6 +26,7 @@ import {
   Confetti,
   CopySimple,
   DownloadSimple,
+  EyeSlash,
   Fire,
   Flag,
   GameController,
@@ -875,7 +876,22 @@ const KARPINDOMO_LINES: string[] = [
   "Señor, hay un karpincho que no sabe dónde está parado",
   "Señor, el karpincho se disfrazó de oficial y casi lo logra",
   "Señor, los karpinchos dudan de su build",
+  "Señor, el D.E.R.E.K. solicita audiencia",
+  "Señor, el karpincho dice que él es el D.E.R.E.K. y nadie lo autorizó",
+  "Señor, Desperuanizador Elegante, Regordete y Educado pide la palabra",
+  "Señor, el mayordomo perdió el acta y culpa al karpincho",
+  "Señor, un karpincho se ofreció a administrar los timers y ya falló dos",
+  "Señor, el karpincho insiste en que el AFK es una sala VIP",
+  "Señor, hay un karpincho que dice tener contactos en el staff",
+  "Señor, el D.E.R.E.K. le recuerda que usted tenía algo pendiente y no recuerda qué",
+  "Señor, un karpincho se anotó al bench y ahora reclama el core",
+  "Señor, el karpincho pregunta si el pasto entra en la raid",
+  "Señor, los karpinchos quieren que se les llame por sus siglas",
 ];
+
+// Nombre completo del mayordomo, tal como figura en la documentación.
+const KARPINDOMO_TITLE =
+  "Desperuanizador Elegante, Regordete y Educado, Karpindomo";
 
 // Widget de Karpindomo: un botón flotante estilo burbuja de chat (como los
 // widgets de ayuda), que se abre con un mensaje random. No usa clases ni
@@ -911,6 +927,7 @@ function KarpindomoWidget({
               ✕
             </button>
           </div>
+          <span className="karpindomo-bubble-title">D.E.R.E.K. · {KARPINDOMO_TITLE}</span>
           <p>{msg}</p>
         </div>
       ) : null}
@@ -4026,8 +4043,12 @@ function EventSummaryCard({
     (option) => option.key === mySignup?.status,
   );
   const paused = event.paused === true;
+  // Sin publicar: el molde de una serie que todavía no entró en su ventana. No
+  // se puede uno anotar hasta que salga el aviso.
+  const pending = event.pendingPublication === true;
   const closed =
     paused ||
+    pending ||
     event.status !== "scheduled" ||
     Boolean(
       event.signupDeadline &&
@@ -4057,18 +4078,22 @@ function EventSummaryCard({
         <span className="event-tile-head">
           <strong>{event.title}</strong>
           {paused ||
+          pending ||
           event.status !== "scheduled" ||
           (closed && event.status === "scheduled") ? (
             <span className="event-card-badges">
               {paused ? (
                 <span className="event-card-status paused">Pausado</span>
               ) : null}
+              {pending ? (
+                <span className="event-card-status pending">Sin publicar</span>
+              ) : null}
               {event.status !== "scheduled" ? (
                 <span className={`event-card-status ${event.status}`}>
                   {event.status === "cancelled" ? "Cancelado" : "Completado"}
                 </span>
               ) : null}
-              {closed && !paused && event.status === "scheduled" ? (
+              {closed && !paused && !pending && event.status === "scheduled" ? (
                 <span className="event-card-status closed">Cerradas</span>
               ) : null}
             </span>
@@ -4593,9 +4618,11 @@ function EventCard({
   };
 
   const paused = event.paused === true;
+  const pending = event.pendingPublication === true;
   const isPoll = eventPoll === true;
   const signupsClosed =
     paused ||
+    pending ||
     event.status !== "scheduled" ||
     Boolean(
       event.signupDeadline &&
@@ -4849,7 +4876,7 @@ function EventCard({
         <div className="event-card-body">
           {/* El título y las etiquetas viven en la cabecera del panel: acá sólo
               quedan los estados, y la fila se omite si no hay ninguno. */}
-          {paused || event.status !== "scheduled" ? (
+          {paused || pending || event.status !== "scheduled" ? (
             <div className="event-card-head">
               <div className="event-card-badges">
                 {paused ? (
@@ -4858,12 +4885,18 @@ function EventCard({
                     Pausado
                   </span>
                 ) : null}
+                {pending ? (
+                  <span className="event-card-status pending">
+                    <EyeSlash aria-hidden="true" weight="fill" />
+                    Sin publicar
+                  </span>
+                ) : null}
                 {event.status !== "scheduled" ? (
                   <span className={`event-card-status ${event.status}`}>
                     {event.status === "cancelled" ? "Cancelado" : "Completado"}
                   </span>
                 ) : null}
-                {event.signupDeadline && signupsClosed && !paused ? (
+                {event.signupDeadline && signupsClosed && !paused && !pending ? (
                   <span className="event-card-status closed">
                     <LockSimple aria-hidden="true" weight="fill" />
                     Cerradas
@@ -5199,7 +5232,9 @@ function EventCard({
                 <div className="event-signup-closed">
                   {paused
                     ? "El evento está pausado."
-                    : "Las inscripciones están cerradas."}
+                    : pending
+                      ? `Todavía no se publicó: el aviso sale ${Math.max(1, event.recurrencePublishDaysBefore ?? 1)} día${Math.max(1, event.recurrencePublishDaysBefore ?? 1) === 1 ? "" : "s"} antes del inicio y ahí abren las inscripciones.`
+                      : "Las inscripciones están cerradas."}
                   {mySignup ? " Tu inscripción actual queda guardada." : ""}
                 </div>
               ) : (

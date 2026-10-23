@@ -20,6 +20,62 @@ export const DEFAULT_EVENT_TAG_COLOR = DEFAULT_TAG_COLOR;
 export const normalizeEventTags = normalizeTags;
 export type EventTag = Tag;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// ¿Ya salió a la luz? Un evento cuenta como publicado cuando tiene el aviso en
+// Discord o el evento agendado. Los que no publican nada (evento sólo del hub)
+// están siempre visibles: no hay ventana que esperar.
+export function eventIsPublished(event: {
+  discordEventId?: string | null;
+  discordMessageIds?: string[] | null;
+  discordPollMessageId?: string | null;
+}): boolean {
+  return Boolean(
+    event.discordEventId ||
+      event.discordPollMessageId ||
+      (event.discordMessageIds ?? []).length > 0,
+  );
+}
+
+// ¿Esta configurada para salir a Discord? Un evento que solo vive en el hub
+// nunca espera ventana de publicación.
+export function eventPublishesToDiscord(event: {
+  discordEventConfig?: EventDiscordConfig;
+  publishChannelId?: string | null;
+}): boolean {
+  return (
+    Boolean(event.publishChannelId) ||
+    event.discordEventConfig?.createScheduledEvent === true
+  );
+}
+
+// Un evento está pendiente de publicación cuando es el molde de una serie que
+// publica en Discord y todavía no entró en su ventana (X días antes del inicio).
+// Es una sola fuente: el scheduler que publica y la API que lista usan esto, así
+// no se puede dar el caso de uno esconder lo que el otro publica.
+export function isEventPendingPublication(
+  event: {
+    discordEventConfig?: EventDiscordConfig;
+    discordEventId?: string | null;
+    discordMessageIds?: string[] | null;
+    discordPollMessageId?: string | null;
+    publishChannelId?: string | null;
+    recurrenceEnabled: boolean;
+    recurrencePublishDaysBefore?: number | null;
+    startsAt: Date;
+  },
+  now = Date.now(),
+): boolean {
+  if (!event.recurrenceEnabled || eventIsPublished(event)) {
+    return false;
+  }
+  if (!eventPublishesToDiscord(event)) {
+    return false;
+  }
+  const days = Math.max(1, event.recurrencePublishDaysBefore ?? 1);
+  return event.startsAt.getTime() - days * DAY_MS > now;
+}
+
 // ── Catálogo de opciones del Módulo X ───────────────────────────────
 // Clases de WoW, roles de combate y tipos de evento. Se definen acá como
 // fuente de verdad y se exponen a la web para poblar los selects.
@@ -322,6 +378,10 @@ export type HubEvent = {
   updatedAt: Date;
   voiceChannelId?: string;
   signups: EventSignup[];
+  // El molde de una serie se publica unos días antes de su fecha: hasta que se
+  // abre esa ventana existe en la base (para poder editarlo) pero no se muestra
+  // a los miembros ni acepta inscripciones.
+  pendingPublication: boolean;
 };
 
 // Config guardada de la publicación en Discord de un evento.
@@ -493,6 +553,17 @@ function toEvent(
     signups: record.signups.map((signup) =>
       toSignup(signup, roster, record.game),
     ),
+    pendingPublication: isEventPendingPublication({
+      discordEventConfig:
+        (record.discordEventConfig as EventDiscordConfig | null) ?? undefined,
+      discordEventId: record.discordEventId,
+      discordMessageIds: record.discordMessageIds,
+      discordPollMessageId: record.discordPollMessageId,
+      publishChannelId: record.publishChannelId,
+      recurrenceEnabled: record.recurrenceEnabled,
+      recurrencePublishDaysBefore: record.recurrencePublishDaysBefore,
+      startsAt: record.startsAt,
+    }),
   };
 }
 

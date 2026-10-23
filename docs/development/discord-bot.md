@@ -227,6 +227,11 @@ Karpindomo es el mayordomo de la comunidad: un capincho que habla en "usted", di
 "Señor/Senior", arranca con un emoji y cierra con un remate. No es cosmético: es
 la voz del bot en todos los avisos que la gente ve.
 
+Su nombre completo es el chiste: **D.E.R.E.K. — Desperuanizador Elegante,
+Regordete y Educado, Karpindomo**. En el acta es el D.E.R.E.K.; en el canal es
+Karpindomo. Varias frases lo presentan con el nombre entero o con las siglas: es
+la forma de que el chiste circule sin colarlo en todas.
+
 Cada aviso sale de un **repertorio** (`pickRandom` sobre un array) en vez de un
 texto fijo, así el servidor no lee la misma frase dos veces:
 
@@ -259,7 +264,8 @@ Dos reglas para agregar frases:
 2. Cooldown anti-spam por usuario.
 3. Niveles con fórmula triangular (`levelBaseXp`).
 4. Roles por nivel (acumular o reemplazar) + roles extra (add/remove).
-5. Prefijo de nickname por nivel (idempotente).
+5. Adorno de nivel al final del nickname (idempotente: se limpia de las dos
+   puntas, así los nicks viejos con el adorno adelante se normalizan solos).
 6. Anuncios de rank (solo al subir de rango).
 7. Multiplicadores de XP por rol.
 8. Cap de nivel (`maxLevel`; 0 = sin límite).

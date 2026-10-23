@@ -112,6 +112,17 @@ const BUTLER_OPENERS = [
   "🪞 Karpindomo se miró al espejo y recordó esto:",
   "🧦 Entre el calcetín perdido y el control remoto apareció:",
   "🎩 Con la venia del señor, una verdad incómoda:",
+  "🫖 El D.E.R.E.K. se aclara la garganta:",
+  "📜 Desperuanizador Elegante, Regordete y Educado, con la palabra:",
+  "🧐 El mayordomo consultó el libro y encontró esto:",
+  "🪑 El D.E.R.E.K. acomoda la silla y lee:",
+  "🎺 Se anuncia, por orden del D.E.R.E.K.:",
+  "🧉 Ronda nueva, frase vieja:",
+  "📯 Aviso oficial del D.E.R.E.K., que no sabe quién lo autorizó:",
+  "🕯️ Se apagan las luces, se enciende la minuta:",
+  "🎻 La orquesta pide silencio para esto:",
+  "🫡 El D.E.R.E.K. rinde cuentas:",
+  "🗝️ Se abre el cajón de las frases guardadas:",
 ];
 
 // Publica una frase al azar en el canal configurado (si corresponde).

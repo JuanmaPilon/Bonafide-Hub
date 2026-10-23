@@ -134,8 +134,10 @@ import {
   listReportPendingEvents,
   listPublishedUpcomingEvents,
   eventLibraryImagePath,
+  eventPublishesToDiscord,
   getEventImageData,
   getEventImageDataUrl,
+  isEventPendingPublication,
   markEventRemindersSent,
   markEventReportSent,
   markEventSignupClosed,
@@ -1723,12 +1725,9 @@ async function runEventRecurrenceSync(): Promise<void> {
       // serie se republicaba apenas terminaba la raid anterior.
       const headPending =
         (head.discordMessageIds ?? []).length === 0 && !head.discordEventId;
-      const headPublishes =
-        Boolean(head.publishChannelId) ||
-        head.discordEventConfig?.createScheduledEvent === true;
       if (
         headPending &&
-        headPublishes &&
+        eventPublishesToDiscord(head) &&
         head.startsAt.getTime() > Date.now() &&
         head.startsAt.getTime() - publishBeforeMs <= Date.now()
       ) {
@@ -5546,7 +5545,16 @@ export async function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const events = await listEvents(params.guildId);
+    // Un evento que todavía no entró en su ventana de publicación no existe para
+    // los miembros: lo ve sólo quien gestiona eventos (para poder editarlo).
+    const canSeeUnpublished = await canManageModule(
+      session,
+      params.guildId,
+      "eventos",
+    );
+    const events = (await listEvents(params.guildId)).filter(
+      (event) => canSeeUnpublished || !event.pendingPublication,
+    );
     // Mandamos el nombre del rol mínimo ya resuelto (cacheado 5 min): sin esto
     // la tarjeta dibujaba "un rol" y después el nombre real (parpadeo).
     const roleNames = await fetchGuildRoleNames(params.guildId);
@@ -7364,6 +7372,13 @@ export async function buildApp() {
           error: "El evento está pausado.",
         });
       }
+      if (event.pendingPublication) {
+        return reply.code(400).send({
+          ok: false,
+          error:
+            "El evento todavía no se publicó: las inscripciones abren cuando sale el aviso.",
+        });
+      }
       if (event.status !== "scheduled") {
         return reply.code(400).send({
           ok: false,
@@ -8227,6 +8242,13 @@ export async function buildApp() {
         return reply.code(400).send({
           ok: false,
           error: "El evento está pausado.",
+        });
+      }
+      if (event.pendingPublication) {
+        return reply.code(400).send({
+          ok: false,
+          error:
+            "El evento todavía no se publicó: las inscripciones abren cuando sale el aviso.",
         });
       }
       if (event.status !== "scheduled") {

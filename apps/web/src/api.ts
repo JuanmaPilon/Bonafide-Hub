@@ -1503,6 +1503,10 @@ export type HubEvent = {
   updatedAt: string;
   voiceChannelId?: string;
   signups: EventSignup[];
+  // El molde de una serie se publica unos días antes de su fecha. Mientras no
+  // entre en esa ventana sólo lo ve quien gestiona eventos, no acepta
+  // inscripciones y los miembros no lo ven en la lista.
+  pendingPublication?: boolean;
 };
 
 export type EventSignup = {

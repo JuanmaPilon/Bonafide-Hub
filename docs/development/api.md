@@ -836,8 +836,18 @@ afuera y con Escape, y sigue al botón si la página se mueve.
 título estaba repetido justo debajo del banner (que ya lo muestra dibujado en la
 portada), así que se sacó: el título es el `h2` del panel y las etiquetas
 (`ComunicadoTag`) van a su costado, en la misma fila centrada. En el cuerpo queda
-sólo la fila de **estados** (Pausado / Completado / Cerradas), y se omite cuando
-no hay ninguno.
+sólo la fila de **estados** (Pausado / Completado / Cerradas / Sin publicar), y
+se omite cuando no hay ninguno.
+
+**Un evento sin publicar no existe para los miembros.** El molde de una serie que
+publica "X días antes" se crea al agendarse, pero hasta que entra en esa ventana
+`GET /guilds/:g/events` lo filtra para quien no gestiona eventos y el API rechaza
+las inscripciones (web e internas) con un mensaje que explica cuándo abren. Quien
+gestiona eventos lo recibe igual, con `pendingPublication: true` y el cartel
+**Sin publicar** en la tarjeta: es el único que necesita verlo, para editarlo. La
+ventana sale de `isEventPendingPublication` (`events-store`), la misma que usa el
+scheduler para publicarlo, así no puede pasar que uno esconda lo que el otro
+publica.
 
 **Los grupos del roster van de a dos**: cada rol es un panel y entran **dos por
 fila** (Tank | Healer / Melee | Range), con el ancho justo para que
@@ -1157,7 +1167,7 @@ Tablas:
 10. `karuta_cards` — posesión de cartas raras (print/wishlist/dueño)
 11. `karuta_albums` — álbumes (`ka`) de cada usuario, con puntero al mensaje
 12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)
-13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`). Con `recurrenceEnabled` el evento es el **molde** de una serie: cada `recurrenceEveryDays` el motor crea una ocurrencia (evento nuevo con el mismo título, publicado `recurrencePublishDaysBefore` días antes). `POST /guilds/:g/events/:id/reset-occurrence` limpia la ocurrencia (avisos + recordatorios en Discord, inscripciones y marcadores) y mueve el molde a la próxima fecha libre de la serie, sin perder la serie.
+13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`). Con `recurrenceEnabled` el evento es el **molde** de una serie: cada `recurrenceEveryDays` el motor crea una ocurrencia (evento nuevo con el mismo título, publicado `recurrencePublishDaysBefore` días antes). Mientras no entra en esa ventana, el campo calculado `pendingPublication` lo marca como no visible para los miembros. `POST /guilds/:g/events/:id/reset-occurrence` limpia la ocurrencia (avisos + recordatorios en Discord, inscripciones y marcadores) y mueve el molde a la próxima fecha libre de la serie, sin perder la serie.
 14. `event_signups` — inscripciones por evento y usuario (`status`, `role`, `wowClass`, `spec`, `character`)
 15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild (con la clase con la que lo usó; la clase/spec del asistente salen de `roster_profiles` y, si no hay ficha, de la última `event_signups`)
 16. `event_player_characters` — PJ de un miembro ya confirmados en el cruce de asistencia de los logs (clave normalizada del nombre que figura en Warcraft Logs)
