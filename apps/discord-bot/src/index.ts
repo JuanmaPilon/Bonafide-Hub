@@ -1079,6 +1079,13 @@ async function syncGuildRoles(guildId: string): Promise<void> {
       .filter(Boolean);
 
     let synced = 0;
+    const nickCounts: Record<NicknameOutcome, number> = {
+      error: 0,
+      "no-rule": 0,
+      rejected: 0,
+      unchanged: 0,
+      updated: 0,
+    };
     for (const member of members.values()) {
       if (member.user.bot) {
         continue;
@@ -1086,12 +1093,13 @@ async function syncGuildRoles(guildId: string): Promise<void> {
 
       const level = profileByUser.get(member.id)?.level ?? 0;
 
-      await applyMemberLevelRewards({
+      const outcome = await applyMemberLevelRewards({
         guildId,
         level,
         userId: member.id,
         xpConfig,
-      }).catch(() => undefined);
+      }).catch((): NicknameOutcome => "error");
+      nickCounts[outcome] += 1;
 
       const rolesAboveLevel = allLevelRoleIds.filter((roleId) => {
         const rule = xpConfig.levelRoles?.find(
@@ -1120,7 +1128,7 @@ async function syncGuildRoles(guildId: string): Promise<void> {
     }
 
     console.log(
-      `[discord-bot] XP sync completed for guild ${guildId}: ${synced} members.`,
+      `[discord-bot] XP sync completed for guild ${guildId}: ${synced} members · nicks ${nickCounts.updated} actualizados, ${nickCounts.unchanged} ya estaban, ${nickCounts.rejected} rechazados por permisos, ${nickCounts["no-rule"]} sin regla con adorno, ${nickCounts.error} con error.`,
     );
   } catch (error: unknown) {
     console.warn(
@@ -2724,7 +2732,8 @@ function startVoiceXpTracker(): void {
 function findNicknameRuleForLevel(
   xpConfig: XpConfig,
   level: number,
-): XpRoleRule | null {  const candidates = (xpConfig.levelRoles ?? [])
+): XpRoleRule | null {
+  const candidates = (xpConfig.levelRoles ?? [])
     .filter(
       (rule) => rule.level <= level && Boolean(rule.nicknamePrefix?.trim()),
     )
@@ -2732,6 +2741,11 @@ function findNicknameRuleForLevel(
 
   return candidates[0] ?? null;
 }
+
+// Qué le pasó al nick de un miembro. El sync lo cuenta al final: antes, cuando
+// no había regla con adorno, no quedaba ningún rastro y era imposible saber por
+// qué alguien no tenía el suyo.
+type NicknameOutcome = "error" | "no-rule" | "rejected" | "unchanged" | "updated";
 
 // El nivel se agrega al FINAL del nombre. Las versiones anteriores lo ponían
 // adelante, así que se limpian las dos puntas: si sólo se limpiara el final,
@@ -2741,9 +2755,9 @@ async function applyNicknameForLevel(input: {
   level: number;
   userId: string;
   xpConfig?: XpConfig;
-}): Promise<void> {
+}): Promise<NicknameOutcome> {
   if (!isRemoteStoreEnabled()) {
-    return;
+    return "error";
   }
 
   try {
@@ -2751,17 +2765,17 @@ async function applyNicknameForLevel(input: {
     const rule = findNicknameRuleForLevel(xpConfig, input.level);
     const levelMark = rule?.nicknamePrefix?.trim();
     if (!rule || !levelMark) {
-      return;
+      return "no-rule";
     }
 
     const guild = await client.guilds.fetch(input.guildId).catch(() => null);
     if (!guild) {
-      return;
+      return "error";
     }
 
     const member = await guild.members.fetch(input.userId).catch(() => null);
     if (!member) {
-      return;
+      return "error";
     }
 
     const marks = (xpConfig.levelRoles ?? [])
@@ -2773,22 +2787,36 @@ async function applyNicknameForLevel(input: {
       : member.user.globalName?.trim() || member.user.username.trim();
 
     if (!baseName) {
-      return;
+      return "error";
     }
 
     // El nick tiene 32 caracteres: se recorta el nombre, no el adorno del nivel.
     const nextNickname = withLevelMark(baseName, levelMark);
     if (member.nickname === nextNickname) {
-      return;
+      return "unchanged";
     }
 
-    await withDiscordRetry(`cambiar el nick de <@${input.userId}>`, () =>
-      member.setNickname(nextNickname, `Level up to ${input.level}`),
+    const result = await withDiscordRetry(
+      `cambiar el nick de <@${input.userId}>`,
+      () => member.setNickname(nextNickname, `Level up to ${input.level}`),
     );
+    if (result === null) {
+      // El dueño del servidor está por encima de cualquier rol: Discord no deja
+      // que un bot le toque el nick, no importa qué permisos tenga. Se avisa con
+      // nombre y apellido para no seguir buscando un problema de jerarquía.
+      if (guild.ownerId === input.userId) {
+        console.warn(
+          `[discord-bot] El dueño del servidor (${input.userId}) no puede recibir el adorno del nick por API: Discord no lo permite. Ponelo a mano una vez ("${nextNickname}") y no se vuelve a tocar.`,
+        );
+      }
+      return "rejected";
+    }
+    return "updated";
   } catch (error: unknown) {
     console.warn(
       `[discord-bot] Failed to apply nickname suffix: ${getErrorMessage(error)}`,
     );
+    return "error";
   }
 }
 
@@ -2895,13 +2923,15 @@ async function applyMemberLevelRewards(input: {
   level: number;
   userId: string;
   xpConfig?: XpConfig;
-}): Promise<void> {
+}): Promise<NicknameOutcome> {
   // Roles y nick van juntos y EN COLA: son dos escrituras sobre el mismo
   // miembro y Discord rate-limita / pisa la segunda.
+  let outcome: NicknameOutcome = "error";
   await enqueueMemberWrite(input.guildId, input.userId, async () => {
     await applyLevelRoles(input);
-    await applyNicknameForLevel(input);
+    outcome = await applyNicknameForLevel(input);
   });
+  return outcome;
 }
 
 async function applyLevelRoles(input: {
