@@ -904,7 +904,22 @@ async function createDynamicVoiceChannelForMember(newState: {
   const creator = hasRelativePosition(freshCreator)
     ? freshCreator
     : creatorChannel;
-  const parentId = creator.parentId ?? null;
+
+  // La categoría se elige en Admin (Admin → Configuraciones). Si está cargada,
+  // manda: es la única forma de no equivocarse cuando hay dos categorías con el
+  // mismo nombre. Si no, se usa la del canal creador.
+  const configuredCategoryId =
+    guildConfig.dynamicVoiceCategoryId?.trim() || null;
+  if (configuredCategoryId) {
+    const belongsToCreator =
+      creator.parentId === configuredCategoryId;
+    if (!belongsToCreator) {
+      console.log(
+        `[discord-bot] la categoria configurada (${configuredCategoryId}) no es la del canal creador (${creator.parentId ?? "sin categoria"}); se usa la configurada.`,
+      );
+    }
+  }
+  const parentId = configuredCategoryId ?? creator.parentId ?? null;
 
   // Sin categoría: Discord agrupa los canales sueltos al FINAL de la lista, con
   // un encabezado que parece una categoría y no se puede borrar (no existe como

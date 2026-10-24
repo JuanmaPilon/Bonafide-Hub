@@ -114,6 +114,7 @@ import {
   getGuildRoles,
   getGuilds,
   getGuildTextChannels,
+  getGuildCategories,
   getGuildVoiceChannels,
   getGuildWidgetStatus,
   getRaidLogAnalysis,
@@ -8404,6 +8405,7 @@ function App() {
     null,
   );
   const [voiceChannels, setVoiceChannels] = useState<GuildChannel[]>([]);
+  const [guildCategories, setGuildCategories] = useState<GuildChannel[]>([]);
   const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
@@ -11913,6 +11915,7 @@ function App() {
   useEffect(() => {
     if (activeTab !== "admin" || !selectedGuildId) {
       setVoiceChannels([]);
+      setGuildCategories([]);
       setTextChannels([]);
       // guildRoles NO se limpia: los colores de los roles se usan fuera del
       // panel (el ranking pinta los nombres con ellos).
@@ -11925,15 +11928,17 @@ function App() {
     Promise.all([
       getGuildVoiceChannels(selectedGuildId),
       getGuildTextChannels(selectedGuildId),
+      getGuildCategories(selectedGuildId),
       getGuildRoles(selectedGuildId),
       listDailyMessages(selectedGuildId),
     ])
-      .then(([channels, textCh, roles, daily]) => {
+      .then(([channels, textCh, categories, roles, daily]) => {
         if (cancelled) {
           return;
         }
 
         setVoiceChannels(channels);
+        setGuildCategories(categories);
         setTextChannels(textCh);
         setGuildRoles(roles);
         setDailyMessages(daily);
@@ -11942,6 +11947,7 @@ function App() {
         if (!cancelled) {
           void error;
           setVoiceChannels([]);
+          setGuildCategories([]);
           setTextChannels([]);
           setGuildRoles([]);
           setDailyMessages([]);
@@ -13002,6 +13008,40 @@ function App() {
                                   {channel.name}
                                 </option>
                               ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Categoría de las salas</span>
+                            <select
+                              className="select select-inline"
+                              value={config.dynamicVoiceCategoryId ?? ""}
+                              onChange={(event) =>
+                                editConfig((current) => ({
+                                  ...current,
+                                  dynamicVoiceCategoryId:
+                                    event.target.value || undefined,
+                                }))
+                              }
+                            >
+                              <option value="">
+                                La misma del canal creador
+                              </option>
+                              {guildCategories.map((category) => {
+                                // Dos categorías pueden llamarse igual: la
+                                // posición (el orden en la lista del servidor) es
+                                // lo único que las distingue sin copiar IDs.
+                                const repeated =
+                                  guildCategories.filter(
+                                    (entry) => entry.name === category.name,
+                                  ).length > 1;
+                                return (
+                                  <option key={category.id} value={category.id}>
+                                    {repeated
+                                      ? `${category.name} (posición ${(category.position ?? 0) + 1})`
+                                      : category.name}
+                                  </option>
+                                );
+                              })}
                             </select>
                           </label>
                           </div>

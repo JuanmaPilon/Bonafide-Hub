@@ -67,21 +67,20 @@
 Al entrar al canal creador (`dynamicVoiceCreateChannelId`) el bot abre una sala
 propia, mueve a la persona y borra la sala cuando queda vacía.
 
-**Dónde se crean:** justo **debajo del canal creador**, no arriba del AFK. Si ya
-hay salas pegadas ahí, la nueva se apila al final de ese bloque, así se leen en
-el orden en que se crearon.
+**Dónde se crean:** debajo del canal creador, dentro de su categoría. La sala se
+crea sin `parent` ni `position` y después se ubica en dos pasos explícitos
+(`setParent` y `setPosition` con el índice del creador + 1), porque mandar las dos
+cosas en el `create` no era confiable: en producción la sala terminaba fuera de la
+categoría, al final de la lista. Al final se relee el canal y el log dice dónde
+quedó de verdad, con nombres además de IDs.
 
-La cuenta vive en `services/dynamic-voice-position.ts` y sólo suma las salas
-**contiguas** al creador. Antes se sumaban todas las de la categoría
-(`creador + 1 + todas`), lo que asume que están pegadas al creador: cuando no lo
-están —salas viejas que quedaron arriba del AFK, o un canal que alguien arrastró
-en el medio— la cuenta daba de más y la sala nueva aparecía **debajo de canales
-ajenos**. Con la cuenta contigua, el bloque nuevo arranca pegado al creador y las
-salas viejas quedan abajo hasta que se borren.
-
-Se usa `position` (el índice dentro del grupo de canales de voz de la categoría),
-nunca `rawPosition`: el `create` y el `setPosition` de discord.js trabajan con
-ese índice.
+**La categoría se puede fijar a mano** en *Admin → Configuraciones → Categoría de
+las salas* (`dynamicVoiceCategoryId`). Si está vacía se usa la del canal creador.
+Sirve para servidores con dos categorías del mismo nombre, donde "la del canal" no
+alcanza para saber cuál es la buena; el selector muestra la posición cuando hay
+nombres repetidos. Al arrancar, el bot además barre las salas registradas: borra
+las vacías y saca de la lista las que ya no existen, para que no queden salas
+huérfanas de intentos anteriores.
 
 Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 

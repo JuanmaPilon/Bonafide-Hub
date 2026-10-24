@@ -251,6 +251,10 @@ export type GuildConfig = {
   dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
+  // Categoría elegida a mano para las salas dinámicas. Si está vacía, el bot usa
+  // la categoría del canal creador. Sirve para servidores con dos categorías del
+  // mismo nombre, donde "la del canal" no alcanza para saber cuál es.
+  dynamicVoiceCategoryId?: string;
   enabledModules?: string[];
   eventClassLabel?: string;
   eventGames?: EventGameConfig[];
@@ -295,6 +299,7 @@ function toGuildConfig(
     dailyMessagesMinMinutes: number;
     defaultRoleId: string | null;
     dynamicVoiceCreateChannelId: string | null;
+    dynamicVoiceCategoryId: string | null;
     enabledModules: string[];
     eventClassLabel: string | null;
     eventGames: unknown;
@@ -347,6 +352,7 @@ function toGuildConfig(
     defaultRoleId: record.defaultRoleId ?? undefined,
     dynamicVoiceCreateChannelId:
       record.dynamicVoiceCreateChannelId ?? undefined,
+    dynamicVoiceCategoryId: record.dynamicVoiceCategoryId ?? undefined,
     enabledModules: record.enabledModules,
     eventClassLabel: record.eventClassLabel ?? undefined,
     eventGames: normalizeEventGames(record.eventGames) ?? undefined,
@@ -391,6 +397,7 @@ type NormalizedGuildConfig = {
   dailyMessagesMinMinutes: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
+  dynamicVoiceCategoryId?: string;
   enabledModules: string[];
   eventClassLabel?: string;
   eventGames?: EventGameConfig[];
@@ -447,6 +454,7 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     dailyMessagesMinMinutes: minMinutes,
     defaultRoleId: config.defaultRoleId,
     dynamicVoiceCreateChannelId: config.dynamicVoiceCreateChannelId,
+    dynamicVoiceCategoryId: config.dynamicVoiceCategoryId,
     enabledModules: config.enabledModules ?? [],
     eventClassLabel: config.eventClassLabel?.trim().slice(0, 24) || undefined,
     eventGames: normalizeEventGames(config.eventGames) ?? [],
@@ -527,6 +535,7 @@ export async function replaceGuildConfig(
         logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
+        dynamicVoiceCategoryId: normalized.dynamicVoiceCategoryId,
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,
@@ -568,6 +577,7 @@ export async function replaceGuildConfig(
         logsWatchServer: normalized.logsWatchServer,
         memberLogChannelId: normalized.memberLogChannelId,
         dynamicVoiceCreateChannelId: normalized.dynamicVoiceCreateChannelId,
+        dynamicVoiceCategoryId: normalized.dynamicVoiceCategoryId,
         defaultRoleId: normalized.defaultRoleId,
         xpSyncRequested: normalized.xpSyncRequested,
         enabledModules: normalized.enabledModules,

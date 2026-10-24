@@ -11,6 +11,7 @@ model GuildConfig {
   guildId                     String   @id
   memberLogChannelId          String?
   dynamicVoiceCreateChannelId String?
+  dynamicVoiceCategoryId      String?
   defaultRoleId               String?
   xpSyncRequested             Boolean  @default(false)
   enabledModules              String[] @default([])

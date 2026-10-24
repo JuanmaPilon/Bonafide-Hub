@@ -10,6 +10,7 @@ type GuildConfig = {
   dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
+  dynamicVoiceCategoryId?: string;
   karutaBotUserId?: string;
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
@@ -55,6 +56,7 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     dailyMessagesMinMinutes: input.dailyMessagesMinMinutes ?? 15,
     defaultRoleId: input.defaultRoleId,
     dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
+    dynamicVoiceCategoryId: input.dynamicVoiceCategoryId,
     karutaBotUserId: input.karutaBotUserId,
     karutaChannelId: input.karutaChannelId,
     karutaRarePrintMax: input.karutaRarePrintMax ?? 10,

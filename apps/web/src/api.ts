@@ -21,6 +21,8 @@ export type GuildConfig = {
   dailyMessagesMinMinutes?: number;
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
+  // Categoría elegida a mano para las salas dinámicas (vacío = la del canal).
+  dynamicVoiceCategoryId?: string;
   enabledModules?: string[];
   eventGames?: EventGameConfig[];
   eventReportChannelId?: string;
@@ -595,6 +597,9 @@ export async function getGuildWidgetStatus(
 export type GuildChannel = {
   id: string;
   name: string;
+  // Posición en la lista del servidor: sirve para distinguir dos categorías con
+  // el mismo nombre.
+  position?: number;
   type: number;
 };
 
@@ -622,6 +627,19 @@ export async function getGuildTextChannels(
   );
 
   return data.textChannels;
+}
+
+export async function getGuildCategories(
+  guildId: string,
+): Promise<GuildChannel[]> {
+  const data = await requestJson<{ categories?: GuildChannel[] }>(
+    `/guilds/${guildId}/channels`,
+    {
+      method: "GET",
+    },
+  );
+
+  return data.categories ?? [];
 }
 
 export async function getGuildRoles(guildId: string): Promise<GuildRole[]> {

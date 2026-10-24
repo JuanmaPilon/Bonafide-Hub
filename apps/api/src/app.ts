@@ -3626,6 +3626,7 @@ export async function buildApp() {
     const channels = (await channelsResponse.json()) as Array<{
       id: string;
       name: string;
+      position?: number;
       type: number;
     }>;
 
@@ -3647,9 +3648,23 @@ export async function buildApp() {
       }))
       .sort((left, right) => left.name.localeCompare(right.name));
 
+    // Categorías (tipo 4): las usa el selector de "categoría de las salas
+    // dinámicas". Dos categorías pueden llamarse igual, así que la web muestra
+    // el nombre y la posición para poder distinguirlas.
+    const categories = channels
+      .filter((channel) => channel.type === 4)
+      .map((channel) => ({
+        id: channel.id,
+        name: channel.name,
+        position: channel.position ?? 0,
+        type: channel.type,
+      }))
+      .sort((left, right) => left.position - right.position);
+
     return {
       ok: true,
       guildId: params.guildId,
+      categories,
       textChannels,
       voiceChannels,
     };
@@ -9113,6 +9128,10 @@ export async function buildApp() {
     if (body.dynamicVoiceCreateChannelId !== undefined) {
       allowedBody.dynamicVoiceCreateChannelId =
         body.dynamicVoiceCreateChannelId;
+    }
+
+    if (body.dynamicVoiceCategoryId !== undefined) {
+      allowedBody.dynamicVoiceCategoryId = body.dynamicVoiceCategoryId;
     }
 
     if (body.defaultRoleId !== undefined) {
