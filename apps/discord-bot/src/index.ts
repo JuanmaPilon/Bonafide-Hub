@@ -852,6 +852,7 @@ async function createDynamicVoiceChannelForMember(newState: {
         values?: () => IterableIterator<{
           id: string;
           name?: string;
+          parentId?: string | null;
           type?: ChannelType;
         }>;
       };
@@ -989,7 +990,9 @@ async function createDynamicVoiceChannelForMember(newState: {
   // Con sólo ids es imposible distinguir dos categorías con el mismo nombre, que
   // es justo el caso cuando la sala "aparece en otra categoría": el bot va al
   // padre del canal configurado, y si ese canal está en una copia, la sala
-  // también. Por eso acá van los NOMBRES, y se avisa si hay categorías repetidas.
+  // también. La comparación ignora emojis y espacios (`Voz🔊` y `Voz 🔊` son la
+  // misma para una persona, no para un `===`), así el aviso no se escapa por un
+  // emoji distinto.
   const cachedChannels = newState.guild.channels.cache;
   const creatorInfo = channelPlacementInfo(creator);
   const categoryName = parentId
@@ -1000,11 +1003,13 @@ async function createDynamicVoiceChannelForMember(newState: {
     : undefined;
   const duplicateCategories: Array<{ id: string; name?: string }> = [];
   if (categoryName && cachedChannels?.values) {
+    const target = categoryName.replace(/[^\p{L}\p{N} ]/gu, "").trim().toLowerCase();
     for (const entry of cachedChannels.values()) {
-      if (
-        entry.type === ChannelType.GuildCategory &&
-        entry.name?.trim().toLowerCase() === categoryName.trim().toLowerCase()
-      ) {
+      if (entry.type !== ChannelType.GuildCategory || !entry.name) {
+        continue;
+      }
+      const candidate = entry.name.replace(/[^\p{L}\p{N} ]/gu, "").trim().toLowerCase();
+      if (candidate === target) {
         duplicateCategories.push({ id: entry.id, name: entry.name });
       }
     }
@@ -1028,9 +1033,18 @@ async function createDynamicVoiceChannelForMember(newState: {
       placementLog,
     );
   } else if (duplicateCategories.length > 1) {
+    // El aviso incluye qué hay adentro de cada una: así se ve de un vistazo cuál
+    // es la vacía que se puede borrar sin perder nada.
+    const contentByCategory = duplicateCategories.map((category) => ({
+      id: category.id,
+      nombre: category.name,
+      canales: [...(cachedChannels?.values?.() ?? [])]
+        .filter((entry) => entry.parentId === category.id)
+        .map((entry) => entry.name ?? entry.id),
+    }));
     console.warn(
-      `[discord-bot] hay ${duplicateCategories.length} categorias llamadas "${categoryName}": el canal "${creatorInfo.name}" vive en ${parentId}. Si la sala aparece en la otra, hay que mover el canal Salas o borrar la categoria repetida.`,
-      { categorias: duplicateCategories, canalCreador: creatorChannelId },
+      `[discord-bot] hay ${duplicateCategories.length} categorias que se llaman parecido: la sala se creo en "${categoryName}" (${parentId}). Si aparece en la otra, borra las salas viejas de esa y despues la categoria, o elegi la categoria a mano en Admin > Configuraciones.`,
+      { categorias: contentByCategory, canalCreador: creatorChannelId },
     );
   } else {
     console.log("[discord-bot] sala dinamica creada", placementLog);
