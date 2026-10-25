@@ -270,14 +270,20 @@ Dos reglas para agregar frases:
    suman** (x2 con x3 da x5), no se multiplican: multiplicar hacía que dos roles
    chicos explotaran el XP sin que se pudiera predecir mirando la tabla.
 8. Adorno de multiplicador: cada rol con multiplicador puede tener el suyo y va
-   **después** del de nivel, pegado al anterior (`Juan ⭐🔥👑`). Van sin espacios
+   **después** del de nivel, pegado al anterior (`Juan⭐🔥👑`). Van sin espacios
    a propósito: con separación, tres adornos se comían el nick. Se aplica cuando
    el miembro sube de nivel o cuando corre la sincronización desde el panel; no
    hay listener de cambio de roles, así que darle el rol a alguien no cambia el
    nick al instante.
-9. Cap de nivel (`maxLevel`; 0 = sin límite).
-10. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
-11. Cada suma de XP (mensaje o voz) se acumula también en el corte del mes (`xp_monthly_profiles`, ver [api](./api.md)): es lo que muestra el ranking "Activos del mes" de Home.
+9. **El sync rearma el nick desde cero, no lo parchea.** Antes de aplicar los
+   adornos se limpia el tramo de símbolos pegado al final y se descartan los
+   repetidos, así se van los adornos duplicados, los que ya no están en la config
+   y los que quedaron con otro selector de variación (`⭐` vs `⭐️`). Si el
+   miembro perdió el rol, sus adornos también se van. Un emoji **separado por un
+   espacio** se respeta: ese lo puso la persona, el bot siempre pega el adorno.
+10. Cap de nivel (`maxLevel`; 0 = sin límite).
+11. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
+12. Cada suma de XP (mensaje o voz) se acumula también en el corte del mes (`xp_monthly_profiles`, ver [api](./api.md)): es lo que muestra el ranking "Activos del mes" de Home.
 
 ## 5. Variables de entorno del bot
 

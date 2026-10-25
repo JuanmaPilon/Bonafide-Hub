@@ -62,6 +62,7 @@ import { startDailyMessagesProcessor } from "./services/daily-messages-service.j
 import {
   nicknameSuffix,
   stripKnownMarks,
+  stripTrailingAdornos,
   withSuffix,
 } from "./services/nickname-mark.js";
 import { startEventControlScheduler } from "./services/event-control-service.js";
@@ -2934,12 +2935,15 @@ async function applyNicknameForLevel(input: {
       )
       .map((entry) => entry.nicknamePrefix!.trim());
 
-    if (!levelMark && multiplierMarks.length === 0) {
-      return "no-rule";
-    }
+    // Si el miembro no tiene adornos que le correspondan, NO se sale: hay que
+    // rearmar el nick igual para sacarle los que tenía (perdió el rol, o el
+    // adorno cambió). Antes se cortaba acá y los adornos viejos quedaban
+    // pegados para siempre.
 
-    // Todos los adornos conocidos se limpian antes de rearmar: si no, quien ya
-    // tenía un multiplicador que perdió quedaría con el adorno pegado.
+    // Todos los adornos conocidos se limpian antes de rearmar, y después el
+    // tramo de símbolos pegado al final: entre los dos se van los adornos
+    // repetidos, los que ya no están en la config y los que quedaron con otro
+    // selector de variación (que era lo que dejaba pares).
     const marks = [
       ...(xpConfig.levelRoles ?? []).map((entry) => entry.nicknamePrefix?.trim()),
       ...(xpConfig.roleMultipliers ?? []).map((entry) =>
@@ -2947,9 +2951,12 @@ async function applyNicknameForLevel(input: {
       ),
     ].filter((mark): mark is string => Boolean(mark));
 
-    const baseName = member.nickname?.trim()
-      ? stripKnownMarks(member.nickname, marks)
+    const rawName = member.nickname?.trim()
+      ? member.nickname
       : member.user.globalName?.trim() || member.user.username.trim();
+    const baseName = rawName
+      ? stripTrailingAdornos(stripKnownMarks(rawName, marks))
+      : "";
 
     if (!baseName) {
       return "error";
@@ -2965,7 +2972,13 @@ async function applyNicknameForLevel(input: {
 
     const result = await withDiscordRetry(
       `cambiar el nick de <@${input.userId}>`,
-      () => member.setNickname(nextNickname, `Level up to ${input.level}`),
+      () =>
+        member.setNickname(
+          nextNickname,
+          levelMark
+            ? `Nivel ${input.level}: adorno del nick`
+            : "Adornos del nick",
+        ),
     );
     if (result === null) {
       // El dueño del servidor está por encima de cualquier rol: Discord no deja
