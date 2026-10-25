@@ -4889,27 +4889,12 @@ a:hover {
   padding-right: 6px;
 }
 
-/* Multiplicador de XP de un rol: el "x" y el número al lado del select. */
-.xp-multiplier {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.xp-multiplier span {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.xp-multiplier input {
-  width: 84px;
-}
-
-/* El adorno del multiplicador es corto: un emoji o dos letras. */
-.xp-multiplier--prefix input {
-  width: 56px;
-  text-align: center;
+/* Multiplicadores por rol: la fila es un botón (como los niveles) y el valor
+   "×2" ocupa el lugar de "Nivel 5". El ancho mínimo es el de "NIVEL 10" para que
+   el chip del rol caiga en la misma columna que en la lista de niveles. */
+.xp-multiplier-value {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
 }
 
 .toast-viewport {

@@ -91,6 +91,9 @@ export function XpSection({
   notify,
 }: XpSectionProps) {
   const [editingLevel, setEditingLevel] = useState<number | null>(null);
+  const [editingMultiplier, setEditingMultiplier] = useState<string | null>(
+    null,
+  );
   const [extrasView, setExtrasView] = useState<"add" | "remove" | null>(null);
   const [roleSearch, setRoleSearch] = useState("");
 
@@ -102,21 +105,46 @@ export function XpSection({
     editingLevel === null
       ? undefined
       : config.levelRoles.find((rule) => rule.level === editingLevel);
+  // Los multiplicadores se listan por valor: los que más suman primero, que es
+  // como se leen al mirar el panel.
+  const multipliers = useMemo(
+    () =>
+      [...config.roleMultipliers].sort(
+        (left, right) => right.multiplier - left.multiplier,
+      ),
+    [config.roleMultipliers],
+  );
+  const editingMultiplierEntry =
+    editingMultiplier === null
+      ? undefined
+      : config.roleMultipliers.find(
+          (entry) => entry.roleId === editingMultiplier,
+        );
+  const modalOpen = Boolean(editing) || Boolean(editingMultiplierEntry);
 
   const closeEditor = (): void => {
     setEditingLevel(null);
+    setEditingMultiplier(null);
     setExtrasView(null);
     setRoleSearch("");
   };
 
   const openEditor = (level: number): void => {
     setEditingLevel(level);
+    setEditingMultiplier(null);
+    setExtrasView(null);
+    setRoleSearch("");
+  };
+
+  const openMultiplier = (roleId: string): void => {
+    setEditingLevel(null);
+    setEditingMultiplier(roleId);
     setExtrasView(null);
     setRoleSearch("");
   };
 
   useEffect(() => {
-    if (!editing) {
+    if (!editing && !editingMultiplierEntry) {
       return undefined;
     }
     const previous = document.body.style.overflow;
@@ -131,7 +159,7 @@ export function XpSection({
       document.body.style.overflow = previous;
       window.removeEventListener("keydown", onKey);
     };
-  }, [editing]);
+  }, [editing, editingMultiplierEntry]);
 
   function patch(updater: (current: XpConfig) => XpConfig): void {
     onChange(updater);
@@ -208,36 +236,41 @@ export function XpSection({
         },
       ],
     }));
+    openMultiplier(available?.id ?? "");
   }
 
-  function updateMultiplier(multiplier: number, roleId: string): void {
-    patch((current) => ({
-      ...current,
-      roleMultipliers: current.roleMultipliers.map((entry) =>
-        entry.roleId === roleId ? { ...entry, multiplier } : entry,
-      ),
-    }));
-  }
-
-  function updateMultiplierPrefix(
-    nicknamePrefix: string,
+  function patchMultiplier(
     roleId: string,
+    values: Partial<{ multiplier: number; nicknamePrefix: string }>,
   ): void {
     patch((current) => ({
       ...current,
       roleMultipliers: current.roleMultipliers.map((entry) =>
-        entry.roleId === roleId ? { ...entry, nicknamePrefix } : entry,
+        entry.roleId === roleId ? { ...entry, ...values } : entry,
       ),
     }));
   }
 
+  // Cambiar el rol es cambiar la clave del multiplicador: si el destino ya tiene
+  // uno, se avisa y no se toca nada (mismo criterio que el nivel de una regla).
   function changeMultiplierRole(fromRoleId: string, nextRoleId: string): void {
+    if (nextRoleId === fromRoleId) {
+      return;
+    }
+    if (
+      nextRoleId &&
+      config.roleMultipliers.some((entry) => entry.roleId === nextRoleId)
+    ) {
+      notify("Ese rol ya tiene un multiplicador.", "error");
+      return;
+    }
     patch((current) => ({
       ...current,
       roleMultipliers: current.roleMultipliers.map((entry) =>
         entry.roleId === fromRoleId ? { ...entry, roleId: nextRoleId } : entry,
       ),
     }));
+    setEditingMultiplier(nextRoleId);
   }
 
   function removeMultiplier(roleId: string): void {
@@ -415,74 +448,64 @@ export function XpSection({
 
       <section className="admin-group admin-group--sep">
         <span className="admin-group-head">Multiplicadores por rol</span>
-        <p className="admin-empty">
-          Los roles que tenga una persona se suman: x2 con x3 da x5.
-        </p>
-        {config.roleMultipliers.length === 0 ? (
+        {multipliers.length === 0 ? (
           <p className="admin-empty">Ningún rol multiplica la XP.</p>
         ) : (
           <div className="admin-list">
-            {config.roleMultipliers.map((entry) => (
-              <div className="admin-row" key={entry.roleId}>
-                <div className="admin-row-box">
-                  <select
-                    aria-label="Rol con multiplicador"
-                    className="select"
-                    onChange={(event) =>
-                      changeMultiplierRole(entry.roleId, event.target.value)
-                    }
-                    value={entry.roleId}
+            {multipliers.map((entry) => {
+              const role = guildRoles.find((item) => item.id === entry.roleId);
+              return (
+                <div className="admin-row" key={entry.roleId}>
+                  <button
+                    className="admin-row-box admin-row-main"
+                    onClick={() => openMultiplier(entry.roleId)}
+                    title="Editar el multiplicador"
+                    type="button"
                   >
-                    <option value="">Sin rol</option>
-                    {guildRoles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="xp-multiplier">
-                    <span>Multiplicador (x)</span>
-                    <input
-                      min="1"
-                      onChange={(event) =>
-                        updateMultiplier(
-                          Number(event.target.value) || 1,
-                          entry.roleId,
-                        )
-                      }
-                      step="0.5"
-                      type="number"
-                      value={entry.multiplier}
+                    <span className="admin-row-label xp-multiplier-value">
+                      <b>×{entry.multiplier}</b>
+                    </span>
+                    {role ? (
+                      <span
+                        className={roleChipClass(role)}
+                        style={roleChipStyle(role)}
+                      >
+                        <span className="role-chip-name">{role.name}</span>
+                      </span>
+                    ) : (
+                      <span className="admin-row-none">Sin rol</span>
+                    )}
+                    {entry.nicknamePrefix ? (
+                      <span
+                        className="xp-rule-prefix"
+                        title="Adorno del multiplicador (va después del de nivel)"
+                      >
+                        {entry.nicknamePrefix}
+                      </span>
+                    ) : null}
+                    <span className="admin-row-spacer" />
+                    <PencilSimple
+                      aria-hidden="true"
+                      className="admin-row-action"
+                      weight="fill"
                     />
-                  </label>
-                  <label className="xp-multiplier xp-multiplier--prefix">
-                    <span>Adorno</span>
-                    <input
-                      maxLength={8}
-                      onChange={(event) =>
-                        updateMultiplierPrefix(event.target.value, entry.roleId)
-                      }
-                      placeholder="🔥"
-                      type="text"
-                      value={entry.nicknamePrefix ?? ""}
+                  </button>
+                  <button
+                    aria-label="Quitar el multiplicador"
+                    className="icon-button"
+                    onClick={() => removeMultiplier(entry.roleId)}
+                    title="Quitar el multiplicador"
+                    type="button"
+                  >
+                    <Trash
+                      aria-hidden="true"
+                      className="icon-button-icon"
+                      weight="fill"
                     />
-                  </label>
+                  </button>
                 </div>
-                <button
-                  aria-label="Quitar el multiplicador"
-                  className="icon-button"
-                  onClick={() => removeMultiplier(entry.roleId)}
-                  title="Quitar el multiplicador"
-                  type="button"
-                >
-                  <Trash
-                    aria-hidden="true"
-                    className="icon-button-icon"
-                    weight="fill"
-                  />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         <button
@@ -759,6 +782,135 @@ export function XpSection({
                   >
                     <Trash aria-hidden="true" weight="fill" />
                     Borrar nivel
+                  </button>
+                  <button
+                    className="primary-button"
+                    onClick={closeEditor}
+                    type="button"
+                  >
+                    Listo
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {editingMultiplierEntry
+        ? createPortal(
+            <div
+              className="modal-overlay"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  closeEditor();
+                }
+              }}
+              role="presentation"
+            >
+              <div
+                aria-label="Multiplicador de XP"
+                aria-modal="true"
+                className="modal xp-rule-modal"
+                role="dialog"
+              >
+                <header className="modal-head">
+                  <h4>
+                    <PencilSimple weight="fill" aria-hidden="true" />
+                    Multiplicador
+                  </h4>
+                  <button
+                    aria-label="Cerrar"
+                    className="icon-button"
+                    onClick={closeEditor}
+                    title="Cerrar"
+                    type="button"
+                  >
+                    <X
+                      aria-hidden="true"
+                      className="icon-button-icon"
+                      weight="bold"
+                    />
+                  </button>
+                </header>
+
+                <div className="form-grid">
+                  <Field label="Rol">
+                    <select
+                      className="select"
+                      onChange={(event) =>
+                        changeMultiplierRole(
+                          editingMultiplierEntry.roleId,
+                          event.target.value,
+                        )
+                      }
+                      value={editingMultiplierEntry.roleId}
+                    >
+                      <option value="">Sin rol</option>
+                      {guildRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Multiplicador (x)">
+                    <input
+                      min="1"
+                      onChange={(event) =>
+                        patchMultiplier(editingMultiplierEntry.roleId, {
+                          multiplier: Math.max(
+                            1,
+                            Number(event.target.value) || 1,
+                          ),
+                        })
+                      }
+                      step="0.5"
+                      type="number"
+                      value={editingMultiplierEntry.multiplier}
+                    />
+                  </Field>
+                  <Field label="Adorno del multiplicador">
+                    <input
+                      maxLength={8}
+                      onChange={(event) =>
+                        patchMultiplier(editingMultiplierEntry.roleId, {
+                          nicknamePrefix: event.target.value,
+                        })
+                      }
+                      placeholder="🔥"
+                      type="text"
+                      value={editingMultiplierEntry.nicknamePrefix ?? ""}
+                    />
+                  </Field>
+                </div>
+
+                <div className="xp-preview">
+                  <span className="admin-group-head">Así se ve el nombre</span>
+                  <span className="xp-preview-name">
+                    {`${roleName(
+                      guildRoles.find(
+                        (role) => role.id === editingMultiplierEntry.roleId,
+                      ),
+                    )} ${editingMultiplierEntry.nicknamePrefix ?? ""}`.trim()}
+                  </span>
+                </div>
+
+                <p className="admin-empty">
+                  Los roles que tenga una persona se suman: ×2 con ×3 da ×5.
+                </p>
+
+                <div className="xp-modal-actions">
+                  <button
+                    className="ghost-button small danger"
+                    onClick={() => {
+                      removeMultiplier(editingMultiplierEntry.roleId);
+                      closeEditor();
+                    }}
+                    type="button"
+                  >
+                    <Trash aria-hidden="true" weight="fill" />
+                    Quitar multiplicador
                   </button>
                   <button
                     className="primary-button"
