@@ -517,7 +517,8 @@ XP:
 2. `PATCH /guilds/:guildId/xp-config` — `levelRoles` (con `nicknamePrefix`) y
    `roleMultipliers` (con `nicknamePrefix` propio). Los multiplicadores de los
    roles que tenga una persona **se suman** (x2 + x3 = x5). En el nick, el adorno
-   de nivel va primero y los de multiplicador después, en el orden del panel.
+   de nivel va primero y los de multiplicador después, en el orden del panel y
+   pegados entre sí (`Juan ⭐🔥`).
 3. `GET /guilds/:guildId/xp/leaderboard`
 4. `GET /guilds/:guildId/xp/leaderboard/monthly` (top 5 del mes en curso, para Home; devuelve `month` en `YYYY-MM`)
 5. `GET /guilds/:guildId/xp/export`

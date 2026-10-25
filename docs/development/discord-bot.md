@@ -270,9 +270,11 @@ Dos reglas para agregar frases:
    suman** (x2 con x3 da x5), no se multiplican: multiplicar hacía que dos roles
    chicos explotaran el XP sin que se pudiera predecir mirando la tabla.
 8. Adorno de multiplicador: cada rol con multiplicador puede tener el suyo y va
-   **después** del de nivel (`Juan ⭐ 🔥`). Se aplica cuando el miembro sube de
-   nivel o cuando corre la sincronización desde el panel; no hay listener de
-   cambio de roles, así que darle el rol a alguien no cambia el nick al instante.
+   **después** del de nivel, pegado al anterior (`Juan ⭐🔥👑`). Van sin espacios
+   a propósito: con separación, tres adornos se comían el nick. Se aplica cuando
+   el miembro sube de nivel o cuando corre la sincronización desde el panel; no
+   hay listener de cambio de roles, así que darle el rol a alguien no cambia el
+   nick al instante.
 9. Cap de nivel (`maxLevel`; 0 = sin límite).
 10. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
 11. Cada suma de XP (mensaje o voz) se acumula también en el corte del mes (`xp_monthly_profiles`, ver [api](./api.md)): es lo que muestra el ranking "Activos del mes" de Home.

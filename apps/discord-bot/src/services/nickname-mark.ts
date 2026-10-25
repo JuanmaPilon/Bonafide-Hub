@@ -30,8 +30,8 @@ export function stripKnownMarks(
 }
 
 // El adorno de nivel va primero y los de multiplicador después, en el orden en
-// que están configurados: "Juan ⭐ 🔥". El primero se pega sin espacio para no
-// cambiar los nicks que ya existen; los siguientes, separados.
+// que están configurados, pegados uno al otro: "Juan ⭐🔥👑". Sin separación a
+// propósito: con espacios, tres adornos se comían el nick.
 export function nicknameSuffix(
   levelMark: string | undefined,
   multiplierMarks: readonly string[],
@@ -40,13 +40,7 @@ export function nicknameSuffix(
     ...(levelMark ? [levelMark] : []),
     ...multiplierMarks.filter(Boolean),
   ];
-  if (parts.length === 0) {
-    return "";
-  }
-  return `${parts[0]}${parts
-    .slice(1)
-    .map((part) => ` ${part}`)
-    .join("")}`;
+  return parts.join("");
 }
 
 // Se recorta el NOMBRE, nunca los adornos: cortando el final se perdía justo lo
