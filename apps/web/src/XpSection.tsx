@@ -878,7 +878,7 @@ export function XpSection({
                           nicknamePrefix: event.target.value,
                         })
                       }
-                      placeholder="🔥"
+                      placeholder="🔵"
                       type="text"
                       value={editingMultiplierEntry.nicknamePrefix ?? ""}
                     />
