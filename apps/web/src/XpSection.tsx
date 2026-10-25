@@ -201,7 +201,11 @@ export function XpSection({
       ...current,
       roleMultipliers: [
         ...current.roleMultipliers,
-        { multiplier: 2, roleId: available?.id ?? "" },
+        {
+          multiplier: 2,
+          nicknamePrefix: "",
+          roleId: available?.id ?? "",
+        },
       ],
     }));
   }
@@ -211,6 +215,18 @@ export function XpSection({
       ...current,
       roleMultipliers: current.roleMultipliers.map((entry) =>
         entry.roleId === roleId ? { ...entry, multiplier } : entry,
+      ),
+    }));
+  }
+
+  function updateMultiplierPrefix(
+    nicknamePrefix: string,
+    roleId: string,
+  ): void {
+    patch((current) => ({
+      ...current,
+      roleMultipliers: current.roleMultipliers.map((entry) =>
+        entry.roleId === roleId ? { ...entry, nicknamePrefix } : entry,
       ),
     }));
   }
@@ -399,6 +415,9 @@ export function XpSection({
 
       <section className="admin-group admin-group--sep">
         <span className="admin-group-head">Multiplicadores por rol</span>
+        <p className="admin-empty">
+          Los roles que tenga una persona se suman: x2 con x3 da x5.
+        </p>
         {config.roleMultipliers.length === 0 ? (
           <p className="admin-empty">Ningún rol multiplica la XP.</p>
         ) : (
@@ -434,6 +453,18 @@ export function XpSection({
                       step="0.5"
                       type="number"
                       value={entry.multiplier}
+                    />
+                  </label>
+                  <label className="xp-multiplier xp-multiplier--prefix">
+                    <span>Adorno</span>
+                    <input
+                      maxLength={8}
+                      onChange={(event) =>
+                        updateMultiplierPrefix(event.target.value, entry.roleId)
+                      }
+                      placeholder="🔥"
+                      type="text"
+                      value={entry.nicknamePrefix ?? ""}
                     />
                   </label>
                 </div>

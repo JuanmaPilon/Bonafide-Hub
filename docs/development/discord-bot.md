@@ -266,10 +266,16 @@ Dos reglas para agregar frases:
 5. Adorno de nivel al final del nickname (idempotente: se limpia de las dos
    puntas, así los nicks viejos con el adorno adelante se normalizan solos).
 6. Anuncios de rank (solo al subir de rango).
-7. Multiplicadores de XP por rol.
-8. Cap de nivel (`maxLevel`; 0 = sin límite).
-9. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
-10. Cada suma de XP (mensaje o voz) se acumula también en el corte del mes (`xp_monthly_profiles`, ver [api](./api.md)): es lo que muestra el ranking "Activos del mes" de Home.
+7. Multiplicadores de XP por rol. Los de los roles que tenga la persona **se
+   suman** (x2 con x3 da x5), no se multiplican: multiplicar hacía que dos roles
+   chicos explotaran el XP sin que se pudiera predecir mirando la tabla.
+8. Adorno de multiplicador: cada rol con multiplicador puede tener el suyo y va
+   **después** del de nivel (`Juan ⭐ 🔥`). Se aplica cuando el miembro sube de
+   nivel o cuando corre la sincronización desde el panel; no hay listener de
+   cambio de roles, así que darle el rol a alguien no cambia el nick al instante.
+9. Cap de nivel (`maxLevel`; 0 = sin límite).
+10. Config completa desde la web (Admin → Sistema de XP), incluidos colores por rango para el hub.
+11. Cada suma de XP (mensaje o voz) se acumula también en el corte del mes (`xp_monthly_profiles`, ver [api](./api.md)): es lo que muestra el ranking "Activos del mes" de Home.
 
 ## 5. Variables de entorno del bot
 

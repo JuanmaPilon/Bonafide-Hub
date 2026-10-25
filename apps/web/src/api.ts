@@ -392,6 +392,8 @@ export type GuildRole = {
 
 export type XpRoleMultiplier = {
   multiplier: number;
+  // Adorno del nick para quien tenga el rol (va después del de nivel).
+  nicknamePrefix?: string;
   roleId: string;
 };
 

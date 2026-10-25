@@ -60,8 +60,9 @@ import {
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
 import {
-  stripKnownLevelMarks,
-  withLevelMark,
+  nicknameSuffix,
+  stripKnownMarks,
+  withSuffix,
 } from "./services/nickname-mark.js";
 import { startEventControlScheduler } from "./services/event-control-service.js";
 import {
@@ -2888,9 +2889,9 @@ function findNicknameRuleForLevel(
 // qué alguien no tenía el suyo.
 type NicknameOutcome = "error" | "no-rule" | "rejected" | "unchanged" | "updated";
 
-// El nivel se agrega al FINAL del nombre. Las versiones anteriores lo ponían
-// adelante, así que se limpian las dos puntas: si sólo se limpiara el final,
-// quien ya tenía "⭐ Juan" quedaría como "⭐ Juan ⭐" al subir de nivel.
+// El adorno de nivel va primero y los de multiplicador después. El nivel lo
+// decide la regla alcanzada; los multiplicadores, los roles que tenga el
+// miembro. Sin ninguno de los dos no se toca el nick.
 async function applyNicknameForLevel(input: {
   guildId: string;
   level: number;
@@ -2904,8 +2905,14 @@ async function applyNicknameForLevel(input: {
   try {
     const xpConfig = input.xpConfig ?? (await fetchRemoteXpConfig(input.guildId));
     const rule = findNicknameRuleForLevel(xpConfig, input.level);
-    const levelMark = rule?.nicknamePrefix?.trim();
-    if (!rule || !levelMark) {
+    const levelMark = rule?.nicknamePrefix?.trim() || undefined;
+
+    // Sin adorno de nivel pero con alguno de multiplicador configurado, todavía
+    // hay que mirar los roles del miembro; con los dos vacíos no se gasta nada.
+    const hasMultiplierMark = (xpConfig.roleMultipliers ?? []).some((entry) =>
+      Boolean(entry.nicknamePrefix?.trim()),
+    );
+    if (!levelMark && !hasMultiplierMark) {
       return "no-rule";
     }
 
@@ -2919,20 +2926,39 @@ async function applyNicknameForLevel(input: {
       return "error";
     }
 
-    const marks = (xpConfig.levelRoles ?? [])
-      .map((entry) => entry.nicknamePrefix?.trim() ?? "")
-      .filter(Boolean);
+    const multiplierMarks = (xpConfig.roleMultipliers ?? [])
+      .filter(
+        (entry) =>
+          entry.nicknamePrefix?.trim() &&
+          member.roles.cache.has(entry.roleId),
+      )
+      .map((entry) => entry.nicknamePrefix!.trim());
+
+    if (!levelMark && multiplierMarks.length === 0) {
+      return "no-rule";
+    }
+
+    // Todos los adornos conocidos se limpian antes de rearmar: si no, quien ya
+    // tenía un multiplicador que perdió quedaría con el adorno pegado.
+    const marks = [
+      ...(xpConfig.levelRoles ?? []).map((entry) => entry.nicknamePrefix?.trim()),
+      ...(xpConfig.roleMultipliers ?? []).map((entry) =>
+        entry.nicknamePrefix?.trim(),
+      ),
+    ].filter((mark): mark is string => Boolean(mark));
 
     const baseName = member.nickname?.trim()
-      ? stripKnownLevelMarks(member.nickname, marks)
+      ? stripKnownMarks(member.nickname, marks)
       : member.user.globalName?.trim() || member.user.username.trim();
 
     if (!baseName) {
       return "error";
     }
 
-    // El nick tiene 32 caracteres: se recorta el nombre, no el adorno del nivel.
-    const nextNickname = withLevelMark(baseName, levelMark);
+    const nextNickname = withSuffix(
+      baseName,
+      nicknameSuffix(levelMark, multiplierMarks),
+    );
     if (member.nickname === nextNickname) {
       return "unchanged";
     }

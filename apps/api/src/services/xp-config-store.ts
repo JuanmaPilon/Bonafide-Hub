@@ -2,6 +2,8 @@ import { prisma } from "../db/prisma.js";
 
 export type XpRoleMultiplier = {
   multiplier: number;
+  // Adorno del nick para quien tenga este rol (se agrega después del de nivel).
+  nicknamePrefix?: string;
   roleId: string;
 };
 
@@ -101,6 +103,11 @@ function toXpConfig(record: XpConfigRecord | null): XpConfig {
         )
         .map((entry) => ({
           multiplier: Math.max(1, Number(entry.multiplier) || 1),
+          nicknamePrefix:
+            typeof entry.nicknamePrefix === "string" &&
+            entry.nicknamePrefix.trim()
+              ? entry.nicknamePrefix.trim()
+              : undefined,
           roleId: String(entry.roleId ?? "").trim(),
         }))
         .filter((entry) => entry.roleId)
@@ -160,6 +167,10 @@ function normalizeRoleMultipliers(
   return roleMultipliers
     .map((entry) => ({
       multiplier: Math.max(1, Number(entry.multiplier) || 1),
+      nicknamePrefix:
+        typeof entry.nicknamePrefix === "string" && entry.nicknamePrefix.trim()
+          ? entry.nicknamePrefix.trim()
+          : undefined,
       roleId: String(entry.roleId ?? "").trim(),
     }))
     .filter((entry) => entry.roleId);

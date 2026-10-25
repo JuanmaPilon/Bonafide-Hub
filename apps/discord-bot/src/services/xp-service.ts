@@ -2,6 +2,8 @@ import { env } from "../config/env.js";
 
 export type XpRoleMultiplier = {
   multiplier: number;
+  // Adorno del nick para quien tenga este rol (va después del de nivel).
+  nicknamePrefix?: string;
   roleId: string;
 };
 
@@ -63,7 +65,11 @@ function normalizeXpConfig(input: Partial<XpConfig>): XpConfig {
     levelRoles: input.levelRoles ?? [],
     maxLevel: input.maxLevel ?? 0,
     messageXp: input.messageXp ?? 15,
-    roleMultipliers: input.roleMultipliers ?? [],
+    roleMultipliers: (input.roleMultipliers ?? []).map((entry) => ({
+      multiplier: Math.max(1, Number(entry.multiplier) || 1),
+      nicknamePrefix: entry.nicknamePrefix?.trim() || undefined,
+      roleId: entry.roleId,
+    })),
     roleStacking: input.roleStacking === "replace" ? "replace" : "stack",
     voiceXpPerMinute: input.voiceXpPerMinute ?? 3,
   };
@@ -198,8 +204,11 @@ export async function setRemoteXpLevel(input: {
 
 /**
  * Calcula el multiplicador de XP de un miembro a partir de sus roles.
- * Se multiplican los multiplicadores de todos los roles de la config que el
- * miembro tenga (por ejemplo Booster x3 * VIP x2 = x6).
+ *
+ * Los multiplicadores de los roles que tenga se SUMAN, no se multiplican: un
+ * Booster x2 con VIP x3 da x5. Multiplicar hacía que dos roles chicos
+ * explotaran el XP (x3 · x3 = x9), y además nadie podía predecir el total
+ * mirando la tabla del panel.
  */
 export function computeXpMultiplier(
   config: XpConfig,
@@ -211,14 +220,15 @@ export function computeXpMultiplier(
 
   const roleSet = new Set(memberRoleIds);
 
-  let multiplier = 1;
+  let bonus = 0;
   for (const entry of config.roleMultipliers) {
-    if (roleSet.has(entry.roleId) && entry.multiplier > 1) {
-      multiplier *= entry.multiplier;
+    const value = Math.max(1, Number(entry.multiplier) || 1);
+    if (roleSet.has(entry.roleId) && value > 1) {
+      bonus += value;
     }
   }
 
-  return multiplier;
+  return bonus > 0 ? bonus : 1;
 }
 
 export async function fetchRemoteXpProfiles(guildId: string): Promise<

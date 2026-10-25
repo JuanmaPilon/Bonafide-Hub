@@ -4906,6 +4906,12 @@ a:hover {
   width: 84px;
 }
 
+/* El adorno del multiplicador es corto: un emoji o dos letras. */
+.xp-multiplier--prefix input {
+  width: 56px;
+  text-align: center;
+}
+
 .toast-viewport {
   position: fixed;
   top: 24px;
