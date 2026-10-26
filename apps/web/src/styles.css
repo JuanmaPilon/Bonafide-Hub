@@ -945,8 +945,13 @@ a:hover {
   --ring-width: 1.5px;
 }
 
+/* La fila del ranking es una banda a todo el ancho, no una tarjeta: el marco va
+   con el mismo radio que las puntas de la banda (10px) y 2px de aire, así dos
+   boosters seguidos no pegan los marcos (se leen como dos cajas) y el filo del
+   podio queda afuera en vez de mezclarse con la línea. */
 .leaderboard-table tr.booster-ring::after {
-  border-radius: 12px;
+  inset: 2px;
+  border-radius: 10px;
 }
 
 @keyframes booster-ring-spin {
