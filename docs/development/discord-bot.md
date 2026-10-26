@@ -87,7 +87,8 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 1. `/desperuanizar` — oculta la sala a los roles vetados (`bannedVoiceRoleIds`); agrega el sufijo ` 🚫🇵🇪` al nombre.
 2. `/reperuanizar` — revierte `/desperuanizar`; quita el sufijo.
 3. `/lock` — tranca la sala para `@everyone` (deniega Connect): los que ya están adentro se quedan, nadie nuevo puede entrar; agrega el sufijo ` 🔒`.
-4. `/unlock` — revierte `/lock`; quita el sufijo.
+4. `/unlock` — revierte `/lock`; quita el sufijo. También **libera el aforo** (`/limit`), porque una sala trancada y limitada queda cerrada dos veces.
+5. `/limit cantidad:<0-99>` — fija el aforo de la sala (`0` = sin límite). Discord corta la entrada cuando se llena; a los que ya están adentro no los saca (si el número nuevo es menor que la gente presente, lo avisa en la respuesta).
 
 ## 3. Eventos y automatizaciones
 
@@ -242,6 +243,7 @@ texto fijo, así el servidor no lee la misma frase dos veces:
 | Timer creado | `/settimer` (respuesta privada) | `timerReplies` |
 | Recordatorio de timer | scheduler → DM | `TIMER_TEMPLATES` |
 | Sala trancada / destrancada | `/lock` / `/unlock` | `LOCK_CHANNEL_BUTLER_MESSAGES` / `UNLOCK_CHANNEL_BUTLER_MESSAGES` |
+| Aforo cambiado / liberado | `/limit` | `LIMIT_CHANNEL_BUTLER_MESSAGES` / `LIMIT_CLEARED_BUTLER_MESSAGES` |
 | Sala oculta / visible | `/desperuanizar` / `/reperuanizar` | `BAN_CHANNEL_BUTLER_MESSAGES` / `UNBAN_CHANNEL_BUTLER_MESSAGES` |
 | Mensaje del loro | `postRandomMessage` | `BUTLER_OPENERS` + la frase que escribió el staff |
 | Burbuja del hub | `KarpindomoWidget` (web) | `KARPINDOMO_LINES` |

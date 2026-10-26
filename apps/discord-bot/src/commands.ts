@@ -215,6 +215,19 @@ export const commandDefinitions = [
     .setName("unlock")
     .setDescription("Destranca tu sala de voz dinámica"),
   new SlashCommandBuilder()
+    .setName("limit")
+    .setDescription(
+      "Pone el límite de gente de tu sala de voz dinámica (0 = sin límite)",
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("cantidad")
+        .setDescription("Cuántas personas entran en la sala (0 = sin límite)")
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(99),
+    ),
+  new SlashCommandBuilder()
     .setName("ranking")
     .setDescription("Muestra el top 20 del ranking de XP del servidor"),
 ].map((command) => command.toJSON());

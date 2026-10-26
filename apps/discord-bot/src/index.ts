@@ -2251,6 +2251,32 @@ const UNLOCK_CHANNEL_BUTLER_MESSAGES = [
   "📜 **Acta de reapertura.**\n{user} destrancó la sala.\nFirmada por quien corresponda, que no es Karpindomo.",
 ];
 
+// Mensajes del mayordomo al cambiar el aforo de una sala. Dos repertorios
+// porque la frase con número y la de "sin límite" no comparten estructura.
+const LIMIT_CHANNEL_BUTLER_MESSAGES = [
+  "🪑 Aforo puesto: entran {limit}, {user}.",
+  "🎫 {user} fijó el aforo en {limit}. Karpindomo cuenta las sillas antes de abrir.",
+  "🚪 Entran {limit}, señor. {user} dejó el número escrito en la puerta.",
+  "🎩 **Karpindomo ajustó el aforo.**\n{user} dejó la sala en {limit}.\nEl que llegue tarde se queda con la oreja pegada a la puerta.",
+  "🧐 **Recuento de tazas.**\n{user} puso el límite en {limit}.\nKarpindomo sirve exactamente esas.",
+  "📋 **Lista de invitados cerrada.**\n{user} fijó {limit} lugares.\nEl mayordomo no discute con la lista.",
+  "🪑 **Sillas contadas.**\n{user} puso {limit}.\nLas demás quedaron apiladas contra la pared.",
+  "🔢 **Número en el cartel.**\n{user} dejó el aforo en {limit}.\nKarpindomo lo escribió con letra prolija.",
+  "🧉 **Ronda medida.**\n{user} fijó {limit}.\nEl mayordomo ceba sólo hasta ese número.",
+  "🎩 **El D.E.R.E.K. cuenta hasta {limit}.**\n{user} puso el aforo.\nDesperuanizador Elegante, Regordete y Educado, Karpindomo.",
+  "🛎️ **Aforo nuevo.**\n{user} dejó {limit} lugares.\nKarpindomo ya sabe a quién no le toca.",
+  "🗝️ **Sala medida.**\n{user} puso el límite en {limit}.\nKarpindomo cierra cuando el número se llena.",
+];
+
+const LIMIT_CLEARED_BUTLER_MESSAGES = [
+  "🔓 Aforo liberado, {user}. Entra quien quiera.",
+  "🪑 {user} sacó el límite de la sala. Karpindomo desapila las sillas.",
+  "🎩 **Se terminó el aforo.**\n{user} dejó la sala sin límite.\nKarpindomo abre la puerta de par en par.",
+  "🧉 **Ronda sin número fijo.**\n{user} quitó el límite.\nEl mayordomo ceba hasta que se acabe el agua.",
+  "🎫 **Sin lista de invitados.**\n{user} liberó el aforo.\nKarpindomo guarda la lista para otra ocasión.",
+  "🛎️ **Vuelve a entrar cualquiera.**\n{user} sacó el límite.\nKarpindomo corre las sillas de nuevo.",
+];
+
 // Sufijo que se agrega/quita al nombre de la sala al trancar.
 const LOCK_SUFFIX = " 🔒";
 
@@ -2316,6 +2342,7 @@ async function handleVoiceLockCommand(
     }
 
     const everyoneRoleId = interaction.guild.roles.everyone.id;
+    let clearedLimit = 0;
     if (lock) {
       await channel.permissionOverwrites.edit(everyoneRoleId, {
         Connect: false,
@@ -2324,6 +2351,12 @@ async function handleVoiceLockCommand(
       const overwrite = channel.permissionOverwrites.cache.get(everyoneRoleId);
       if (overwrite) {
         await channel.permissionOverwrites.delete(everyoneRoleId);
+      }
+      // Destrancar saca también el aforo: si la sala estaba limitada, el
+      // candado no se levanta del todo hasta liberar los lugares.
+      clearedLimit = channel.userLimit;
+      if (clearedLimit > 0) {
+        await channel.setUserLimit(0);
       }
     }
 
@@ -2349,8 +2382,12 @@ async function handleVoiceLockCommand(
       ? LOCK_CHANNEL_BUTLER_MESSAGES
       : UNLOCK_CHANNEL_BUTLER_MESSAGES;
     const template = pickRandom(messages);
+    const content = template.replace("{user}", interaction.user.toString());
     await interaction.editReply({
-      content: template.replace("{user}", interaction.user.toString()),
+      content:
+        clearedLimit > 0
+          ? `${content}\n-# Aforo libre de nuevo: la sala quedó sin límite.`
+          : content,
     });
   } catch (error) {
     console.error(
@@ -2364,6 +2401,104 @@ async function handleVoiceLockCommand(
       .editReply({
         content:
           "Ocurrió un error al actualizar la sala. Revisá que el bot tenga permiso de Gestionar Canales y volvé a intentar.",
+      })
+      .catch(() => {
+        // Si ni siquiera podemos editar la respuesta, no queda nada por hacer.
+      });
+  }
+}
+
+// /limit: fija el aforo de la sala dinámica (0 = sin límite). Discord corta la
+// entrada cuando se llena; a los que ya están adentro no los mueve.
+async function handleVoiceLimitCommand(
+  interaction: ChatInputCommandInteraction,
+): Promise<void> {
+  if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    await interaction.reply({
+      content: "Este comando solo se puede usar dentro de un servidor.",
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Mismo motivo que en handleVoiceLockCommand: deferimos para no pegarle al
+  // timeout de 3s y respondemos siempre, incluso en el catch.
+  await interaction.deferReply();
+
+  try {
+    const member = await interaction.guild.members
+      .fetch(interaction.user.id)
+      .catch(() => null);
+    if (!member) {
+      await interaction.editReply({
+        content: "No pude obtener tu perfil de miembro.",
+      });
+      return;
+    }
+
+    const voiceChannelId = member.voice.channelId ?? null;
+    if (!voiceChannelId) {
+      await interaction.editReply({
+        content: "Tenés que estar en una sala de voz para usar este comando.",
+      });
+      return;
+    }
+
+    const isTemporary = await isTemporaryVoiceChannel(
+      interaction.guildId,
+      voiceChannelId,
+    );
+    if (!isTemporary) {
+      await interaction.editReply({
+        content:
+          "Este comando solo funciona en salas de voz dinámicas creadas por Karpindomo.",
+      });
+      return;
+    }
+
+    const channel = await interaction.guild.channels
+      .fetch(voiceChannelId)
+      .catch(() => null);
+    if (!channel?.isVoiceBased()) {
+      await interaction.editReply({
+        content: "No pude acceder al canal de voz.",
+      });
+      return;
+    }
+
+    const limit = interaction.options.getInteger("cantidad", true);
+    const inside = channel.members.size;
+    await channel.setUserLimit(limit);
+
+    const template = pickRandom(
+      limit === 0
+        ? LIMIT_CLEARED_BUTLER_MESSAGES
+        : LIMIT_CHANNEL_BUTLER_MESSAGES,
+    );
+    const content = template
+      .replace("{user}", interaction.user.toString())
+      .replace("{limit}", String(limit));
+
+    // Bajar el aforo por debajo de la gente que ya está adentro no expulsa a
+    // nadie: Discord sólo deja de admitir nuevos. Sin el aviso, parece roto.
+    const overbooked =
+      limit > 0 && inside > limit
+        ? `\n-# Ya hay ${inside} adentro: nadie sale, pero no entra nadie más.`
+        : "";
+
+    await interaction.editReply({ content: `${content}${overbooked}` });
+  } catch (error) {
+    console.error(
+      "[discord-bot] handleVoiceLimitCommand failed (respondiendo de todos modos)",
+      {
+        guildId: interaction.guildId,
+        error,
+      },
+    );
+    await interaction
+      .editReply({
+        content:
+          "Ocurrió un error al cambiar el límite de la sala. Revisá que el bot tenga permiso de Gestionar Canales y volvé a intentar.",
       })
       .catch(() => {
         // Si ni siquiera podemos editar la respuesta, no queda nada por hacer.
@@ -2701,6 +2836,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.commandName === "unlock") {
     await handleVoiceLockCommand(interaction, false);
+    return;
+  }
+
+  if (interaction.commandName === "limit") {
+    await handleVoiceLimitCommand(interaction);
     return;
   }
 
