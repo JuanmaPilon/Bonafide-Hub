@@ -327,6 +327,13 @@ export type GuildBooster = GuildMemberCard & {
   premiumSince: string;
 };
 
+// Colores del rol de Server Booster, tal como están en Discord (el `color` es
+// el número de Discord, no un hex: `roleColorHex` lo convierte).
+export type BoosterRoleColors = {
+  color: number;
+  secondaryColor?: number;
+};
+
 // Raid leads del servidor: los que tienen el rol de Raid Officer del roster.
 export async function getRaidLeads(
   guildId: string,
@@ -343,15 +350,15 @@ export async function getRaidLeads(
 
 export async function getGuildBoosters(
   guildId: string,
-): Promise<GuildBooster[]> {
-  const data = await requestJson<{ boosters: GuildBooster[] }>(
-    `/guilds/${guildId}/boosters`,
-    {
-      method: "GET",
-    },
-  );
+): Promise<{ boosters: GuildBooster[]; role: BoosterRoleColors | null }> {
+  const data = await requestJson<{
+    boosterRole?: BoosterRoleColors | null;
+    boosters: GuildBooster[];
+  }>(`/guilds/${guildId}/boosters`, {
+    method: "GET",
+  });
 
-  return data.boosters;
+  return { boosters: data.boosters, role: data.boosterRole ?? null };
 }
 
 export type GuildGameActivity = {

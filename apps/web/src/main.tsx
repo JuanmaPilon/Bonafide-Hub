@@ -65,6 +65,7 @@ import {
   roleChipStyle,
   roleColorHex,
   roleNameStyle as levelColorsStyle,
+  tintHex,
 } from "./roles";
 import { XpSection } from "./XpSection";
 import { copyToClipboard } from "./clipboard";
@@ -193,6 +194,7 @@ import {
   type ApiGuild,
   type AdminAccess,
   type AuditLogEntry,
+  type BoosterRoleColors,
   type Communication,
   type CommunicationInput,
   type DailyMessage,
@@ -8020,6 +8022,42 @@ function EventReportModal({
 // app. El de los boosters lo pone el CSS del grid (es una sola lista).
 const HOME_LEAD_ACCENT = "201, 138, 27";
 
+// Nombre de un booster: los dos colores de su rol en Discord, en degradado. Con
+// degradado el relleno es transparente (background-clip: text) y el text-shadow
+// rosa de la tarjeta se ve como una mancha detrás de las letras.
+function boosterNameStyle(
+  role: BoosterRoleColors | null,
+): CSSProperties | undefined {
+  const color = roleColorHex(role?.color);
+  if (!color) {
+    return undefined;
+  }
+  const secondary = roleColorHex(role?.secondaryColor) ?? undefined;
+  const style = levelColorsStyle(color, secondary);
+  if (!style) {
+    return undefined;
+  }
+  return secondary && secondary !== color
+    ? { ...style, textShadow: "none" }
+    : style;
+}
+
+// Variables del anillo de booster: los dos colores del rol y el halo. Van en el
+// elemento que envuelve al avatar y el CSS las lee desde ahí.
+function boosterRingVars(
+  role: BoosterRoleColors | null,
+): CSSProperties | undefined {
+  const color = roleColorHex(role?.color);
+  if (!color) {
+    return undefined;
+  }
+  return {
+    "--booster-a": color,
+    "--booster-b": roleColorHex(role?.secondaryColor) ?? color,
+    "--booster-glow": tintHex(color, 0.5),
+  } as CSSProperties;
+}
+
 // Fila de miembro de Home: la comparten el podio, los raid leads y los más
 // activos del mes (mismo alto, mismo avatar, mismo nombre linkeado al perfil;
 // cambia el acento).
@@ -8074,6 +8112,7 @@ function HomeMemberRow({
 function HomeView({
   boostCount,
   boosters,
+  boosterRole,
   colorFor,
   leaderboard,
   leads,
@@ -8086,6 +8125,7 @@ function HomeView({
 }: {
   boostCount: number | null;
   boosters: GuildBooster[];
+  boosterRole: BoosterRoleColors | null;
   colorFor: (level: number) => CSSProperties | undefined;
   leaderboard: LeaderboardEntry[];
   leads: GuildMemberCard[];
@@ -8132,17 +8172,25 @@ function HomeView({
             {boosters.map((booster) => (
               <article className="home-member-card" key={booster.userId}>
                 {booster.avatarUrl ? (
-                  <img
-                    className="home-member-avatar"
-                    src={booster.avatarUrl}
-                    alt=""
-                  />
+                  <span
+                    className="avatar-ring"
+                    style={boosterRingVars(boosterRole)}
+                  >
+                    <img
+                      className="home-member-avatar home-member-avatar--booster"
+                      src={booster.avatarUrl}
+                      alt=""
+                    />
+                  </span>
                 ) : (
                   <span className="home-member-avatar home-member-avatar-placeholder">
                     ?
                   </span>
                 )}
-                <span className="home-member-name">
+                <span
+                  className="home-member-name"
+                  style={boosterNameStyle(boosterRole)}
+                >
                   <button
                     className="member-link"
                     onClick={() => onOpenProfile(booster.userId)}
@@ -8757,6 +8805,11 @@ function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [boosters, setBoosters] = useState<GuildBooster[]>([]);
+  // Colores del rol de Server Booster: el nombre va con ese degradado en Inicio
+  // y el anillo que gira del ranking sale de acá.
+  const [boosterRole, setBoosterRole] = useState<BoosterRoleColors | null>(
+    null,
+  );
   const [boostersLoading, setBoostersLoading] = useState(true);
   const [raidLeads, setRaidLeads] = useState<GuildMemberCard[]>([]);
   const [raidLeadsLoading, setRaidLeadsLoading] = useState(true);
@@ -12015,8 +12068,13 @@ function App() {
   // esperar la respuesta y el bloque aparecía de golpe (mostrando mientras
   // tanto el estado vacío, que además miente). Solo se limpian al cambiar de
   // guild, para no mostrar los de la guild anterior.
+  // El ranking también lo pide: de acá salen los colores del anillo de quienes
+  // boostean, que tienen que estar al entrar directo al dashboard.
   useEffect(() => {
-    if (activeTab !== "home" || !selectedGuildId) {
+    if (
+      (activeTab !== "home" && activeTab !== "dashboard") ||
+      !selectedGuildId
+    ) {
       return;
     }
 
@@ -12029,9 +12087,10 @@ function App() {
 
     let cancelled = false;
     getGuildBoosters(selectedGuildId)
-      .then((boostersList) => {
+      .then(({ boosters: boostersList, role }) => {
         if (!cancelled) {
           setBoosters(boostersList);
+          setBoosterRole(role);
         }
       })
       .catch(() => {
@@ -12564,6 +12623,7 @@ function App() {
           <HomeView
             boostCount={widgetStatus?.boostCount ?? null}
             boosters={boosters}
+            boosterRole={boosterRole}
             colorFor={levelStyleFor}
             leaderboard={leaderboard}
             leads={raidLeads}
@@ -12781,13 +12841,33 @@ function App() {
                               <td>
                                 <span className="leaderboard-user">
                                   {entry.avatarUrl ? (
-                                    <img
-                                      className="leaderboard-avatar"
-                                      src={entry.avatarUrl}
-                                      alt=""
-                                    />
+                                    <span
+                                      className={
+                                        entry.isBooster
+                                          ? "avatar-ring avatar-ring--sm"
+                                          : "leaderboard-avatar-frame"
+                                      }
+                                      style={
+                                        entry.isBooster
+                                          ? boosterRingVars(boosterRole)
+                                          : undefined
+                                      }
+                                    >
+                                      <img
+                                        className="leaderboard-avatar"
+                                        src={entry.avatarUrl}
+                                        alt=""
+                                      />
+                                    </span>
                                   ) : (
-                                    <span className="leaderboard-avatar leaderboard-avatar-placeholder">
+                                    <span
+                                      className={`leaderboard-avatar leaderboard-avatar-placeholder${entry.isBooster ? " avatar-ring avatar-ring--sm" : ""}`}
+                                      style={
+                                        entry.isBooster
+                                          ? boosterRingVars(boosterRole)
+                                          : undefined
+                                      }
+                                    >
                                       ?
                                     </span>
                                   )}

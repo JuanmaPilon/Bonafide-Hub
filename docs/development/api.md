@@ -702,6 +702,13 @@ Emojis del servidor: `GET /guilds/:guildId/emojis`
 
 Boosters de Nitro: `GET /guilds/:guildId/boosters`
 
+El payload trae, además de la lista, `boosterRole`: los dos colores del rol de
+Server Booster tal como están en Discord (se lo reconoce por
+`tags.premium_subscriber`, nunca por nombre). Con esos colores el nombre de cada
+booster va en degradado en Inicio y el avatar lleva el anillo neón que gira en el
+ranking. Si el rol no se pudo leer, la web cae a los canónicos de Discord
+(`#f47fff → #5865f2`).
+
 Home: la tarjeta principal son los **boosters** (los que bancan el server, con
 el acento de Nitro, el contador de boosts y una tarjeta por miembro —
 `.home-member-card`— porque es lo que más se mira) y abajo van tres de

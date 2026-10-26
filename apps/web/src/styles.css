@@ -869,6 +869,82 @@ a:hover {
   font-weight: 700;
 }
 
+/* Caja del avatar del ranking: mismo tamaño que la imagen, para que el anillo de
+   booster tenga dónde vivir (un <img> no tiene pseudo-elementos). */
+.leaderboard-avatar-frame {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+/* Anillo neón de los boosters: un borde de 2px con el degradado del rol de
+   Server Booster que gira. Los dos colores los pone el JS (salen de Discord); si
+   no llegaron quedan los canónicos de Discord. */
+@property --booster-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.avatar-ring {
+  --booster-a: #f47fff;
+  --booster-b: #5865f2;
+  --booster-glow: rgba(244, 127, 255, 0.5);
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+.avatar-ring::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from var(--booster-angle),
+    var(--booster-a),
+    var(--booster-b),
+    var(--booster-a)
+  );
+  /* El centro se recorta con una máscara radial: así el degradado queda como
+     línea y no como un disco tapando la foto. */
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2px),
+    #000 calc(100% - 2px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2px),
+    #000 calc(100% - 2px)
+  );
+  filter: drop-shadow(0 0 6px var(--booster-glow));
+  animation: booster-ring-spin 4s linear infinite;
+  pointer-events: none;
+}
+
+.avatar-ring--sm::after {
+  inset: -2px;
+}
+
+@keyframes booster-ring-spin {
+  to {
+    --booster-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-ring::after {
+    animation: none;
+  }
+}
+
+/* Sobre blanco el halo del anillo se ve sucio: queda sólo la línea. */
+:root[data-theme="light"] .avatar-ring::after {
+  filter: none;
+}
+
 /* ── Módulo de XP (Admin) ──────────────────────────────────────────
    Los números de configuración, los roles por nivel como lista compacta (el
    detalle de cada nivel se edita en una ventana emergente) y los
@@ -4757,6 +4833,12 @@ a:hover {
 .home-member-card .home-member-avatar {
   width: 52px;
   height: 52px;
+}
+
+/* El booster ya lleva el anillo animado del rol: el halo fijo de la tarjeta
+   quedaba como un segundo borde. */
+.home-member-card .home-member-avatar--booster {
+  box-shadow: none;
 }
 
 .home-member-card .home-member-name {

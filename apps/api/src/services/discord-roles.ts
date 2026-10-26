@@ -30,6 +30,9 @@ export type DiscordRole = {
   name: string;
   permissions: string;
   position: number;
+  // El rol de Server Booster viene con `premium_subscriber` acá; es la única
+  // forma fiable de encontrarlo (la guild puede llamarlo como quiera).
+  tags?: { premium_subscriber?: unknown };
   unicode_emoji?: string | null;
 };
 

@@ -23,6 +23,7 @@ Después, según lo que vayas a tocar, entrá por el documento de esa pieza.
 | [development/process.md](development/process.md) | Cómo se fue construyendo y qué se aprendió en el camino | Querés entender por qué está así, o llegás nuevo al repo |
 | [development/api.md](development/api.md) | La app en detalle: cada módulo del hub y cada endpoint | Trabajás en el API o en la web |
 | [development/discord-bot.md](development/discord-bot.md) | El bot: comandos, eventos, automatizaciones y permisos | Trabajás en el bot |
+| [development/role-colors.md](development/role-colors.md) | Los degradados y colores de los roles del server, y las reglas de la paleta | Tocás rangos, chips o cualquier nombre pintado con color de rol |
 | [development/railway-operations.md](development/railway-operations.md) | Despliegue, variables por servicio, límites de costo y diagnóstico | Desplegás o debuggeás en producción |
 
 ## Cómo se mantiene
@@ -35,6 +36,7 @@ cambio que el código, no después:
 | Un endpoint o su payload | `development/api.md` |
 | Un módulo del hub (UI, módulo nuevo, sección del Admin) | `development/api.md` y, si cambia el mapa general, `../README.md` |
 | Un comando, evento o automatización del bot | `development/discord-bot.md` |
+| El color o el degradado de un rol | `development/role-colors.md` |
 | Un flujo que cruza piezas, una tabla nueva o una decisión de arquitectura | `development/architecture.md` |
 | Una decisión de proceso, una trampa nueva o una fase que se cierra | `development/process.md` |
 | Variables de entorno | El `.env.example` de la app y `development/railway-operations.md` |

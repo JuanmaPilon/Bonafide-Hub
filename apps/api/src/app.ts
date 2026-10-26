@@ -438,23 +438,30 @@ function invalidateGuildMembers(guildId: string): void {
 
 // Caché corta de roles de la guild: la usa el listado de eventos para mandar
 // el NOMBRE del rol mínimo junto al evento (así la tarjeta no muestra primero
-// "un rol" y después el nombre, que era un parpadeo feo).
-const guildRolesCache = new Map<
-  string,
-  { at: number; names: Map<string, string> }
->();
+// "un rol" y después el nombre, que era un parpadeo feo) y también para los
+// colores del rol de Server Booster (Inicio y ranking pintan esos nombres con
+// el degradado de Discord).
+type GuildRoleInfo = {
+  boosterColor: number | null;
+  boosterSecondaryColor: number | null;
+  names: Map<string, string>;
+};
+
+const guildRolesCache = new Map<string, { at: number } & GuildRoleInfo>();
 const GUILD_ROLES_TTL_MS = 5 * 60 * 1000;
 
-async function fetchGuildRoleNames(
-  guildId: string,
-): Promise<Map<string, string>> {
+async function loadGuildRoles(guildId: string): Promise<GuildRoleInfo> {
   const cached = guildRolesCache.get(guildId);
   if (cached && Date.now() - cached.at < GUILD_ROLES_TTL_MS) {
-    return cached.names;
+    return cached;
   }
-  const names = new Map<string, string>();
+  const info: GuildRoleInfo = {
+    boosterColor: null,
+    boosterSecondaryColor: null,
+    names: new Map(),
+  };
   if (!env.DISCORD_BOT_TOKEN) {
-    return names;
+    return info;
   }
   try {
     const response = await fetchWithDiscordRetry(
@@ -462,19 +469,42 @@ async function fetchGuildRoleNames(
       { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
     );
     if (response.ok) {
-      const roles = (await response.json()) as Array<{
-        id: string;
-        name: string;
-      }>;
+      const roles = (await response.json()) as DiscordRole[];
       for (const role of roles) {
-        names.set(role.id, role.name);
+        info.names.set(role.id, role.name);
+        if (role.tags && "premium_subscriber" in role.tags) {
+          info.boosterColor = role.colors?.primary_color || role.color || null;
+          info.boosterSecondaryColor = role.colors?.secondary_color || null;
+        }
       }
-      guildRolesCache.set(guildId, { at: Date.now(), names });
+      guildRolesCache.set(guildId, { at: Date.now(), ...info });
     }
   } catch {
     // Sin nombres: la tarjeta cae al fallback de la web.
   }
-  return names;
+  return info;
+}
+
+async function fetchGuildRoleNames(
+  guildId: string,
+): Promise<Map<string, string>> {
+  return (await loadGuildRoles(guildId)).names;
+}
+
+// Colores del rol de Server Booster (el `#f47fff → #5865f2` mientras la guild
+// no lo cambie). Sale de Discord y no de una constante en la web: si mañana
+// editan el rol, la web los sigue sola.
+async function fetchBoosterRoleColors(
+  guildId: string,
+): Promise<{ color: number; secondaryColor?: number } | null> {
+  const { boosterColor, boosterSecondaryColor } = await loadGuildRoles(guildId);
+  if (!boosterColor) {
+    return null;
+  }
+  return {
+    color: boosterColor,
+    secondaryColor: boosterSecondaryColor ?? undefined,
+  };
 }
 
 // Vista pública de un rol de Discord para el panel: los colores con degradado
@@ -3550,12 +3580,16 @@ export async function buildApp() {
       return reply.code(403).send({ ok: false, error: "Forbidden" });
     }
 
-    const boosters = await fetchGuildBoosters(params.guildId).catch(() => []);
+    const [boosters, boosterRole] = await Promise.all([
+      fetchGuildBoosters(params.guildId).catch(() => []),
+      fetchBoosterRoleColors(params.guildId).catch(() => null),
+    ]);
 
     return {
       ok: true,
       guildId: params.guildId,
       boosters,
+      boosterRole,
     };
   });
 
