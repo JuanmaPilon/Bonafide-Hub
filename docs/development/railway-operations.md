@@ -204,6 +204,37 @@ crecimiento no acotado eran:
    (pulls, daño por jugador, muertes y consumibles), varios MB. Se bajó de 100
    entradas / 10 min a **8 / 5 min**.
 
+**El número de RAM que muestra Railway no baja nunca, y eso no es un leak.** Es el
+`rss`, el máximo que el proceso pidió al sistema; V8 no devuelve el heap que
+liberó, lo deja reservado para reusarlo. Un pico de trabajo (un deploy, una
+noche de raid) sube la marca y el escalón queda hasta el próximo reinicio. Para
+distinguir las dos cosas el API escribe `[mem]` cada 5 minutos con cuatro
+números: `heapUsedMb` (lo que el GC puede soltar — si crece **sin tráfico**, hay
+leak), `heapTotalMb` (lo reservado), `externalMb` (buffers nativos: Prisma,
+zlib) y `rssMb` (lo que se cobra). Un leak crece en reposo; una marca de agua
+queda plana cuando no hay tráfico.
+
+Ojo con el tamaño relativo: en el acumulado de un mes el **API** pesa ~4,5 veces
+más que el bot (≈236 MB promedio contra ≈53 MB), así que un escalón del bot es
+chico al lado del mismo escalón en el API.
+
+#### Compresión: dejar la calidad de brotli donde está
+
+`@fastify/compress` **no** usa la calidad 11 de zlib: trae `BROTLI_PARAM_QUALITY:
+4` por default y lo deja escrito en su código. Medido sobre un payload de 151 kB
+de este API (20 requests, plugin real):
+
+| Calidad | Sale | Tiempo por respuesta |
+| --- | --- | --- |
+| **4 (default)** | 27,7 kB | **2,9 ms** |
+| 5 | 25,8 kB | 4,1 ms |
+| 11 | 20,6 kB | 148,8 ms |
+
+Subirla a 11 cuesta ~50 veces más CPU para ahorrar 25% de bytes — centavos de
+egress — y, como Node comprime en un pool de 4 hilos, encola las respuestas
+grandes cuando hay concurrencia. Si hace falta bajar egress, el camino es otro
+(que la web no proxee el API, cachear los assets), no la calidad de compresión.
+
 #### Network Egress: qué lo genera y qué se hizo para bajarlo
 
 Es tráfico que **sale** del servicio hacia internet: respuestas HTTP a la web,

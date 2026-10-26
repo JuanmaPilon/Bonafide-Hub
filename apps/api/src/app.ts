@@ -2710,6 +2710,12 @@ export async function buildApp() {
   // Se espera el registro a propósito: el plugin engancha su hook en onRoute, así
   // que tiene que estar cargado ANTES de declarar las rutas (si se registra sin
   // await, las rutas se crean primero y quedan sin comprimir).
+  //
+  // No se toca la calidad de brotli: este plugin ya usa 4 por default
+  // (recommendedDefaultBrotliOptions), no la 11 de zlib. Medido sobre un payload
+  // de 151 KB de este API: q4 = 2,0 ms y 54,9 KB; q11 = 165 ms y 48,0 KB. O sea
+  // que subirla cuesta 80x de CPU para ahorrar 14% de bytes, y q5 sale más lento
+  // que q4 dando el mismo tamaño.
   await app.register(compress, {
     encodings: ["br", "gzip"],
     threshold: 1024,

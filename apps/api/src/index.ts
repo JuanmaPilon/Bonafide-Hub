@@ -4,6 +4,27 @@ import { migrateCommunicationInstances } from "./services/communications-migrati
 import { migrateLegacyEventRoles } from "./services/event-games-migration.js";
 import { backfillRaidLogDetails } from "./services/raid-logs-store.js";
 
+// Muestra de memoria cada 5 minutos. Sirve para distinguir un leak de una marca
+// de agua: `rss` es lo que Railway cobra y no baja nunca (V8 no devuelve lo
+// liberado), `heapUsed` es lo que el GC puede soltar. Si `heapUsed` crece sin
+// tráfico hay leak; si baja y `rss` queda alto, es sólo el máximo histórico.
+const MEMORY_SAMPLE_MS = 5 * 60 * 1000;
+
+function logMemorySample(app: Awaited<ReturnType<typeof buildApp>>): void {
+  setInterval(() => {
+    const usage = process.memoryUsage();
+    app.log.info(
+      {
+        heapTotalMb: Math.round(usage.heapTotal / 1e6),
+        heapUsedMb: Math.round(usage.heapUsed / 1e6),
+        externalMb: Math.round(usage.external / 1e6),
+        rssMb: Math.round(usage.rss / 1e6),
+      },
+      "[mem] uso de memoria",
+    );
+  }, MEMORY_SAMPLE_MS).unref();
+}
+
 async function main(): Promise<void> {
   const app = await buildApp();
 
@@ -36,6 +57,8 @@ async function main(): Promise<void> {
   // Re-renderiza los avisos-embed ya publicados (roles, roster y layout al
   // dia). Es fire & forget y nunca notifica: edita los mensajes existentes.
   refreshAllPublishedAnnouncements();
+
+  logMemorySample(app);
 
   // Los logs guardados antes de que la tarjeta supiera identificar un pull
   // (boss + hora) no tienen esos datos: se refrescan una vez, en segundo plano,
