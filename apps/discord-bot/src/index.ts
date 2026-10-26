@@ -5089,10 +5089,13 @@ async function handlePrefixCommand(
 
   try {
     const reply = await parsed.command.run(parsed.ctx);
-    // El mensaje del comando se borra para que el canal quede con la respuesta
-    // sola. Sin permiso de Gestionar Mensajes, sigue igual.
-    await message.delete().catch(() => undefined);
-    await message.channel.send({ content: reply.content });
+    // El mensaje del comando se queda: borrarlo hacía desaparecer lo que la
+    // persona escribió. Se responde citándolo (sin ping) para que se lea como
+    // una respuesta y no como un mensaje suelto del bot.
+    await message.reply({
+      allowedMentions: { repliedUser: false },
+      content: reply.content,
+    });
   } catch (error) {
     console.error(
       `[discord-bot] prefix command "${parsed.command.name}" failed`,

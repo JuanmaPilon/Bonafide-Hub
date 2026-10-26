@@ -15,15 +15,11 @@ export const BOT_PREFIX = (env.BOT_PREFIX?.trim() || "oe").toLowerCase();
 const MESSAGE_MAX_LENGTH = 2000;
 
 // El muro: la frase partida en una palabra por renglón, como si alguien
-// estuviera gritando de a una sílaba, y el bloque repetido varias veces para que
-// tape la pantalla del canal.
+// estuviera gritando de a una sílaba. Una sola pasada: repetir el bloque doce
+// veces era demasiado scroll para el mismo chiste.
 const DEREK_SPAM_PHRASE =
   "OE OE EO EO MERCADOLIBRE! LO MATAS EO OE OE LE GANAS MERCADOLIBREPULLANGARROZ";
 const DEREK_SPAM_LINES = DEREK_SPAM_PHRASE.split(/\s+/);
-
-// Bloques completos de la frase. Con 12 entran 156 renglones y ~1.150
-// caracteres: tapa la pantalla sin acercarse al tope de 2.000 de Discord.
-const DEREK_SPAM_REPEAT = 12;
 
 export type PrefixContext = {
   args: string[];
@@ -42,11 +38,7 @@ export type PrefixCommand = {
 const derekCommand: PrefixCommand = {
   name: "derek",
   run: () => ({
-    content: Array.from({ length: DEREK_SPAM_REPEAT }, () =>
-      DEREK_SPAM_LINES.join("\n"),
-    )
-      .join("\n")
-      .slice(0, MESSAGE_MAX_LENGTH),
+    content: DEREK_SPAM_LINES.join("\n").slice(0, MESSAGE_MAX_LENGTH),
   }),
 };
 

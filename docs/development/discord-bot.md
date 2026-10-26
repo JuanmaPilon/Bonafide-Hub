@@ -103,8 +103,9 @@ ni `/unlock` ni el barrido).
 Los comandos de chat viven en `services/prefix-commands.ts` y se escriben en el
 canal, con el prefix de `BOT_PREFIX` (default `oe`):
 
-1. `oe derek` — el muro: la frase partida en una palabra por renglón y repetida
-   doce veces (156 renglones).
+1. `oe derek` — el muro: la frase partida en una palabra por renglón, una sola
+   pasada (13 renglones). El mensaje del comando no se borra: el bot responde
+   citándolo, sin ping.
 
 El prefix sólo cuenta si va seguido de **un espacio** y de un comando conocido; si
 no, el bot se queda callado a propósito. "oe" es una interjección y aparece al
@@ -113,14 +114,13 @@ comando" sería peor que no tener prefix.
 
 Detalles que no son obvios:
 
-1. El mensaje del comando se borra (si el bot tiene Gestionar Mensajes) para que en
-   el canal quede sólo la respuesta.
+1. El mensaje del comando **se queda** en el canal y el bot le responde citándolo
+   (sin ping): borrarlo hacía desaparecer lo que la persona escribió.
 2. Cooldown de 3 s por persona: el comando escribe en el canal y sin freno un
    usuario lo inunda solo.
 3. Los mensajes de comando **no dan XP** — si no, repetirlos subía de nivel.
-4. El muro va en **un** mensaje de 156 renglones y no en muchos mensajes:
-   Discord castiga el envío en ráfaga (rate limit y, si insiste, revisión del
-   bot). En pantalla se ve igual.
+4. La respuesta va en **un** mensaje y no en muchos: Discord castiga el envío en
+   ráfaga (rate limit y, si insiste, revisión del bot).
 
 ## 3. Eventos y automatizaciones
 1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada
