@@ -750,13 +750,12 @@ a:hover {
   border-bottom: none;
 }
 
-.leaderboard-table tr.mvp-row td {
-  background: rgba(var(--podium-rgb), 0.055);
-  border-bottom-color: rgba(var(--podium-rgb), 0.16);
-}
-
+/* El podio se marca sólo en la placa del número: el tinte de la fila y el filo
+   de color competían con el marco del booster y ensuciaban la tabla. El borde
+   izquierdo transparente reserva el ancho para que las columnas no se corran
+   respecto de las filas de abajo. */
 .leaderboard-table tr.mvp-row td:first-child {
-  border-left: 2px solid var(--podium-c);
+  border-left: 2px solid transparent;
   border-radius: 10px 0 0 10px;
 }
 
