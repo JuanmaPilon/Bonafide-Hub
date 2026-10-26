@@ -88,7 +88,15 @@ Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 2. `/reperuanizar` — revierte `/desperuanizar`; quita el sufijo.
 3. `/lock` — tranca la sala para `@everyone` (deniega Connect): los que ya están adentro se quedan, nadie nuevo puede entrar; agrega el sufijo ` 🔒`.
 4. `/unlock` — revierte `/lock`; quita el sufijo. También **libera el aforo** (`/limit`), porque una sala trancada y limitada queda cerrada dos veces.
-5. `/limit cantidad:<0-99>` — fija el aforo de la sala (`0` = sin límite). Discord corta la entrada cuando se llena; a los que ya están adentro no los saca (si el número nuevo es menor que la gente presente, lo avisa en la respuesta).
+5. `/limit cantidad:<0-99>` — fija el aforo de la sala (`0` = sin límite) y lo escribe en el nombre con un emoji por dígito (`3️⃣`, `1️⃣2️⃣`). Discord corta la entrada cuando se llena; a los que ya están adentro no los saca (si el número nuevo es menor que la gente presente, lo avisa en la respuesta).
+
+**Las marcas del nombre se rearman enteras, no se apilan.** El nombre lleva hasta
+tres marcas —aforo (`1️⃣2️⃣`), bandera (`🚫🇵🇪`) y candado (`🔒`)— y cada comando lee
+el nombre base, cambia su marca y lo vuelve a escribir en ese orden
+(`voice-room-marks.ts`). Antes cada comando agregaba la suya al final y sólo sabía
+quitarla si seguía ahí: con dos marcas, la segunda tapaba a la primera y esa marca
+quedaba pegada para siempre (un candado puesto después de la bandera no lo sacaba
+ni `/unlock` ni el barrido).
 
 ## 3. Eventos y automatizaciones
 

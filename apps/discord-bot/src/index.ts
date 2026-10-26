@@ -60,6 +60,10 @@ import {
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
 import {
+  composeVoiceRoomName,
+  readVoiceRoomMarks,
+} from "./services/voice-room-marks.js";
+import {
   nicknameSuffix,
   stripKnownMarks,
   stripTrailingAdornos,
@@ -2072,9 +2076,6 @@ const UNBAN_CHANNEL_BUTLER_MESSAGES = [
   "📯 **Aviso de puertas abiertas.**\n{user} reperuanizó la sala.\nEl control migratorio cerró por falta de personal.",
 ];
 
-// Sufijo que se agrega/quita al nombre de la sala al desperuanizar.
-const PERU_FLAG_SUFFIX = " 🚫🇵🇪";
-
 // /desperuanizar y /reperuanizar: ocultan o revelan una sala de voz
 // dinámica a los roles vetados configurados en el panel de admin.
 async function handleVoiceBanCommand(
@@ -2172,15 +2173,16 @@ async function handleVoiceBanCommand(
       }
     }
 
-    // Marca la sala en el nombre: agregamos/quítamos el sufijo de la bandera.
+    // Marca la sala en el nombre: la bandera va con el aforo y el candado, y se
+    // rearma el nombre entero para no dejar marcas viejas colgadas.
     try {
-      const currentName = channel.name;
-      if (ban) {
-        if (!currentName.endsWith(PERU_FLAG_SUFFIX)) {
-          await channel.setName(`${currentName}${PERU_FLAG_SUFFIX}`);
-        }
-      } else if (currentName.endsWith(PERU_FLAG_SUFFIX)) {
-        await channel.setName(currentName.slice(0, -PERU_FLAG_SUFFIX.length));
+      const { base, marks } = readVoiceRoomMarks(channel.name);
+      const nextName = composeVoiceRoomName(base, {
+        ...marks,
+        hidden: ban,
+      });
+      if (nextName !== channel.name) {
+        await channel.setName(nextName);
       }
     } catch (error) {
       console.error("[discord-bot] Failed to rename channel", {
@@ -2277,9 +2279,6 @@ const LIMIT_CLEARED_BUTLER_MESSAGES = [
   "🛎️ **Vuelve a entrar cualquiera.**\n{user} sacó el límite.\nKarpindomo corre las sillas de nuevo.",
 ];
 
-// Sufijo que se agrega/quita al nombre de la sala al trancar.
-const LOCK_SUFFIX = " 🔒";
-
 // /lock y /unlock: trancan o destrancan una sala de voz dinámica para
 // @everyone (a diferencia de /desperuanizar, que solo oculta a roles
 // vetados). Quienes ya están adentro se quedan; nadie nuevo puede entrar.
@@ -2360,15 +2359,17 @@ async function handleVoiceLockCommand(
       }
     }
 
-    // Marca la sala en el nombre: agregamos/quitamos el candado.
+    // Marca la sala en el nombre: el candado va último y el aforo se cae con el
+    // unlock (la sala volvió a estar abierta del todo).
     try {
-      const currentName = channel.name;
-      if (lock) {
-        if (!currentName.endsWith(LOCK_SUFFIX)) {
-          await channel.setName(`${currentName}${LOCK_SUFFIX}`);
-        }
-      } else if (currentName.endsWith(LOCK_SUFFIX)) {
-        await channel.setName(currentName.slice(0, -LOCK_SUFFIX.length));
+      const { base, marks } = readVoiceRoomMarks(channel.name);
+      const nextName = composeVoiceRoomName(base, {
+        ...marks,
+        limit: lock ? channel.userLimit : 0,
+        locked: lock,
+      });
+      if (nextName !== channel.name) {
+        await channel.setName(nextName);
       }
     } catch (error) {
       console.error("[discord-bot] Failed to rename channel", {
@@ -2469,6 +2470,21 @@ async function handleVoiceLimitCommand(
     const limit = interaction.options.getInteger("cantidad", true);
     const inside = channel.members.size;
     await channel.setUserLimit(limit);
+
+    // El aforo también va en el nombre, con un emoji por dígito (2️⃣, 1️⃣2️⃣).
+    try {
+      const { base, marks } = readVoiceRoomMarks(channel.name);
+      const nextName = composeVoiceRoomName(base, { ...marks, limit });
+      if (nextName !== channel.name) {
+        await channel.setName(nextName);
+      }
+    } catch (error) {
+      console.error("[discord-bot] Failed to rename channel", {
+        guildId: interaction.guildId,
+        channelId: voiceChannelId,
+        error,
+      });
+    }
 
     const template = pickRandom(
       limit === 0
