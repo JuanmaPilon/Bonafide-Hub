@@ -14,12 +14,16 @@ export const BOT_PREFIX = (env.BOT_PREFIX?.trim() || "oe").toLowerCase();
 // Tope de Discord para el contenido de un mensaje.
 const MESSAGE_MAX_LENGTH = 2000;
 
-const DEREK_SPAM_LINE =
+// El muro: la frase partida en una palabra por renglón, como si alguien
+// estuviera gritando de a una sílaba, y el bloque repetido varias veces para que
+// tape la pantalla del canal.
+const DEREK_SPAM_PHRASE =
   "OE OE EO EO MERCADOLIBRE! LO MATAS EO OE OE LE GANAS MERCADOLIBREPULLANGARROZ";
+const DEREK_SPAM_LINES = DEREK_SPAM_PHRASE.split(/\s+/);
 
-// Cuántas veces se repite en el muro. Con 2000 de tope entran 23; con 20 el
-// mensaje ocupa media pantalla del canal sin llegar al límite de Discord.
-const DEREK_SPAM_REPEAT = 20;
+// Bloques completos de la frase. Con 12 entran 156 renglones y ~1.150
+// caracteres: tapa la pantalla sin acercarse al tope de 2.000 de Discord.
+const DEREK_SPAM_REPEAT = 12;
 
 export type PrefixContext = {
   args: string[];
@@ -38,7 +42,9 @@ export type PrefixCommand = {
 const derekCommand: PrefixCommand = {
   name: "derek",
   run: () => ({
-    content: Array.from({ length: DEREK_SPAM_REPEAT }, () => DEREK_SPAM_LINE)
+    content: Array.from({ length: DEREK_SPAM_REPEAT }, () =>
+      DEREK_SPAM_LINES.join("\n"),
+    )
       .join("\n")
       .slice(0, MESSAGE_MAX_LENGTH),
   }),

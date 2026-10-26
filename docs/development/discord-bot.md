@@ -103,7 +103,8 @@ ni `/unlock` ni el barrido).
 Los comandos de chat viven en `services/prefix-commands.ts` y se escriben en el
 canal, con el prefix de `BOT_PREFIX` (default `oe`):
 
-1. `oe derek` — el muro: veinte líneas de `OE OE EO EO MERCADOLIBRE! LO MATAS …`.
+1. `oe derek` — el muro: la frase partida en una palabra por renglón y repetida
+   doce veces (156 renglones).
 
 El prefix sólo cuenta si va seguido de **un espacio** y de un comando conocido; si
 no, el bot se queda callado a propósito. "oe" es una interjección y aparece al
@@ -117,9 +118,9 @@ Detalles que no son obvios:
 2. Cooldown de 3 s por persona: el comando escribe en el canal y sin freno un
    usuario lo inunda solo.
 3. Los mensajes de comando **no dan XP** — si no, repetirlos subía de nivel.
-4. El muro va en **un** mensaje de veinte líneas y no en veinte mensajes: Discord
-   castiga el envío en ráfaga (rate limit y, si insiste, revisión del bot). En
-   pantalla se ve igual.
+4. El muro va en **un** mensaje de 156 renglones y no en muchos mensajes:
+   Discord castiga el envío en ráfaga (rate limit y, si insiste, revisión del
+   bot). En pantalla se ve igual.
 
 ## 3. Eventos y automatizaciones
 1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada
@@ -274,7 +275,7 @@ texto fijo, así el servidor no lee la misma frase dos veces:
 | Recordatorio de timer | scheduler → DM | `TIMER_TEMPLATES` |
 | Sala trancada / destrancada | `/lock` / `/unlock` | `LOCK_CHANNEL_BUTLER_MESSAGES` / `UNLOCK_CHANNEL_BUTLER_MESSAGES` |
 | Aforo cambiado / liberado | `/limit` | `LIMIT_CHANNEL_BUTLER_MESSAGES` / `LIMIT_CLEARED_BUTLER_MESSAGES` |
-| Muro del `oe derek` | prefix `oe` | `DEREK_SPAM_LINE` |
+| Muro del `oe derek` | prefix `oe` | `DEREK_SPAM_PHRASE` |
 | Sala oculta / visible | `/desperuanizar` / `/reperuanizar` | `BAN_CHANNEL_BUTLER_MESSAGES` / `UNBAN_CHANNEL_BUTLER_MESSAGES` |
 | Mensaje del loro | `postRandomMessage` | `BUTLER_OPENERS` + la frase que escribió el staff |
 | Burbuja del hub | `KarpindomoWidget` (web) | `KARPINDOMO_LINES` |
