@@ -98,8 +98,30 @@ quitarla si seguía ahí: con dos marcas, la segunda tapaba a la primera y esa m
 quedaba pegada para siempre (un candado puesto después de la bandera no lo sacaba
 ni `/unlock` ni el barrido).
 
-## 3. Eventos y automatizaciones
+### Comandos con prefix (`oe`)
 
+Los comandos de chat viven en `services/prefix-commands.ts` y se escriben en el
+canal, con el prefix de `BOT_PREFIX` (default `oe`):
+
+1. `oe derek` — el muro: veinte líneas de `OE OE EO EO MERCADOLIBRE! LO MATAS …`.
+
+El prefix sólo cuenta si va seguido de **un espacio** y de un comando conocido; si
+no, el bot se queda callado a propósito. "oe" es una interjección y aparece al
+principio de mensajes reales ("oe, ¿jugamos?"), así que un "no conozco ese
+comando" sería peor que no tener prefix.
+
+Detalles que no son obvios:
+
+1. El mensaje del comando se borra (si el bot tiene Gestionar Mensajes) para que en
+   el canal quede sólo la respuesta.
+2. Cooldown de 3 s por persona: el comando escribe en el canal y sin freno un
+   usuario lo inunda solo.
+3. Los mensajes de comando **no dan XP** — si no, repetirlos subía de nivel.
+4. El muro va en **un** mensaje de veinte líneas y no en veinte mensajes: Discord
+   castiga el envío en ráfaga (rate limit y, si insiste, revisión del bot). En
+   pantalla se ve igual.
+
+## 3. Eventos y automatizaciones
 1. `GuildMemberAdd` → asigna rol de entrada (`defaultRoleId`) y log de entrada
 2. `GuildMemberRemove` → log de salida (con el nombre de la persona: `Nick (usuario)`,
    el nick del servidor o si no el nombre de la cuenta; si el evento llega con un
@@ -252,6 +274,7 @@ texto fijo, así el servidor no lee la misma frase dos veces:
 | Recordatorio de timer | scheduler → DM | `TIMER_TEMPLATES` |
 | Sala trancada / destrancada | `/lock` / `/unlock` | `LOCK_CHANNEL_BUTLER_MESSAGES` / `UNLOCK_CHANNEL_BUTLER_MESSAGES` |
 | Aforo cambiado / liberado | `/limit` | `LIMIT_CHANNEL_BUTLER_MESSAGES` / `LIMIT_CLEARED_BUTLER_MESSAGES` |
+| Muro del `oe derek` | prefix `oe` | `DEREK_SPAM_LINE` |
 | Sala oculta / visible | `/desperuanizar` / `/reperuanizar` | `BAN_CHANNEL_BUTLER_MESSAGES` / `UNBAN_CHANNEL_BUTLER_MESSAGES` |
 | Mensaje del loro | `postRandomMessage` | `BUTLER_OPENERS` + la frase que escribió el staff |
 | Burbuja del hub | `KarpindomoWidget` (web) | `KARPINDOMO_LINES` |

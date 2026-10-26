@@ -60,6 +60,10 @@ import {
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
 import {
+  parsePrefixCommand,
+  type ParsedPrefixCommand,
+} from "./services/prefix-commands.js";
+import {
   composeVoiceRoomName,
   readVoiceRoomMarks,
 } from "./services/voice-room-marks.js";
@@ -5052,11 +5056,63 @@ async function handleKarutaDropMessage(message: Message): Promise<void> {
   }
 }
 
+// Los comandos con prefix responden en el canal: sin cooldown, un ida y vuelta
+// rápido se convierte en spam de un solo usuario.
+const PREFIX_COMMAND_COOLDOWN_MS = 3000;
+const prefixCommandCooldowns = new Map<string, number>();
+
+function parsePrefixFromMessage(message: Message): ParsedPrefixCommand | null {
+  if (message.author.bot || !message.inGuild()) {
+    return null;
+  }
+  if (env.DISCORD_GUILD_ID && message.guildId !== env.DISCORD_GUILD_ID) {
+    return null;
+  }
+  return parsePrefixCommand(message.content);
+}
+
+async function handlePrefixCommand(
+  message: Message,
+  parsed: ParsedPrefixCommand,
+): Promise<void> {
+  const cooldownKey = `${message.guildId}:${message.author.id}`;
+  const now = Date.now();
+  const lastUsed = prefixCommandCooldowns.get(cooldownKey) ?? 0;
+  if (now - lastUsed < PREFIX_COMMAND_COOLDOWN_MS) {
+    return;
+  }
+  prefixCommandCooldowns.set(cooldownKey, now);
+
+  if (!message.channel.isSendable()) {
+    return;
+  }
+
+  try {
+    const reply = await parsed.command.run(parsed.ctx);
+    // El mensaje del comando se borra para que el canal quede con la respuesta
+    // sola. Sin permiso de Gestionar Mensajes, sigue igual.
+    await message.delete().catch(() => undefined);
+    await message.channel.send({ content: reply.content });
+  } catch (error) {
+    console.error(
+      `[discord-bot] prefix command "${parsed.command.name}" failed`,
+      { guildId: message.guildId, error },
+    );
+  }
+}
+
 client.on(Events.MessageCreate, (message) => {
   const memberRoles = message.member
     ? Array.from(message.member.roles.cache.keys())
     : undefined;
-  void awardXpForMessage(message, memberRoles);
+
+  const prefixCommand = parsePrefixFromMessage(message);
+  if (prefixCommand) {
+    // Los comandos con prefix no dan XP: si no, repetirlos sube de nivel.
+    void handlePrefixCommand(message, prefixCommand);
+  } else {
+    void awardXpForMessage(message, memberRoles);
+  }
   void handleKarutaDropMessage(message);
 });
 
