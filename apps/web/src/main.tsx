@@ -8042,19 +8042,23 @@ function boosterNameStyle(
     : style;
 }
 
-// Variables del anillo de booster: los dos colores del rol y el halo. Van en el
-// elemento que envuelve al avatar y el CSS las lee desde ahí.
-function boosterRingVars(
+// Colores del rol de Server Booster como variables CSS: las usa el anillo (borde
+// del avatar, de la tarjeta y de la fila del ranking) y el tinte de la tarjeta.
+// Van en el elemento que envuelve todo lo que se pinta.
+function boosterColorVars(
   role: BoosterRoleColors | null,
 ): CSSProperties | undefined {
   const color = roleColorHex(role?.color);
   if (!color) {
     return undefined;
   }
+  const secondary = roleColorHex(role?.secondaryColor) ?? color;
   return {
     "--booster-a": color,
-    "--booster-b": roleColorHex(role?.secondaryColor) ?? color,
+    "--booster-b": secondary,
     "--booster-glow": tintHex(color, 0.5),
+    "--booster-tint-a": tintHex(color, 0.12),
+    "--booster-tint-b": tintHex(secondary, 0.12),
   } as CSSProperties;
 }
 
@@ -8150,7 +8154,10 @@ function HomeView({
         </p>
       </section>
 
-      <section className="panel content-panel home-panel home-panel--main">
+      <section
+        className="panel content-panel home-panel home-panel--main booster-ring booster-ring--border booster-ring--inside booster-ring--static"
+        style={boosterColorVars(boosterRole)}
+      >
         <div className="section-header">
           <div>
             <h2>Nitro · Boosts del servidor</h2>
@@ -8170,12 +8177,13 @@ function HomeView({
         ) : (
           <div className="home-card-grid">
             {boosters.map((booster) => (
-              <article className="home-member-card" key={booster.userId}>
+              <article
+                className="home-member-card booster-ring booster-ring--border booster-ring--inside booster-ring--static"
+                key={booster.userId}
+                style={boosterColorVars(boosterRole)}
+              >
                 {booster.avatarUrl ? (
-                  <span
-                    className="avatar-ring"
-                    style={boosterRingVars(boosterRole)}
-                  >
+                  <span className="booster-ring avatar-ring">
                     <img
                       className="home-member-avatar home-member-avatar--booster"
                       src={booster.avatarUrl}
@@ -12824,9 +12832,14 @@ function App() {
                         <tbody>
                           {visibleLeaderboard.map((entry) => (
                             <tr
-                              className={`leaderboard-row${entry.rank <= 5 ? ` mvp-row mvp-row-${entry.rank}` : ""}`}
+                              className={`leaderboard-row${entry.rank <= 5 ? ` mvp-row mvp-row-${entry.rank}` : ""}${entry.isBooster ? " booster-ring booster-ring--inside" : ""}`}
                               key={entry.userId}
                               onClick={() => openMemberProfile(entry.userId)}
+                              style={
+                                entry.isBooster
+                                  ? boosterColorVars(boosterRole)
+                                  : undefined
+                              }
                               title="Ver perfil"
                             >
                               <td>
@@ -12841,33 +12854,13 @@ function App() {
                               <td>
                                 <span className="leaderboard-user">
                                   {entry.avatarUrl ? (
-                                    <span
-                                      className={
-                                        entry.isBooster
-                                          ? "avatar-ring avatar-ring--sm"
-                                          : "leaderboard-avatar-frame"
-                                      }
-                                      style={
-                                        entry.isBooster
-                                          ? boosterRingVars(boosterRole)
-                                          : undefined
-                                      }
-                                    >
-                                      <img
-                                        className="leaderboard-avatar"
-                                        src={entry.avatarUrl}
-                                        alt=""
-                                      />
-                                    </span>
+                                    <img
+                                      className="leaderboard-avatar"
+                                      src={entry.avatarUrl}
+                                      alt=""
+                                    />
                                   ) : (
-                                    <span
-                                      className={`leaderboard-avatar leaderboard-avatar-placeholder${entry.isBooster ? " avatar-ring avatar-ring--sm" : ""}`}
-                                      style={
-                                        entry.isBooster
-                                          ? boosterRingVars(boosterRole)
-                                          : undefined
-                                      }
-                                    >
+                                    <span className="leaderboard-avatar leaderboard-avatar-placeholder">
                                       ?
                                     </span>
                                   )}

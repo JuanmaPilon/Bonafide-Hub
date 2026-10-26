@@ -36,6 +36,11 @@ el blurple): es el único rol que va de claro a oscuro, a propósito, para que
 coincida con lo que hace Discord. Karpindomo termina en blanco puro, así que no se
 confunde con ningún rango.
 
+El hub no tiene estos valores escritos: lee los dos colores del rol de Server
+Booster desde Discord (lo reconoce por `tags.premium_subscriber`) y con ellos pinta
+el nombre, el tinte de la tarjeta de Inicio y el anillo del borde. Si cambian el rol
+en Discord, la web los sigue.
+
 ## Reglas
 
 1. **El primario va medio/oscuro.** El hub lo usa para el texto del chip; si

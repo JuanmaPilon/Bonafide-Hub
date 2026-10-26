@@ -869,63 +869,84 @@ a:hover {
   font-weight: 700;
 }
 
-/* Caja del avatar del ranking: mismo tamaño que la imagen, para que el anillo de
-   booster tenga dónde vivir (un <img> no tiene pseudo-elementos). */
-.leaderboard-avatar-frame {
-  display: inline-flex;
-  flex-shrink: 0;
-  border-radius: 50%;
-}
-
-/* Anillo neón de los boosters: un borde de 2px con el degradado del rol de
-   Server Booster que gira. Los dos colores los pone el JS (salen de Discord); si
-   no llegaron quedan los canónicos de Discord. */
+/* Anillo neón de los boosters: un borde pintado con el degradado del rol de
+   Server Booster, que gira. Los dos colores los pone el JS (salen de Discord); si
+   no llegaron quedan los canónicos. Lo usan el avatar, la tarjeta de Inicio, el
+   recuadro del panel y la fila del ranking. */
 @property --booster-angle {
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
 }
 
-.avatar-ring {
+.booster-ring {
   --booster-a: #f47fff;
   --booster-b: #5865f2;
   --booster-glow: rgba(244, 127, 255, 0.5);
+  --booster-tint-a: rgba(244, 127, 255, 0.12);
+  --booster-tint-b: rgba(88, 101, 242, 0.12);
+  --ring-width: 2px;
   position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  border-radius: 50%;
 }
 
-.avatar-ring::after {
+.booster-ring::after {
   content: "";
   position: absolute;
-  inset: -3px;
-  border-radius: 50%;
+  inset: calc(-1 * var(--ring-width));
+  padding: var(--ring-width);
+  border-radius: inherit;
   background: conic-gradient(
     from var(--booster-angle),
     var(--booster-a),
     var(--booster-b),
     var(--booster-a)
   );
-  /* El centro se recorta con una máscara radial: así el degradado queda como
-     línea y no como un disco tapando la foto. */
-  -webkit-mask: radial-gradient(
-    farthest-side,
-    transparent calc(100% - 2px),
-    #000 calc(100% - 2px)
-  );
-  mask: radial-gradient(
-    farthest-side,
-    transparent calc(100% - 2px),
-    #000 calc(100% - 2px)
-  );
+  /* La máscara recorta el centro (content-box) y deja sólo el borde: sin esto
+     el degradado quedaría como un disco tapando la foto. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
   filter: drop-shadow(0 0 6px var(--booster-glow));
   animation: booster-ring-spin 4s linear infinite;
   pointer-events: none;
 }
 
-.avatar-ring--sm::after {
-  inset: -2px;
+/* Redondo: el avatar de la tarjeta (el pseudo hereda el radio). */
+.avatar-ring {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+/* Sobre una caja que ya tiene borde, el anillo va adentro de su caja: así mide
+   lo mismo que el borde que reemplaza y no pisa a la tarjeta de al lado. */
+.booster-ring.booster-ring--border {
+  --ring-width: 1px;
+  border-color: transparent;
+}
+
+.booster-ring--inside::after {
+  inset: 0;
+}
+
+/* En las cajas el borde queda quieto y sigue el mismo sentido que el nombre
+   (izquierda a derecha) en vez de girar. */
+.booster-ring--static::after {
+  background: linear-gradient(100deg, var(--booster-a), var(--booster-b));
+  animation: none;
+}
+
+.leaderboard-table tr.booster-ring {
+  --ring-width: 1.5px;
+}
+
+.leaderboard-table tr.booster-ring::after {
+  border-radius: 12px;
 }
 
 @keyframes booster-ring-spin {
@@ -935,13 +956,13 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .avatar-ring::after {
+  .booster-ring::after {
     animation: none;
   }
 }
 
 /* Sobre blanco el halo del anillo se ve sucio: queda sólo la línea. */
-:root[data-theme="light"] .avatar-ring::after {
+:root[data-theme="light"] .booster-ring::after {
   filter: none;
 }
 
@@ -4824,9 +4845,13 @@ a:hover {
   gap: 8px;
   padding: 16px 12px;
   border-radius: 16px;
-  border: 1px solid rgba(var(--home-member-rgb), 0.45);
-  background: rgba(var(--home-member-rgb), 0.08);
-  box-shadow: 0 0 20px rgba(var(--home-member-rgb), 0.16);
+  border: 1px solid transparent;
+  background: linear-gradient(
+    150deg,
+    var(--booster-tint-a),
+    var(--booster-tint-b)
+  );
+  box-shadow: 0 0 18px var(--booster-tint-b);
   text-align: center;
 }
 
@@ -4886,19 +4911,15 @@ a:hover {
 }
 
 /* La tarjeta de boosters es la principal de Inicio (los que bancan el server):
-   lleva el acento de Nitro y un halo, como las tarjetas de rango del Admin. Va
-   con `.home-view` adelante para ganarle al borde y la sombra de `.panel`. */
+   lleva el degradado de Nitro en el borde, el tinte y el halo, como las tarjetas
+   de rango del Admin. Va con `.home-view` adelante para ganarle al borde y la
+   sombra de `.panel`; el borde lo pinta el anillo. */
 .home-view .home-panel--main {
-  border-color: rgba(244, 127, 255, 0.45);
-  box-shadow:
-    0 0 0 1px rgba(244, 127, 255, 0.14),
-    0 16px 44px rgba(94, 16, 120, 0.24);
+  box-shadow: 0 16px 44px rgba(94, 16, 120, 0.24);
 }
 
 :root[data-theme="light"] .home-view .home-panel--main {
-  box-shadow:
-    0 0 0 1px rgba(244, 127, 255, 0.3),
-    0 12px 32px rgba(94, 16, 120, 0.12);
+  box-shadow: 0 12px 32px rgba(94, 16, 120, 0.12);
 }
 
 :root[data-theme="light"] .home-member-row {
@@ -4910,10 +4931,10 @@ a:hover {
   text-shadow: none;
 }
 
-/* Sobre blanco el tinte del acento alcanza y el halo del tema oscuro se ve
-   sucio: la tarjeta de booster queda con un anillo. */
+/* Sobre blanco el halo del tema oscuro se ve sucio: la tarjeta queda con el
+   tinte del degradado y el borde que pinta el anillo. */
 :root[data-theme="light"] .home-member-card {
-  box-shadow: 0 0 0 1px rgba(var(--home-member-rgb), 0.3);
+  box-shadow: 0 4px 14px var(--booster-tint-b);
 }
 
 .booster-badge {
