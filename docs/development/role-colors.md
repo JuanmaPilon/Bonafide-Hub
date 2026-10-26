@@ -21,6 +21,9 @@ abajo son colores plenos, como las rarezas del juego.
 | R6 | Common | `#ffffff` | — |
 | R7 | Poor | `#9d9d9d` | — |
 
+Del R4 para abajo los valores son los canónicos del juego: quedan por confirmar los
+del server.
+
 ## Roles de la casa
 
 | Rol | Primario | Secundario |
