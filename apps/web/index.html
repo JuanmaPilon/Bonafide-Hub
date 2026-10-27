@@ -41,6 +41,20 @@
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-v4.png" />
     <link rel="manifest" href="/site.webmanifest?v=4" />
+    <!-- La portada del server, para que el link se vea al compartirlo (Discord,
+         WhatsApp, X). Sin esto el enlace sale sin imagen.
+         `og:image` necesita URL ABSOLUTA (los scrapers no resuelven rutas
+         relativas ni ejecutan JavaScript), por eso la base sale de VITE_SITE_URL:
+         en producción es el dominio del hub. -->
+    <meta property="og:title" content="Bonafide Hub" />
+    <meta
+      property="og:description"
+      content="El hub de la comunidad: roster, eventos, raids y ranking."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="%VITE_SITE_URL%/og-cover.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="%VITE_SITE_URL%/og-cover.png" />
     <title>Bonafide Hub</title>
   </head>
   <body>

@@ -42,6 +42,14 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
     `https://tu-api.up.railway.app`), para que Discord pueda bajar la imagen de un
     evento. Si no está, se usa `RAILWAY_PUBLIC_DOMAIN`, que Railway expone solo.
 
+### Web
+
+1. `VITE_API_BASE_URL` (`/api`)
+2. `VITE_API_TARGET` — URL real de la API para el proxy del preview
+3. `VITE_SITE_URL` (opcional) — dominio público del hub, para la URL absoluta de
+   `og:image` (la imagen que se ve al compartir el link). Si no está, el build usa
+   `https://bonafide-cum.com`.
+
 ## 3. Comandos recomendados de deploy
 
 > **Orden de deploy:** primero API (corre `prisma db push` y crea las tablas nuevas), luego Web y Bot.

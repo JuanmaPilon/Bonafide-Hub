@@ -167,6 +167,18 @@ a:hover {
 
 .landing-media .cover-art {
   min-height: 360px;
+  background-color: #0a1224;
+  background-image:
+    linear-gradient(
+      0deg,
+      rgba(5, 9, 20, 0.62) 0%,
+      rgba(5, 9, 20, 0.18) 30%,
+      transparent 52%
+    ),
+    url("/landing-banner.webp");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .carousel-mask {
@@ -4720,21 +4732,32 @@ a:hover {
   gap: 8px;
 }
 
+/* El hero de Inicio es la portada del server: una foto con un velo que oscurece
+   la izquierda y el pie, que es donde caen el título y el saludo (el pasto es lo
+   más claro de la imagen y ahí el texto claro no se leía). El velo va como capa
+   del mismo `background`, arriba del archivo. */
 .home-hero-art {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(
-      circle at 72% 30%,
-      rgba(255, 138, 80, 0.42),
-      transparent 46%
+  background-color: #0a1224;
+  background-image:
+    linear-gradient(
+      100deg,
+      rgba(5, 9, 20, 0.9) 0%,
+      rgba(5, 9, 20, 0.68) 38%,
+      rgba(5, 9, 20, 0.12) 66%,
+      transparent 82%
     ),
-    radial-gradient(
-      circle at 20% 80%,
-      rgba(106, 168, 255, 0.35),
-      transparent 50%
+    linear-gradient(
+      0deg,
+      rgba(5, 9, 20, 0.8) 0%,
+      rgba(5, 9, 20, 0.22) 42%,
+      transparent 68%
     ),
-    linear-gradient(160deg, rgba(54, 89, 185, 0.28), rgba(223, 90, 61, 0.18));
+    url("/home-banner.webp");
+  background-position: 78% center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .home-hero h1,
@@ -10265,6 +10288,55 @@ select.list-order {
 :root[data-theme="light"] .rr-rule,
 :root[data-theme="light"] .rr-preview {
   background: var(--surface-card);
+}
+
+/* Los chips de miembros de la landing van sobre la foto de la portada, que es
+   clara: en tema claro el chip blanco dejaba el texto casi invisible. Se quedan
+   con el fondo oscuro del tema oscuro, que sobre la foto se lee siempre. */
+:root[data-theme="light"] .landing-media .user-pill {
+  background: rgba(12, 19, 36, 0.86);
+  border-color: rgba(106, 168, 255, 0.52);
+  color: #edf2ff;
+}
+
+:root[data-theme="light"] .landing-media .user-pill.booster-pill {
+  background: rgba(60, 20, 70, 0.72);
+  border-color: rgba(244, 127, 255, 0.55);
+  color: #ffd1ff;
+}
+
+/* Sobre la portada el velo es oscuro en los dos temas, así que el título y el
+   saludo siguen en claro aunque el tema sea claro: si se pintan con la paleta
+   del tema claro (texto oscuro) desaparecen contra la foto.
+   Se pisa sólo `background-image` y no el shorthand: el shorthand resetea
+   background-clip y el degradado dejaría de recortarse al texto (se vería un
+   rectángulo de color en lugar del título). */
+:root[data-theme="light"] .home-hero .brand-gradient {
+  background-image: linear-gradient(
+    90deg,
+    #7db4ff 0%,
+    #ffd08f 22%,
+    #ffb36b 45%,
+    #ffa067 55%,
+    #7db4ff 78%,
+    #ffd08f 100%
+  );
+}
+
+:root[data-theme="light"] .home-hero p,
+:root[data-theme="light"] .home-hero .user-name {
+  color: #e6ecf8;
+}
+
+/* En pantallas angostas la portada se recorta y la brasa (que está a la derecha)
+   quedaba afuera: se corre el foco para que siga entrando. Y como el recorte deja
+   la brasa justo detrás del título, se baja el brillo de la foto: el pasto y el
+   fuego son lo más claro de la imagen y compiten con las letras. */
+@media (max-width: 760px) {
+  .home-hero-art {
+    background-position: 90% center;
+    filter: brightness(0.72);
+  }
 }
 
 /* En claro el halo naranja tiene que ser más suave para no ensuciar. */

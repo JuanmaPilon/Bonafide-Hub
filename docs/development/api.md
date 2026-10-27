@@ -59,6 +59,22 @@ Archivo ejemplo: `apps/api/.env.example`
 
 Salud y metadata: `GET /health`, `GET /`
 
+**Portadas del hub.** Las dos pantallas de entrada usan una ilustración propia, que
+vive en `apps/web/public` y se sirve como archivo estático (no pasa por el API):
+
+| Archivo | Dónde | Caja |
+| --- | --- | --- |
+| `/landing-banner.webp` | landing (sin sesión), dentro de `.landing-media` | 2560×600 (4.27:1) |
+| `/home-banner.webp` | portada de Inicio (`.home-hero-art`) | 3200×520 (6.15:1) |
+| `/og-cover.png` | vista previa al compartir el link (`og:image`) | 600×600 |
+
+Son WebP de ~75 KB (los PNG originales pesaban ~800 KB cada uno). Se pintan con
+`cover`, así que no hace falta recortarlas a mano: la caja manda. En Inicio el foco
+del fondo va corrido a la derecha (`background-position: 78%`, `90%` en móvil) para
+que la brasa no se salga al angostarse el panel, y en móvil la foto se atenúa
+(`brightness(0.72)`) porque el recorte deja el fuego justo detrás del título. El
+velo oscuro va como capa del mismo `background`, arriba del archivo.
+
 OAuth Discord: `GET /auth/discord/start`, `GET /auth/discord/callback`
 
 Sesión: `GET /me`, `GET /guilds`, `POST /auth/logout`
