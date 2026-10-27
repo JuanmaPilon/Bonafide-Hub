@@ -68,6 +68,14 @@ vive en `apps/web/public` y se sirve como archivo estático (no pasa por el API)
 | `/home-banner.webp` | portada de Inicio (`.home-hero-art`) | 3200×520 (6.15:1) |
 | `/og-cover.png` | vista previa al compartir el link (`og:image`) | 600×600 |
 
+El mismo dibujo de la brasa es además el **icono del sitio**: `favicon.svg` (PNG
+embebido en 64 px), `favicon-v5.png` (256), `favicon.ico` (16/32/48 en un solo
+archivo) y `apple-touch-icon-v5.png` (180), todos generados del mismo cuadrado con
+un encuadre más cerrado cuanto más chico el tamaño —en 16 px el bosque se convierte
+en una mancha y la brasa tiene que ocupar casi todo—. El número de versión en el
+nombre es lo que fuerza al navegador a pedir el icono nuevo; los archivos viejos se
+borraron cuando dejaron de estar referenciados.
+
 Son WebP de ~75 KB (los PNG originales pesaban ~800 KB cada uno). Se pintan con
 `cover`, así que no hace falta recortarlas a mano: la caja manda. En Inicio el foco
 del fondo va corrido a la derecha (`background-position: 78%`, `90%` en móvil) para
