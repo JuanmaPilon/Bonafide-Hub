@@ -69,12 +69,21 @@ vive en `apps/web/public` y se sirve como archivo estático (no pasa por el API)
 | `/og-cover.png` | vista previa al compartir el link (`og:image`) | 600×600 |
 
 El mismo dibujo de la brasa es además el **icono del sitio**: `favicon.svg` (PNG
-embebido en 64 px), `favicon-v5.png` (256), `favicon.ico` (16/32/48 en un solo
-archivo) y `apple-touch-icon-v5.png` (180), todos generados del mismo cuadrado con
-un encuadre más cerrado cuanto más chico el tamaño —en 16 px el bosque se convierte
-en una mancha y la brasa tiene que ocupar casi todo—. El número de versión en el
-nombre es lo que fuerza al navegador a pedir el icono nuevo; los archivos viejos se
-borraron cuando dejaron de estar referenciados.
+embebido en 64 px), `favicon-v6.png` (256), `favicon.ico` (16/32/48 en un solo
+archivo) y `apple-touch-icon-v6.png` (180), todos generados del mismo cuadrado con
+dos ajustes por tamaño:
+
+1. **Encuadre más cerrado cuanto más chico.** En 16 px el bosque se convierte en
+   una mancha y la brasa tiene que ocupar casi todo.
+2. **Esquinas redondeadas a 22% del lado**, con transparencia real (el cuadrado se
+   recorta con un clip antes de dibujar). La excepción es `apple-touch-icon`, que va
+   a sangre porque iOS le aplica su propia máscara: si ya viniera redondeado, las
+   esquinas se verían negras.
+
+El número de versión en el nombre es lo que fuerza al navegador a pedir el icono
+nuevo. Ojo con los **marcadores**: Chrome guarda el icono de cada marcador en su
+propia base y no lo refresca solo; cambiar el archivo no alcanza. Hay que visitar el
+sitio con ese marcador (o borrarlo y volver a agregarlo) para que tome el nuevo.
 
 Son WebP de ~75 KB (los PNG originales pesaban ~800 KB cada uno). Se pintan con
 `cover`, así que no hace falta recortarlas a mano: la caja manda. En Inicio el foco
