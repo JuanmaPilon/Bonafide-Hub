@@ -37,6 +37,7 @@ import {
   ImageSquare,
   Key,
   Lightning,
+  List,
   ListChecks,
   LockSimple,
   MapPin,
@@ -9162,6 +9163,14 @@ function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [karpindomoMsg, setKarpindomoMsg] = useState(KARPINDOMO_LINES[0] ?? "");
   const [karpindomoOpen, setKarpindomoOpen] = useState(false);
+  // Menú del topbar en pantallas angostas. Ahí el nav completo no entra: ocho
+  // módulos en una barra de 390 px se parten en tres filas y se comen un cuarto
+  // de la pantalla. Abajo de 1024 px el nav pasa a un panel que se abre con el
+  // botón de la izquierda, y cada módulo con subsecciones se despliega al
+  // tocarlo (en táctil no hay hover, así que el submenú no puede depender de él).
+  const [navOpen, setNavOpen] = useState(false);
+  const [navExpanded, setNavExpanded] = useState<HubTab | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
     null,
   );
@@ -9172,6 +9181,34 @@ function App() {
   const [sessionReady, setSessionReady] = useState(false);
   const loading = loadingSession || loadingGuildData;
   const importFileRef = useRef<HTMLInputElement | null>(null);
+
+  // Cerrar los menús del topbar al tocar afuera o con Escape. Se registra sólo
+  // mientras hay algo abierto para no dejar un listener global siempre activo.
+  useEffect(() => {
+    if (!navOpen && !profileOpen) {
+      return undefined;
+    }
+    const close = (event: Event): void => {
+      const target = event.target as Element | null;
+      if (target?.closest(".topbar")) {
+        return;
+      }
+      setNavOpen(false);
+      setProfileOpen(false);
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setNavOpen(false);
+        setProfileOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [navOpen, profileOpen]);
 
   const pushToast = useCallback(
     (message: string, kind: ToastKind = "success"): void => {
@@ -12661,16 +12698,28 @@ function App() {
     // Eventos arma su propio menú (dinámico, con los eventos): es la
     // forma de saltar de un evento a otro sin pasar por la lista.
     const hasMenu = Boolean(visibleSections) || isEvents;
+    // En el panel mobile el módulo con subsecciones se despliega en el lugar:
+    // `navExpanded` manda sobre el hover, que en táctil no existe.
+    const expanded = navExpanded === tab;
     return (
-      <div className="nav-item" key={tab}>
+      <div
+        className={`nav-item${expanded ? " nav-item--expanded" : ""}`}
+        key={tab}
+      >
         <button
           className={`nav-link ${activeTab === tab ? "active" : ""}`}
           onClick={
             isEvents
-              ? goToEventsList
+              ? () => {
+                  goToEventsList();
+                  setNavOpen(false);
+                }
               : hasMenu
-                ? undefined
-                : () => setActiveTab(tab)
+                ? () => setNavExpanded(expanded ? null : tab)
+                : () => {
+                    setActiveTab(tab);
+                    setNavOpen(false);
+                  }
           }
           type="button"
         >
@@ -12692,7 +12741,10 @@ function App() {
                 {canAccess("eventos") ? (
                   <button
                     className="nav-sublink nav-sublink-new"
-                    onClick={startNewEvent}
+                    onClick={() => {
+                      startNewEvent();
+                      setNavOpen(false);
+                    }}
                     type="button"
                   >
                     <Plus
@@ -12707,7 +12759,10 @@ function App() {
                   <button
                     className={`nav-sublink nav-sublink-event${activeTab === "eventos" && eventKey === entry.id ? " active" : ""}`}
                     key={entry.id}
-                    onClick={() => openEvent(entry)}
+                    onClick={() => {
+                      openEvent(entry);
+                      setNavOpen(false);
+                    }}
                     type="button"
                   >
                     <span className="nav-sublink-label">
@@ -12729,7 +12784,10 @@ function App() {
                 <button
                   className={`nav-sublink${activeTab === tab && sectionFor(tab) === section.key ? " active" : ""}`}
                   key={section.key}
-                  onClick={() => goToSection(tab, section.key)}
+                  onClick={() => {
+                    goToSection(tab, section.key);
+                    setNavOpen(false);
+                  }}
                   type="button"
                 >
                   {section.label}
@@ -12760,8 +12818,22 @@ function App() {
           onClose={() => setKarpindomoOpen(false)}
         />
       ) : null}
-      <header className="topbar">
+      <header className={`topbar${navOpen ? " topbar--menu" : ""}`}>
         <div className="topbar-inner">
+          <button
+            aria-controls="hub-nav"
+            aria-expanded={navOpen}
+            aria-label={navOpen ? "Cerrar menú" : "Abrir menú"}
+            className="nav-toggle"
+            onClick={() => setNavOpen((open) => !open)}
+            type="button"
+          >
+            {navOpen ? (
+              <X aria-hidden="true" weight="bold" />
+            ) : (
+              <List aria-hidden="true" weight="bold" />
+            )}
+          </button>
           <button
             className="brand"
             onClick={() => setActiveTab("home")}
@@ -12778,7 +12850,7 @@ function App() {
             <strong>Bonafide</strong>
           </button>
 
-          <nav className="top-nav">
+          <nav className="top-nav" id="hub-nav">
             {visibleTabs.map(renderNavTab)}
           </nav>
 
@@ -12802,15 +12874,15 @@ function App() {
             {/* El perfil es el desplegable del panel: adentro van "Mi perfil" y
                 las secciones del Admin. Antes Admin era un ítem más del nav y
                 ocupaba lugar en la barra para algo que se usa cada tanto. */}
-            <div className="nav-item nav-item--profile">
+            <div
+              className={`nav-item nav-item--profile${profileOpen ? " nav-item--open" : ""}`}
+            >
               <button
                 className={`user-chip user-chip-link${myTier ? ` user-chip--${myTier}` : ""}`}
-                onClick={() => {
-                  setProfileUserId(null);
-                  setActiveTab("perfil");
-                }}
+                onClick={() => setProfileOpen((open) => !open)}
                 type="button"
                 title="Mi perfil y Admin"
+                aria-expanded={profileOpen}
               >
                 {me?.avatar ? (
                   <img
@@ -12818,7 +12890,14 @@ function App() {
                     src={userAvatarUrl(me)}
                     alt=""
                   />
-                ) : null}
+                ) : (
+                  <span
+                    className="user-chip-avatar user-chip-avatar--initial"
+                    aria-hidden="true"
+                  >
+                    {username.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
                 {username}
                 {adminSections.length > 0 ? (
                   <span aria-hidden="true" className="nav-caret">
@@ -12832,6 +12911,7 @@ function App() {
                   onClick={() => {
                     setProfileUserId(null);
                     setActiveTab("perfil");
+                    setProfileOpen(false);
                   }}
                   type="button"
                 >
@@ -12844,7 +12924,10 @@ function App() {
                       <button
                         className={`nav-sublink${activeTab === "admin" && sectionFor("admin") === section.key ? " active" : ""}`}
                         key={section.key}
-                        onClick={() => goToSection("admin", section.key)}
+                        onClick={() => {
+                          goToSection("admin", section.key);
+                          setProfileOpen(false);
+                        }}
                         type="button"
                       >
                         {section.label}

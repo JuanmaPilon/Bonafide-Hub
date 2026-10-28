@@ -353,7 +353,17 @@ Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
    (tinta del texto, oscurecida para que se lea) y `--roster-class-tint` (borde
    y fondo, crudo). Con la tinta oscurecida en todo el bloque las clases se
    veían todas grises y no se distinguían entre sí.
-4. Karpindomo (web): FAB de chat flotante con burbuja de frases del asistente;
+4. Responsive: la adaptación vive en un bloque al final de `styles.css` con tres
+   cortes (1024, 760 y 560 px), no repartida por componente. Abajo de 1024 el nav
+   deja de ser una fila y pasa a un panel que abre el botón de la izquierda,
+   porque ocho módulos en 390 px se parten en tres filas y se comen un cuarto de
+   la pantalla. En táctil no hay hover, así que los submenús del nav y del perfil
+   los abre el click (estado de React), no `:hover`.
+5. Dos trampas al adaptar: un flex item tiene `min-width: auto`, así que una fila
+   que se desliza adentro (chips) estira el panel entero y la página scrollea de
+   costado; y en un contenedor en columna un `flex: 1 1 220px` pensado como ancho
+   pasa a ser **alto**. Para las filas de campos se usa grid, no columna flex.
+6. Karpindomo (web): FAB de chat flotante con burbuja de frases del asistente;
    aparece solo tras login. Usa clases tipo "widget" para no ser bloqueado por
    adblockers.
 

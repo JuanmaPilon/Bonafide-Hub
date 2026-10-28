@@ -583,6 +583,19 @@ a:hover {
   border: 2px solid rgba(255, 138, 92, 0.75);
 }
 
+/* Respaldo cuando la cuenta no tiene foto: la inicial, con el mismo círculo y
+   borde que la imagen para que el chip no quede vacío. */
+.user-chip-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 138, 92, 0.2);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .user-chip-link:hover {
   filter: brightness(1.15);
   border-color: rgba(255, 138, 92, 0.85);
@@ -11595,4 +11608,382 @@ select.list-order {
 
 .event-history-names .event-roster-member + .event-roster-member::before {
   content: ", ";
+}
+
+/* ============================================================
+   Adaptación a pantallas angostas
+   ------------------------------------------------------------
+   Todo lo que cambia de forma en celular y tablet vive acá, en un solo bloque
+   al final del archivo: las reglas de arriba son la versión de escritorio y
+   estas la pisan por orden de aparición. Tres cortes, de más ancho a más
+   angosto:
+
+   1024px  el nav completo no entra en una fila: pasa a un panel que se abre
+           con el botón de la izquierda.
+    760px  celular acostado y tablets chicas: se achica el aire general y el
+           encabezado grande deja de ocupar lugar.
+    560px  celular parado: una columna, controles a ancho completo y chips en
+           una fila que se desliza.
+   ============================================================ */
+
+/* Botón que abre el panel del nav. No existe en escritorio. */
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  border: 1px solid var(--line-mid);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.nav-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+:root[data-theme="light"] .nav-toggle {
+  background: var(--surface-card);
+}
+
+@media (max-width: 1024px) {
+  .nav-toggle {
+    display: inline-flex;
+  }
+
+  .topbar-inner {
+    padding: 10px 16px;
+    gap: 12px;
+  }
+
+  /* Una sola fila: menú, marca y las acciones del usuario. */
+  .topbar-inner {
+    flex-wrap: nowrap;
+  }
+
+  .brand {
+    font-size: 1rem;
+  }
+
+  .brand-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* El nav deja de ser una fila y pasa a ser un panel desplegable debajo de la
+     barra. `order` lo manda después de las acciones del usuario para que ocupe
+     el ancho completo de la pantalla. */
+  .top-nav {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    order: 3;
+    gap: 2px;
+    padding: 8px;
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    border-bottom: 1px solid var(--panel-border);
+    background: #0b1220;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  :root[data-theme="light"] .top-nav {
+    background: var(--panel-solid);
+    box-shadow: 0 20px 40px rgba(38, 58, 92, 0.18);
+  }
+
+  .topbar--menu .top-nav {
+    display: grid;
+  }
+
+  .nav-item {
+    display: block;
+  }
+
+  /* Fila del módulo: alta, alineada a la izquierda y con el caret a la derecha,
+     que es lo que se toca con el dedo. */
+  .nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: 10px;
+    font-size: 0.98rem;
+    text-align: left;
+  }
+
+  .nav-item--expanded > .nav-link {
+    background: rgba(106, 168, 255, 0.12);
+    color: var(--text);
+  }
+
+  /* Adentro del panel el submenú deja de flotar: se abre en el lugar. */
+  .nav-item .nav-submenu,
+  .topbar-user .nav-submenu {
+    position: static;
+    left: auto;
+    right: auto;
+    display: none;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    margin: 2px 0 6px;
+    padding: 0 0 0 10px;
+    border: 0;
+    border-left: 1px solid var(--line-mid);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
+
+  .nav-item--expanded > .nav-submenu,
+  .nav-item--open > .nav-submenu {
+    display: grid;
+  }
+
+  /* En táctil el hover no existe: el submenú del perfil lo abre el click. */
+  .nav-item:hover > .nav-submenu {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .nav-item--profile {
+    position: relative;
+  }
+
+  .nav-sublink {
+    padding: 11px 12px;
+    font-size: 0.9rem;
+  }
+
+  /* El nombre completo no entra al lado del resto de las acciones. */
+  .user-chip {
+    padding: 3px;
+    gap: 0;
+    font-size: 0;
+  }
+
+  .user-chip .user-chip-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .user-chip .nav-caret {
+    display: none;
+  }
+
+  .topbar-user {
+    margin-left: auto;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 760px) {
+  /* El saludo grande es la portada de Inicio; en el resto de las páginas el
+     título del panel ya dice dónde estás y repetirlo cuesta ~100 px de alto en
+     cada navegación. */
+  .page-hero {
+    display: none;
+  }
+
+  .page {
+    padding: 16px 14px 40px;
+  }
+
+  .content-panel {
+    padding: 16px 14px;
+  }
+
+  .content-panel > h2,
+  .section-header h2 {
+    font-size: 1.15rem;
+  }
+
+  /* La barra del módulo pasa a dos columnas: las acciones se reparten la
+     primera fila y lo que necesita ancho completo (buscador y filtros) va
+     abajo, ocupando las dos. */
+  .module-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .module-toolbar > .list-search,
+  .module-toolbar > .list-filters,
+  .module-toolbar > .roster-filter-chips,
+  .module-toolbar > .event-tag-filter {
+    grid-column: 1 / -1;
+  }
+
+  /* Sin esto una columna de la barra crece hasta el ancho de su contenido (una
+     fila de chips que se desliza) en vez de quedarse con el ancho de pantalla. */
+  .module-toolbar > * {
+    min-width: 0;
+  }
+
+  .module-toolbar .list-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .module-toolbar-button {
+    justify-content: center;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    /* Los rótulos son largos ("Agregar/Modificar mi ficha"): en dos columnas el
+       texto tiene que poder partirse en dos líneas en vez de recortarse. */
+    white-space: normal;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  /* El contador del roster ocupa su propia fila; sigue alineado a la derecha
+     como en escritorio (su `margin-left: auto` es lo que lo empuja). */
+  .roster-total {
+    grid-column: 1 / -1;
+  }
+
+  /* El ancho de la columna no puede depender del contenido: una fila que se
+     desliza adentro (chips) estiraba el panel entero y sacaba scroll de costado. */
+  .dashboard-stack > *,
+  .roster-view > *,
+  .home-view > *,
+  .admin-page-stack > * {
+    min-width: 0;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modal {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 32px);
+  }
+
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toast-stack {
+    left: 12px;
+    right: 12px;
+  }
+
+  /* Blancos de toque. Las guías piden 44 px; los chips son el control que más se
+     toca y venían en 26, así que se llevan a 32 sin duplicar la altura de la
+     barra. La marca del topbar, a 40. */
+  .event-filter-chip {
+    min-height: 32px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .brand {
+    min-height: 40px;
+  }
+
+  .karpindomo-bubble-close {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* Filtros de la lista: el buscador y el orden van uno por fila. Se usa grid y
+     no una columna flex porque el `flex: 1 1 220px` del buscador está pensado
+     como ancho y en una columna se interpreta como ALTO (quedaba una caja de
+     220 px con el texto abajo). */
+  .list-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+  }
+
+  input.list-search,
+  .module-toolbar .list-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  select.list-order {
+    width: 100%;
+  }
+
+  /* Los chips sí se deslizan: cada grupo queda en una sola línea con su rótulo
+     fijo a la izquierda y los chips corriendo al costado. */
+  .roster-filter-chips {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .roster-filter-group {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Un flex item tiene `min-width: auto`, o sea que no baja de su ancho de
+       contenido: sin esto el grupo se queda en 408 px adentro de una pantalla de
+       317 y se desliza el grupo, no los chips. */
+    min-width: 0;
+    width: 100%;
+    /* Los chips siguen de largo más allá del borde: el degradado avisa que se
+       deslizan. Sin esto el último chip cortado parece un error de maquetado. */
+    mask-image: linear-gradient(to right, #000 86%, transparent 100%);
+  }
+
+  .roster-filter-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .roster-filter-group > * {
+    flex: 0 0 auto;
+  }
+
+  .roster-filter-label {
+    position: sticky;
+    left: 0;
+    padding-right: 4px;
+    background: var(--panel-solid);
+  }
+
+  .event-filter-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .event-filter-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .event-filter-chips > * {
+    flex: 0 0 auto;
+  }
+
+  /* El ranking tiene seis columnas y en un celular no entran: quedan las tres
+     que se leen de un vistazo (#, usuario y nivel). El resto está en el perfil.
+     Sin esto la tabla mide 529 px dentro de una pantalla de 375 y arrastra toda
+     la página al costado. */
+  .leaderboard-table th:nth-child(n + 4),
+  .leaderboard-table td:nth-child(n + 4) {
+    display: none;
+  }
+
+  /* La grilla de eventos pide 380 px por columna: en un celular eso es más que
+     la pantalla y la tarjeta se sale. */
+  .events-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

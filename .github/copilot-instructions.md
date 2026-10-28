@@ -264,6 +264,16 @@ Rules:
     the screen in both themes (the harness with `?theme=` or the toggle) and
     check that borders are visible and the text/chip has contrast. "It looks
     fine in dark" is not a check.
+15. **Mobile is a target, not a fallback.** Every module has to work at 390 px.
+    The responsive rules live in one block at the end of `styles.css` with three
+    breakpoints (1024, 760, 560), not scattered per component. The bar collapses
+    into a panel at 1024, the greeting header is hidden below 760, and lists go
+    to one column at 560. Never leave a page that scrolls sideways: check
+    `document.scrollWidth === clientWidth` on every route at 390 px. Two traps:
+    a flex item defaults to `min-width: auto`, so a row that scrolls inside
+    (chips) stretches the whole panel; and in a column container a
+    `flex: 1 1 220px` written for width becomes **height** — use grid for rows of
+    fields. In touch there is no hover: menus open on click.
 
 ## Learning-First Delivery
 
