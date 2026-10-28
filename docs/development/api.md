@@ -797,6 +797,12 @@ anteriores quedan como historial. El nivel y el nombre/avatar salen de
 `xp_profiles`, que es donde vive la identidad conocida. La pestaña se llama
 **Home** (la ruta ya era `home`).
 
+**Home es la raíz del sitio, no una ruta.** La web usa hash para navegar
+(`#/raids/logs`, `#/admin/tags`), pero `home` no escribe hash: la barra queda en
+`bonafide-cum.com` a secas. Un enlace viejo a `/#/home` se normaliza a la raíz al
+cargar. El historial se maneja con `pushState` (y no con `location.hash`) para que
+el "atrás" siga volviendo a la pantalla anterior sin dejar un `#` colgando.
+
 **El perfil de un miembro junta todo lo que el hub ya sabe de esa persona.** La
 página ocupa el ancho de la estructura (`--shell-max`), como el resto de los
 módulos: arriba una sola tarjeta de identidad (portada de Discord o el color de

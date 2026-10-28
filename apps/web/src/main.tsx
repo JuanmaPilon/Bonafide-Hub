@@ -12195,16 +12195,31 @@ function App() {
             // no llegó, se deja la clave tal cual (si no, el enlace directo
             // perdía el evento y volvía a la lista).
             `#/eventos/${pageEvent ? eventSlug(pageEvent, events) : eventKey}`
-          : `#/${activeTab}`;
-    if (window.location.hash !== target) {
-      // Normalizar la clave de un evento (un enlace viejo con el id) REEMPLAZA la
-      // entrada: si no, el "atrás" pasaba por una URL intermedia que muestra lo
-      // mismo.
-      if (activeTab === "eventos" && pageEvent) {
-        window.history.replaceState(null, "", target);
-      } else {
-        window.location.hash = target;
-      }
+          : activeTab === "home"
+            ? // Inicio es la raíz del sitio: la barra queda limpia en vez de
+              // /#/home. El hash ausente ya se lee como `home` al parsear.
+              ""
+            : `#/${activeTab}`;
+    if (window.location.hash === target) {
+      return;
+    }
+    if (!target) {
+      // `location.hash = ""` deja el "#" colgando en la barra; con el estado
+      // del historial la URL queda sin hash, y el "atrás" sigue funcionando.
+      window.history.pushState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+      return;
+    }
+    // Normalizar la clave de un evento (un enlace viejo con el id) REEMPLAZA la
+    // entrada: si no, el "atrás" pasaba por una URL intermedia que muestra lo
+    // mismo.
+    if (activeTab === "eventos" && pageEvent) {
+      window.history.replaceState(null, "", target);
+    } else {
+      window.location.hash = target;
     }
   }, [activeTab, comunicadoSlug, eventKey, events, pageEvent, tabSections]);
 
