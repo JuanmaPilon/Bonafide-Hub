@@ -177,9 +177,19 @@ a:hover {
 }
 
 .landing-media .cover-art {
-  min-height: 360px;
+  /* La portada aprovecha el alto de la página: antes medía 360 px fijos y en un
+     monitor grande quedaba una franja angosta con medio metro de vacío abajo. El
+     techo en `vh` evita que en una pantalla alta el panel se coma todo. */
+  min-height: clamp(380px, 56vh, 660px);
   background-color: #0a1224;
   background-image:
+    /* Velo de arriba: los chips de miembros van arriba y necesitan fondo propio. */
+    linear-gradient(
+      180deg,
+      rgba(5, 9, 20, 0.58) 0%,
+      rgba(5, 9, 20, 0.12) 20%,
+      transparent 38%
+    ),
     linear-gradient(
       0deg,
       rgba(5, 9, 20, 0.62) 0%,
@@ -196,9 +206,19 @@ a:hover {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 14px;
+  /* Arriba, no al pie: con la foto más alta el pie queda lejos del título y los
+     chips se leen como parte de la portada. */
+  top: 18px;
   overflow: hidden;
   padding: 0 14px;
+  /* Se desvanecen en los bordes en vez de cortarse a mitad de un nombre. */
+  mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 5%,
+    #000 95%,
+    transparent
+  );
 }
 
 .carousel-track {
@@ -8259,7 +8279,7 @@ select.list-order {
   }
 
   .landing-media .cover-art {
-    min-height: 260px;
+    min-height: clamp(240px, 40vh, 360px);
   }
 }
 

@@ -5919,6 +5919,21 @@ const LANDING_PREVIEW_USERS = [
   "Myrth",
 ] as const;
 
+// Orden aleatorio para los chips de la portada: siempre los mismos nombres en el
+// mismo orden hacían que la portada pareciera una lista fija. El barajado se hace
+// UNA vez por carga (y no en cada render) para que los chips no salten cuando se
+// cambia el tema.
+function shuffleNames<T>(list: readonly T[]): T[] {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j] as T, copy[i] as T];
+  }
+  return copy;
+}
+
+const LANDING_FALLBACK_PILLS = shuffleNames(LANDING_PREVIEW_USERS);
+
 function formatGuildLabel(guild: ApiGuild): string {
   return guild.owner ? `${guild.name} (owner)` : guild.name;
 }
@@ -12594,7 +12609,9 @@ function App() {
     getPublicLeaderboard()
       .then((list) => {
         if (!cancelled) {
-          setLandingPreview(list);
+          // Barajado acá y no al dibujar: así el orden queda estable mientras se
+          // está en la portada y cambia en cada visita.
+          setLandingPreview(shuffleNames(list));
         }
       })
       .catch(() => {});
@@ -12620,10 +12637,15 @@ function App() {
             isBooster: entry.isBooster,
             name: entry.nickname ?? entry.username ?? "—",
           }))
-        : LANDING_PREVIEW_USERS.map((name) => ({
+        : LANDING_FALLBACK_PILLS.map((name) => ({
             isBooster: false,
             name,
           }));
+
+    // La pista se duplica para que el bucle cierre. El tiempo de la animación se
+    // calcula por chip: con una duración fija, cuantos más nombres entran más
+    // rápido pasan (30 nombres cruzaban la pantalla a las carreras).
+    const carouselSeconds = Math.round(previewPills.length * 2.6);
 
     return (
       <div className="shell landing-shell">
@@ -12675,7 +12697,10 @@ function App() {
             >
               <div className="cover-art" />
               <div className="carousel-mask">
-                <div className="carousel-track">
+                <div
+                  className="carousel-track"
+                  style={{ animationDuration: `${carouselSeconds}s` }}
+                >
                   {previewPills.map((pill, index) => (
                     <span
                       className={`user-pill${pill.isBooster ? " booster-pill" : ""}`}
