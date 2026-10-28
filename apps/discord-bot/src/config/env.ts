@@ -25,6 +25,10 @@ const envSchema = z.object({
   // recuperar las wishlists que anunció Card Companion mientras el bot estaba
   // caído. 0 lo desactiva; sin valor usa el default (1000).
   KARUTA_WISHLIST_BACKFILL_MESSAGES: z.string().optional(),
+  // Zona horaria de los cumpleaños (ej. America/Argentina/Buenos_Aires). Sin
+  // valor usa la de la guild del proyecto: el servidor corre en UTC y sin esto
+  // el rol se daría el día anterior a la noche.
+  BIRTHDAY_TIMEZONE: z.string().optional(),
   YOUTUBE_COOKIE: z.string().optional(),
 });
 

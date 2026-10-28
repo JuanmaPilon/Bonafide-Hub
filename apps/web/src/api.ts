@@ -1472,6 +1472,7 @@ export const EVENT_TYPES: Array<{
   { emoji: "🗝️", key: "mplus", label: "M+" },
   { emoji: "🏆", key: "pvp", label: "PvP" },
   { emoji: "🎉", key: "social", label: "Social" },
+  { emoji: "🎂", key: "birthday", label: "Cumpleaños" },
 ];
 
 // Opciones de publicación en Discord de un evento (Módulo X).
@@ -1575,9 +1576,15 @@ export type HubEvent = {
   publishChannelId?: string;
   // Duración de la encuesta en horas (vacío = sin límite).
   pollHours?: number;
-  // Recurrencia propia: cada X días se crea y publica una copia del evento.
+  // Recurrencia propia: cada X se crea y publica una copia del evento.
   recurrenceEnabled?: boolean;
+  // LEGACY: series creadas antes de recurrenceEvery/Unit.
   recurrenceEveryDays?: number;
+  recurrenceEvery?: number;
+  // days | weeks | months
+  recurrenceUnit?: string;
+  // Persona que cumple (plantilla "cumple"). El bot le da el rol ese día.
+  birthdayUserId?: string;
   recurrencePublishDaysBefore?: number;
   recurrenceNextAt?: string;
   // Rol de Discord mínimo para entrar al roster principal (yes sin rol→bench).
@@ -1890,7 +1897,9 @@ export async function createEvent(
     // Duración de la encuesta de Discord en horas (solo juegos de encuesta).
     pollHours?: number;
     recurrenceEnabled?: boolean;
+    recurrenceEvery?: number;
     recurrenceEveryDays?: number;
+    recurrenceUnit?: string;
     recurrencePublishDaysBefore?: number;
     reminderHours?: number[];
     requiredRoleId?: string;
@@ -1911,6 +1920,22 @@ export async function createEvent(
   return { discordError: data.discordError, event: data.event };
 }
 
+// Cumpleaños: crea el evento de la plantilla "cumple" con la persona y la fecha.
+// El API arma la repetición anual y deja el evento sin anotación.
+export async function createBirthday(
+  guildId: string,
+  input: { day: number; month: number; userId: string },
+): Promise<HubEvent> {
+  const data = await requestJson<{ event: HubEvent }>(
+    `/guilds/${guildId}/birthdays`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+  return data.event;
+}
+
 export async function updateEvent(
   guildId: string,
   eventId: string,
@@ -1926,7 +1951,9 @@ export async function updateEvent(
     // Duración de la encuesta de Discord en horas (null = sin límite).
     pollHours?: number | null;
     recurrenceEnabled?: boolean;
+    recurrenceEvery?: number;
     recurrenceEveryDays?: number;
+    recurrenceUnit?: string;
     recurrencePublishDaysBefore?: number;
     reminderHours?: number[];
     requiredRoleId?: string;
@@ -2127,6 +2154,9 @@ export type EventGameOption = EventGameConfig & {
   // true = además del aviso el evento publica una encuesta nativa de Discord
   // (plantilla "encuesta").
   poll?: boolean;
+  // true = plantilla de cumpleaños: el evento lleva la persona que cumple y se
+  // repite cada año.
+  birthday?: boolean;
 };
 
 export async function getEventGames(
@@ -2203,6 +2233,9 @@ export type EventTemplateSummary = {
   label: string;
   // Plantilla de encuesta: además del aviso se publica una encuesta de Discord.
   poll: boolean;
+  // Plantilla de cumpleaños: el evento lleva la persona que cumple y se repite
+  // cada año; no se anota nadie.
+  birthday?: boolean;
   roles: EventRoleOption[];
 };
 

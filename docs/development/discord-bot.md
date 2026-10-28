@@ -135,6 +135,11 @@ Detalles que no son obvios:
 7. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
 8. `MessageCreate`/`MessageUpdate` (Karuta) → detecta cartas raras (`kv`), su colección (`ka`) y transferencias (`kg`/grab) en el canal vigilado y las guarda en la API
 9. `PresenceUpdate` → juegos que se juegan en el server (ver abajo)
+10. Barrido de cumpleaños (`birthdays-service`) → una vez por hora mira qué
+    eventos de la plantilla `cumple` caen hoy en la zona horaria configurada, crea
+    el rol `🎂 Cumpleaños` si no existe, se lo pone a quien cumple y se lo quita al
+    resto, y saluda en el canal configurado. Si al bot le falta *Gestionar roles*
+    (o su rol quedó por debajo), lo deja en el log y sigue con el resto.
 
 ### Juegos que se juegan en el server
 
@@ -332,6 +337,7 @@ Archivo ejemplo: `apps/discord-bot/.env.example`
 7. `YOUTUBE_COOKIE` — opcional: cookies de navegador de YouTube (mitiga 429/403 en IPs de datacenter)
 8. `YOUTUBE_DL_BIN` — opcional: ruta al binario de `yt-dlp` si no se encuentra en PATH ni se descarga automáticamente
 9. `KARUTA_WISHLIST_BACKFILL_MESSAGES` — opcional: cuántos mensajes del canal de Karuta revisar al arrancar para recuperar las wishlists que Card Companion anunció con el bot caído (default 1000, máximo 5000, `0` desactiva)
+10. `BIRTHDAY_TIMEZONE` — opcional: zona horaria de los cumpleaños (ej. `America/Argentina/Buenos_Aires`). El server corre en UTC; sin esto el rol se daría a las 21:00 del día anterior.
 
 ## 6. Permisos recomendados
 

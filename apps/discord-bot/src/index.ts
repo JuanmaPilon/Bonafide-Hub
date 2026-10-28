@@ -59,6 +59,7 @@ import {
   setXpSyncRequested,
 } from "./services/guild-config-store.js";
 import { startDailyMessagesProcessor } from "./services/daily-messages-service.js";
+import { startBirthdayProcessor } from "./services/birthdays-service.js";
 import {
   parsePrefixCommand,
   type ParsedPrefixCommand,
@@ -1317,6 +1318,7 @@ client.once(Events.ClientReady, (readyClient) => {
   startVoiceXpTracker();
   startXpSyncChecker();
   startDailyMessagesProcessor(readyClient);
+  startBirthdayProcessor(readyClient);
   startEventControlScheduler(readyClient);
   startKarutaWishlistBackfill();
   startGameActivityReporter();

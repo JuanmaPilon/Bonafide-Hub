@@ -20,6 +20,9 @@ export type EventTemplate = {
   // Plantilla de ENCUESTA: además del aviso, el evento se publica como
   // encuesta nativa de Discord (una respuesta por rol, con ✅/❌).
   poll?: boolean;
+  // Plantilla de CUMPLEAÑOS: el evento lleva birthdayUserId y se repite cada 12
+  // meses. No tiene anotación: el bot le da el rol a la persona ese día.
+  birthday?: boolean;
   roles: EventRoleOption[];
   specs: EventTemplateSpec[];
 };
@@ -183,6 +186,16 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     roles: [role("si", "SI", "✅"), role("no", "NO", "❌")],
     specs: [],
   },
+  {
+    // Cumpleaños: un evento por persona, repetido cada 12 meses. El rol de
+    // inscripción es el "estado" del cumpleañero dentro del evento, y el bot le
+    // da el rol real (GuildConfig.birthdayRoleId) el día que toca.
+    key: "cumple",
+    label: "Cumpleaños",
+    birthday: true,
+    roles: [role("cumple", "Cumpleañero", "🎂")],
+    specs: [],
+  },
 ];
 
 // Catálogo de clases/specs tal como está en el código. Sin `game` devuelve el
@@ -217,12 +230,14 @@ export function summarizeEventTemplate(template: EventTemplate): {
   key: string;
   label: string;
   poll: boolean;
+  birthday: boolean;
   roles: EventRoleOption[];
 } {
   return {
     key: template.key,
     label: template.label,
     poll: template.poll === true,
+    birthday: template.birthday === true,
     roles: template.roles,
   };
 }

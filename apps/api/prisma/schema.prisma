@@ -86,6 +86,13 @@ model GuildConfig {
   eventReportUserIds   String[] @default([])
   eventReportDmCreator Boolean  @default(true)
 
+  // ── Cumpleaños ──
+  // Rol que el bot crea y asigna el día del cumpleaños. Se guarda el id porque
+  // el rol vive en Discord: si alguien lo borra, el bot lo recrea en el próximo
+  // barrido y actualiza este campo.
+  birthdayRoleId      String?
+  birthdayChannelId   String?
+
   adminRoleModules  AdminRoleModule[]
 
   @@map("guild_configs")
@@ -352,11 +359,22 @@ model HubEvent {
   // Pausa manual: frena recordatorios, recurrencia y anotaciones sin cancelar
   // el evento (se puede reactivar en cualquier momento).
   paused              Boolean  @default(false)
-  // Recurrencia propia: cada X días se crea y publica una copia del evento.
+  // Recurrencia propia: cada X se crea y publica una copia del evento.
   // El evento con recurrenceEnabled actúa como "cabecera" de la serie; las
   // copias generadas no repiten la recurrencia.
   recurrenceEnabled   Boolean  @default(false)
+  // LEGACY: cantidad de días entre ocurrencias. Lo reemplazaron
+  // recurrenceEvery + recurrenceUnit (que permiten semanas y meses). Se conserva
+  // para no perder las series creadas antes y se lee como fallback.
   recurrenceEveryDays Int?
+  // Cada cuánto se repite, en la unidad de `recurrenceUnit`. Sin esto, las
+  // series viejas usan recurrenceEveryDays.
+  recurrenceEvery     Int?
+  recurrenceUnit      String? // days | weeks | months
+  // Persona a la que hay que darle el rol el día del evento. Sólo lo usan los
+  // eventos de la plantilla "cumple": es el vínculo entre la fecha y quién
+  // cumple. Se copia a cada ocurrencia (si no, la copia nace sin dueño).
+  birthdayUserId      String?
   // Cuántos días ANTES de la fecha del evento se crea/publica la ocurrencia.
   recurrencePublishDaysBefore Int?
   // Próxima fecha en la que hay que generar la copia.

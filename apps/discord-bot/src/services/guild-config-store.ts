@@ -4,6 +4,9 @@ import { env } from "../config/env.js";
 
 type GuildConfig = {
   bannedVoiceRoleIds?: string[];
+  // Cumpleaños: rol temporal que crea el bot y canal del saludo.
+  birthdayChannelId?: string;
+  birthdayRoleId?: string;
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
   dailyMessagesMaxMinutes?: number;
@@ -50,6 +53,8 @@ function isRemoteStoreEnabled(): boolean {
 function normalizeGuildConfig(input: GuildConfig): GuildConfig {
   return {
     bannedVoiceRoleIds: input.bannedVoiceRoleIds ?? [],
+    birthdayChannelId: input.birthdayChannelId,
+    birthdayRoleId: input.birthdayRoleId,
     dailyMessagesChannelId: input.dailyMessagesChannelId,
     dailyMessagesEnabled: input.dailyMessagesEnabled ?? false,
     dailyMessagesMaxMinutes: input.dailyMessagesMaxMinutes ?? 90,

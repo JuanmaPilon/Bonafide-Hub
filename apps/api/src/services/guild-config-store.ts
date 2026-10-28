@@ -35,6 +35,9 @@ export type EventGameOption = EventGameConfig & {
   // true = además del aviso se publica una encuesta nativa de Discord
   // (plantilla "encuesta", definida en el código, no en la config).
   poll: boolean;
+  // true = plantilla de cumpleaños: el evento no se anota, se repite cada año y
+  // lleva la persona que cumple (plantilla "cumple").
+  birthday: boolean;
 };
 
 export const DEFAULT_EVENT_ROLES: EventRoleOption[] = [
@@ -221,6 +224,7 @@ export function resolveEventGames(
     const custom = configured.find((game) => game.key === key);
     const template = findEventTemplate(key);
     games.push({
+      birthday: template?.birthday === true,
       configured: Boolean(custom && custom.roles.length > 0),
       key,
       label: custom?.label ?? template?.label ?? key,

@@ -169,6 +169,12 @@ import {
   type MappingEmoji,
 } from "./services/mappings-store.js";
 import {
+  advanceByUnit,
+  advanceSteps,
+  recurrenceStep,
+  stepsUntil,
+} from "./services/event-recurrence.js";
+import {
   EVENT_TEMPLATES,
   findEventTemplate,
   summarizeEventTemplate,
@@ -1455,12 +1461,18 @@ async function createRecurrenceCopy(
     ? head.signupDeadline.getTime() - head.startsAt.getTime()
     : null;
   const created = await createEvent({
+    // Sin esto una copia de una serie de otro juego (o de la plantilla de
+    // cumpleaños) nacía como "wow" y perdía sus roles y su catálogo. Y sin
+    // `birthdayUserId` la ocurrencia del cumpleaños quedaba sin dueño, así que
+    // el bot no sabía a quién darle el rol.
+    birthdayUserId: head.birthdayUserId ?? null,
     characterEnabled: head.characterEnabled,
     createdByUserId: head.createdByUserId,
     createdByUsername: head.createdByUsername,
     description: head.description,
     discordCleanupOnComplete: head.discordCleanupOnComplete,
     durationMinutes: head.durationMinutes,
+    game: head.game,
     guildId: head.guildId,
     imageUrl: head.imageUrl,
     reminderHours: head.reminderHours,
@@ -1544,7 +1556,7 @@ async function resetSeriesOccurrence(
   nextStartsAt: Date;
   removedSignups: number;
 }> {
-  const stepMs = (event.recurrenceEveryDays ?? 7) * DAY_MS;
+  const step = recurrenceStep(event);
   // El cierre de inscripciones viaja con la serie: mismo offset respecto del
   // inicio. Si no se mueve, queda en el pasado y el evento aparece cerrado.
   const deadlineOffsetMs = event.signupDeadline
@@ -1555,10 +1567,11 @@ async function resetSeriesOccurrence(
   // caer el mismo día que una ocurrencia ya publicada (dos avisos iguales).
   const findFreeDate = async (from: Date): Promise<Date> => {
     let candidate = from;
-    while (candidate.getTime() <= Date.now()) {
-      candidate = new Date(candidate.getTime() + stepMs);
-    }
-    for (let guard = 0; guard < 52; guard += 1) {
+    for (let guard = 0; guard < 64; guard += 1) {
+      if (candidate.getTime() <= Date.now()) {
+        candidate = advanceByUnit(candidate, step.count, step.unit);
+        continue;
+      }
       const taken = await eventExistsAt(
         guildId,
         candidate,
@@ -1568,16 +1581,17 @@ async function resetSeriesOccurrence(
       if (!taken) {
         break;
       }
-      candidate = new Date(candidate.getTime() + stepMs);
+      candidate = advanceByUnit(candidate, step.count, step.unit);
     }
     return candidate;
   };
 
   const nextStartsAt = await findFreeDate(
-    event.recurrenceNextAt ?? new Date(event.startsAt.getTime() + stepMs),
+    event.recurrenceNextAt ??
+      advanceByUnit(event.startsAt, step.count, step.unit),
   );
   const nextRecurrenceAt = await findFreeDate(
-    new Date(nextStartsAt.getTime() + stepMs),
+    advanceByUnit(nextStartsAt, step.count, step.unit),
   );
 
   const cleanup = await cleanupEventDiscord({
@@ -1746,11 +1760,10 @@ async function runEventRecurrenceSync(): Promise<void> {
   try {
     const series = await listRecurrenceSeries();
     for (const head of series) {
-      const every = head.recurrenceEveryDays;
-      if (!every || every <= 0 || !head.recurrenceNextAt) {
+      const step = recurrenceStep(head);
+      if (!head.recurrenceNextAt) {
         continue;
       }
-      const stepMs = every * DAY_MS;
       // Cuántos días antes de la fecha del evento se publica la ocurrencia.
       const publishBeforeMs =
         Math.max(1, head.recurrencePublishDaysBefore ?? 1) * DAY_MS;
@@ -1783,8 +1796,12 @@ async function runEventRecurrenceSync(): Promise<void> {
       // 1) Ocurrencias cuya fecha ya pasó (API caída mucho tiempo): las
       // salteamos para no crear eventos viejos.
       if (nextAt.getTime() <= Date.now()) {
-        const steps = Math.ceil((Date.now() - nextAt.getTime()) / stepMs);
-        nextAt = new Date(nextAt.getTime() + steps * stepMs);
+        nextAt = advanceSteps(
+          nextAt,
+          step.count,
+          step.unit,
+          stepsUntil(nextAt, new Date(), step.count, step.unit),
+        );
         changed = true;
       }
 
@@ -1805,7 +1822,7 @@ async function runEventRecurrenceSync(): Promise<void> {
           );
           break;
         }
-        nextAt = new Date(nextAt.getTime() + stepMs);
+        nextAt = advanceByUnit(nextAt, step.count, step.unit);
         created += 1;
         changed = true;
       }
@@ -3035,6 +3052,10 @@ export async function buildApp() {
     // del bot sobre la configuración actual, preservando el resto.
     const BOT_CONFIG_FIELDS = [
       "bannedVoiceRoleIds",
+      // Sin esto el bot no puede persistir el rol de cumpleaños que crea: el
+      // PUT interno lo descartaría y lo recrearía en cada barrido.
+      "birthdayChannelId",
+      "birthdayRoleId",
       "dailyMessagesChannelId",
       "dailyMessagesEnabled",
       "dailyMessagesMaxMinutes",
@@ -3119,6 +3140,42 @@ export async function buildApp() {
       }
     },
   );
+
+  // Cumpleaños del guild para el bot: sólo los eventos de la plantilla "cumple"
+  // con persona asignada. El bot no calcula fechas ni recorre la serie: lee
+  // esta lista y compara el día en su zona horaria.
+  app.get("/internal/guilds/:guildId/birthdays", async (request, reply) => {
+    if (!env.BOT_API_TOKEN) {
+      return reply.code(503).send({
+        ok: false,
+        error: "BOT_API_TOKEN is not configured",
+      });
+    }
+    if (!isAuthorizedBotRequest(request)) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    const events = await listEvents(params.guildId);
+    return {
+      ok: true,
+      guildId: params.guildId,
+      events: events
+        .filter(
+          (event) => event.type === "birthday" && event.status === "scheduled",
+        )
+        .map((event) => ({
+          birthdayUserId: event.birthdayUserId,
+          id: event.id,
+          startsAt: event.startsAt.toISOString(),
+          title: event.title,
+          type: event.type,
+        })),
+    };
+  });
 
   app.get(
     "/internal/guilds/:guildId/daily-messages",
@@ -6545,7 +6602,9 @@ export async function buildApp() {
       paused?: boolean;
       pollHours?: number;
       recurrenceEnabled?: boolean;
+      recurrenceEvery?: number;
       recurrenceEveryDays?: number;
+      recurrenceUnit?: string;
       recurrencePublishDaysBefore?: number;
       reminderHours?: number[];
       requiredRoleId?: string;
@@ -6601,7 +6660,9 @@ export async function buildApp() {
       paused: body.paused === true,
       pollHours: normalizePollHours(body.pollHours),
       recurrenceEnabled: body.recurrenceEnabled === true,
+      recurrenceEvery: normalizeRecurrenceDays(body.recurrenceEvery),
       recurrenceEveryDays: normalizeRecurrenceDays(body.recurrenceEveryDays),
+      recurrenceUnit: body.recurrenceUnit,
       recurrencePublishDaysBefore: normalizeRecurrenceDays(
         body.recurrencePublishDaysBefore,
       ),
@@ -6650,6 +6711,108 @@ export async function buildApp() {
     };
   });
 
+  // Cumpleaños: crea el evento de la plantilla "cumple" con los valores que no
+  // se preguntan (sin anotación, sin cupo, repetición anual). Va aparte de
+  // POST /events porque armar un cumpleaños con el formulario general obliga a
+  // mandar game, characterEnabled y recordatorios, y cualquier default
+  // equivocado deja un evento de raid con nombre de cumpleaños.
+  app.post("/guilds/:guildId/birthdays", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as {
+      day?: number;
+      month?: number;
+      userId?: string;
+    };
+    const userId = String(body.userId ?? "").trim();
+    const day = Number(body.day);
+    const month = Number(body.month);
+    if (!userId) {
+      return reply.code(400).send({ ok: false, error: "Falta la persona" });
+    }
+    // El rango solo no alcanza: el 31 de febrero cumple 1..31 y 1..12 pero no
+    // existe. Se valida contra los días reales del mes.
+    const lastDay = new Date(2024, month, 0).getDate(); // 2024 es bisiesto
+    if (
+      !Number.isInteger(month) ||
+      month < 1 ||
+      month > 12 ||
+      !Number.isInteger(day) ||
+      day < 1 ||
+      day > lastDay
+    ) {
+      return reply
+        .code(400)
+        .send({ ok: false, error: "Fecha de cumpleaños inválida" });
+    }
+
+    const label = await memberLogLabel(params.guildId, userId).catch(
+      () => "Alguien",
+    );
+    const config = await getGuildConfig(params.guildId);
+    const game = resolveGameKey(config, "cumple");
+    if (!game) {
+      return reply.code(503).send({
+        ok: false,
+        error: "La plantilla de cumpleaños no está disponible",
+      });
+    }
+
+    // La fecha se guarda con el año en curso (o el próximo si ya pasó) para que
+    // la primera ocurrencia sea futura; la serie se mueve con paso de 12 meses.
+    const now = new Date();
+    let year = now.getUTCFullYear();
+    if (
+      month < now.getUTCMonth() + 1 ||
+      (month === now.getUTCMonth() + 1 && day < now.getUTCDate())
+    ) {
+      year += 1;
+    }
+    const startsAt = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+    const user = session.user as {
+      global_name?: string | null;
+      id?: string;
+      username?: string | null;
+    };
+    const event = await createEvent({
+      birthdayUserId: userId,
+      characterEnabled: false,
+      createdByUserId: user.id,
+      createdByUsername: user.global_name ?? user.username ?? undefined,
+      game,
+      guildId: params.guildId,
+      recurrenceEnabled: true,
+      recurrenceEvery: 12,
+      recurrenceUnit: "months",
+      recurrencePublishDaysBefore: 7,
+      reminderHours: [],
+      startsAt: startsAt.toISOString(),
+      title: `Cumpleaños de ${label}`,
+      type: "birthday",
+    });
+
+    await logAdminAction(session, params.guildId, "birthday:create", {
+      details: `Cumpleaños de ${label} cargado (${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}).`,
+      targetId: userId,
+      targetType: "user",
+    });
+
+    return { ok: true, guildId: params.guildId, event };
+  });
+
   app.patch("/guilds/:guildId/events/:eventId", async (request, reply) => {
     const session = await requireSession(request);
     if (!session) {
@@ -6684,7 +6847,9 @@ export async function buildApp() {
       paused?: boolean;
       pollHours?: number | null;
       recurrenceEnabled?: boolean;
+      recurrenceEvery?: number;
       recurrenceEveryDays?: number;
+      recurrenceUnit?: string;
       recurrencePublishDaysBefore?: number;
       reminderHours?: number[];
       requiredRoleId?: string;
@@ -6809,6 +6974,11 @@ export async function buildApp() {
         body.recurrenceEveryDays === undefined
           ? undefined
           : normalizeRecurrenceDays(body.recurrenceEveryDays),
+      recurrenceEvery:
+        body.recurrenceEvery === undefined
+          ? undefined
+          : normalizeRecurrenceDays(body.recurrenceEvery),
+      recurrenceUnit: body.recurrenceUnit,
       recurrencePublishDaysBefore:
         body.recurrencePublishDaysBefore === undefined
           ? undefined

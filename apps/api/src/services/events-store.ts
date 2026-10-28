@@ -1,4 +1,8 @@
 import { Prisma, prisma } from "../db/prisma.js";
+import {
+  advanceByUnit,
+  parseRecurrenceUnit,
+} from "./event-recurrence.js";
 import { listTemplateSpecs } from "./event-templates.js";
 import { applySpecMappings, listGuildMappings } from "./mappings-store.js";
 import {
@@ -102,7 +106,14 @@ export const RAID_ROLES = ["tank", "healer", "melee", "ranged"] as const;
 export const COMBAT_ROLES = RAID_ROLES;
 export const SIGNUP_ROLES = [...RAID_ROLES, "dps"] as const;
 
-export const EVENT_TYPES = ["raid", "mplus", "pvp", "social"] as const;
+export const EVENT_TYPES = [
+  "raid",
+  "mplus",
+  "pvp",
+  "social",
+  // Cumpleaños: no se anota nadie, el bot le da el rol a la persona ese día.
+  "birthday",
+] as const;
 
 export type WowClass = (typeof WOW_CLASSES)[number];
 export type RaidRole = (typeof RAID_ROLES)[number];
@@ -334,6 +345,9 @@ export async function updateRaidSpec(
 export type HubEvent = {
   // Si se pide (y se recuerda) el nombre de personaje al anotarse.
   characterEnabled: boolean;
+  // Persona que cumple (plantilla "cumple"). Es el vínculo entre la fecha y a
+  // quién hay que darle el rol el día del evento.
+  birthdayUserId?: string;
   completedAt?: Date;
   createdAt: Date;
   createdByUserId?: string;
@@ -358,7 +372,10 @@ export type HubEvent = {
   // Duración de la encuesta en horas (vacío = la de Discord: 24 h).
   pollHours?: number;
   recurrenceEnabled: boolean;
+  // LEGACY: series creadas antes de recurrenceEvery/Unit.
   recurrenceEveryDays?: number;
+  recurrenceEvery?: number;
+  recurrenceUnit?: string;
   recurrenceNextAt?: Date;
   recurrencePublishDaysBefore?: number;
   reminderMessageIds: string[];
@@ -414,6 +431,7 @@ export type EventSignup = {
 };
 
 type EventRecord = {
+  birthdayUserId: string | null;
   characterEnabled: boolean;
   completedAt: Date | null;
   createdAt: Date;
@@ -435,6 +453,8 @@ type EventRecord = {
   publishChannelId: string | null;
   recurrenceEnabled: boolean;
   recurrenceEveryDays: number | null;
+  recurrenceEvery: number | null;
+  recurrenceUnit: string | null;
   recurrenceNextAt: Date | null;
   recurrencePublishDaysBefore: number | null;
   reminderMessageIds: string[];
@@ -511,6 +531,7 @@ function toEvent(
   roster?: Map<string, RosterProfile>,
 ): HubEvent {
   return {
+    birthdayUserId: record.birthdayUserId ?? undefined,
     characterEnabled: record.characterEnabled,
     completedAt: record.completedAt ?? undefined,
     createdAt: record.createdAt,
@@ -533,6 +554,8 @@ function toEvent(
     publishChannelId: record.publishChannelId ?? undefined,
     recurrenceEnabled: record.recurrenceEnabled,
     recurrenceEveryDays: record.recurrenceEveryDays ?? undefined,
+    recurrenceEvery: record.recurrenceEvery ?? undefined,
+    recurrenceUnit: record.recurrenceUnit ?? undefined,
     recurrenceNextAt: record.recurrenceNextAt ?? undefined,
     recurrencePublishDaysBefore:
       record.recurrencePublishDaysBefore ?? undefined,
@@ -586,7 +609,19 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
     include: { signups: { orderBy: { createdAt: "asc" } } },
   });
   const roster = await rosterClassesFor(records, guildId);
-  return records.map((record) => toEvent(record, roster));
+  const now = Date.now();
+  return (
+    records
+      .map((record) => toEvent(record, roster))
+      // El molde de una serie de cumpleaños se queda con la fecha original
+      // (nadie lo completa a mano), así que al año siguiente quedaría visible
+      // como un cumpleaños de hace meses. La ocurrencia vigente la crea la
+      // recurrencia; una vez que la fecha pasó, el molde deja de mostrarse.
+      .filter(
+        (event) =>
+          event.type !== "birthday" || event.startsAt.getTime() >= now,
+      )
+  );
 }
 
 // Ruta pública de la portada de un evento. La imagen se guarda como data URL
@@ -752,6 +787,7 @@ export async function getEvent(
 }
 
 export async function createEvent(input: {
+  birthdayUserId?: string | null;
   createdByUserId?: string;
   createdByUsername?: string;
   characterEnabled?: boolean;
@@ -765,6 +801,8 @@ export async function createEvent(input: {
   pollHours?: number | null;
   recurrenceEnabled?: boolean;
   recurrenceEveryDays?: number | null;
+  recurrenceEvery?: number | null;
+  recurrenceUnit?: string | null;
   recurrencePublishDaysBefore?: number | null;
   reminderHours?: number[];
   requiredRoleId?: string | null;
@@ -774,9 +812,16 @@ export async function createEvent(input: {
   title: string;
   type: string;
 }): Promise<HubEvent> {
-  const everyDays = input.recurrenceEveryDays ?? null;
+  // La cantidad vive en recurrenceEvery; recurrenceEveryDays es el fallback de
+  // las series viejas. Se guarda en el campo nuevo salvo que la unidad sea
+  // "days", donde se escribe también en el viejo para que cualquier lectura que
+  // no conozca la unidad siga funcionando.
+  const unit = input.recurrenceUnit?.trim().toLowerCase() || "days";
+  const every = input.recurrenceEvery ?? input.recurrenceEveryDays ?? null;
+  const everyDays = unit === "days" ? every : null;
   const record = await prisma.hubEvent.create({
     data: {
+      birthdayUserId: input.birthdayUserId ?? null,
       characterEnabled: input.characterEnabled ?? true,
       createdByUserId: input.createdByUserId,
       createdByUsername: input.createdByUsername,
@@ -790,12 +835,15 @@ export async function createEvent(input: {
       pollHours: input.pollHours ?? null,
       recurrenceEnabled: input.recurrenceEnabled ?? false,
       recurrenceEveryDays: everyDays,
+      recurrenceEvery: every,
+      recurrenceUnit: input.recurrenceEnabled ? unit : null,
       recurrencePublishDaysBefore: input.recurrencePublishDaysBefore ?? null,
       recurrenceNextAt:
-        input.recurrenceEnabled && everyDays && everyDays > 0
-          ? new Date(
-              new Date(input.startsAt).getTime() +
-                everyDays * 24 * 60 * 60 * 1000,
+        input.recurrenceEnabled && every && every > 0
+          ? advanceByUnit(
+              new Date(input.startsAt),
+              every,
+              parseRecurrenceUnit(unit) ?? "days",
             )
           : null,
       reminderHours: input.reminderHours ?? [],
@@ -817,6 +865,7 @@ export async function updateEvent(
   guildId: string,
   eventId: string,
   input: {
+    birthdayUserId?: string | null;
     characterEnabled?: boolean;
     description?: string;
     discordCleanupOnComplete?: boolean;
@@ -827,6 +876,8 @@ export async function updateEvent(
     pollHours?: number | null;
     recurrenceEnabled?: boolean;
     recurrenceEveryDays?: number | null;
+    recurrenceEvery?: number | null;
+    recurrenceUnit?: string | null;
     recurrencePublishDaysBefore?: number | null;
     reminderHours?: number[];
     requiredRoleId?: string | null;
@@ -842,8 +893,10 @@ export async function updateEvent(
     where: { id: eventId, guildId },
     select: {
       recurrenceEnabled: true,
+      recurrenceEvery: true,
       recurrenceEveryDays: true,
       recurrenceNextAt: true,
+      recurrenceUnit: true,
       startsAt: true,
     },
   });
@@ -851,35 +904,40 @@ export async function updateEvent(
     return null;
   }
 
-  // Recurrencia: si se activa (o cambia el intervalo/fecha base) recalculamos
-  // la próxima publicación como startsAt + X días. Si está apagada, se limpia.
-  // Editar otros campos no reancla la serie (conserva recurrenceNextAt).
+  // Recurrencia: si se activa (o cambia el intervalo/unidad/fecha base)
+  // recalculamos la próxima publicación. Si está apagada, se limpia. Editar
+  // otros campos no reancla la serie (conserva recurrenceNextAt).
   const nextEnabled = input.recurrenceEnabled ?? current.recurrenceEnabled;
-  const nextEveryDays =
-    input.recurrenceEveryDays !== undefined
-      ? input.recurrenceEveryDays
-      : current.recurrenceEveryDays;
+  const nextUnitIn =
+    input.recurrenceUnit !== undefined
+      ? (parseRecurrenceUnit(input.recurrenceUnit) ?? "days")
+      : (parseRecurrenceUnit(current.recurrenceUnit) ?? "days");
+  const nextEvery =
+    input.recurrenceEvery !== undefined
+      ? input.recurrenceEvery
+      : input.recurrenceEveryDays !== undefined
+        ? input.recurrenceEveryDays
+        : (current.recurrenceEvery ?? current.recurrenceEveryDays);
   const nextStartsAt = input.startsAt
     ? new Date(input.startsAt)
     : current.startsAt;
   const recurrenceChanged =
     nextEnabled !== current.recurrenceEnabled ||
-    (input.recurrenceEveryDays !== undefined &&
-      nextEveryDays !== current.recurrenceEveryDays) ||
+    nextEvery !== (current.recurrenceEvery ?? current.recurrenceEveryDays) ||
+    nextUnitIn !== (parseRecurrenceUnit(current.recurrenceUnit) ?? "days") ||
     (input.startsAt !== undefined &&
       nextStartsAt.getTime() !== current.startsAt.getTime());
   let recurrenceNextAt = current.recurrenceNextAt;
-  if (!nextEnabled || !nextEveryDays || nextEveryDays <= 0) {
+  if (!nextEnabled || !nextEvery || nextEvery <= 0) {
     recurrenceNextAt = null;
   } else if (!current.recurrenceNextAt || recurrenceChanged) {
-    recurrenceNextAt = new Date(
-      nextStartsAt.getTime() + nextEveryDays * 24 * 60 * 60 * 1000,
-    );
+    recurrenceNextAt = advanceByUnit(nextStartsAt, nextEvery, nextUnitIn);
   }
 
   const record = await prisma.hubEvent.updateMany({
     where: { id: eventId, guildId },
     data: {
+      birthdayUserId: input.birthdayUserId,
       characterEnabled: input.characterEnabled,
       completedAt: input.status === "completed" ? new Date() : undefined,
       description: input.description,
@@ -891,7 +949,18 @@ export async function updateEvent(
       pollHours:
         input.pollHours === undefined ? undefined : input.pollHours || null,
       recurrenceEnabled: input.recurrenceEnabled,
-      recurrenceEveryDays: input.recurrenceEveryDays,
+      // Se escribe en el campo nuevo y, cuando la unidad es días, también en el
+      // viejo: así cualquier lectura que no conozca recurrenceUnit sigue viendo
+      // el intervalo correcto.
+      recurrenceEveryDays:
+        input.recurrenceEvery !== undefined ||
+        input.recurrenceEveryDays !== undefined
+          ? nextUnitIn === "days"
+            ? nextEvery
+            : null
+          : input.recurrenceEveryDays,
+      recurrenceEvery: input.recurrenceEvery,
+      recurrenceUnit: input.recurrenceUnit,
       recurrencePublishDaysBefore: input.recurrencePublishDaysBefore,
       recurrenceNextAt,
       reminderHours: input.reminderHours,
@@ -1095,9 +1164,14 @@ export async function markEventSignupClosed(
 export async function listRecurrenceSeries(): Promise<HubEvent[]> {
   const records = await prisma.hubEvent.findMany({
     where: {
+      // El intervalo puede estar en recurrenceEvery (nuevo) o en
+      // recurrenceEveryDays (series viejas): hay que aceptar los dos.
+      OR: [
+        { recurrenceEvery: { not: null } },
+        { recurrenceEveryDays: { not: null } },
+      ],
       paused: false,
       recurrenceEnabled: true,
-      recurrenceEveryDays: { not: null },
       recurrenceNextAt: { not: null },
     },
     include: { signups: { orderBy: { createdAt: "asc" } } },

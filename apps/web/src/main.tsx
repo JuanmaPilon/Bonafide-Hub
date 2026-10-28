@@ -979,6 +979,30 @@ function recurrenceLabel(
   }
 }
 
+// "Cada 12 meses": el intervalo de la serie según su unidad. Las series viejas
+// no tienen unidad y se leen como días.
+function recurrenceEveryLabel(event: {
+  recurrenceEvery?: number;
+  recurrenceEveryDays?: number;
+  recurrenceUnit?: string;
+}): string {
+  const count = event.recurrenceEvery ?? event.recurrenceEveryDays ?? 0;
+  const unit = event.recurrenceUnit ?? "days";
+  const label =
+    unit === "months"
+      ? count === 1
+        ? "mes"
+        : "meses"
+      : unit === "weeks"
+        ? count === 1
+          ? "semana"
+          : "semanas"
+        : count === 1
+          ? "día"
+          : "días";
+  return `Cada ${count} ${label}`;
+}
+
 const SIGNUP_OPTIONS: Array<{
   emoji: string;
   key: "yes" | "late" | "bench" | "no";
@@ -4981,14 +5005,15 @@ function EventCard({
                   : "—"}
               </span>
             </div>
-            {event.recurrenceEnabled && event.recurrenceEveryDays ? (
+            {event.recurrenceEnabled &&
+            (event.recurrenceEvery ?? event.recurrenceEveryDays) ? (
               <div className="event-info-item">
                 <span className="event-info-label">
                   <Repeat aria-hidden="true" weight="fill" />
                   Repetición
                 </span>
                 <span className="event-info-value">
-                  {`Cada ${event.recurrenceEveryDays} días`}
+                  {recurrenceEveryLabel(event)}
                 </span>
               </div>
             ) : recurrenceLabel(event.discordEventConfig?.recurrence) ? (
@@ -8901,7 +8926,8 @@ function App() {
     // Vacío = sin duración explícita: Discord la abre 24 h (su default).
     pollHours: string;
     recurrenceEnabled: boolean;
-    recurrenceEveryDays: string;
+    recurrenceEvery: string;
+    recurrenceUnit: string;
     recurrencePublishDaysBefore: string;
     reminderHours: number[];
     requiredRoleId: string;
@@ -8921,7 +8947,8 @@ function App() {
     paused: false,
     pollHours: "",
     recurrenceEnabled: false,
-    recurrenceEveryDays: "",
+    recurrenceEvery: "",
+    recurrenceUnit: "days",
     recurrencePublishDaysBefore: "3",
     reminderHours: [],
     requiredRoleId: "",
@@ -10372,7 +10399,8 @@ function App() {
       paused: false,
       pollHours: "",
       recurrenceEnabled: false,
-      recurrenceEveryDays: "",
+      recurrenceEvery: "",
+      recurrenceUnit: "days",
       recurrencePublishDaysBefore: "3",
       reminderHours: [],
       requiredRoleId: "",
@@ -10426,10 +10454,13 @@ function App() {
       paused: event.paused ?? false,
       pollHours: event.pollHours != null ? String(event.pollHours) : "",
       recurrenceEnabled: event.recurrenceEnabled ?? false,
-      recurrenceEveryDays:
-        event.recurrenceEveryDays != null
-          ? String(event.recurrenceEveryDays)
-          : "",
+      recurrenceEvery:
+        event.recurrenceEvery != null
+          ? String(event.recurrenceEvery)
+          : event.recurrenceEveryDays != null
+            ? String(event.recurrenceEveryDays)
+            : "",
+      recurrenceUnit: event.recurrenceUnit ?? "days",
       recurrencePublishDaysBefore:
         event.recurrencePublishDaysBefore != null
           ? String(event.recurrencePublishDaysBefore)
@@ -10483,7 +10514,8 @@ function App() {
       paused: false,
       pollHours: event.pollHours != null ? String(event.pollHours) : "",
       recurrenceEnabled: false,
-      recurrenceEveryDays: "",
+      recurrenceEvery: "",
+      recurrenceUnit: "days",
       recurrencePublishDaysBefore: "3",
       reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
@@ -10658,8 +10690,11 @@ function App() {
               : null
             : undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
-          recurrenceEveryDays: eventForm.recurrenceEnabled
-            ? Number(eventForm.recurrenceEveryDays) || undefined
+          recurrenceEvery: eventForm.recurrenceEnabled
+            ? Number(eventForm.recurrenceEvery) || undefined
+            : undefined,
+          recurrenceUnit: eventForm.recurrenceEnabled
+            ? eventForm.recurrenceUnit
             : undefined,
           recurrencePublishDaysBefore: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrencePublishDaysBefore) || undefined
@@ -10698,8 +10733,11 @@ function App() {
               ? Number(eventForm.pollHours)
               : undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
-          recurrenceEveryDays: eventForm.recurrenceEnabled
-            ? Number(eventForm.recurrenceEveryDays) || undefined
+          recurrenceEvery: eventForm.recurrenceEnabled
+            ? Number(eventForm.recurrenceEvery) || undefined
+            : undefined,
+          recurrenceUnit: eventForm.recurrenceEnabled
+            ? eventForm.recurrenceUnit
             : undefined,
           recurrencePublishDaysBefore: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrencePublishDaysBefore) || undefined
@@ -15867,10 +15905,12 @@ function App() {
                                     setEventForm((current) => ({
                                       ...current,
                                       recurrenceEnabled: checked,
-                                      recurrenceEveryDays:
-                                        checked && !current.recurrenceEveryDays
-                                          ? "7"
-                                          : current.recurrenceEveryDays,
+                                      recurrenceEvery:
+                                        checked && !current.recurrenceEvery
+                                          ? current.recurrenceUnit === "months"
+                                            ? "1"
+                                            : "7"
+                                          : current.recurrenceEvery,
                                     }))
                                   }
                                 />
@@ -15889,21 +15929,38 @@ function App() {
                                 {eventForm.recurrenceEnabled ? (
                                   <>
                                     <label className="event-option-field">
-                                      <span>Cada (días)</span>
+                                      <span>Cada</span>
                                       <input
                                         className="input"
-                                        max="365"
                                         min="1"
                                         onChange={(event) =>
                                           setEventForm((current) => ({
                                             ...current,
-                                            recurrenceEveryDays:
+                                            recurrenceEvery:
                                               event.target.value,
                                           }))
                                         }
                                         type="number"
-                                        value={eventForm.recurrenceEveryDays}
+                                        value={eventForm.recurrenceEvery}
                                       />
+                                    </label>
+                                    <label className="event-option-field">
+                                      <span>Unidad</span>
+                                      <select
+                                        className="select"
+                                        onChange={(event) =>
+                                          setEventForm((current) => ({
+                                            ...current,
+                                            recurrenceUnit:
+                                              event.target.value,
+                                          }))
+                                        }
+                                        value={eventForm.recurrenceUnit}
+                                      >
+                                        <option value="days">Días</option>
+                                        <option value="weeks">Semanas</option>
+                                        <option value="months">Meses</option>
+                                      </select>
                                     </label>
                                     <label className="event-option-field">
                                       <span>Publicar (días antes)</span>

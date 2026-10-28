@@ -1046,6 +1046,16 @@ próxima fecha **sin publicar nada en Discord**; el scheduler
 (`recurrencePublishDaysBefore`). Antes `resetSeriesOccurrence` republicaba el
 aviso en el acto, así que la serie aparecía de nuevo apenas terminaba la raid.
 
+**Cumpleaños.** Es un evento más (`type: "birthday"`) de la plantilla `cumple`,
+no un módulo aparte: aparece en la misma grilla, calendario y búsqueda. Se crea
+con `POST /guilds/:g/birthdays { userId, day, month }`, que arma el resto (sin
+anotación, sin recordatorios, repetición de 12 meses, publicación 7 días antes).
+`birthdayUserId` es el vínculo entre la fecha y la persona, y **se copia a cada
+ocurrencia**: sin eso la copia nace sin dueño y el bot no sabe a quién darle el
+rol. El campo `birthdayUserId` viaja en el evento y el bot lee los del día con
+`GET /internal/guilds/:g/birthdays`. Una fecha pasada se deja de listar, porque
+el molde no se completa a mano y quedaría mostrando un cumpleaños de meses atrás.
+
 **Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
 cierre, repetición, ubicación, roster principal, Discord) y los tipos
 (`Sword` raid, `Key` M+, `Trophy` PvP, `Confetti` social) se dibujan con íconos de
@@ -1241,7 +1251,7 @@ Tablas:
 10. `karuta_cards` — posesión de cartas raras (print/wishlist/dueño)
 11. `karuta_albums` — álbumes (`ka`) de cada usuario, con puntero al mensaje
 12. `karuta_album_pages` — imágenes de páginas cacheadas (bytes propios)
-13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`). Con `recurrenceEnabled` el evento es el **molde** de una serie: cada `recurrenceEveryDays` el motor crea una ocurrencia (evento nuevo con el mismo título, publicado `recurrencePublishDaysBefore` días antes). Mientras no entra en esa ventana, el campo calculado `pendingPublication` lo marca como no visible para los miembros. `POST /guilds/:g/events/:id/reset-occurrence` limpia la ocurrencia (avisos + recordatorios en Discord, inscripciones y marcadores) y mueve el molde a la próxima fecha libre de la serie, sin perder la serie.
+13. `hub_events` — eventos del Módulo X (`game`, `type`, fechas, publicación en Discord, recordatorios, recurrencia propia, `paused`, `characterEnabled`). Con `recurrenceEnabled` el evento es el **molde** de una serie: cada `recurrenceEvery` + `recurrenceUnit` (`days` | `weeks` | `months`, con `recurrenceEveryDays` como legado de las series viejas) el motor crea una ocurrencia (evento nuevo con el mismo título, publicado `recurrencePublishDaysBefore` días antes). Los meses se avanzan por calendario, no por milisegundos: `setMonth` sobre el 31 desborda al mes siguiente. Mientras no entra en esa ventana, el campo calculado `pendingPublication` lo marca como no visible para los miembros. `POST /guilds/:g/events/:id/reset-occurrence` limpia la ocurrencia (avisos + recordatorios en Discord, inscripciones y marcadores) y mueve el molde a la próxima fecha libre de la serie, sin perder la serie.
 14. `event_signups` — inscripciones por evento y usuario (`status`, `role`, `wowClass`, `spec`, `character`)
 15. `event_player_profiles` — memoria del nombre de personaje por jugador y guild (con la clase con la que lo usó; la clase/spec del asistente salen de `roster_profiles` y, si no hay ficha, de la última `event_signups`)
 16. `event_player_characters` — PJ de un miembro ya confirmados en el cruce de asistencia de los logs (clave normalizada del nombre que figura en Warcraft Logs)
