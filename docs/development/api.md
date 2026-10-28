@@ -60,13 +60,13 @@ Archivo ejemplo: `apps/api/.env.example`
 Salud y metadata: `GET /health`, `GET /`
 
 **Portadas del hub.** Las dos pantallas de entrada usan una ilustración propia, que
-vive en `apps/web/public` y se sirve como archivo estático (no pasa por el API):
+vive en `apps/web/public` y se sirve como archivo estático (no pasa por el API).
+Los tamaños de cada imagen (exportación, caja en pantalla y recorte por ancho) están
+en [brand-assets.md](brand-assets.md):
 
-| Archivo | Dónde | Caja |
-| --- | --- | --- |
-| `/landing-banner.webp` | landing (sin sesión), dentro de `.landing-media` | 2560×600 (4.27:1) |
-| `/home-banner.webp` | portada de Inicio (`.home-hero-art`) | 3200×520 (6.15:1) |
-| `/og-cover.png` | vista previa al compartir el link (`og:image`) | 600×600 |
+`/landing-banner.webp` pinta la landing (dentro de `.landing-media`),
+`/home-banner.webp` la portada de Inicio (`.home-hero-art`) y `/og-cover.png` la
+vista previa al compartir el link (`og:image`).
 
 El mismo dibujo de la brasa es además el **icono del sitio**: `favicon.svg` (PNG
 embebido en 64 px), `favicon-v6.png` (256), `favicon.ico` (16/32/48 en un solo
