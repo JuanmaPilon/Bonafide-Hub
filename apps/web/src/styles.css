@@ -3392,21 +3392,24 @@ a:hover {
   padding: 8px;
   border-radius: 10px;
   border: 1px solid
-    color-mix(in srgb, var(--roster-class-ink) 58%, transparent);
+    color-mix(in srgb, var(--roster-class-ink) 70%, transparent);
   border-left: 4px solid var(--roster-class-ink);
-  /* Fondo opaco + tinte de la clase arriba a la izquierda: la carta de atrás no
-     debe verse a través de la de adelante, y el color tiene que identificar la
-     clase de un vistazo. */
+  /* Fondo opaco + la carta ENTERA teñida con el color de la clase (la de atrás
+     no debe verse a través de la de adelante). Antes el tinte era un degradado
+     que moría en transparente a los 58%: el color se veía sólo en una esquina y
+     la carta se leía difusa. El techo lo pone la spec: por encima del ~22% el
+     texto (--muted) baja de 4,5:1 sobre las clases más claras (el amarillo del
+     pícaro). */
   background:
     linear-gradient(
-        140deg,
-        color-mix(in srgb, var(--roster-class-ink) 20%, transparent),
-        transparent 58%
+        180deg,
+        color-mix(in srgb, var(--roster-class-ink) 22%, transparent),
+        color-mix(in srgb, var(--roster-class-ink) 16%, transparent)
       )
       padding-box,
     #111929;
   box-shadow: 0 0 20px
-    color-mix(in srgb, var(--roster-class-ink) 28%, transparent);
+    color-mix(in srgb, var(--roster-class-ink) 34%, transparent);
 }
 
 /* Mazo: la carta principal adelante y las clases secundarias apiladas detrás,
@@ -3986,21 +3989,22 @@ a:hover {
     transparent
   );
   border-left-color: var(--roster-class-tint, var(--roster-class-color));
+  /* Igual que en oscuro: la carta entera va teñida, no una esquina. El techo del
+     tinte lo pone la spec sobre el amarillo del pícaro, que es la clase más
+     clara: por encima del ~46% el texto baja de 4,5:1. */
   background:
     linear-gradient(
-        140deg,
+        180deg,
         color-mix(
             in srgb,
-            var(--roster-class-tint, var(--roster-class-color)) 38%,
+            var(--roster-class-tint, var(--roster-class-color)) 40%,
             transparent
           ),
         color-mix(
             in srgb,
-            var(--roster-class-tint, var(--roster-class-color)) 10%,
+            var(--roster-class-tint, var(--roster-class-color)) 32%,
             transparent
           )
-          55%,
-        transparent 85%
       )
       padding-box,
     #ffffff;
@@ -4016,6 +4020,38 @@ a:hover {
 
 :root[data-theme="light"] .roster-member--back {
   border-right-color: var(--roster-class-tint, var(--roster-class-color));
+}
+
+/* Badges de estado en claro. Con la carta teñida por la clase, un badge
+   translúcido del mismo tono (el ámbar de Bench sobre una carta de pícaro)
+   desaparece. Sobre fondo claro van opacos, con la tinta oscurecida. */
+:root[data-theme="light"] .roster-status-badge--raid {
+  border-color: rgba(31, 122, 53, 0.5);
+  background: #f1fbf4;
+  color: #1f7a35;
+}
+
+:root[data-theme="light"] .roster-status-badge--bench {
+  border-color: rgba(138, 109, 0, 0.5);
+  background: #fffaeb;
+  color: #8a6d00;
+}
+
+:root[data-theme="light"] .roster-status-badge--inactive {
+  border-color: rgba(161, 35, 28, 0.5);
+  background: #fdf1f0;
+  color: #a1231c;
+}
+
+/* "Sin asignar": el azul grisáceo del tema oscuro no se lee sobre blanco. */
+:root[data-theme="light"] .roster-status-badge--unassigned {
+  border-color: rgba(77, 95, 133, 0.45);
+  background: #f4f7fd;
+  color: #4d5f85;
+}
+
+:root[data-theme="light"] .roster-status-option--unassigned {
+  color: #4d5f85;
 }
 
 /* Los dos estados "fuera de línea" van con el borde y el tinte más oscuros:
@@ -4039,17 +4075,6 @@ a:hover {
   border-color: rgba(124, 58, 237, 0.45);
   background: rgba(124, 58, 237, 0.12);
   color: #5b21b6;
-}
-
-/* "Sin asignar": el azul grisáceo del tema oscuro no se lee sobre blanco. */
-:root[data-theme="light"] .roster-status-badge--unassigned,
-:root[data-theme="light"] .roster-status-option--unassigned {
-  color: #4d5f85;
-}
-
-:root[data-theme="light"] .roster-status-badge--unassigned {
-  border-color: rgba(77, 95, 133, 0.45);
-  background: rgba(77, 95, 133, 0.1);
 }
 
 :root[data-theme="light"] .roster-member--unassigned {
