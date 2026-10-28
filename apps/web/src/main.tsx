@@ -1784,6 +1784,187 @@ function EmojiSelect({
   );
 }
 
+// Buscador de una persona del servidor. Es un `<select>` con búsqueda: la lista
+// del servidor es larga y encontrar un nombre scrolleando era más lento que
+// escribir tres letras. Reusa el patrón de `EmojiSelect` (menú por portal con
+// `position: fixed`, cierra con click afuera y Escape) porque el formulario del
+// evento vive dentro de un modal con `overflow`, que recortaría la lista.
+function MemberSearchField({
+  label,
+  members,
+  onChange,
+  placeholder,
+  value,
+}: {
+  label: string;
+  members: GuildMember[];
+  onChange: (userId: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [anchor, setAnchor] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const selected = members.find((member) => member.id === value);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    const onMove = (): void => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (rect) {
+        setAnchor({ left: rect.left, top: rect.bottom + 6, width: rect.width });
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open]);
+
+  const abrir = (): void => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (rect) {
+      setAnchor({ left: rect.left, top: rect.bottom + 6, width: rect.width });
+    }
+    setOpen(true);
+  };
+
+  const normalizar = (texto: string): string =>
+    texto
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const filtrados = members
+    .filter((member) => {
+      const texto = normalizar(query.trim());
+      if (!texto) {
+        return true;
+      }
+      return (
+        normalizar(member.displayName).includes(texto) ||
+        normalizar(member.username).includes(texto)
+      );
+    })
+    .sort((left, right) =>
+      left.displayName.localeCompare(right.displayName, "es"),
+    )
+    // Una persona puede venir repetida si el API devuelve la lista con altas
+    // duplicadas; sin esto React protesta por `key` repetida y la opción
+    // aparece dos veces en el menú.
+    .filter(
+      (member, index, list) =>
+        list.findIndex((other) => other.id === member.id) === index,
+    )
+    .slice(0, 40);
+
+  const menu = (
+    <div
+      className="member-search-menu"
+      ref={menuRef}
+      role="listbox"
+      style={
+        anchor
+          ? { left: anchor.left, top: anchor.top, width: anchor.width }
+          : undefined
+      }
+    >
+      {filtrados.length === 0 ? (
+        <span className="member-search-empty">Nadie coincide.</span>
+      ) : (
+        filtrados.map((member) => (
+          <button
+            aria-selected={member.id === value}
+            className={`member-search-option${member.id === value ? " active" : ""}`}
+            key={member.id}
+            onClick={() => {
+              onChange(member.id);
+              setOpen(false);
+              setQuery("");
+            }}
+            role="option"
+            type="button"
+          >
+            <span className="member-search-name">{member.displayName}</span>
+            <span className="member-search-username">
+              @{member.username}
+            </span>
+          </button>
+        ))
+      )}
+    </div>
+  );
+
+  return (
+    <div className="member-search" ref={rootRef}>
+      <span className="member-search-label">{label}</span>
+      <div className="member-search-control">
+        <input
+          className="input"
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (!open) {
+              abrir();
+            }
+          }}
+          onFocus={() => {
+            if (!open) {
+              abrir();
+            }
+          }}
+          placeholder={
+            selected ? selected.displayName : placeholder
+          }
+          type="search"
+          value={query}
+        />
+        {selected ? (
+          <button
+            aria-label="Quitar la persona"
+            className="member-search-clear"
+            onClick={() => {
+              onChange("");
+              setQuery("");
+            }}
+            type="button"
+          >
+            <X aria-hidden="true" weight="bold" />
+          </button>
+        ) : null}
+      </div>
+      {open ? createPortal(menu, document.body) : null}
+    </div>
+  );
+}
+
 // Estados del roster como chips de color: el color es el mismo que usa la
 // tarjeta del jugador, y el chip se comporta igual que los de etiqueta (tenue
 // sin seleccionar, sólido al seleccionar).
@@ -15925,36 +16106,22 @@ function App() {
                             </div>
                           ) : null}
                           {eventFormFields.birthdayUser ? (
-                            <label className="event-form-wide">
-                              <span>Cumpleaños de</span>
+                            <div className="event-form-wide">
                               {/* Es el vínculo con la persona: sin esto el bot
                                   no sabe a quién darle el rol ese día. */}
-                              <select
-                                className="select"
-                                value={eventForm.birthdayUserId}
-                                onChange={(event) =>
+                              <MemberSearchField
+                                label="Cumpleaños de"
+                                members={guildMembersForPicker}
+                                onChange={(userId) =>
                                   setEventForm((current) => ({
                                     ...current,
-                                    birthdayUserId: event.target.value,
+                                    birthdayUserId: userId,
                                   }))
                                 }
-                              >
-                                <option value="">Elegí a la persona</option>
-                                {guildMembersForPicker
-                                  .slice()
-                                  .sort((left, right) =>
-                                    left.displayName.localeCompare(
-                                      right.displayName,
-                                      "es",
-                                    ),
-                                  )
-                                  .map((member) => (
-                                    <option key={member.id} value={member.id}>
-                                      {member.displayName}
-                                    </option>
-                                  ))}
-                              </select>
-                            </label>
+                                placeholder="Buscar por nombre o usuario…"
+                                value={eventForm.birthdayUserId}
+                              />
+                            </div>
                           ) : null}
                           {eventFormFields.requiredRole ? (
                             <label>
