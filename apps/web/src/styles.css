@@ -715,6 +715,17 @@ a:hover {
   height: 18px;
 }
 
+/* El de la portada, cuando no hay sesión: flota arriba a la derecha. Va `fixed`
+   porque la portada se scrollea y el botón tiene que seguir a mano (ahí no hay
+   topbar que lo aloje). */
+.theme-toggle--floating {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  box-shadow: 0 6px 18px rgba(2, 8, 13, 0.28);
+}
+
 .page {
   max-width: var(--shell-max);
   margin: 0 auto;
