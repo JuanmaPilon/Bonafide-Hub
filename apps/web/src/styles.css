@@ -185,7 +185,7 @@ a:hover {
   /* La portada aprovecha el alto de la página: antes medía 360 px fijos y en un
      monitor grande quedaba una franja angosta con medio metro de vacío abajo. El
      techo en `vh` evita que en una pantalla alta el panel se coma todo. */
-  min-height: clamp(400px, 62vh, 740px);
+  min-height: clamp(420px, 68vh, 820px);
   background-color: #0a1224;
   background-image:
     /* Velo de arriba: los chips de miembros van arriba y necesitan fondo propio. */
@@ -8284,7 +8284,7 @@ select.list-order {
   }
 
   .landing-media .cover-art {
-    min-height: clamp(260px, 46vh, 400px);
+    min-height: clamp(280px, 54vh, 440px);
   }
 }
 

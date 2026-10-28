@@ -29,14 +29,14 @@ que la muestran esperan 1.91:1. Hoy el archivo es de 600 × 600, así que se rec
 
 | Archivo | Dónde va | Exportar | Se muestra (máx) | Proporción |
 | --- | --- | --- | --- | --- |
-| `landing-banner.webp` | Pantalla de login | 3200 × 1280 | 1678 × 670 | 2.5:1 |
+| `landing-banner.webp` | Pantalla de login | 3200 × 1400 | 1678 × 734 | 2.3:1 |
 | `home-banner.webp` | Hero de Inicio | 3200 × 520 | 1632 × 260 | 6.3:1 |
 
 Los dos se ven a `background-size: cover`, o sea que la imagen se escala hasta
 cubrir la caja y se recorta lo que sobra. El banner de login va **a sangre**: sale
 del aire del panel y llega hasta el borde, y ocupa el ancho completo de la caja.
-Su alto sale de `clamp(400px, 62vh, 740px)`, así que depende del alto de la
-ventana: 670 px con una ventana de 1080, 558 con una de 900. El tamaño de
+Su alto sale de `clamp(420px, 68vh, 820px)`, así que depende del alto de la
+ventana: 734 px con una ventana de 1080, 612 con una de 900. El tamaño de
 exportación es la caja más grande (1920 px de ancho) ×2, para que no se vea blanda
 en pantallas de alta densidad. Con el archivo actual de 2560 × 600 (4.27:1) el
 `cover` recorta los costados, así que el arte tiene que poder perder un 35% a cada
@@ -47,17 +47,17 @@ ventana). Medido con una ventana de 900 px de alto:
 
 | Pantalla | Banner login | Banner Home |
 | --- | --- | --- |
-| 1920 px | 1678 × 670 | 1632 × 260 |
-| 1440 px | 1378 × 558 | 1377 × 260 |
-| 1024 px | 947 × 476 | 961 × 260 |
-| 390 px (celular) | 328 × 388 | 327 × 260 |
+| 1920 px | 1678 × 734 | 1632 × 260 |
+| 1440 px | 1363 × 612 | 1377 × 260 |
+| 1024 px | 947 × 522 | 961 × 260 |
+| 390 px (celular) | 328 × 440 | 327 × 260 |
 
 En el celular la proporción se da vuelta y del ancho original sólo entra una
 parte:
 
 | Banner | Se ve del ancho | Dónde mira |
 | --- | --- | --- |
-| Login | 34% | Centro (`center`) |
+| Login | 31% | Centro (`center`) |
 | Home | 20% | Derecha (`78%` en escritorio, `90%` por debajo de 760 px) |
 
 Los chips con los nombres de los miembros carruselan sobre la franja **superior**
