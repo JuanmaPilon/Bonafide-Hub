@@ -128,6 +128,8 @@ a:hover {
 }
 
 .landing-hero {
+  /* Ancla el botón de tema de la portada, que va en la esquina del panel. */
+  position: relative;
   padding: 26px;
 }
 
@@ -715,15 +717,14 @@ a:hover {
   height: 18px;
 }
 
-/* El de la portada, cuando no hay sesión: flota arriba a la derecha. Va `fixed`
-   porque la portada se scrollea y el botón tiene que seguir a mano (ahí no hay
-   topbar que lo aloje). */
-.theme-toggle--floating {
-  position: fixed;
+/* El de la portada, cuando no hay sesión: en la esquina del panel. Va `absolute`
+   y no `fixed` porque el panel tiene `backdrop-filter`, que ya lo posicionaría
+   respecto del panel de todos modos, y porque así queda adentro de la caja. */
+.theme-toggle--landing {
+  position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 30;
-  box-shadow: 0 6px 18px rgba(2, 8, 13, 0.28);
+  z-index: 2;
 }
 
 .page {

@@ -12627,29 +12627,31 @@ function App() {
 
     return (
       <div className="shell landing-shell">
-        {/* El tema se puede elegir antes de entrar: la portada se ve distinta en
-            claro y en oscuro, y quien no tiene sesión no tenía cómo cambiarlo. */}
-        <button
-          aria-label="Cambiar tema"
-          className="theme-toggle theme-toggle--floating"
-          onClick={() =>
-            setTheme((current) => (current === "dark" ? "light" : "dark"))
-          }
-          title={
-            theme === "dark"
-              ? "Cambiar a tema claro"
-              : "Cambiar a tema oscuro"
-          }
-          type="button"
-        >
-          {theme === "dark" ? (
-            <Sun aria-hidden="true" weight="fill" />
-          ) : (
-            <Moon aria-hidden="true" weight="fill" />
-          )}
-        </button>
         <main className="landing-main">
           <section className="panel landing-hero landing-hero-center">
+            {/* El tema se puede elegir antes de entrar: la portada se ve distinta
+                en claro y en oscuro, y quien no tiene sesión no tenía cómo
+                cambiarlo. Va adentro del panel, en la esquina libre arriba a la
+                derecha (el título está centrado). */}
+            <button
+              aria-label="Cambiar tema"
+              className="theme-toggle theme-toggle--landing"
+              onClick={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
+              title={
+                theme === "dark"
+                  ? "Cambiar a tema claro"
+                  : "Cambiar a tema oscuro"
+              }
+              type="button"
+            >
+              {theme === "dark" ? (
+                <Sun aria-hidden="true" weight="fill" />
+              ) : (
+                <Moon aria-hidden="true" weight="fill" />
+              )}
+            </button>
             <h1 className="brand-gradient">BONAFIDE</h1>
 
             <p className="landing-tagline">Bienvenido a Bonafide</p>
