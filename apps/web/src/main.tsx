@@ -8637,6 +8637,11 @@ function App() {
   const [guildCategories, setGuildCategories] = useState<GuildChannel[]>([]);
   const [textChannels, setTextChannels] = useState<GuildChannel[]>([]);
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
+  // Miembros del servidor para el selector "Cumpleaños de" (sólo se cargan
+  // cuando el formulario de evento los necesita).
+  const [guildMembersForPicker, setGuildMembersForPicker] = useState<
+    GuildMember[]
+  >([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
   // Catálogo de etiquetas de la guild (Admin → Etiquetas). Vive en el App y no
@@ -8922,9 +8927,13 @@ function App() {
     game: string;
     imageUrl: string;
     paused: boolean;
-    // Duración de la encuesta de Discord en horas (solo juegos de encuesta).
+    // Duración de la encuesta de Discord. Se guarda en horas: la unidad sólo
+    // cambia cómo se escribe en el formulario.
     // Vacío = sin duración explícita: Discord la abre 24 h (su default).
     pollHours: string;
+    pollHoursUnit: string;
+    // Persona que cumple (plantilla cumple).
+    birthdayUserId: string;
     recurrenceEnabled: boolean;
     recurrenceEvery: string;
     recurrenceUnit: string;
@@ -8946,6 +8955,8 @@ function App() {
     imageUrl: "",
     paused: false,
     pollHours: "",
+    pollHoursUnit: "hours",
+    birthdayUserId: "",
     recurrenceEnabled: false,
     recurrenceEvery: "",
     recurrenceUnit: "days",
@@ -8969,6 +8980,26 @@ function App() {
   // Juego elegido en el formulario: dice si el evento publica una encuesta de
   // Discord (plantilla "encuesta") y por lo tanto si se pide su duración.
   const eventFormGame = eventGames.find((game) => game.key === eventForm.game);
+  // Qué campos tienen sentido para la plantilla elegida. Sin esto el formulario
+  // mostraba todo siempre: un cumpleaños pedía personaje, recordatorios, rol
+  // mínimo y una duración en horas, cuando dura el día entero y no se anota
+  // nadie. Cada plantilla declara lo suyo.
+  const eventFormFields = useMemo(() => {
+    const esCumple = eventFormGame?.birthday === true;
+    const esEncuesta = eventFormGame?.poll === true;
+    return {
+      // Personaje, cierre de inscripciones, rol mínimo, recordatorios y el roster
+      // de clases/specs: nada de eso aplica a un cumpleaños.
+      birthdayUser: esCumple,
+      deadline: !esCumple,
+      duration: !esCumple,
+      pollDuration: esEncuesta,
+      // Rol mínimo y recordatorios: dependen de que haya gente que se anote.
+      reminders: !esCumple,
+      requiredRole: !esCumple,
+      signup: !esCumple,
+    };
+  }, [eventFormGame]);
   // Catálogo de specs de inscripción (estilo Raid Helper). Los roles de cada
   // tipo de evento salen del código (event-templates), no de la guild.
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
@@ -9919,6 +9950,15 @@ function App() {
         })
         .catch(() => {});
     }
+    // Miembros para el selector de "Cumpleaños de". Se pide una sola vez y sólo
+    // cuando hace falta: es la lista completa del servidor.
+    getGuildMembers(selectedGuildId)
+      .then((members) => {
+        if (!cancelled) {
+          setGuildMembersForPicker(members);
+        }
+      })
+      .catch(() => {});
     const fetches: Array<Promise<GuildChannel[]>> = [];
     if (missingVoice) {
       fetches.push(getGuildVoiceChannels(selectedGuildId));
@@ -10398,6 +10438,8 @@ function App() {
       imageUrl: "",
       paused: false,
       pollHours: "",
+      pollHoursUnit: "hours",
+      birthdayUserId: "",
       recurrenceEnabled: false,
       recurrenceEvery: "",
       recurrenceUnit: "days",
@@ -10453,6 +10495,8 @@ function App() {
       imageUrl: event.imageUrl ?? "",
       paused: event.paused ?? false,
       pollHours: event.pollHours != null ? String(event.pollHours) : "",
+      pollHoursUnit: "hours",
+      birthdayUserId: event.birthdayUserId ?? "",
       recurrenceEnabled: event.recurrenceEnabled ?? false,
       recurrenceEvery:
         event.recurrenceEvery != null
@@ -10513,6 +10557,8 @@ function App() {
       // La copia no hereda pausa ni recurrencia (evita dos series andando).
       paused: false,
       pollHours: event.pollHours != null ? String(event.pollHours) : "",
+      pollHoursUnit: "hours",
+      birthdayUserId: event.birthdayUserId ?? "",
       recurrenceEnabled: false,
       recurrenceEvery: "",
       recurrenceUnit: "days",
@@ -10686,7 +10732,9 @@ function App() {
           // null = sin duración explícita → Discord la abre 24 h.
           pollHours: eventFormGame?.poll
             ? eventForm.pollHours
-              ? Number(eventForm.pollHours)
+              ? eventForm.pollHoursUnit === 'days'
+                ? Number(eventForm.pollHours) * 24
+                : Number(eventForm.pollHours)
               : null
             : undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
@@ -10699,14 +10747,23 @@ function App() {
           recurrencePublishDaysBefore: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrencePublishDaysBefore) || undefined
             : undefined,
-          reminderHours: [...eventForm.reminderHours],
-          requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
+          birthdayUserId: eventFormFields.birthdayUser
+            ? eventForm.birthdayUserId.trim() || undefined
+            : undefined,
+          reminderHours: eventFormFields.reminders
+            ? [...eventForm.reminderHours]
+            : [],
+          requiredRoleId: eventFormFields.requiredRole
+            ? eventForm.requiredRoleId.trim() || undefined
+            : undefined,
           signupDeadline: signupDeadlineIso ?? null,
           startsAt: startsAtIso,
           status: eventForm.status,
           tags: eventForm.tags,
           title: eventForm.title.trim(),
-          type: eventForm.type,
+          // El tipo sale de la plantilla: un cumpleaños no es un raid aunque el
+          // formulario venga con el tipo por defecto.
+          type: eventFormFields.birthdayUser ? "birthday" : eventForm.type,
         });
         setEvents((current) =>
           current
@@ -10730,7 +10787,9 @@ function App() {
           imageUrl: imageUrl || undefined,
           pollHours:
             eventFormGame?.poll && eventForm.pollHours
-              ? Number(eventForm.pollHours)
+              ? eventForm.pollHoursUnit === 'days'
+                ? Number(eventForm.pollHours) * 24
+                : Number(eventForm.pollHours)
               : undefined,
           recurrenceEnabled: eventForm.recurrenceEnabled,
           recurrenceEvery: eventForm.recurrenceEnabled
@@ -10742,13 +10801,22 @@ function App() {
           recurrencePublishDaysBefore: eventForm.recurrenceEnabled
             ? Number(eventForm.recurrencePublishDaysBefore) || undefined
             : undefined,
-          reminderHours: [...eventForm.reminderHours],
-          requiredRoleId: eventForm.requiredRoleId.trim() || undefined,
+          birthdayUserId: eventFormFields.birthdayUser
+            ? eventForm.birthdayUserId.trim() || undefined
+            : undefined,
+          reminderHours: eventFormFields.reminders
+            ? [...eventForm.reminderHours]
+            : [],
+          requiredRoleId: eventFormFields.requiredRole
+            ? eventForm.requiredRoleId.trim() || undefined
+            : undefined,
           signupDeadline: signupDeadlineIso,
           startsAt: startsAtIso,
           tags: eventForm.tags,
           title: eventForm.title.trim(),
-          type: eventForm.type,
+          // El tipo sale de la plantilla: un cumpleaños no es un raid aunque el
+          // formulario venga con el tipo por defecto.
+          type: eventFormFields.birthdayUser ? "birthday" : eventForm.type,
         });
         setEvents((current) =>
           [...current, result.event].sort(
@@ -15691,12 +15759,25 @@ function App() {
                             <select
                               className="select"
                               value={eventForm.game}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                const key = event.target.value;
+                                const template = eventGames.find(
+                                  (game) => game.key === key,
+                                );
                                 setEventForm((current) => ({
                                   ...current,
-                                  game: event.target.value,
-                                }))
-                              }
+                                  game: key,
+                                  // Un cumpleaños se repite cada año: se
+                                  // preajusta para no tener que armarlo a mano.
+                                  ...(template?.birthday
+                                    ? {
+                                        recurrenceEnabled: true,
+                                        recurrenceEvery: "12",
+                                        recurrenceUnit: "months",
+                                      }
+                                    : {}),
+                                }));
+                              }}
                             >
                               {eventGames.length === 0 ? (
                                 <option value={eventForm.game}>
@@ -15772,127 +15853,191 @@ function App() {
                               }
                             />
                           </div>
-                          <label>
-                            <span>Duración (horas)</span>
-                            <input
-                              className="input"
-                              type="number"
-                              min="0"
-                              step="any"
-                              placeholder="3"
-                              value={eventForm.durationHours}
-                              onChange={(event) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  durationHours: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                          {eventFormGame?.poll ? (
+                          {eventFormFields.duration ? (
                             <label>
-                              <span>Duración de la encuesta (horas)</span>
+                              <span>Duración (horas)</span>
                               <input
                                 className="input"
                                 type="number"
                                 min="0"
-                                placeholder="24 (por defecto)"
-                                value={eventForm.pollHours}
+                                step="any"
+                                placeholder="3"
+                                value={eventForm.durationHours}
                                 onChange={(event) =>
                                   setEventForm((current) => ({
                                     ...current,
-                                    pollHours: event.target.value,
+                                    durationHours: event.target.value,
                                   }))
                                 }
                               />
                             </label>
                           ) : null}
-                          <div className="event-date-field">
-                            <span>Cierre de inscripciones</span>
-                            <EventDateTimeField
-                              value={eventForm.signupDeadline}
-                              onChange={(value) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  signupDeadline: value,
-                                }))
-                              }
-                            />
-                          </div>
-                          <label>
-                            <span>Rol mínimo para el roster (opcional)</span>
-                            <select
-                              className="select"
-                              value={eventForm.requiredRoleId}
-                              onChange={(event) =>
-                                setEventForm((current) => ({
-                                  ...current,
-                                  requiredRoleId: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Sin requisitos</option>
-                              {guildRoles.map((role) => (
-                                <option key={role.id} value={role.id}>
-                                  {role.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          {/* Opciones agrupadas por tema, sin cajas: una fila
-                              por grupo con los switches en línea. */}
-                          <div className="event-form-wide event-options">
-                            <div className="event-option-row">
-                              <span className="event-option-label">
-                                Inscripción
-                              </span>
-                              <div className="event-option-controls">
-                                <FormSwitch
-                                  checked={eventForm.characterEnabled}
-                                  label="Pedir personaje"
-                                  onChange={(checked) =>
+                          {eventFormFields.pollDuration ? (
+                            <div className="event-option-field">
+                              <span>Duración de la encuesta</span>
+                              {/* La encuesta puede durar horas o días: el API
+                                  guarda horas, así que los días se convierten
+                                  acá. Antes solo había un campo en horas y una
+                                  encuesta de una semana pedía escribir 168. */}
+                              <div className="event-duration-row">
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min="0"
+                                  placeholder="24"
+                                  value={eventForm.pollHours}
+                                  onChange={(event) =>
                                     setEventForm((current) => ({
                                       ...current,
-                                      characterEnabled: checked,
+                                      pollHours: event.target.value,
                                     }))
                                   }
                                 />
-                                <span
-                                  aria-hidden="true"
-                                  className="event-switch-divider"
-                                />
-                                <span className="event-switch-hint">
-                                  Recordatorios
+                                <select
+                                  className="select"
+                                  onChange={(event) => {
+                                    const unit = event.target.value;
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      pollHoursUnit: unit,
+                                    }));
+                                  }}
+                                  value={eventForm.pollHoursUnit}
+                                >
+                                  <option value="hours">Horas</option>
+                                  <option value="days">Días</option>
+                                </select>
+                              </div>
+                            </div>
+                          ) : null}
+                          {eventFormFields.deadline ? (
+                            <div className="event-date-field">
+                              <span>Cierre de inscripciones</span>
+                              <EventDateTimeField
+                                value={eventForm.signupDeadline}
+                                onChange={(value) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    signupDeadline: value,
+                                  }))
+                                }
+                              />
+                            </div>
+                          ) : null}
+                          {eventFormFields.birthdayUser ? (
+                            <label className="event-form-wide">
+                              <span>Cumpleaños de</span>
+                              {/* Es el vínculo con la persona: sin esto el bot
+                                  no sabe a quién darle el rol ese día. */}
+                              <select
+                                className="select"
+                                value={eventForm.birthdayUserId}
+                                onChange={(event) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    birthdayUserId: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Elegí a la persona</option>
+                                {guildMembersForPicker
+                                  .slice()
+                                  .sort((left, right) =>
+                                    left.displayName.localeCompare(
+                                      right.displayName,
+                                      "es",
+                                    ),
+                                  )
+                                  .map((member) => (
+                                    <option key={member.id} value={member.id}>
+                                      {member.displayName}
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                          ) : null}
+                          {eventFormFields.requiredRole ? (
+                            <label>
+                              <span>Rol mínimo para el roster (opcional)</span>
+                              <select
+                                className="select"
+                                value={eventForm.requiredRoleId}
+                                onChange={(event) =>
+                                  setEventForm((current) => ({
+                                    ...current,
+                                    requiredRoleId: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">Sin requisitos</option>
+                                {guildRoles.map((role) => (
+                                  <option key={role.id} value={role.id}>
+                                    {role.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
+                          {/* Opciones agrupadas por tema, sin cajas: una fila
+                              por grupo con los switches en línea. */}
+                          <div className="event-form-wide event-options">
+                            {eventFormFields.signup ? (
+                              <div className="event-option-row">
+                                <span className="event-option-label">
+                                  Inscripción
                                 </span>
-                                {REMINDER_HOUR_OPTIONS.map((option) => (
+                                <div className="event-option-controls">
                                   <FormSwitch
-                                    checked={eventForm.reminderHours.includes(
-                                      option.hours,
-                                    )}
-                                    disabled={!eventForm.requiredRoleId.trim()}
-                                    key={option.hours}
-                                    label={option.label}
+                                    checked={eventForm.characterEnabled}
+                                    label="Pedir personaje"
                                     onChange={(checked) =>
                                       setEventForm((current) => ({
                                         ...current,
-                                        reminderHours: checked
-                                          ? [
-                                              ...current.reminderHours.filter(
-                                                (hours) =>
-                                                  hours !== option.hours,
-                                              ),
-                                              option.hours,
-                                            ]
-                                          : current.reminderHours.filter(
-                                              (hours) =>
-                                                hours !== option.hours,
-                                            ),
+                                        characterEnabled: checked,
                                       }))
                                     }
                                   />
-                                ))}
+                                  {eventFormFields.reminders ? (
+                                    <>
+                                      <span
+                                        aria-hidden="true"
+                                        className="event-switch-divider"
+                                      />
+                                      <span className="event-switch-hint">
+                                        Recordatorios
+                                      </span>
+                                      {REMINDER_HOUR_OPTIONS.map((option) => (
+                                        <FormSwitch
+                                          checked={eventForm.reminderHours.includes(
+                                            option.hours,
+                                          )}
+                                          disabled={!eventForm.requiredRoleId.trim()}
+                                          key={option.hours}
+                                          label={option.label}
+                                          onChange={(checked) =>
+                                            setEventForm((current) => ({
+                                              ...current,
+                                              reminderHours: checked
+                                                ? [
+                                                    ...current.reminderHours.filter(
+                                                      (hours) =>
+                                                        hours !== option.hours,
+                                                    ),
+                                                    option.hours,
+                                                  ]
+                                                : current.reminderHours.filter(
+                                                    (hours) =>
+                                                      hours !== option.hours,
+                                                  ),
+                                            }))
+                                          }
+                                        />
+                                      ))}
+                                    </>
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
+                            ) : null}
                             <div className="event-option-row">
                               <span className="event-option-label">
                                 Repetición

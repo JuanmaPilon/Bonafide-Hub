@@ -1896,6 +1896,8 @@ export async function createEvent(
     paused?: boolean;
     // Duración de la encuesta de Discord en horas (solo juegos de encuesta).
     pollHours?: number;
+    // Persona que cumple (plantilla cumple).
+    birthdayUserId?: string;
     recurrenceEnabled?: boolean;
     recurrenceEvery?: number;
     recurrenceEveryDays?: number;
@@ -1950,6 +1952,8 @@ export async function updateEvent(
     paused?: boolean;
     // Duración de la encuesta de Discord en horas (null = sin límite).
     pollHours?: number | null;
+    // Persona que cumple (plantilla cumple).
+    birthdayUserId?: string;
     recurrenceEnabled?: boolean;
     recurrenceEvery?: number;
     recurrenceEveryDays?: number;

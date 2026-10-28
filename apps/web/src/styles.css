@@ -7736,6 +7736,13 @@ select.list-order {
   font-size: 0.75rem;
 }
 
+/* Número + unidad en la misma fila (duración de la encuesta: horas o días). */
+.event-duration-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .event-option-row {
     grid-template-columns: minmax(0, 1fr);

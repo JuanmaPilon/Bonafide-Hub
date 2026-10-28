@@ -1056,6 +1056,16 @@ rol. El campo `birthdayUserId` viaja en el evento y el bot lee los del día con
 `GET /internal/guilds/:g/birthdays`. Una fecha pasada se deja de listar, porque
 el molde no se completa a mano y quedaría mostrando un cumpleaños de meses atrás.
 
+**Cada plantilla declara qué campos del formulario tienen sentido.** El alta de
+un evento es una sola y mostraba todo siempre: un cumpleaños pedía personaje,
+recordatorios, rol mínimo y una duración en horas, cuando dura el día entero y no
+se anota nadie. La web deriva `eventFormFields` de la plantilla (`birthday` /
+`poll`) y esconde lo que no aplica: en cumpleaños quedan título, tipo, fecha,
+"Cumpleaños de", repetición, Discord e imagen. Además el `type` del evento sale de
+la plantilla (si no, el cumpleaños se guardaba como `raid`) y la repetición se
+preajusta a 12 meses. La encuesta, que antes sólo aceptaba horas, ahora tiene
+selector de horas o días (el API sigue guardando horas).
+
 **Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
 cierre, repetición, ubicación, roster principal, Discord) y los tipos
 (`Sword` raid, `Key` M+, `Trophy` PvP, `Confetti` social) se dibujan con íconos de

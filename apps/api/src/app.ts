@@ -6584,6 +6584,7 @@ export async function buildApp() {
     }
 
     const body = (request.body ?? {}) as {
+      birthdayUserId?: string;
       characterEnabled?: boolean;
       description?: string;
       discord?: {
@@ -6648,6 +6649,7 @@ export async function buildApp() {
     }
 
     const event = await createEvent({
+      birthdayUserId: body.birthdayUserId?.trim() || null,
       characterEnabled: body.characterEnabled !== false,
       createdByUserId: user.id,
       createdByUsername: user.global_name ?? user.username ?? undefined,
@@ -6829,6 +6831,7 @@ export async function buildApp() {
     }
 
     const body = (request.body ?? {}) as {
+      birthdayUserId?: string;
       characterEnabled?: boolean;
       description?: string;
       discord?: {
@@ -6949,6 +6952,10 @@ export async function buildApp() {
     }
 
     const event = await updateEvent(params.guildId, params.eventId, {
+      birthdayUserId:
+        body.birthdayUserId === undefined
+          ? undefined
+          : body.birthdayUserId.trim() || null,
       characterEnabled:
         body.characterEnabled === undefined
           ? undefined
