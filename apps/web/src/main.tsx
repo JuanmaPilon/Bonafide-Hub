@@ -1963,7 +1963,12 @@ function chipColorVars(color: string | undefined): CSSProperties {
     "--chip-border": tagTint(background, 0.7),
     "--chip-color": background,
     "--chip-text": tagTextColor(background),
+    // Dos tintes: el 22% alcanza sobre el tema oscuro, pero sobre blanco el
+    // chip se lava (el color "apenas se nota"). El 34% es el que usa el tema
+    // claro; cuál se aplica lo decide el CSS con `--chip-tint`, así el color
+    // sigue calculándose en JS y no con color-mix.
     "--chip-tint": tagTint(background, 0.22),
+    "--chip-tint-strong": tagTint(background, 0.34),
   } as CSSProperties;
 }
 
@@ -14205,7 +14210,7 @@ function App() {
                   {sectionFor("admin") === "tags" && canAccess("eventos") ? (
                     <details
                       open
-                      className="admin-card admin-card-acc admin-card--officer"
+                      className="admin-card admin-card-acc admin-card--subofficer"
                     >
                       <summary className="admin-card-header admin-acc-header">
                         <div>
@@ -14232,11 +14237,15 @@ function App() {
                           </span>
                           <div className="module-toolbar">
                             <button
-                              className="module-toolbar-button"
+                              className="primary-button module-toolbar-button"
                               onClick={() => setTagEditorId("new")}
                               type="button"
                             >
-                              <Plus aria-hidden="true" weight="bold" />
+                              <Plus
+                                aria-hidden="true"
+                                size={16}
+                                weight="bold"
+                              />
                               Nueva etiqueta
                             </button>
                             <ListFilterBar

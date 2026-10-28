@@ -182,12 +182,17 @@ Rules:
 
 1. **Module bar** — every list module starts with the panel's own header (the
    title comes from the panel, not from the module) and then a
-   `.module-toolbar`: actions on the left with a Phosphor icon + label
-   (`.module-toolbar-button`), the search `ListFilterBar` filling the rest and
-   the order select to its right. Filter chips go on their own row below.
+   `.module-toolbar`: actions on the left with a Phosphor icon + label, the
+   search `ListFilterBar` filling the rest and the order select to its right.
+   Filter chips go on their own row below.
    Never put the primary action inside `ListFilterBar` (it ends up after the
    search box) and never leave a `ListFilterBar` inside a flex row with its
    default `width: 100%` / `margin-bottom`.
+   **The action button is always `primary-button module-toolbar-button`** (icon
+   at `size={16} weight="bold"`). `.module-toolbar-button` only aligns the icon
+   with the label — it carries no colors, so a button with only that class
+   renders as a bare grey box and stands out as "not from here". Same for the
+   reverse: never add a bespoke `background`/`border` to a toolbar action.
 2. **Chips** — one chip for the whole hub (`event-filter-chip`):
    - neutral chip (`Todos`, roles, types): dark surface, muted text, blue tint
      when active.
@@ -196,6 +201,8 @@ Rules:
      contrast text and a ✓ when selected. The colors are computed in JS
      (`chipColorVars` → `--chip-tint/--chip-border/--chip-color/--chip-text`),
      never with `color-mix` or `opacity` (they wash out in light theme).
+     22% is the dark-theme tint; the light theme swaps to `--chip-tint-strong`
+     (34%) in CSS, because 22% of a color on white is barely a color.
 3. **Icons** — Phosphor, never emoji, for UI affordances (buttons, labels,
    types). Emoji are only allowed where they are shared vocabulary with
    Discord (signup statuses ✅ ⏰ 🪑 ❌, and the emojis the API sends inside the
@@ -241,6 +248,22 @@ Rules:
     (`.nav-item--profile`) opens a menu with "Mi perfil" on top and the Admin
     sections below, grouped under a `nav-submenu-label` and anchored to the right
     (`right: 0`) so it doesn't leave the screen. The nav holds only modules.
+12. **Reuse before creating.** Before writing a button, field, chip, card, row or
+    modal, find the existing one (`grep` the class in `styles.css` and the
+    component in `main.tsx`) and use it. A new class is only justified when no
+    existing one fits, and then it must take its colors from the tokens
+    (`--panel-border`, `--line-*`, `--surface-card`, `--text`, `--muted`,
+    `--accent`, `--tier-*`), never a literal hex. New surfaces get their light
+    theme value through a token, not through a one-off selector.
+13. **Borders and tints are per theme.** `--line-soft/mid/strong` and
+    `--panel-border` exist because the dark palette (light blue at 10–28% alpha)
+    is invisible on white. Use the tokens for any border; do not hardcode
+    `rgba(...)`. A surface that is white on white (card on panel) is not a
+    surface: use `--surface-card`.
+14. **The light theme is verified, not assumed.** After touching colors, look at
+    the screen in both themes (the harness with `?theme=` or the toggle) and
+    check that borders are visible and the text/chip has contrast. "It looks
+    fine in dark" is not a check.
 
 ## Learning-First Delivery
 

@@ -27,6 +27,15 @@
   --accent-strong: #ff7043;
   --danger: #fca5a5;
 
+  /* Bordes y divisores, en cuatro intensidades. Existen porque el tema claro no
+     puede usar los mismos rgba translúcidos que el oscuro: un azul claro al 16%
+     sobre blanco es invisible. Cada tema redefine estos valores en un solo
+     lugar y las reglas usan var(--line-*). */
+  --line-soft: rgba(134, 158, 214, 0.16);
+  --line-mid: rgba(134, 158, 214, 0.2);
+  --line: rgba(133, 156, 212, 0.24);
+  --line-strong: rgba(134, 158, 214, 0.28);
+
   /* Colores de los rangos de staff (jerarquía del panel Permisos, badges de las
      tarjetas y chip de usuario). Único lugar donde se cambian: el resto de las
      reglas usan var(--tier-*). El *-rgb es para las transparencias. */
@@ -775,7 +784,7 @@ a:hover {
 .leaderboard-table td {
   text-align: left;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(134, 158, 214, 0.16);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .leaderboard-table th {
@@ -1387,6 +1396,15 @@ a:hover {
     rgba(var(--panel-rgb, 12, 19, 37), 0.2) 100%
   );
   box-shadow: 0 10px 34px rgba(var(--admin-page-tier-rgb), 0.16);
+}
+
+/* En claro el degradado del rango teñía TODO el panel y lo dejaba lavado: los
+   campos y las filas claras de adentro perdían el contraste. El rango se sigue
+   leyendo en el borde, el título y el badge; la superficie queda blanca, que es
+   sobre lo que se apoyan los controles. */
+:root[data-theme="light"] .admin-page-stack[class*="admin-tier-page-"] {
+  background: var(--panel-solid);
+  box-shadow: 0 10px 30px rgba(38, 58, 92, 0.14);
 }
 
 .admin-section-title.tier-owner {
@@ -3797,7 +3815,7 @@ a:hover {
   align-items: center;
   gap: 5px;
   border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   color: var(--muted);
   font-size: 0.7rem;
   padding: 1px 7px;
@@ -4345,7 +4363,7 @@ a:hover {
   padding: 12px 8px;
   border-radius: 12px;
   background: rgba(12, 19, 37, 0.55);
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid var(--line-soft);
 }
 
 .profile-stat strong {
@@ -4750,7 +4768,7 @@ a:hover {
   border-radius: 22px;
   overflow: hidden;
   padding: 40px 32px;
-  border: 1px solid rgba(134, 158, 214, 0.2);
+  border: 1px solid var(--line-mid);
   background: rgba(12, 19, 37, 0.55);
   min-height: 260px;
   display: flex;
@@ -5021,7 +5039,7 @@ a:hover {
   color: var(--muted);
   font-size: 0.86rem;
   padding: 10px 12px;
-  border: 1px dashed rgba(134, 158, 214, 0.2);
+  border: 1px dashed var(--line-mid);
   border-radius: 12px;
 }
 
@@ -5035,7 +5053,7 @@ a:hover {
   padding: 4px 10px;
   border-radius: 999px;
   background: rgba(6, 16, 24, 0.5);
-  border: 1px solid rgba(134, 158, 214, 0.2);
+  border: 1px solid var(--line-mid);
   font-size: 0.85rem;
 }
 
@@ -5430,7 +5448,7 @@ a:hover {
 
 .stat-tile {
   border-radius: 18px;
-  border: 1px solid rgba(134, 158, 214, 0.2);
+  border: 1px solid var(--line-mid);
   background: linear-gradient(
     145deg,
     rgba(28, 42, 76, 0.78),
@@ -5548,7 +5566,7 @@ a:hover {
   justify-items: center;
   padding: 12px;
   border-radius: 18px;
-  border: 1px solid rgba(134, 158, 214, 0.2);
+  border: 1px solid var(--line-mid);
   background: linear-gradient(
     145deg,
     rgba(28, 42, 76, 0.78),
@@ -5809,7 +5827,7 @@ a:hover {
   justify-items: center;
   padding: 16px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   background: rgba(15, 23, 42, 0.55);
   color: var(--text);
   cursor: pointer;
@@ -5907,7 +5925,7 @@ input,
 textarea {
   width: 100%;
   border-radius: 14px;
-  border: 1px solid rgba(133, 156, 212, 0.24);
+  border: 1px solid var(--line);
   background: rgba(10, 16, 31, 0.88);
   color: var(--text);
   padding: 11px 12px;
@@ -5981,7 +5999,7 @@ textarea {
 
 /* Dropdown multi-select de roles (estilo acordeón) */
 .role-multiselect {
-  border: 1px solid rgba(133, 156, 212, 0.24);
+  border: 1px solid var(--line);
   border-radius: 14px;
   background: rgba(10, 16, 31, 0.88);
   color: var(--text);
@@ -6205,7 +6223,7 @@ textarea {
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  border: 1px solid rgba(133, 156, 212, 0.24);
+  border: 1px solid var(--line);
   background: rgba(10, 16, 31, 0.88);
   cursor: pointer;
   font-size: 1.05rem;
@@ -6504,7 +6522,9 @@ select.list-order {
    contraste (más el tilde). El cambio "tenue → sólido" se lee al toque y el
    color queda siempre presente. Los valores los calcula el JS
    (--chip-tint/--chip-border/--chip-color/--chip-text): nada de color-mix ni de
-   opacity, que en modo claro lavaban el chip. */
+   opacity, que en modo claro lavaban el chip.
+   El tema claro usa `--chip-tint-strong`: el mismo color al 34%, porque el 22%
+   sobre blanco deja el chip casi sin color. */
 .event-filter-chip--color {
   border-color: var(--chip-border);
   background: var(--chip-tint);
@@ -6512,6 +6532,10 @@ select.list-order {
   transition:
     filter 0.15s ease-out,
     outline-color 0.15s ease-out;
+}
+
+:root[data-theme="light"] .event-filter-chip--color {
+  background: var(--chip-tint-strong, var(--chip-tint));
 }
 
 .event-filter-chip--color:hover,
@@ -6665,7 +6689,7 @@ select.list-order {
   padding: 12px;
   border-radius: 14px;
   background: rgba(134, 158, 214, 0.07);
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid var(--line-soft);
 }
 
 .event-info-item {
@@ -6764,7 +6788,7 @@ select.list-order {
   gap: 5px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   font-size: 0.85rem;
 }
 
@@ -7035,7 +7059,7 @@ select.list-order {
   padding: 12px;
   border-radius: 14px;
   background: rgba(134, 158, 214, 0.07);
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid var(--line-soft);
 }
 
 .event-signup-status {
@@ -7051,7 +7075,7 @@ select.list-order {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   background: transparent;
   font-size: 1.1rem;
   cursor: pointer;
@@ -7781,7 +7805,7 @@ select.list-order {
   gap: 8px;
   width: 100%;
   border-radius: 14px;
-  border: 1px solid rgba(133, 156, 212, 0.24);
+  border: 1px solid var(--line);
   background: rgba(10, 16, 31, 0.88);
   color: var(--text);
   padding: 11px 12px;
@@ -7883,7 +7907,7 @@ select.list-order {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--text);
   font-family: inherit;
@@ -8590,7 +8614,7 @@ select.list-order {
 .comm-form .textarea {
   width: 100%;
   border-radius: 14px;
-  border: 1px solid rgba(133, 156, 212, 0.24);
+  border: 1px solid var(--line);
   background: rgba(10, 16, 31, 0.88);
   color: var(--text);
   padding: 11px 12px;
@@ -8759,7 +8783,7 @@ select.list-order {
   font-family: inherit;
   line-height: 1.5;
   border-radius: 14px;
-  border: 1px solid rgba(133, 156, 212, 0.24);
+  border: 1px solid var(--line);
   background: rgba(10, 16, 31, 0.88);
   color: var(--text);
   padding: 11px 12px;
@@ -9550,7 +9574,7 @@ select.list-order {
   gap: 10px;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(134, 158, 214, 0.2);
+  border: 1px solid var(--line-mid);
   background: rgba(12, 19, 37, 0.55);
   /* Para el tilt: relativa para poder subir su z-index mientras se inclina. */
   position: relative;
@@ -9660,7 +9684,7 @@ select.list-order {
   height: 30px;
   padding: 0;
   border-radius: 8px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   background: rgba(134, 158, 214, 0.12);
   color: var(--text, #e6edf7);
   font-size: 1.05rem;
@@ -10206,25 +10230,38 @@ select.list-order {
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg-1: #dbe5f1;
-  --bg-2: #c6d5ea;
-  --panel: rgba(255, 255, 255, 0.94);
+  /* Fondo más hondo: con el anterior (#dbe5f1 → #c6d5ea) los paneles blancos se
+     fundían con la página y todo se leía "lavado". El blanco ahora tiene contra
+     qué recortarse. */
+  --bg-1: #c6d6e9;
+  --bg-2: #aec2db;
+  --panel: rgba(255, 255, 255, 0.96);
   --panel-solid: #ffffff;
   --modal-surface: #ffffff;
-  --panel-border: rgba(48, 77, 122, 0.32);
-  --text: #101a2e;
-  --muted: #3f4f6b;
-  --accent: #2456d6;
-  --accent-strong: #c44f16;
-  --danger: #b92e24;
+  --panel-border: rgba(38, 62, 100, 0.4);
+  --text: #0c1626;
+  --muted: #33425c;
+  --accent: #1d4ec4;
+  --accent-strong: #b84712;
+  --danger: #a8261c;
+  /* Bordes en el tema claro: los mismos cuatro niveles que el oscuro, pero
+     oscuros y más opacos, que es lo que se ve sobre blanco. El nivel fuerte
+     apunta a 3:1 contra el panel (el mínimo de la WCAG para el borde de un
+     control); con la paleta oscura heredada quedaba en 1.2:1, o sea invisible. */
+  --line-soft: rgba(38, 62, 100, 0.26);
+  --line-mid: rgba(38, 62, 100, 0.34);
+  --line: rgba(38, 62, 100, 0.44);
+  --line-strong: rgba(38, 62, 100, 0.56);
   /* Colores de rango para texto: versiones oscurecidas (sobre blanco el dorado
      y el violeta del tema oscuro no se leen). */
   --tier-owner-text: #9a3412;
   --tier-admin-text: #b4462a;
   --tier-officer-text: #8a6d00;
   --tier-subofficer-text: #6b1fa8;
-  /* Superficies claras reutilizables */
-  --surface-card: rgba(255, 255, 255, 0.92);
+  /* Superficies claras reutilizables. La tarjeta interior va en gris azulado, no
+     en blanco: sobre un panel blanco, una tarjeta blanca sólo deja ver su borde
+     y el contenido queda flotando. */
+  --surface-card: #f2f6fc;
   --surface-input: #ffffff;
   /* Scroll de las listas del análisis y su degradado, en tema claro. */
   --rlb-list-fade: rgba(255, 255, 255, 0.92);
@@ -10825,7 +10862,7 @@ select.list-order {
   gap: 2px;
   padding: 2px;
   border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
 }
 
 .event-month-view {
@@ -10906,7 +10943,7 @@ select.list-order {
   gap: 4px;
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid rgba(134, 158, 214, 0.28);
+  border: 1px solid var(--line-strong);
   background: transparent;
   color: var(--text);
   cursor: pointer;
@@ -10949,7 +10986,7 @@ select.list-order {
   min-height: 96px;
   padding: 6px;
   border-radius: 12px;
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid var(--line-soft);
   background: rgba(6, 16, 24, 0.35);
 }
 
@@ -11203,7 +11240,7 @@ select.list-order {
   gap: 12px;
   padding: 14px;
   border-radius: 14px;
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid var(--line-soft);
   background: rgba(134, 158, 214, 0.07);
 }
 
@@ -11267,7 +11304,7 @@ select.list-order {
 
 .event-report-row {
   border-radius: 12px;
-  border: 1px solid rgba(134, 158, 214, 0.16);
+  border: 1px solid var(--line-soft);
   background: rgba(6, 16, 24, 0.35);
 }
 
