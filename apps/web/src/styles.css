@@ -3969,29 +3969,53 @@ a:hover {
   border-color: rgba(60, 85, 130, 0.22);
 }
 
-/* En claro la carta sigue llevando el color de la clase, pero sobre blanco y
-   con una tinta más oscura para que se vea. */
+/* En claro la carta sigue llevando el color de la clase. La tinta (el texto y la
+   spec) va oscurecida porque el amarillo de pícaro o el blanco de sacerdote no
+   se leen sobre blanco, pero el borde y el fondo usan el color de clase CRUDO:
+   con la tinta oscurecida el tinte salía gris y las clases no se distinguían
+   entre sí. */
 :root[data-theme="light"] .roster-member {
   --roster-class-ink: color-mix(
     in srgb,
-    var(--roster-class-color) 60%,
-    #16233d
+    var(--roster-class-color) 62%,
+    #101b30
   );
-  border-color: color-mix(in srgb, var(--roster-class-ink) 50%, transparent);
-  border-left-color: var(--roster-class-ink);
+  border-color: color-mix(
+    in srgb,
+    var(--roster-class-tint, var(--roster-class-color)) 55%,
+    transparent
+  );
+  border-left-color: var(--roster-class-tint, var(--roster-class-color));
   background:
     linear-gradient(
         140deg,
-        color-mix(in srgb, var(--roster-class-ink) 16%, transparent),
-        transparent 58%
+        color-mix(
+            in srgb,
+            var(--roster-class-tint, var(--roster-class-color)) 38%,
+            transparent
+          ),
+        color-mix(
+            in srgb,
+            var(--roster-class-tint, var(--roster-class-color)) 10%,
+            transparent
+          )
+          55%,
+        transparent 85%
       )
       padding-box,
     #ffffff;
-  box-shadow: 0 6px 18px rgba(54, 89, 185, 0.1);
+  box-shadow:
+    0 1px 0
+      color-mix(
+        in srgb,
+        var(--roster-class-tint, var(--roster-class-color)) 30%,
+        transparent
+      ),
+    0 6px 18px rgba(38, 58, 92, 0.1);
 }
 
 :root[data-theme="light"] .roster-member--back {
-  border-right-color: var(--roster-class-ink);
+  border-right-color: var(--roster-class-tint, var(--roster-class-color));
 }
 
 /* Los dos estados "fuera de línea" van con el borde y el tinte más oscuros:
@@ -5444,6 +5468,15 @@ a:hover {
     var(--panel) 100%
   );
   box-shadow: 0 10px 34px rgba(var(--tier-subofficer-rgb), 0.16);
+}
+
+/* En claro ese degradado es semi-transparente y se mezclaba con el fondo
+   azulado de la página en vez de con blanco: resultaba una banda grisácea
+   encima del título (se veía sucio, no tintado). Sobre blanco el rango se lee
+   en el borde, en el título y en el badge, y la superficie queda limpia. */
+:root[data-theme="light"] .content-panel-admin[class*="admin-tier-panel-"] {
+  background: var(--panel-solid);
+  box-shadow: 0 10px 30px rgba(38, 58, 92, 0.14);
 }
 
 .stat-tile {
@@ -10230,13 +10263,15 @@ select.list-order {
 
 :root[data-theme="light"] {
   color-scheme: light;
-  /* Fondo más hondo: con el anterior (#dbe5f1 → #c6d5ea) los paneles blancos se
-     fundían con la página y todo se leía "lavado". El blanco ahora tiene contra
-     qué recortarse. */
-  --bg-1: #c6d6e9;
-  --bg-2: #aec2db;
-  --panel: rgba(255, 255, 255, 0.96);
-  --panel-solid: #ffffff;
+  /* Fondo hondo y frío: con un fondo casi blanco los paneles se fundían con la
+     página y todo se leía "lavado". El blanco tiene que recortarse contra algo. */
+  --bg-1: #b9cde3;
+  --bg-2: #9db6d3;
+  /* El panel tampoco es blanco puro: si el panel y las tarjetas son los dos
+     blancos, la jerarquía desaparece y no se distingue qué está encima de qué.
+     El panel va apenas teñido y las tarjetas quedan en blanco. */
+  --panel: rgba(240, 246, 254, 0.97);
+  --panel-solid: #f4f9ff;
   --modal-surface: #ffffff;
   --panel-border: rgba(38, 62, 100, 0.4);
   --text: #0c1626;
@@ -10258,13 +10293,14 @@ select.list-order {
   --tier-admin-text: #b4462a;
   --tier-officer-text: #8a6d00;
   --tier-subofficer-text: #6b1fa8;
-  /* Superficies claras reutilizables. La tarjeta interior va en gris azulado, no
-     en blanco: sobre un panel blanco, una tarjeta blanca sólo deja ver su borde
-     y el contenido queda flotando. */
-  --surface-card: #f2f6fc;
+  /* Superficies claras reutilizables. La tarjeta interior va en azul grisáceo,
+     no en blanco: sobre el panel casi blanco, una tarjeta blanca sólo deja ver
+     su borde y el contenido queda flotando. */
+  --surface-card: #e3ecf9;
   --surface-input: #ffffff;
-  /* Scroll de las listas del análisis y su degradado, en tema claro. */
-  --rlb-list-fade: rgba(255, 255, 255, 0.92);
+  /* El mismo azul grisáceo del bloque de análisis, para que el degradado del
+     scroll no se vea como una banda blanca. */
+  --rlb-list-fade: rgba(236, 242, 251, 0.95);
   --rlb-scroll-thumb: rgba(60, 85, 130, 0.35);
 }
 

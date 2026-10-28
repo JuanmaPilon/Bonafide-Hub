@@ -1437,6 +1437,32 @@ export function classColor(wowClass?: string): string | undefined {
   return WOW_CLASS_META.find((entry) => entry.key === wowClass)?.color;
 }
 
+// Color de clase para TINTES sobre fondo claro. `classColor` devuelve el color
+// canónico (el mismo que va al embed de Discord) y hay uno que no sirve como
+// tinte: el sacerdote es #FFFFFF, o sea nada sobre una carta blanca. Para el
+// tinte y la franja se baja el brillo sólo cuando el color es muy claro; los
+// demás quedan intactos.
+export function classTintColor(wowClass?: string): string | undefined {
+  const base = classColor(wowClass);
+  if (!base) {
+    return undefined;
+  }
+  const hex = base.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  if (luminance <= 0.82) {
+    return base;
+  }
+  const factor = 0.62;
+  return `#${[r, g, b]
+    .map((value) =>
+      Math.round(value * factor)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
 export const EVENT_TYPES: Array<{
   emoji: string;
   key: string;

@@ -345,7 +345,15 @@ Web (tab Sugerencias) -> POST /guilds/:guildId/suggestions
    `localStorage` (`bonafide-theme`). El tema claro redefine variables CSS y las
    superficies oscuras hardcodeadas se adaptan con overrides bajo
    `:root[data-theme="light"]`.
-2. Karpindomo (web): FAB de chat flotante con burbuja de frases del asistente;
+2. Jerarquía en el tema claro: el fondo es azul profundo, el panel va apenas
+   teñido (`--panel`) y las tarjetas quedan en blanco o en `--surface-card`. Con
+   el panel en blanco puro no había escalones y todo se leía lavado. Los bordes
+   usan los tokens `--line-soft/mid/strong`; no se hardcodean `rgba` nuevos.
+3. Los colores de clase del roster llevan dos variables: `--roster-class-color`
+   (tinta del texto, oscurecida para que se lea) y `--roster-class-tint` (borde
+   y fondo, crudo). Con la tinta oscurecida en todo el bloque las clases se
+   veían todas grises y no se distinguían entre sí.
+4. Karpindomo (web): FAB de chat flotante con burbuja de frases del asistente;
    aparece solo tras login. Usa clases tipo "widget" para no ser bloqueado por
    adblockers.
 

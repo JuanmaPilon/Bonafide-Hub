@@ -156,6 +156,7 @@ import {
   updateDailyMessage,
   EVENT_TYPES,
   classColor,
+  classTintColor,
   classEmoji,
   addRosterMember,
   createEvent,
@@ -3366,6 +3367,8 @@ function RosterSection({
             style={
               {
                 "--roster-class-color": classColor(set.className) ?? "#6aa8ff",
+                "--roster-class-tint":
+                  classTintColor(set.className) ?? "#6aa8ff",
               } as CSSProperties
             }
             type="button"
@@ -3388,6 +3391,8 @@ function RosterSection({
             {
               "--roster-class-color":
                 classColor(frontSet?.className) ?? "#6aa8ff",
+              "--roster-class-tint":
+                classTintColor(frontSet?.className) ?? "#6aa8ff",
             } as CSSProperties
           }
         >
@@ -3490,6 +3495,8 @@ function RosterSection({
                     {
                       "--roster-class-color":
                         classColor(set.className) ?? "#6aa8ff",
+                      "--roster-class-tint":
+                        classTintColor(set.className) ?? "#6aa8ff",
                     } as CSSProperties
                   }
                   title={`${set.className} ${set.specName}${set.isMain ? " (principal)" : " (alter)"}`}
