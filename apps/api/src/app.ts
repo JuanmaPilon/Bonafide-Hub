@@ -46,6 +46,13 @@ import {
   updateDailyMessage,
 } from "./services/daily-messages-store.js";
 import {
+  createGuildTag,
+  deleteGuildTag,
+  listGuildTags,
+  seedGuildTagsFromUsage,
+  updateGuildTag,
+} from "./services/tags-store.js";
+import {
   createRaidLog,
   deleteRaidLog,
   extractReportCode,
@@ -5096,6 +5103,159 @@ export async function buildApp() {
       };
     },
   );
+
+  // ── Catálogo de etiquetas ───────────────────────────────────────
+  // Lo lee cualquiera que esté en la guild (los editores de eventos y
+  // comunicados lo necesitan para ofrecer los chips) y lo escribe el staff con
+  // el módulo `eventos`, que es el que ya tienen admin, officer y subofficer:
+  // pedir un módulo nuevo obligaría a reconfigurar los roles de todos.
+  app.get("/guilds/:guildId/tags", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!isGuildMember(session, params.guildId)) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    // Primera visita: se importan las etiquetas que ya están en uso para no
+    // perder lo cargado antes de que existiera el catálogo.
+    const seeded = await seedGuildTagsFromUsage(params.guildId).catch(() => 0);
+    if (seeded > 0) {
+      console.log(
+        `[tags] ${seeded} etiqueta/s importada/s del uso previo en ${params.guildId}`,
+      );
+    }
+
+    const tags = await listGuildTags(params.guildId);
+
+    return {
+      ok: true,
+      guildId: params.guildId,
+      seeded,
+      tags,
+    };
+  });
+
+  app.post("/guilds/:guildId/tags", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string };
+    if (!params.guildId) {
+      return reply.code(400).send({ ok: false, error: "Missing guildId" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { color?: string; label?: string };
+    const result = await createGuildTag({
+      color: body.color,
+      guildId: params.guildId,
+      label: body.label ?? "",
+    });
+
+    if (!result.ok) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          result.error === "empty"
+            ? "La etiqueta no puede estar vacía"
+            : "Ya existe una etiqueta con ese nombre",
+      });
+    }
+
+    await logAdminAction(session, params.guildId, "tag:create", {
+      details: `Etiqueta creada: "${result.tag.label}"`,
+      targetId: result.tag.id,
+      targetType: "tag",
+    });
+
+    return { ok: true, guildId: params.guildId, tag: result.tag };
+  });
+
+  app.patch("/guilds/:guildId/tags/:tagId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; tagId?: string };
+    if (!params.guildId || !params.tagId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const body = (request.body ?? {}) as { color?: string; label?: string };
+    const result = await updateGuildTag({
+      color: body.color,
+      guildId: params.guildId,
+      id: params.tagId,
+      label: body.label,
+    });
+
+    if (!result) {
+      return reply.code(404).send({ ok: false, error: "Not found" });
+    }
+    if (!result.ok) {
+      return reply.code(400).send({
+        ok: false,
+        error:
+          result.error === "empty"
+            ? "La etiqueta no puede estar vacía"
+            : "Ya existe una etiqueta con ese nombre",
+      });
+    }
+
+    await logAdminAction(session, params.guildId, "tag:update", {
+      details: `Etiqueta editada: "${result.tag.label}"`,
+      targetId: result.tag.id,
+      targetType: "tag",
+    });
+
+    return { ok: true, guildId: params.guildId, tag: result.tag };
+  });
+
+  app.delete("/guilds/:guildId/tags/:tagId", async (request, reply) => {
+    const session = await requireSession(request);
+    if (!session) {
+      return reply.code(401).send({ ok: false, error: "Unauthorized" });
+    }
+
+    const params = request.params as { guildId?: string; tagId?: string };
+    if (!params.guildId || !params.tagId) {
+      return reply.code(400).send({ ok: false, error: "Missing params" });
+    }
+
+    if (!(await canManageModule(session, params.guildId, "eventos"))) {
+      return reply.code(403).send({ ok: false, error: "Forbidden" });
+    }
+
+    const deleted = await deleteGuildTag(params.guildId, params.tagId);
+
+    if (deleted) {
+      await logAdminAction(session, params.guildId, "tag:delete", {
+        details: "Etiqueta eliminada del catálogo.",
+        targetId: params.tagId,
+        targetType: "tag",
+      });
+    }
+
+    return { ok: true, guildId: params.guildId, deleted };
+  });
 
   app.post("/guilds/:guildId/raid-logs", async (request, reply) => {
     const session = await requireSession(request);

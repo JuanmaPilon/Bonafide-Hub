@@ -559,6 +559,30 @@ XP:
 7. `POST /guilds/:guildId/xp/reset-all`
 8. `POST /guilds/:guildId/xp/sync`
 
+Etiquetas (catálogo de la guild, Admin → Etiquetas):
+
+1. `GET /guilds/:guildId/tags` — la lista ordenada por nombre. La **primera vez**
+   que se pide con el catálogo vacío importa las etiquetas que ya están en uso
+   (eventos, comunicados y fichas del roster, incluida la etiqueta única de los
+   registros viejos) para no perder lo cargado antes de que existiera la pantalla.
+   Después no vuelve a importar: si borrás una a mano, no reaparece.
+2. `POST /guilds/:guildId/tags` — `{ label, color }`. El color se normaliza a
+   `#rrggbb` y los nombres se comparan **sin mayúsculas** para los duplicados.
+3. `PATCH /guilds/:guildId/tags/:tagId` — `{ label?, color? }`.
+4. `DELETE /guilds/:guildId/tags/:tagId`.
+
+**Las etiquetas que ya tiene un registro no se tocan al editar el catálogo.** Cada
+evento, comunicado y ficha sigue guardando su propia copia `{ label, color }`: el
+catálogo sólo decide qué se ofrece. Editar una etiqueta cambia los chips para lo
+nuevo, no reescribe el historial; borrarla deja los registros viejos como estaban
+(y el editor los sigue mostrando aparte, con su ✕, para poder sacarlos).
+
+Los cuatro endpoints de escritura piden el módulo **`eventos`**, que es el que ya
+tienen admin, officer y subofficer: así el permiso es "subofficer y arriba" sin
+crear un módulo nuevo, que obligaría a reconfigurar los roles de todas las guilds
+(`tierForModules` compara la lista de módulos exacta).
+
+
 ### Piezas compartidas del panel Admin
 
 Todas las páginas del panel se arman con el mismo vocabulario, así ninguna se ve

@@ -342,6 +342,33 @@ a:hover {
   margin-left: 0;
 }
 
+/* El desplegable del perfil: el chip ES el disparador, así que el ítem no puede
+   heredar el alto de un nav-link. Se abre a la derecha y con aire de sobra para
+   que el chip siga siendo una pastilla. */
+.nav-item--profile {
+  display: flex;
+}
+
+.nav-submenu-profile {
+  min-width: 210px;
+  padding-top: 8px;
+  margin-top: 2px;
+  /* Con todas las secciones abiertas el menú pasa de 500 px: se scrollea en vez
+     de crecer fuera de la pantalla en una notebook. */
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+/* Rótulo de grupo dentro de un submenú ("Admin"). */
+.nav-submenu-label {
+  padding: 8px 12px 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* El submenú de Admin se abre hacia la izquierda: está al final de la barra y
    con `left: 0` se saldría de la pantalla. */
 .topbar-user .nav-submenu {
@@ -6316,6 +6343,40 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Texto de apoyo del editor de etiquetas (catálogo vacío o etiquetas que el
+   registro tiene y el catálogo ya no). */
+.event-tags-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.event-tag-orphans {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(134, 158, 214, 0.22);
+}
+
+/* Fila del catálogo (Admin → Etiquetas): el chip ocupa el lugar del título. */
+.guild-tag-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.guild-tag-preview {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.guild-tag-preview > span:first-child {
+  color: var(--muted);
+  font-size: 0.86rem;
 }
 
 .event-tag-item {

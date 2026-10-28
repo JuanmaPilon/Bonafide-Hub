@@ -219,6 +219,23 @@ model DailyMessage {
   @@map("daily_messages")
 }
 
+// Catálogo de etiquetas de la guild: la lista de la que eligen los editores
+// (eventos, comunicados y fichas del roster). Cada registro sigue guardando su
+// propia copia `{ label, color }` en su columna `tags`, así cambiar el catálogo
+// no reescribe lo ya cargado y borrar una etiqueta no deja registros huérfanos.
+model GuildTag {
+  id        String   @id @default(cuid())
+  guildId   String
+  label     String
+  color     String   @default("#6aa8ff")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([guildId, label])
+  @@index([guildId])
+  @@map("guild_tags")
+}
+
 // Log de raid sincronizado con Warcraft Logs. El API observa el report y
 // guarda el resumen: el log queda como BORRADOR en la web y recién se publica
 // en Discord cuando el staff lo confirma (así no sale un log a medio subir).

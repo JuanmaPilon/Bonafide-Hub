@@ -53,6 +53,7 @@ import {
   Sliders,
   Sun,
   Sword,
+  Tag,
   Trash,
   Trophy,
   UserPlus,
@@ -113,6 +114,10 @@ import {
   getRaidLeads,
   getGuildConfig,
   getGuildRoles,
+  listGuildTags,
+  createGuildTag,
+  updateGuildTag,
+  deleteGuildTag,
   getGuilds,
   getGuildTextChannels,
   getGuildCategories,
@@ -206,6 +211,7 @@ import {
   type GuildGameActivityResponse,
   type GuildMember,
   type GuildRole,
+  type GuildTag,
   type MappingGroup,
   type MappingEmoji,
   type GuildRoleDetail,
@@ -1461,6 +1467,9 @@ function ComunicadoTag({ color, label }: { color?: string; label?: string }) {
 }
 
 const MAX_TAGS = 6;
+// Color con el que arranca una etiqueta nueva del catálogo (el mismo default
+// del API).
+const DEFAULT_TAG_HEX = "#6aa8ff";
 // Valor del filtro "eventos sin ninguna etiqueta".
 const EVENT_TAG_NONE = "__none__";
 
@@ -1846,45 +1855,68 @@ function ListFilterBar({
   );
 }
 
-// Editor de etiquetas (lo usan los eventos y los comunicados): se agregan de a
-// una (texto + color) y se ven como chips con su ✕. Sugiere textos ya usados.
+// Editor de etiquetas (lo usan los eventos y los comunicados). Desde que existe
+// el catálogo (Admin → Etiquetas) ya no se escribe la etiqueta acá: se eligen
+// los chips de la biblioteca y se marcan/desmarcan. Las etiquetas que un
+// registro viejo tenga y que ya no estén en el catálogo se siguen mostrando
+// (vienen en `tags`) y se pueden quitar, así editar algo de antes no pierde
+// datos.
+//
+// Recibe `onToggle`/`onRemove` en vez de un `onChange` con la lista ya armada:
+// dos clics seguidos (o un click mientras React todavía no re-renderizó)
+// calculaban sobre el estado anterior y se perdía el primero.
 function TagsField({
-  onChange,
-  suggestions,
+  library,
+  onRemove,
+  onToggle,
   tags,
 }: {
-  onChange: (tags: EventTag[]) => void;
-  suggestions: string[];
+  library: GuildTag[];
+  onRemove: (label: string) => void;
+  onToggle: (tag: GuildTag) => void;
   tags: EventTag[];
 }) {
-  const [label, setLabel] = useState("");
-  const [color, setColor] = useState("#6aa8ff");
+  const knownKeys = useMemo(
+    () => new Set(library.map((tag) => tag.label.toLowerCase())),
+    [library],
+  );
+  const selectedKeys = useMemo(
+    () => new Set(tags.map((tag) => tag.label.toLowerCase())),
+    [tags],
+  );
 
-  const addTag = (): void => {
-    const text = label.trim().slice(0, 24);
-    if (!text || tags.length >= MAX_TAGS) {
-      return;
-    }
-    if (tags.some((tag) => tag.label.toLowerCase() === text.toLowerCase())) {
-      setLabel("");
-      return;
-    }
-    onChange([...tags, { color: normalizeHexColor(color), label: text }]);
-    setLabel("");
-  };
+  // Las que el registro tiene pero el catálogo ya no: se listan aparte para que
+  // se vea que existen y se puedan sacar.
+  const orphans = tags.filter((tag) => !knownKeys.has(tag.label.toLowerCase()));
 
   return (
     <div className="event-tags-editor">
-      {tags.length > 0 ? (
+      {library.length === 0 ? (
+        <p className="event-tags-empty">
+          Todavía no hay etiquetas. Se crean en Admin → Etiquetas.
+        </p>
+      ) : (
         <div className="event-tag-list">
-          {tags.map((tag) => (
+          {library.map((tag) => (
+            <ColorFilterChip
+              active={selectedKeys.has(tag.label.toLowerCase())}
+              color={tag.color}
+              key={tag.id}
+              label={tag.label}
+              onToggle={() => onToggle(tag)}
+            />
+          ))}
+        </div>
+      )}
+      {orphans.length > 0 ? (
+        <div className="event-tag-orphans">
+          <span className="event-tags-empty">Ya no están en el catálogo:</span>
+          {orphans.map((tag) => (
             <span className="event-tag-item" key={tag.label}>
               <ComunicadoTag color={tag.color} label={tag.label} />
               <button
                 className="event-tag-remove"
-                onClick={() =>
-                  onChange(tags.filter((entry) => entry.label !== tag.label))
-                }
+                onClick={() => onRemove(tag.label)}
                 title={`Quitar ${tag.label}`}
                 type="button"
               >
@@ -1894,45 +1926,29 @@ function TagsField({
           ))}
         </div>
       ) : null}
-      {tags.length < MAX_TAGS ? (
-        <div className="event-tag-add">
-          <input
-            className="event-tag-input"
-            list="tag-suggestions"
-            maxLength={24}
-            onChange={(event) => setLabel(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addTag();
-              }
-            }}
-            placeholder="Etiqueta"
-            value={label}
-          />
-          <ColorControl
-            compact
-            label="Color de la etiqueta"
-            onChange={setColor}
-            value={color}
-          />
-          <button
-            className="ghost-button"
-            disabled={!label.trim()}
-            onClick={addTag}
-            type="button"
-          >
-            Agregar
-          </button>
-        </div>
-      ) : null}
-      <datalist id="tag-suggestions">
-        {suggestions.map((suggestion) => (
-          <option key={suggestion} value={suggestion} />
-        ))}
-      </datalist>
     </div>
   );
+}
+
+// Alterna una etiqueta del catálogo sobre una lista, con las mismas reglas que
+// el API: sin repetidos (comparando sin mayúsculas) y con tope.
+function toggleTagInList(
+  current: EventTag[],
+  tag: EventTag,
+): EventTag[] {
+  const key = tag.label.toLowerCase();
+  if (current.some((entry) => entry.label.toLowerCase() === key)) {
+    return current.filter((entry) => entry.label.toLowerCase() !== key);
+  }
+  if (current.length >= MAX_TAGS) {
+    return current;
+  }
+  return [...current, { color: tag.color, label: tag.label }];
+}
+
+function removeTagFromList(current: EventTag[], label: string): EventTag[] {
+  const key = label.toLowerCase();
+  return current.filter((entry) => entry.label.toLowerCase() !== key);
 }
 
 // Chips de color del hub: el MISMO chip para las etiquetas y para los estados
@@ -5962,6 +5978,11 @@ const TAB_SECTIONS: Partial<
       tier: "officer",
     },
     { key: "xp", label: "XP", module: "xp", tier: "admin" },
+    // Catálogo de etiquetas: cuelga del módulo `eventos` a propósito, porque es
+    // el que ya tienen admin, officer y subofficer. Con un módulo propio habría
+    // que reconfigurar los roles de todas las guilds (tierForModules compara la
+    // lista exacta) y las etiquetas no son más sensibles que un evento.
+    { key: "tags", label: "Etiquetas", module: "eventos", tier: "subofficer" },
     {
       key: "registros",
       label: "Registros",
@@ -8351,6 +8372,110 @@ function AdminNumberField({
   );
 }
 
+// Alta y edición de una etiqueta del catálogo (Admin → Etiquetas). El nombre y
+// el color viven en la ventana: el color se elige con el mismo control que el
+// resto del panel y se ve el chip resultante antes de guardar.
+function GuildTagModal({
+  onClose,
+  onSave,
+  saving,
+  tag,
+}: {
+  onClose: () => void;
+  onSave: (input: { color: string; label: string }) => void;
+  saving: boolean;
+  tag: GuildTag | null;
+}) {
+  const [label, setLabel] = useState(tag?.label ?? "");
+  const [color, setColor] = useState(tag?.color ?? DEFAULT_TAG_HEX);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <ModalPortal>
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          aria-modal="true"
+          className="modal"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <header className="modal-head">
+            <h4>
+              <Tag weight="fill" aria-hidden="true" />
+              {tag ? "Editar etiqueta" : "Nueva etiqueta"}
+            </h4>
+            <button
+              aria-label="Cerrar"
+              className="icon-button"
+              onClick={onClose}
+              title="Cerrar"
+              type="button"
+            >
+              <X aria-hidden="true" className="icon-button-icon" weight="bold" />
+            </button>
+          </header>
+          <div className="form-grid">
+            <label className="event-form-wide">
+              <span>Nombre</span>
+              <input
+                autoFocus
+                className="input"
+                maxLength={24}
+                onChange={(event) => setLabel(event.target.value)}
+                placeholder="PvP"
+                value={label}
+              />
+            </label>
+            <label>
+              <span>Color</span>
+              <ColorControl
+                label="Color de la etiqueta"
+                onChange={setColor}
+                value={color}
+              />
+            </label>
+            <div className="guild-tag-preview">
+              <span>Vista previa</span>
+              <ColorFilterChip
+                active
+                color={color}
+                label={label.trim() || "Etiqueta"}
+                onToggle={() => undefined}
+              />
+            </div>
+          </div>
+          <div className="admin-save">
+            <button
+              className="ghost-button small"
+              onClick={onClose}
+              type="button"
+            >
+              Cancelar
+            </button>
+            <button
+              className="primary-button"
+              disabled={saving || !label.trim()}
+              onClick={() => onSave({ color, label: label.trim() })}
+              type="button"
+            >
+              {saving ? "Guardando…" : "Guardar etiqueta"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 // Alta y edición de una frase del loro. El texto vive en la ventana: antes había
 // un textarea siempre abierto en el panel, y para corregir una frase había que
 // borrarla y crearla de nuevo.
@@ -8461,6 +8586,14 @@ function App() {
   const [guildRoles, setGuildRoles] = useState<GuildRole[]>([]);
   const [xpConfig, setXpConfig] = useState<XpConfig | null>(null);
   const [dailyMessages, setDailyMessages] = useState<DailyMessage[]>([]);
+  // Catálogo de etiquetas de la guild (Admin → Etiquetas). Vive en el App y no
+  // dentro del panel porque lo usan los editores de eventos y comunicados.
+  const [guildTags, setGuildTags] = useState<GuildTag[]>([]);
+  // Etiqueta que se está editando: `"new"` = alta, un id = edición, `null` =
+  // ninguna. Igual que el editor de frases del loro.
+  const [tagEditorId, setTagEditorId] = useState<string | null>(null);
+  const [tagSearch, setTagSearch] = useState("");
+  const [savingTag, setSavingTag] = useState(false);
   // Frase del loro que se está editando en la ventana: `"new"` = alta, un id =
   // edición, `null` = ninguna.
   const [dailyEditorId, setDailyEditorId] = useState<string | null>(null);
@@ -9304,21 +9437,36 @@ function App() {
       // nombres blancos al entrar al Dashboard). Un fallo acá no rompe el
       // resto de la carga.
       getXpConfig(selectedGuildId).catch(() => null),
+      // Etiquetas: también aparte, y no sólo en el panel, porque los editores
+      // de eventos y comunicados las necesitan. La primera vez el API las
+      // importa del uso previo y devuelve la lista ya poblada.
+      listGuildTags(selectedGuildId).catch(() => []),
     ])
-      .then(([nextConfig, nextWidgetStatus, nextLeaderboard, nextXpConfig]) => {
-        if (cancelled) {
-          return;
-        }
+      .then(
+        ([
+          nextConfig,
+          nextWidgetStatus,
+          nextLeaderboard,
+          nextXpConfig,
+          nextGuildTags,
+        ]) => {
+          if (cancelled) {
+            return;
+          }
 
-        setConfig(nextConfig);
-        setConfigDirty(false);
-        setDirtyModules(new Set());
-        setWidgetStatus(nextWidgetStatus);
-        setLeaderboard(nextLeaderboard);
-        setXpConfig(nextXpConfig);
-        savedXpRef.current = nextXpConfig ? JSON.stringify(nextXpConfig) : null;
-        setXpDirty(false);
-      })
+          setConfig(nextConfig);
+          setConfigDirty(false);
+          setDirtyModules(new Set());
+          setWidgetStatus(nextWidgetStatus);
+          setLeaderboard(nextLeaderboard);
+          setXpConfig(nextXpConfig);
+          setGuildTags(nextGuildTags);
+          savedXpRef.current = nextXpConfig
+            ? JSON.stringify(nextXpConfig)
+            : null;
+          setXpDirty(false);
+        },
+      )
       .catch((error: unknown) => {
         if (!cancelled) {
           void error;
@@ -9350,7 +9498,6 @@ function App() {
       cancelled = true;
     };
   }, [selectedGuildId]);
-
   const canManageComunicados = canAccess("comunicados");
 
   useEffect(() => {
@@ -11236,6 +11383,72 @@ function App() {
     }
   }
 
+  // ── Catálogo de etiquetas (Admin → Etiquetas) ────────────────────
+  const visibleGuildTags = useMemo(() => {
+    const query = tagSearch.trim().toLowerCase();
+    if (!query) {
+      return guildTags;
+    }
+    return guildTags.filter((tag) => tag.label.toLowerCase().includes(query));
+  }, [guildTags, tagSearch]);
+
+  async function handleSaveGuildTag(input: {
+    color: string;
+    label: string;
+  }): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    setSavingTag(true);
+    try {
+      if (tagEditorId && tagEditorId !== "new") {
+        const updated = await updateGuildTag(selectedGuildId, tagEditorId, input);
+        setGuildTags((current) =>
+          current
+            .map((tag) => (tag.id === updated.id ? updated : tag))
+            .sort((left, right) => left.label.localeCompare(right.label)),
+        );
+        pushToast("Etiqueta actualizada.", "success");
+      } else {
+        const created = await createGuildTag(selectedGuildId, input);
+        setGuildTags((current) =>
+          [...current, created].sort((left, right) =>
+            left.label.localeCompare(right.label),
+          ),
+        );
+        pushToast("Etiqueta creada.", "success");
+      }
+      setTagEditorId(null);
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la etiqueta.",
+        "error",
+      );
+    } finally {
+      setSavingTag(false);
+    }
+  }
+
+  async function handleDeleteGuildTag(tag: GuildTag): Promise<void> {
+    if (!selectedGuildId) {
+      return;
+    }
+    try {
+      await deleteGuildTag(selectedGuildId, tag.id);
+      setGuildTags((current) => current.filter((entry) => entry.id !== tag.id));
+      pushToast("Etiqueta eliminada.", "success");
+    } catch (error) {
+      pushToast(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la etiqueta.",
+        "error",
+      );
+    }
+  }
+
   // ── Logs de Raid (Warcraft Logs) ─────────────────────────────────
   async function refreshRaidLogs(): Promise<void> {
     if (!selectedGuildId) {
@@ -11863,7 +12076,8 @@ function App() {
     return eventSpecs.filter((spec) => spec.game === (game ?? ""));
   }
 
-  // La navegación = Inicio (siempre) + módulos activos + Admin (con permisos).
+  // La navegación = Inicio (siempre) + módulos activos. Admin ya no es una tab
+  // del nav: vive en el desplegable del perfil.
   const visibleTabs: HubTab[] = [
     "home",
     ...(configLoaded
@@ -11871,7 +12085,6 @@ function App() {
           (mod) => mod.key,
         )
       : []),
-    ...(adminEnabled ? (["admin"] as HubTab[]) : []),
   ];
 
   useEffect(() => {
@@ -12415,34 +12628,31 @@ function App() {
     (section) => section.key === sectionFor("admin"),
   );
 
+  // Secciones del panel que este usuario puede abrir. Las usa el desplegable
+  // del perfil: Admin ya no es un ítem aparte del nav.
+  const adminSections = (
+    TAB_SECTIONS.admin?.filter(
+      (section) => !section.module || canAccess(section.module),
+    ) ?? []
+  ).sort(
+    (left, right) =>
+      ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
+      ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
+  );
+
   // Un tab de la barra. Se usa dos veces: los módulos van en el nav y Admin va
   // al lado del perfil, separado de ellos.
   const renderNavTab = (tab: HubTab): ReactNode => {
     const isEvents = tab === "eventos";
     const sections = TAB_SECTIONS[tab];
-    const visibleSections =
-      tab === "admin"
-        ? sections
-            ?.filter(
-              (section) =>
-                !section.module || canAccess(section.module),
-            )
-            .sort(
-              (left, right) =>
-                ACCESS_TIER_ORDER[left.tier ?? "subofficer"] -
-                ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
-            )
-        : sections;
+    const visibleSections = sections;
     // Eventos arma su propio menú (dinámico, con los eventos): es la
     // forma de saltar de un evento a otro sin pasar por la lista.
     const hasMenu = Boolean(visibleSections) || isEvents;
     return (
-      <div
-        className={`nav-item${tab === "admin" ? " nav-item--admin" : ""}`}
-        key={tab}
-      >
+      <div className="nav-item" key={tab}>
         <button
-          className={`nav-link ${activeTab === tab ? "active" : ""}${tab === "admin" ? " nav-link--admin" : ""}`}
+          className={`nav-link ${activeTab === tab ? "active" : ""}`}
           onClick={
             isEvents
               ? goToEventsList
@@ -12557,14 +12767,10 @@ function App() {
           </button>
 
           <nav className="top-nav">
-            {visibleTabs
-              .filter((tab) => tab !== "admin")
-              .map(renderNavTab)}
+            {visibleTabs.map(renderNavTab)}
           </nav>
 
           <div className="topbar-user">
-            {/* Admin va al lado del perfil, separado de los módulos. */}
-            {visibleTabs.includes("admin") ? renderNavTab("admin") : null}
             {guilds.length > 1 ? (
               <select
                 className="select guild-select"
@@ -12581,24 +12787,66 @@ function App() {
                 ))}
               </select>
             ) : null}
-            <button
-              className={`user-chip user-chip-link${myTier ? ` user-chip--${myTier}` : ""}`}
-              onClick={() => {
-                setProfileUserId(null);
-                setActiveTab("perfil");
-              }}
-              type="button"
-              title="Ver mi perfil"
-            >
-              {me?.avatar ? (
-                <img
-                  className="user-chip-avatar"
-                  src={userAvatarUrl(me)}
-                  alt=""
-                />
-              ) : null}
-              {username}
-            </button>
+            {/* El perfil es el desplegable del panel: adentro van "Mi perfil" y
+                las secciones del Admin. Antes Admin era un ítem más del nav y
+                ocupaba lugar en la barra para algo que se usa cada tanto. */}
+            <div className="nav-item nav-item--profile">
+              <button
+                className={`user-chip user-chip-link${myTier ? ` user-chip--${myTier}` : ""}`}
+                onClick={() => {
+                  setProfileUserId(null);
+                  setActiveTab("perfil");
+                }}
+                type="button"
+                title="Mi perfil y Admin"
+              >
+                {me?.avatar ? (
+                  <img
+                    className="user-chip-avatar"
+                    src={userAvatarUrl(me)}
+                    alt=""
+                  />
+                ) : null}
+                {username}
+                {adminSections.length > 0 ? (
+                  <span aria-hidden="true" className="nav-caret">
+                    ▾
+                  </span>
+                ) : null}
+              </button>
+              <div className="nav-submenu nav-submenu-profile">
+                <button
+                  className={`nav-sublink${activeTab === "perfil" ? " active" : ""}`}
+                  onClick={() => {
+                    setProfileUserId(null);
+                    setActiveTab("perfil");
+                  }}
+                  type="button"
+                >
+                  Mi perfil
+                </button>
+                {adminSections.length > 0 ? (
+                  <>
+                    <span className="nav-submenu-label">Admin</span>
+                    {adminSections.map((section) => (
+                      <button
+                        className={`nav-sublink${activeTab === "admin" && sectionFor("admin") === section.key ? " active" : ""}`}
+                        key={section.key}
+                        onClick={() => goToSection("admin", section.key)}
+                        type="button"
+                      >
+                        {section.label}
+                        {section.tier ? (
+                          <span className={`admin-nav-tier tier-${section.tier}`}>
+                            {accessTierLabel(section.tier)}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </>
+                ) : null}
+              </div>
+            </div>
             <button
               className="theme-toggle"
               onClick={() =>
@@ -13954,6 +14202,116 @@ function App() {
                     </details>
                   ) : null}
 
+                  {sectionFor("admin") === "tags" && canAccess("eventos") ? (
+                    <details
+                      open
+                      className="admin-card admin-card-acc admin-card--officer"
+                    >
+                      <summary className="admin-card-header admin-acc-header">
+                        <div>
+                          <h3>
+                            Etiquetas{" "}
+                            <span className="admin-tier-badge tier-subofficer">
+                              Sub Officer
+                            </span>
+                          </h3>
+                        </div>
+                        <span className="admin-acc-chevron" aria-hidden="true">
+                          ▸
+                        </span>
+                      </summary>
+                      <div className="admin-card-body">
+                        <section className="admin-group">
+                          <span className="admin-group-head">
+                            <Tag weight="fill" aria-hidden="true" />
+                            Catálogo
+                            <small>
+                              {guildTags.length} etiqueta
+                              {guildTags.length === 1 ? "" : "s"}
+                            </small>
+                          </span>
+                          <div className="module-toolbar">
+                            <button
+                              className="module-toolbar-button"
+                              onClick={() => setTagEditorId("new")}
+                              type="button"
+                            >
+                              <Plus aria-hidden="true" weight="bold" />
+                              Nueva etiqueta
+                            </button>
+                            <ListFilterBar
+                              onSearchChange={setTagSearch}
+                              placeholder="Buscar etiqueta…"
+                              search={tagSearch}
+                            />
+                          </div>
+
+                          {guildTags.length === 0 ? (
+                            <p className="admin-empty">
+                              No hay etiquetas todavía. Creá la primera para
+                              poder usarla en eventos y comunicados.
+                            </p>
+                          ) : visibleGuildTags.length === 0 ? (
+                            <p className="admin-empty">
+                              Ninguna etiqueta coincide con la búsqueda.
+                            </p>
+                          ) : (
+                            <div className="admin-list">
+                              {visibleGuildTags.map((tag) => (
+                                <div className="admin-row" key={tag.id}>
+                                  <button
+                                    className="admin-row-box admin-row-main"
+                                    onClick={() => setTagEditorId(tag.id)}
+                                    title="Editar la etiqueta"
+                                    type="button"
+                                  >
+                                    <span className="guild-tag-chip">
+                                      <ComunicadoTag
+                                        color={tag.color}
+                                        label={tag.label}
+                                      />
+                                    </span>
+                                    <span className="admin-row-spacer" />
+                                    <PencilSimple
+                                      aria-hidden="true"
+                                      className="admin-row-action"
+                                      weight="fill"
+                                    />
+                                  </button>
+                                  <button
+                                    aria-label="Eliminar la etiqueta"
+                                    className="icon-button"
+                                    onClick={() => void handleDeleteGuildTag(tag)}
+                                    title="Eliminar la etiqueta"
+                                    type="button"
+                                  >
+                                    <Trash
+                                      aria-hidden="true"
+                                      className="icon-button-icon"
+                                      weight="fill"
+                                    />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </section>
+                        {tagEditorId !== null ? (
+                          <GuildTagModal
+                            onClose={() => setTagEditorId(null)}
+                            onSave={(input) => void handleSaveGuildTag(input)}
+                            saving={savingTag}
+                            tag={
+                              guildTags.find(
+                                (entry) => entry.id === tagEditorId,
+                              ) ?? null
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    </details>
+                  ) : null}
+
                   {sectionFor("admin") === "xp" && canAccess("xp") ? (
                     <details
                       open
@@ -15167,15 +15525,19 @@ function App() {
                           <div className="event-form-wide event-tag-field">
                             <span className="event-tag-title">Etiquetas</span>
                             <TagsField
-                              onChange={(tags) =>
+                              library={guildTags}
+                              onRemove={(label) =>
                                 setEventForm((current) => ({
                                   ...current,
-                                  tags,
+                                  tags: removeTagFromList(current.tags, label),
                                 }))
                               }
-                              suggestions={eventTagOptions.map(
-                                (tag) => tag.label,
-                              )}
+                              onToggle={(tag) =>
+                                setEventForm((current) => ({
+                                  ...current,
+                                  tags: toggleTagInList(current.tags, tag),
+                                }))
+                              }
                               tags={eventForm.tags}
                             />
                           </div>
@@ -15975,12 +16337,27 @@ function App() {
               <div className="event-tag-field">
                 <span className="event-tag-title">Etiquetas</span>
                 <TagsField
-                  onChange={(tags) =>
+                  library={guildTags}
+                  onRemove={(label) =>
                     setCommEditor((current) =>
-                      current ? { ...current, tags } : current,
+                      current
+                        ? {
+                            ...current,
+                            tags: removeTagFromList(current.tags ?? [], label),
+                          }
+                        : current,
                     )
                   }
-                  suggestions={boardTagOptions.map((tag) => tag.label)}
+                  onToggle={(tag) =>
+                    setCommEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            tags: toggleTagInList(current.tags ?? [], tag),
+                          }
+                        : current,
+                    )
+                  }
                   tags={commEditor.tags ?? []}
                 />
               </div>

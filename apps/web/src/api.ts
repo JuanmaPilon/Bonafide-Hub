@@ -1469,6 +1469,48 @@ export type EventTagInput = {
   label?: string;
 };
 
+// Etiqueta del catálogo de la guild (Admin → Etiquetas): la misma forma que
+// `EventTag` pero con id, porque se edita y se borra por id.
+export type GuildTag = EventTag & { id: string };
+
+export async function listGuildTags(guildId: string): Promise<GuildTag[]> {
+  const data = await requestJson<{ tags: GuildTag[] }>(
+    `/guilds/${guildId}/tags`,
+    { method: "GET" },
+  );
+  return data.tags;
+}
+
+export async function createGuildTag(
+  guildId: string,
+  input: { color: string; label: string },
+): Promise<GuildTag> {
+  const data = await requestJson<{ tag: GuildTag }>(`/guilds/${guildId}/tags`, {
+    body: JSON.stringify(input),
+    method: "POST",
+  });
+  return data.tag;
+}
+
+export async function updateGuildTag(
+  guildId: string,
+  tagId: string,
+  input: { color?: string; label?: string },
+): Promise<GuildTag> {
+  const data = await requestJson<{ tag: GuildTag }>(
+    `/guilds/${guildId}/tags/${tagId}`,
+    { body: JSON.stringify(input), method: "PATCH" },
+  );
+  return data.tag;
+}
+
+export async function deleteGuildTag(
+  guildId: string,
+  tagId: string,
+): Promise<void> {
+  await requestJson(`/guilds/${guildId}/tags/${tagId}`, { method: "DELETE" });
+}
+
 export type HubEvent = {
   // Si el evento pide (y recuerda) el nombre de personaje al anotarse.
   characterEnabled?: boolean;
