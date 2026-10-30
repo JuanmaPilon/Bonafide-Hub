@@ -1056,15 +1056,28 @@ rol. El campo `birthdayUserId` viaja en el evento y el bot lee los del día con
 `GET /internal/guilds/:g/birthdays`. Una fecha pasada se deja de listar, porque
 el molde no se completa a mano y quedaría mostrando un cumpleaños de meses atrás.
 
+**`signupEnabled: false` = evento informativo.** Es el flag que separa un evento
+que convoca de uno que sólo avisa (un cumpleaños es siempre informativo). Con el
+flag apagado el evento no tiene roster, ni botones de inscripción en Discord, ni
+cierre, ni conteo de asistencia; el embed sale en su molde simple (fecha + texto)
+y la web esconde la asistencia, la inscripción y el cierre tanto en la tarjeta
+como en el detalle. El default es `true`, así que todo evento existente sigue
+funcionando igual. En los cumpleaños además dura **todo el día**: el formulario no
+pide hora (manda `T00:00` local) y guarda `durationMinutes: 1440`, y no se ofrece
+"Scheduled Event" porque un cumpleaños no es un evento de Discord.
+
 **Cada plantilla declara qué campos del formulario tienen sentido.** El alta de
 un evento es una sola y mostraba todo siempre: un cumpleaños pedía personaje,
 recordatorios, rol mínimo y una duración en horas, cuando dura el día entero y no
 se anota nadie. La web deriva `eventFormFields` de la plantilla (`birthday` /
 `poll`) y esconde lo que no aplica: en cumpleaños quedan título, tipo, fecha,
-"Cumpleaños de", repetición, Discord e imagen. Además el `type` del evento sale de
-la plantilla (si no, el cumpleaños se guardaba como `raid`) y la repetición se
-preajusta a 12 meses. La encuesta, que antes sólo aceptaba horas, ahora tiene
-selector de horas o días (el API sigue guardando horas).
+"Cumpleaños de", repetición, aviso en un canal e imagen. Además el `type` del
+evento sale de la plantilla (si no, el cumpleaños se guardaba como `raid`) y la
+repetición se preajusta a 12 meses. Un evento que no es cumpleaños tiene el
+switch **"Pedir asistencia"**: al apagarlo se van el cierre, el rol mínimo, los
+recordatorios y el pedido de personaje (es el mismo `signupEnabled` del párrafo
+anterior). La encuesta, que antes sólo aceptaba horas, ahora tiene selector de
+horas o días (el API sigue guardando horas).
 
 **Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
 cierre, repetición, ubicación, roster principal, Discord) y los tipos

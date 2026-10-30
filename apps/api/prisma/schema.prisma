@@ -315,6 +315,10 @@ model HubEvent {
   tagLabel          String?
   tagColor          String?
   startsAt          DateTime
+  // Si es false el evento es informativo: no se anota nadie, no hay roster ni
+  // recordatorios, y en Discord no lleva botones. Los cumpleaños van siempre
+  // apagados; el resto lo elige quien lo crea.
+  signupEnabled     Boolean  @default(true)
   // Duración del evento en minutos (opcional, para mostrar hora de fin).
   durationMinutes   Int?
   // Cierre de inscripciones: a partir de acá ya no se puede anotar.

@@ -627,11 +627,67 @@ export function buildEventAnnouncementEmbeds(input: {
   tags?: EventTag[];
   title: string;
   type?: string;
+  // Si es false el evento es informativo: el aviso no lleva roster, ni cierre,
+  // ni conteo de asistencia. Los cumpleaños van siempre así.
+  signupEnabled?: boolean;
   // Si el juego no usa personaje, el aviso no muestra el botón "Personaje".
   characterEnabled?: boolean;
 }): Array<Record<string, unknown>> {
   const typeLabel = input.type ?? "evento";
   const timestamp = Math.floor(input.startsAt.getTime() / 1000);
+
+  // Evento informativo (cumpleaños incluido): el aviso anuncia, no convoca.
+  // Reusa el molde (título, descripción, imagen, etiquetas, footer) pero sin los
+  // campos de un evento de raid: no hay roster, ni cierre de inscripciones, ni
+  // conteo de asistencia, y en Discord no lleva botones.
+  if (input.signupEnabled === false) {
+    const esCumple = input.type === "birthday";
+    const simple: Record<string, unknown> = {
+      title: input.title.slice(0, 250),
+      color: esCumple ? 0xff73fa : 0x6aa8ff,
+      description: [
+        esCumple
+          ? `🎂 **Todo el día · <t:${timestamp}:D>**`
+          : `🗓️ **<t:${timestamp}:F>**`,
+        input.description?.trim(),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      fields: esCumple
+        ? [{ name: "🎉", value: "¡Felicitalo cuando lo veas!" }]
+        : [],
+      footer: { text: `Bonafide Hub · ${typeLabel}` },
+      timestamp: new Date().toISOString(),
+    };
+    if (input.guildIconUrl) {
+      simple.thumbnail = { url: input.guildIconUrl };
+      simple.footer = {
+        icon_url: input.guildIconUrl,
+        text: `Bonafide Hub · ${typeLabel}`,
+      };
+    }
+    const tagLabels = (input.tags ?? [])
+      .map((tag) => tag.label.trim())
+      .filter(Boolean);
+    if (tagLabels.length > 0) {
+      simple.author = {
+        ...(input.guildIconUrl ? { icon_url: input.guildIconUrl } : {}),
+        name: `🏷️ ${tagLabels.join(" · ").slice(0, 250)}`,
+      };
+    }
+    const imagen = resolveEmbedImageUrl(
+      input.guildId,
+      input.eventId,
+      input.imageUrl,
+    );
+    if (imagen) {
+      simple.image = { url: imagen };
+    }
+    if (input.discordEventId) {
+      simple.url = `https://discord.com/events/${encodeURIComponent(input.guildId)}/${encodeURIComponent(input.discordEventId)}`;
+    }
+    return [simple];
+  }
 
   // ¿Ya cerró la inscripción? Si hay cierre y ya pasó, el aviso se pinta en
   // rojo, avisa bien visible que no se puede anotar (banner arriba) y los
@@ -1002,9 +1058,14 @@ export function buildEventSignupActionRows(
     characterEnabled?: boolean;
     classLabel?: string;
     disableSignup?: boolean;
+    signupEnabled?: boolean;
     specLabel?: string;
   },
 ): Array<Record<string, unknown>> {
+  // Evento informativo: sin botones. No hay nada que responder.
+  if (options?.signupEnabled === false) {
+    return [];
+  }
   const disableSignup = options?.disableSignup ?? false;
   const classLabel = options?.classLabel ?? "Clase";
   const specLabel = options?.specLabel ?? "spec";
@@ -1126,6 +1187,7 @@ async function postAnnouncement(
             input.paused === true ||
             (input.signupDeadline !== undefined &&
               input.signupDeadline.getTime() <= Date.now()),
+          signupEnabled: input.signupEnabled,
           specLabel: input.specLabel,
         }),
         content: content || undefined,
@@ -1247,6 +1309,7 @@ export async function syncEventToDiscord(input: {
   requiredRoleId?: string;
   roles?: EventRoleOption[];
   signupDeadline?: Date;
+  signupEnabled?: boolean;
   signups?: AnnouncementSignup[];
   specLabel?: string;
   specs?: AnnouncementSpec[];
@@ -1331,6 +1394,7 @@ export async function syncEventToDiscord(input: {
       requiredRoleId: input.requiredRoleId,
       roles: input.roles,
       signupDeadline: input.signupDeadline,
+      signupEnabled: input.signupEnabled,
       signups: input.signups ?? [],
       specLabel: input.specLabel,
       specs: input.specs ?? [],
@@ -1365,6 +1429,7 @@ export async function syncEventToDiscord(input: {
             input.paused === true ||
             (input.signupDeadline !== undefined &&
               input.signupDeadline.getTime() <= Date.now()),
+          signupEnabled: input.signupEnabled,
           specLabel: input.specLabel,
         }),
         content,

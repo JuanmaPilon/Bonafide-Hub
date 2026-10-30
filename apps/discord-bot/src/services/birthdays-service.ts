@@ -126,6 +126,19 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
       todayKey(new Date(event.startsAt)) === hoy,
   );
 
+  const idsHoy = new Set(
+    cumpleHoy
+      .map((event) => event.birthdayUserId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  // Sin rol guardado y sin nadie que cumpla hoy no hay nada que hacer: crearlo
+  // antes de saberlo dejaba un rol vacío en guilds que nunca usan cumpleaños.
+  // Con un rol guardado sí se sigue: hay que sacárselo a quien quedó con él.
+  if (!config.birthdayRoleId && idsHoy.size === 0) {
+    return;
+  }
+
   const role = await ensureBirthdayRole(guild, config.birthdayRoleId);
   if (role.created && role.roleId) {
     // Se guarda para no recrearlo en el próximo tick ni al reiniciar.
@@ -145,12 +158,6 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
     return;
   }
 
-  const idsHoy = new Set(
-    cumpleHoy
-      .map((event) => event.birthdayUserId)
-      .filter((id): id is string => Boolean(id)),
-  );
-
   // Poner el rol a quien cumple hoy.
   for (const userId of idsHoy) {
     const member = await guild.members.fetch(userId).catch(() => null);
@@ -164,6 +171,17 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
 
   // Quitarlo a quien lo tenga sin cumplir hoy: sin esto, al año siguiente medio
   // server sigue con el rol puesto.
+  // El cache de miembros no viene completo (sólo los que el bot ya vio), así
+  // que la lista se pide al gateway antes de revisar.
+  if (guild.members.cache.size < guild.memberCount) {
+    await guild.members.fetch().catch((error: unknown) => {
+      console.warn(
+        `[cumpleaños] no se pudo leer la lista de miembros de ${guild.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
+  }
   for (const member of guild.members.cache.values()) {
     if (!member.roles.cache.has(role.roleId) || idsHoy.has(member.id)) {
       continue;
@@ -186,7 +204,6 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
   if (announced.get(guild.id) === hoy) {
     return;
   }
-  announced.set(guild.id, hoy);
 
   const channel = guild.channels.cache.get(config.birthdayChannelId);
   if (!channel?.isTextBased() || !("send" in channel)) {
@@ -199,13 +216,22 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
     nombres.length === 1
       ? `🎂 ¡Feliz cumpleaños, **${nombres[0]}**! Que tengas un gran día.`
       : `🎂 ¡Feliz cumpleaños a ${nombres.map((n) => `**${n}**`).join(", ")}! Que tengan un gran día.`;
-  await channel.send(texto).catch((error: unknown) => {
-    console.warn(
-      `[cumpleaños] no se pudo saludar en ${guild.name}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  });
+  // El día se marca recién con el saludo enviado: marcarlo antes hacía que un
+  // envío fallido no se reintentara hasta el día siguiente.
+  const sent = await channel.send(texto).then(
+    () => true,
+    (error: unknown) => {
+      console.warn(
+        `[cumpleaños] no se pudo saludar en ${guild.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return false;
+    },
+  );
+  if (sent) {
+    announced.set(guild.id, hoy);
+  }
 }
 
 async function addRole(member: GuildMember, roleId: string): Promise<void> {

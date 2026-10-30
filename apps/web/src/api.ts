@@ -1596,6 +1596,8 @@ export type HubEvent = {
   // para este evento. Vacío = sin recordatorios.
   reminderHours?: number[];
   signupDeadline?: string;
+  // false = evento informativo: sin roster ni botones de inscripción.
+  signupEnabled?: boolean;
   startsAt: string;
   status: string;
   // Etiquetas libres del evento (texto + color).
@@ -1906,6 +1908,7 @@ export async function createEvent(
     reminderHours?: number[];
     requiredRoleId?: string;
     signupDeadline?: string;
+    signupEnabled?: boolean;
     startsAt: string;
     tags?: EventTagInput[];
     title: string;
@@ -1962,6 +1965,7 @@ export async function updateEvent(
     reminderHours?: number[];
     requiredRoleId?: string;
     signupDeadline?: string | null;
+    signupEnabled?: boolean;
     startsAt?: string;
     status?: string;
     tags?: EventTagInput[];

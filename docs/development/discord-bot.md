@@ -136,10 +136,15 @@ Detalles que no son obvios:
 8. `MessageCreate`/`MessageUpdate` (Karuta) → detecta cartas raras (`kv`), su colección (`ka`) y transferencias (`kg`/grab) en el canal vigilado y las guarda en la API
 9. `PresenceUpdate` → juegos que se juegan en el server (ver abajo)
 10. Barrido de cumpleaños (`birthdays-service`) → una vez por hora mira qué
-    eventos de la plantilla `cumple` caen hoy en la zona horaria configurada, crea
-    el rol `🎂 Cumpleaños` si no existe, se lo pone a quien cumple y se lo quita al
-    resto, y saluda en el canal configurado. Si al bot le falta *Gestionar roles*
-    (o su rol quedó por debajo), lo deja en el log y sigue con el resto.
+    eventos de la plantilla `cumple` caen hoy en la zona horaria configurada,
+    crea el rol `🎂 Cumpleaños` si hace falta (sólo cuando hay alguien que cumple
+    o cuando ya había un rol guardado al que hay que sacárselo), se lo pone a
+    quien cumple y se lo quita al resto, y saluda en el canal configurado. La
+    remoción pide la lista de miembros al gateway (`guild.members.fetch()`) antes
+    de revisar: el cache del bot no viene completo y alguien quedaba con el rol
+    puesto hasta el año siguiente. El saludo se reintenta: el día se marca recién
+    cuando el mensaje salió. Si al bot le falta *Gestionar roles* (o su rol quedó
+    por debajo), lo deja en el log y sigue con el resto.
 
 ### Juegos que se juegan en el server
 

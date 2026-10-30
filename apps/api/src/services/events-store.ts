@@ -365,6 +365,8 @@ export type HubEvent = {
   // Juego del evento: decide roles de inscripción y catálogo.
   game: string;
   guildId: string;
+  // false = evento informativo: sin inscripción, roster ni recordatorios.
+  signupEnabled: boolean;
   id: string;
   imageUrl?: string;
   paused: boolean;
@@ -456,6 +458,7 @@ type EventRecord = {
   recurrenceEvery: number | null;
   recurrenceUnit: string | null;
   recurrenceNextAt: Date | null;
+  signupEnabled: boolean;
   recurrencePublishDaysBefore: number | null;
   reminderMessageIds: string[];
   reminderHours: number[];
@@ -557,6 +560,7 @@ function toEvent(
     recurrenceEvery: record.recurrenceEvery ?? undefined,
     recurrenceUnit: record.recurrenceUnit ?? undefined,
     recurrenceNextAt: record.recurrenceNextAt ?? undefined,
+    signupEnabled: record.signupEnabled,
     recurrencePublishDaysBefore:
       record.recurrencePublishDaysBefore ?? undefined,
     reminderMessageIds: record.reminderMessageIds,
@@ -807,6 +811,8 @@ export async function createEvent(input: {
   reminderHours?: number[];
   requiredRoleId?: string | null;
   signupDeadline?: string;
+  // false = evento informativo (sin inscripción).
+  signupEnabled?: boolean;
   startsAt: string;
   tags?: unknown;
   title: string;
@@ -851,6 +857,7 @@ export async function createEvent(input: {
       signupDeadline: input.signupDeadline
         ? new Date(input.signupDeadline)
         : null,
+      signupEnabled: input.signupEnabled !== false,
       startsAt: new Date(input.startsAt),
       tags: normalizeEventTags(input.tags),
       title: input.title,
@@ -882,6 +889,7 @@ export async function updateEvent(
     reminderHours?: number[];
     requiredRoleId?: string | null;
     signupDeadline?: string | null;
+    signupEnabled?: boolean;
     startsAt?: string;
     status?: string;
     tags?: unknown;
@@ -972,6 +980,7 @@ export async function updateEvent(
       // marcador de "aviso ya actualizado por cierre": si vuelve a ser
       // futuro se re-abre, y si vuelve a pasar se re-renderiza de nuevo.
       signupClosedAt: input.signupDeadline !== undefined ? null : undefined,
+      signupEnabled: input.signupEnabled,
       signupDeadline:
         input.signupDeadline === null
           ? null

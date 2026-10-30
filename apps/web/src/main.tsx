@@ -1022,6 +1022,9 @@ const REMINDER_HOUR_OPTIONS: Array<{ hours: number; label: string }> = [
   { hours: 2, label: "2 h antes" },
 ];
 
+// Evento de todo el día (cumpleaños): 24 h desde las 00:00 locales.
+const WHOLE_DAY_MINUTES = 24 * 60;
+
 // Convierte una fecha a string local YYYY-MM-DDTHH:mm (sin zona horaria).
 function toDateTimeLocal(value: Date | string): string {
   const date = new Date(value);
@@ -1116,10 +1119,14 @@ function currentMonthKey(): string {
 // almanaque (mismo formato siempre, sin depender del idioma del navegador) y
 // la hora se elige en selects de 24 hs. Emite un valor local YYYY-MM-DDTHH:mm
 // (o "" si la fecha está incompleta).
+// `dateOnly` (cumpleaños): no hay hora que elegir, el evento dura el día entero;
+// emite siempre T00:00.
 function EventDateTimeField({
+  dateOnly = false,
   onChange,
   value,
 }: {
+  dateOnly?: boolean;
   onChange: (value: string) => void;
   value: string;
 }) {
@@ -1156,7 +1163,9 @@ function EventDateTimeField({
       return;
     }
     const [, day, month, year] = match;
-    const iso = `${year}-${month}-${day}T${nextHours}:${nextMinutes}`;
+    const iso = dateOnly
+      ? `${year}-${month}-${day}T00:00`
+      : `${year}-${month}-${day}T${nextHours}:${nextMinutes}`;
     const next = Number.isNaN(new Date(iso).getTime()) ? "" : iso;
     lastEmitted.current = next;
     onChange(next);
@@ -1303,29 +1312,33 @@ function EventDateTimeField({
           </>
         ) : null}
       </span>
-      <select
-        className="select event-time-select"
-        value={hours}
-        onChange={(event) => emit(dateText, event.target.value, minutes)}
-      >
-        {Array.from({ length: 24 }, (_value, hour) => (
-          <option key={hour} value={pad2(hour)}>
-            {pad2(hour)}
-          </option>
-        ))}
-      </select>
-      <span aria-hidden="true">:</span>
-      <select
-        className="select event-time-select"
-        value={minutes}
-        onChange={(event) => emit(dateText, hours, event.target.value)}
-      >
-        {Array.from({ length: 60 }, (_value, minute) => (
-          <option key={minute} value={pad2(minute)}>
-            {pad2(minute)}
-          </option>
-        ))}
-      </select>
+      {dateOnly ? null : (
+        <>
+          <select
+            className="select event-time-select"
+            value={hours}
+            onChange={(event) => emit(dateText, event.target.value, minutes)}
+          >
+            {Array.from({ length: 24 }, (_value, hour) => (
+              <option key={hour} value={pad2(hour)}>
+                {pad2(hour)}
+              </option>
+            ))}
+          </select>
+          <span aria-hidden="true">:</span>
+          <select
+            className="select event-time-select"
+            value={minutes}
+            onChange={(event) => emit(dateText, hours, event.target.value)}
+          >
+            {Array.from({ length: 60 }, (_value, minute) => (
+              <option key={minute} value={pad2(minute)}>
+                {pad2(minute)}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
     </div>
   );
 }
@@ -4287,6 +4300,9 @@ function EventSummaryCard({
   const durationHours = event.durationMinutes
     ? `${hoursFromMinutes(event.durationMinutes)} hs`
     : undefined;
+  // Evento informativo (cumpleaños): sin inscripción, sin conteos y sin hora.
+  const signupEnabled = event.signupEnabled !== false;
+  const allDay = (event.durationMinutes ?? 0) >= WHOLE_DAY_MINUTES;
 
   return (
     <button
@@ -4323,15 +4339,23 @@ function EventSummaryCard({
                   {event.status === "cancelled" ? "Cancelado" : "Completado"}
                 </span>
               ) : null}
-              {closed && !paused && !pending && event.status === "scheduled" ? (
+              {signupEnabled &&
+              closed &&
+              !paused &&
+              !pending &&
+              event.status === "scheduled" ? (
                 <span className="event-card-status closed">Cerradas</span>
               ) : null}
             </span>
           ) : null}
         </span>
         <span className="event-tile-when">
-          {formatDayMonthShort(event.startsAt)} · {formatTime24(event.startsAt)}
-          {durationHours ? ` · ${durationHours}` : ""}
+          {formatDayMonthShort(event.startsAt)}
+          {allDay
+            ? " · todo el día"
+            : ` · ${formatTime24(event.startsAt)}${
+                durationHours ? ` · ${durationHours}` : ""
+              }`}
         </span>
         {(event.tags ?? []).length > 0 ? (
           <span className="event-tile-tags">
@@ -4341,22 +4365,28 @@ function EventSummaryCard({
           </span>
         ) : null}
         <span className="event-tile-foot">
-          <span className="event-tile-counts">
-            <span className="event-count total">
-              <Users aria-hidden="true" weight="fill" />
-              {counts.yes}
-              {counts.bench + counts.late > 0
-                ? ` (+${counts.bench + counts.late})`
-                : ""}
-              {event.expectedCount && event.expectedCount > 0
-                ? ` / ${event.expectedCount}`
-                : ""}
+          {signupEnabled ? (
+            <span className="event-tile-counts">
+              <span className="event-count total">
+                <Users aria-hidden="true" weight="fill" />
+                {counts.yes}
+                {counts.bench + counts.late > 0
+                  ? ` (+${counts.bench + counts.late})`
+                  : ""}
+                {event.expectedCount && event.expectedCount > 0
+                  ? ` / ${event.expectedCount}`
+                  : ""}
+              </span>
             </span>
-          </span>
-          <span className={`event-tile-me${mySignup ? "" : " none"}`}>
-            {myOption ? `${myOption.emoji} ${myOption.label}` : "Sin anotarte"}
-            {mySignup?.character ? ` · ${mySignup.character}` : ""}
-          </span>
+          ) : (
+            <span />
+          )}
+          {signupEnabled ? (
+            <span className={`event-tile-me${mySignup ? "" : " none"}`}>
+              {myOption ? `${myOption.emoji} ${myOption.label}` : "Sin anotarte"}
+              {mySignup?.character ? ` · ${mySignup.character}` : ""}
+            </span>
+          ) : null}
         </span>
       </span>
     </button>
@@ -4850,6 +4880,9 @@ function EventCard({
   const paused = event.paused === true;
   const pending = event.pendingPublication === true;
   const isPoll = eventPoll === true;
+  // Evento informativo (cumpleaños): no hay inscripción ni roster.
+  const signupEnabled = event.signupEnabled !== false;
+  const allDay = (event.durationMinutes ?? 0) >= WHOLE_DAY_MINUTES;
   const signupsClosed =
     paused ||
     pending ||
@@ -5126,7 +5159,11 @@ function EventCard({
                     {event.status === "cancelled" ? "Cancelado" : "Completado"}
                   </span>
                 ) : null}
-                {event.signupDeadline && signupsClosed && !paused && !pending ? (
+                {signupEnabled &&
+                event.signupDeadline &&
+                signupsClosed &&
+                !paused &&
+                !pending ? (
                   <span className="event-card-status closed">
                     <LockSimple aria-hidden="true" weight="fill" />
                     Cerradas
@@ -5144,20 +5181,24 @@ function EventCard({
                 Empieza
               </span>
               <span className="event-info-value">
-                {formatDateTime24(event.startsAt)}
+                {allDay
+                  ? `${formatDate24(event.startsAt)} · todo el día`
+                  : formatDateTime24(event.startsAt)}
               </span>
             </div>
-            <div className="event-info-item">
-              <span className="event-info-label">
-                <Flag aria-hidden="true" weight="fill" />
-                Termina
-              </span>
-              <span className="event-info-value">
-                {endAt && durationHours
-                  ? `${formatDateTime24(endAt)} (${durationHours})`
-                  : "—"}
-              </span>
-            </div>{" "}
+            {allDay ? null : (
+              <div className="event-info-item">
+                <span className="event-info-label">
+                  <Flag aria-hidden="true" weight="fill" />
+                  Termina
+                </span>
+                <span className="event-info-value">
+                  {endAt && durationHours
+                    ? `${formatDateTime24(endAt)} (${durationHours})`
+                    : "—"}
+                </span>
+              </div>
+            )}{" "}
             {isPoll ? (
               <div className="event-info-item">
                 <span className="event-info-label">
@@ -5171,22 +5212,23 @@ function EventCard({
                 </span>
               </div>
             ) : null}
-            <div className="event-info-item">
-              <span className="event-info-label">
-                <LockSimple aria-hidden="true" weight="fill" />
-                Cierre de inscripciones
-              </span>
-              <span
-                className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
-              >
-                {event.signupDeadline
-                  ? `${formatDateTime24(event.signupDeadline)}${
-                      signupsClosed ? " · ya cerró" : ""
-                    }`
-                  : "—"}
-              </span>
-            </div>
-            {event.recurrenceEnabled &&
+            {signupEnabled ? (
+              <div className="event-info-item">
+                <span className="event-info-label">
+                  <LockSimple aria-hidden="true" weight="fill" />
+                  Cierre de inscripciones
+                </span>
+                <span
+                  className={`event-info-value${signupsClosed && event.signupDeadline ? " closed" : ""}`}
+                >
+                  {event.signupDeadline
+                    ? `${formatDateTime24(event.signupDeadline)}${
+                        signupsClosed ? " · ya cerró" : ""
+                      }`
+                    : "—"}
+                </span>
+              </div>
+            ) : null}            {event.recurrenceEnabled &&
             (event.recurrenceEvery ?? event.recurrenceEveryDays) ? (
               <div className="event-info-item">
                 <span className="event-info-label">
@@ -5220,7 +5262,7 @@ function EventCard({
                 </span>
               </div>
             ) : null}
-            {event.requiredRoleId ? (
+            {signupEnabled && event.requiredRoleId ? (
               <div className="event-info-item wide">
                 <span className="event-info-label">
                   <Users aria-hidden="true" weight="fill" />
@@ -5274,47 +5316,52 @@ function EventCard({
           {event.description?.trim() ? (
             <p className="event-card-desc">{event.description.trim()}</p>
           ) : null}
-          <div className="event-card-assistance">
-            <div className="event-card-assistance-head">
-              <span className="event-info-label">
-                <Users aria-hidden="true" weight="fill" />
-                Asistencia
-              </span>
-              {canManage && (event.expectedCount ?? 0) > 0 ? (
-                <button
-                  className="ghost-button small"
-                  onClick={() => void openRoster()}
-                  type="button"
-                >
-                  <ListChecks aria-hidden="true" size={16} weight="fill" />
-                  Ver asistencias
-                </button>
-              ) : null}
-            </div>
-            <div className="event-card-counts">
-              {/* El total lleva el contador de control cuando el evento tiene rol
-                  mínimo: "confirmados (+tentativos) / esperados". */}
-              <span className="event-count total">
-                👥 {counts.yes}
-                {counts.bench + counts.late > 0
-                  ? ` (+${counts.bench + counts.late})`
-                  : ""}
-                {event.expectedCount && event.expectedCount > 0
-                  ? ` / ${event.expectedCount}`
-                  : ""}
-              </span>
-              {SIGNUP_OPTIONS.map((option) => (
-                <span className={`event-count ${option.key}`} key={option.key}>
-                  {option.emoji} {counts[option.key]}
+          {signupEnabled ? (
+            <div className="event-card-assistance">
+              <div className="event-card-assistance-head">
+                <span className="event-info-label">
+                  <Users aria-hidden="true" weight="fill" />
+                  Asistencia
                 </span>
-              ))}
+                {canManage && (event.expectedCount ?? 0) > 0 ? (
+                  <button
+                    className="ghost-button small"
+                    onClick={() => void openRoster()}
+                    type="button"
+                  >
+                    <ListChecks aria-hidden="true" size={16} weight="fill" />
+                    Ver asistencias
+                  </button>
+                ) : null}
+              </div>
+              <div className="event-card-counts">
+                {/* El total lleva el contador de control cuando el evento tiene rol
+                    mínimo: "confirmados (+tentativos) / esperados". */}
+                <span className="event-count total">
+                  👥 {counts.yes}
+                  {counts.bench + counts.late > 0
+                    ? ` (+${counts.bench + counts.late})`
+                    : ""}
+                  {event.expectedCount && event.expectedCount > 0
+                    ? ` / ${event.expectedCount}`
+                    : ""}
+                </span>
+                {SIGNUP_OPTIONS.map((option) => (
+                  <span
+                    className={`event-count ${option.key}`}
+                    key={option.key}
+                  >
+                    {option.emoji} {counts[option.key]}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           {/* Los que faltan anotarse, en el hueco de la columna derecha (entre
             los contadores y mi inscripción). Sin caja ni filtros: es la parte
             accionable del control del roster; el detalle sigue en el modal. */}
-          {rosterInline ? (
+          {signupEnabled && rosterInline ? (
             <div className="event-card-missing">
             <span className="event-info-label">
               <UserPlus aria-hidden="true" weight="fill" />
@@ -5388,7 +5435,7 @@ function EventCard({
           </div>
           ) : null}
 
-          {event.signups.length > 0 ? (
+          {!signupEnabled ? null : event.signups.length > 0 ? (
             <div className="event-roster">
               {/* Columnas por rol (estilo Raid Helper): cada rol es una columna
                 con sus confirmados (nombre, personaje y clase/spec). */}
@@ -5457,7 +5504,7 @@ function EventCard({
               · ❌ NO).
             </div>
           ) : null}
-          {meId && !isPoll ? (
+          {signupEnabled && meId && !isPoll ? (
             <div className="event-signup">
               {signupsClosed ? (
                 <div className="event-signup-closed">
@@ -9122,6 +9169,9 @@ function App() {
     reminderHours: number[];
     requiredRoleId: string;
     signupDeadline: string;
+    // false = evento informativo (sin roster ni botones). Los cumpleaños
+    // siempre son informativos: no hay a quién pedirle asistencia.
+    signupEnabled: boolean;
     startsAt: string;
     status: string;
     tags: EventTag[];
@@ -9145,6 +9195,7 @@ function App() {
     reminderHours: [],
     requiredRoleId: "",
     signupDeadline: "",
+    signupEnabled: true,
     startsAt: "",
     status: "scheduled",
     tags: [],
@@ -9168,19 +9219,31 @@ function App() {
   const eventFormFields = useMemo(() => {
     const esCumple = eventFormGame?.birthday === true;
     const esEncuesta = eventFormGame?.poll === true;
+    // Un cumpleaños nunca pide asistencia. El resto sí, salvo que el staff
+    // apague "Pedir asistencia": ahí el evento pasa a ser un aviso informativo
+    // y todo lo que cuelga de la inscripción (cierre, rol mínimo,
+    // recordatorios, roster) deja de tener sentido.
+    const asistencia = !esCumple && eventForm.signupEnabled !== false;
     return {
       // Personaje, cierre de inscripciones, rol mínimo, recordatorios y el roster
       // de clases/specs: nada de eso aplica a un cumpleaños.
       birthdayUser: esCumple,
-      deadline: !esCumple,
+      // Sin hora: el cumpleaños dura el día entero.
+      dateOnly: esCumple,
+      deadline: asistencia,
       duration: !esCumple,
       pollDuration: esEncuesta,
       // Rol mínimo y recordatorios: dependen de que haya gente que se anote.
-      reminders: !esCumple,
-      requiredRole: !esCumple,
+      reminders: asistencia,
+      requiredRole: asistencia,
+      // Un cumpleaños no crea un evento de Discord (aparecería como "interesado"
+      // en la pestaña Eventos): sólo se publica el aviso.
+      scheduledEvent: !esCumple,
       signup: !esCumple,
+      signupEnabled: asistencia,
+      wholeDay: esCumple,
     };
-  }, [eventFormGame]);
+  }, [eventForm.signupEnabled, eventFormGame]);
   // Catálogo de specs de inscripción (estilo Raid Helper). Los roles de cada
   // tipo de evento salen del código (event-templates), no de la guild.
   const [eventSpecs, setEventSpecs] = useState<RaidSpec[]>([]);
@@ -10628,6 +10691,7 @@ function App() {
       reminderHours: [],
       requiredRoleId: "",
       signupDeadline: "",
+      signupEnabled: true,
       startsAt: "",
       status: "scheduled",
       tags: [],
@@ -10695,6 +10759,7 @@ function App() {
       signupDeadline: event.signupDeadline
         ? toDateTimeLocal(event.signupDeadline)
         : "",
+      signupEnabled: event.signupEnabled !== false,
       startsAt: toDateTimeLocal(event.startsAt),
       status: event.status,
       tags: event.tags ?? [],
@@ -10747,6 +10812,7 @@ function App() {
       reminderHours: event.reminderHours ?? [],
       requiredRoleId: event.requiredRoleId ?? "",
       signupDeadline: "",
+      signupEnabled: event.signupEnabled !== false,
       startsAt: toDateTimeLocal(event.startsAt),
       status: "scheduled",
       tags: event.tags ?? [],
@@ -10872,10 +10938,19 @@ function App() {
       pushToast("La fecha/hora no es válida.", "error");
       return;
     }
-    const signupDeadlineIso = toIsoInstant(eventForm.signupDeadline);
+    // `undefined` (no null) cuando la plantilla no pide cierre: el tipo de
+    // createEvent no acepta null y una fecha vacía ya significa "sin cierre".
+    const signupDeadlineIso = eventFormFields.deadline
+      ? toIsoInstant(eventForm.signupDeadline)
+      : undefined;
+    // Todo el día: un cumpleaños arranca a las 00:00 y termina a las 24:00.
+    const durationMinutes = eventFormFields.wholeDay
+      ? WHOLE_DAY_MINUTES
+      : minutesFromHours(eventForm.durationHours);
 
     const discordPayload: EventDiscordOptions = {
-      createScheduledEvent: eventForm.discord.createScheduledEvent,
+      createScheduledEvent:
+        eventFormFields.scheduledEvent && eventForm.discord.createScheduledEvent,
       entityType: eventForm.discord.entityType,
       location: eventForm.discord.location.trim() || undefined,
       publishChannelId: eventForm.discord.publishChannelId || undefined,
@@ -10904,7 +10979,7 @@ function App() {
         const result = await updateEvent(selectedGuildId, editingEventId, {
           characterEnabled: eventForm.characterEnabled,
           discord: discordPayload,
-          durationMinutes: minutesFromHours(eventForm.durationHours) ?? null,
+          durationMinutes: durationMinutes ?? null,
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
           imageUrl: imageUrl || undefined,
@@ -10938,6 +11013,7 @@ function App() {
             ? eventForm.requiredRoleId.trim() || undefined
             : undefined,
           signupDeadline: signupDeadlineIso ?? null,
+          signupEnabled: eventFormFields.signupEnabled,
           startsAt: startsAtIso,
           status: eventForm.status,
           tags: eventForm.tags,
@@ -10962,7 +11038,7 @@ function App() {
         const result = await createEvent(selectedGuildId, {
           characterEnabled: eventForm.characterEnabled,
           discord: discordPayload,
-          durationMinutes: minutesFromHours(eventForm.durationHours),
+          durationMinutes,
           discordCleanupOnComplete: eventForm.discordCleanupOnComplete,
           game: eventForm.game || undefined,
           imageUrl: imageUrl || undefined,
@@ -10992,6 +11068,7 @@ function App() {
             ? eventForm.requiredRoleId.trim() || undefined
             : undefined,
           signupDeadline: signupDeadlineIso,
+          signupEnabled: eventFormFields.signupEnabled,
           startsAt: startsAtIso,
           tags: eventForm.tags,
           title: eventForm.title.trim(),
@@ -15952,11 +16029,16 @@ function App() {
                                   // preajusta para no tener que armarlo a mano.
                                   ...(template?.birthday
                                     ? {
+                                        discord: {
+                                          ...current.discord,
+                                          createScheduledEvent: false,
+                                        },
                                         recurrenceEnabled: true,
                                         recurrenceEvery: "12",
                                         recurrenceUnit: "months",
+                                        signupEnabled: false,
                                       }
-                                    : {}),
+                                    : { signupEnabled: true }),
                                 }));
                               }}
                             >
@@ -16023,8 +16105,13 @@ function App() {
                             </label>
                           ) : null}
                           <div className="event-date-field">
-                            <span>Fecha y hora</span>
+                            <span>
+                              {eventFormFields.dateOnly
+                                ? "Fecha"
+                                : "Fecha y hora"}
+                            </span>
                             <EventDateTimeField
+                              dateOnly={eventFormFields.dateOnly}
                               value={eventForm.startsAt}
                               onChange={(value) =>
                                 setEventForm((current) => ({
@@ -16155,15 +16242,33 @@ function App() {
                                 </span>
                                 <div className="event-option-controls">
                                   <FormSwitch
-                                    checked={eventForm.characterEnabled}
-                                    label="Pedir personaje"
+                                    checked={eventForm.signupEnabled}
+                                    label="Pedir asistencia"
                                     onChange={(checked) =>
                                       setEventForm((current) => ({
                                         ...current,
-                                        characterEnabled: checked,
+                                        signupEnabled: checked,
                                       }))
                                     }
                                   />
+                                  {eventFormFields.signupEnabled ? (
+                                    <>
+                                      <span
+                                        aria-hidden="true"
+                                        className="event-switch-divider"
+                                      />
+                                      <FormSwitch
+                                        checked={eventForm.characterEnabled}
+                                        label="Pedir personaje"
+                                        onChange={(checked) =>
+                                          setEventForm((current) => ({
+                                            ...current,
+                                            characterEnabled: checked,
+                                          }))
+                                        }
+                                      />
+                                    </>
+                                  ) : null}
                                   {eventFormFields.reminders ? (
                                     <>
                                       <span
@@ -16300,21 +16405,23 @@ function App() {
                             <div className="event-option-row">
                               <span className="event-option-label">Discord</span>
                               <div className="event-option-controls">
-                                <FormSwitch
-                                  checked={
-                                    eventForm.discord.createScheduledEvent
-                                  }
-                                  label="Scheduled Event"
-                                  onChange={(checked) =>
-                                    setEventForm((current) => ({
-                                      ...current,
-                                      discord: {
-                                        ...current.discord,
-                                        createScheduledEvent: checked,
-                                      },
-                                    }))
-                                  }
-                                />
+                                {eventFormFields.scheduledEvent ? (
+                                  <FormSwitch
+                                    checked={
+                                      eventForm.discord.createScheduledEvent
+                                    }
+                                    label="Scheduled Event"
+                                    onChange={(checked) =>
+                                      setEventForm((current) => ({
+                                        ...current,
+                                        discord: {
+                                          ...current.discord,
+                                          createScheduledEvent: checked,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                ) : null}
                                 <FormSwitch
                                   checked={eventForm.discord.publishMessage}
                                   label="Aviso en un canal"
@@ -16328,7 +16435,8 @@ function App() {
                                     }))
                                   }
                                 />
-                                {eventForm.discord.createScheduledEvent ||
+                                {(eventFormFields.scheduledEvent &&
+                                  eventForm.discord.createScheduledEvent) ||
                                 eventForm.discord.publishMessage ? (
                                   <FormSwitch
                                     checked={eventForm.discordCleanupOnComplete}
@@ -16341,7 +16449,8 @@ function App() {
                                     }
                                   />
                                 ) : null}
-                                {eventForm.discord.createScheduledEvent ||
+                                {(eventFormFields.scheduledEvent &&
+                                  eventForm.discord.createScheduledEvent) ||
                                 eventForm.discord.publishMessage ? (
                                   <div className="event-option-fields">
                                     {eventForm.discord.publishMessage ? (
@@ -16377,7 +16486,8 @@ function App() {
                                         </select>
                                       </label>
                                     ) : null}
-                                    {eventForm.discord.createScheduledEvent ? (
+                                    {eventFormFields.scheduledEvent &&
+                                    eventForm.discord.createScheduledEvent ? (
                                       <label className="event-option-field">
                                         <span>Sala de voz</span>
                                         <select

@@ -1481,6 +1481,7 @@ async function createRecurrenceCopy(
       deadlineOffsetMs !== null
         ? new Date(startsAt.getTime() + deadlineOffsetMs).toISOString()
         : undefined,
+    signupEnabled: head.signupEnabled,
     startsAt: startsAt.toISOString(),
     tags: head.tags,
     title: head.title,
@@ -2329,6 +2330,8 @@ async function syncAndStoreEventDiscord(input: {
     recurrenceEveryDays?: number;
     requiredRoleId?: string;
     signupDeadline?: Date;
+    // false = evento informativo: el aviso sale sin roster ni botones.
+    signupEnabled?: boolean;
     signups: AnnouncementSignup[];
     startsAt: Date;
     tags: EventTag[];
@@ -2383,6 +2386,7 @@ async function syncAndStoreEventDiscord(input: {
     requiredRoleId: event.requiredRoleId,
     roles: await resolveEventRolesFor(event.guildId, event.game, eventConfig),
     signupDeadline: event.signupDeadline,
+    signupEnabled: event.signupEnabled,
     signups: event.signups,
     specLabel: eventConfig.eventSpecLabel,
     specs,
@@ -2472,6 +2476,7 @@ async function refreshEventAnnouncement(
       requiredRoleId: event.requiredRoleId,
       roles: await resolveEventRolesFor(guildId, event.game, eventConfig),
       signupDeadline: event.signupDeadline,
+      signupEnabled: event.signupEnabled,
       signups: event.signups,
       specLabel: eventConfig.eventSpecLabel,
       specs,
@@ -2489,6 +2494,7 @@ async function refreshEventAnnouncement(
         characterEnabled: event.characterEnabled !== false,
         classLabel: eventConfig.eventClassLabel,
         disableSignup: event.paused || signupsClosed,
+        signupEnabled: event.signupEnabled,
         specLabel: eventConfig.eventSpecLabel,
       }),
       // Si el evento ya no tiene rol mínimo, limpiamos la mención vieja del
@@ -6610,6 +6616,7 @@ export async function buildApp() {
       reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string;
+      signupEnabled?: boolean;
       startsAt?: string;
       tags?: { color?: string; label?: string }[];
       title?: string;
@@ -6671,6 +6678,7 @@ export async function buildApp() {
       reminderHours: normalizeReminderHours(body.reminderHours),
       requiredRoleId: body.requiredRoleId?.trim() || null,
       signupDeadline: body.signupDeadline?.trim() || undefined,
+      signupEnabled: body.signupEnabled !== false,
       startsAt,
       tags: body.tags,
       title,
@@ -6801,6 +6809,8 @@ export async function buildApp() {
       recurrenceUnit: "months",
       recurrencePublishDaysBefore: 7,
       reminderHours: [],
+      // Un cumpleaños no se anota: es informativo.
+      signupEnabled: false,
       startsAt: startsAt.toISOString(),
       title: `Cumpleaños de ${label}`,
       type: "birthday",
@@ -6857,6 +6867,7 @@ export async function buildApp() {
       reminderHours?: number[];
       requiredRoleId?: string;
       signupDeadline?: string | null;
+      signupEnabled?: boolean;
       startsAt?: string;
       status?: string;
       tags?: { color?: string; label?: string }[];
@@ -6999,6 +7010,7 @@ export async function buildApp() {
           ? undefined
           : body.requiredRoleId.trim() || null,
       signupDeadline: body.signupDeadline ?? null,
+      signupEnabled: body.signupEnabled,
       startsAt: body.startsAt,
       status: body.status,
       tags: body.tags,
