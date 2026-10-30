@@ -834,6 +834,23 @@ Eventos con inscripciones estilo Raid Helper. Un evento puede publicarse como
 Scheduled Event de Discord y/o como aviso-embed en un canal (el bot maneja los
 botones de inscripción).
 
+**La lista se lee como un calendario: primero lo que viene.** El orden por defecto
+de la grilla es la fecha ascendente ("Próximos primero"; las claves de orden son
+las compartidas, sólo cambian las etiquetas: `oldest` es la que ordena de más
+próximo a más lejano). Es el mismo criterio del menú del nav —que arma su propia
+lista de eventos abiertos de más cerca a más lejos— y el orden en que se publican
+los avisos, porque cada uno sale X días antes de su fecha. Discord no ordena nada
+nuestro: su pestaña de eventos agendados la ordena él por fecha de inicio.
+
+**Cuándo se ve un evento.** La grilla muestra todo lo que no esté completado, pero
+el API esconde a los miembros (`pendingPublication`) el molde de una serie que
+publica en Discord y todavía no entró en su ventana de "publicar X días antes":
+para el staff aparece con la etiqueta "Sin publicar". Un evento sin serie se ve
+desde que se crea, aunque falte un año, y un cumpleaños también (no espera
+publicación: la fecha se sabe de antemano). Es decir: la visibilidad la decide la
+ventana de publicación, y apagando la publicación en Discord el evento se ve al
+instante.
+
 **Dos niveles: la lista y la página del evento.** El módulo tiene `#/eventos`
 (el listado) y `#/eventos/<id>` (la página de un evento). En el listado cada
 evento es una **tarjeta compacta** —portada, cuándo empieza, cuánto dura, las
@@ -1049,12 +1066,28 @@ aviso en el acto, así que la serie aparecía de nuevo apenas terminaba la raid.
 **Cumpleaños.** Es un evento más (`type: "birthday"`) de la plantilla `cumple`,
 no un módulo aparte: aparece en la misma grilla, calendario y búsqueda, y se crea
 con el alta normal de eventos eligiendo esa plantilla (la repetición de 12 meses
-se preajusta sola). `birthdayUserId` es el vínculo entre la fecha y la persona, y
-**se copia a cada ocurrencia**: sin eso la copia nace sin dueño y el bot no sabe a
-quién darle el rol. El campo `birthdayUserId` viaja en el evento y el bot lee los
-del día con `GET /internal/guilds/:g/birthdays`. Una fecha pasada se deja de
-listar, porque el molde no se completa a mano y quedaría mostrando un cumpleaños
-de meses atrás.
+se preajusta sola). `birthdayUserId` es el vínculo entre la fecha y la persona. El
+campo viaja en el evento y el bot lee los del día con
+`GET /internal/guilds/:g/birthdays`.
+
+**El cumpleaños no genera ocurrencias: la misma fila apunta siempre a su próxima
+fecha.** Una serie normal crea una copia por ocurrencia, pero en un cumpleaños la
+copia daría el mismo cumpleaños dos veces en la grilla y, con la ventana de
+publicación en 0, la ocurrencia del año siguiente no existiría hasta el mismo día
+(la grilla se quedaría sin fecha). Por eso `runEventRecurrenceSync` lo saltea y,
+cuando el día ya terminó, lo mueve un período con `rolloverBirthday`: borra el
+evento agendado de Discord (apunta a la fecha que pasó), deja el mensaje de saludo
+en el canal salvo que esté "Borrar al completar", limpia los ids guardados (para
+que el año que viene publique un mensaje **nuevo** en vez de editar el del año
+pasado) y mueve `startsAt` al próximo período. Tampoco se archiva una ocurrencia:
+no hay roster ni asistencia que guardar. `listEventsPendingAutoComplete` los deja
+afuera: completarlos los congelaría en la fecha que pasó.
+
+**El aviso de cumpleaños sale el día, no antes.** Su ventana de publicación es 0
+días (`toEvent` normaliza `recurrencePublishDaysBefore` a 0 para `birthday`) y el
+scheduler publica mientras el evento siga vigente en vez de exigir que todavía no
+haya empezado. Como el inicio ya pasó, el evento agendado de Discord se crea con
+la hora actual: Discord rechaza una fecha de inicio en el pasado.
 
 **`signupEnabled: false` = evento informativo.** Es el flag que separa un evento
 que convoca de uno que sólo avisa. Con el flag apagado el evento no tiene roster,

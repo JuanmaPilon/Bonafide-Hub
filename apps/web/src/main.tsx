@@ -1576,6 +1576,16 @@ const COMUNICADO_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
   ...LIST_ORDER_OPTIONS,
 ];
 
+// Los eventos se ordenan como un calendario: primero lo que viene. Es el mismo
+// criterio del menú del nav (donde los próximos van de más cerca a más lejos) y
+// el orden en que se anuncian en Discord.
+const EVENT_ORDER_OPTIONS: Array<{ key: ListOrder; label: string }> = [
+  { key: "oldest", label: "Próximos primero" },
+  { key: "newest", label: "Más lejanos primero" },
+  { key: "az", label: "A-Z" },
+  { key: "za", label: "Z-A" },
+];
+
 // Chips del filtro de rareza de Karuta: cada uno lleva el MATERIAL de su
 // rareza (acero la rara, dorado la súper, holográfico la ultra), el mismo que
 // usan las cartas. `modifier` es la clase que define ese material.
@@ -8920,7 +8930,9 @@ function App() {
   const [eventTagFilter, setEventTagFilter] = useState<string[]>([]);
   // Filtros y buscadores de las listas (mismo mecanismo en todas).
   const [eventSearch, setEventSearch] = useState("");
-  const [eventOrder, setEventOrder] = useState<ListOrder>("newest");
+  // Los eventos se leen de más próximo a más lejano: el orden por defecto es el
+  // que responde "¿qué viene ahora?" (antes arrancaba por el más lejano).
+  const [eventOrder, setEventOrder] = useState<ListOrder>("oldest");
   const [comunicadoSearch, setComunicadoSearch] = useState("");
   const [comunicadoOrder, setComunicadoOrder] = useState<ListOrder>("board");
   const [comunicadoTagFilter, setComunicadoTagFilter] = useState<string[]>([]);
@@ -9241,6 +9253,8 @@ function App() {
       // Rol mínimo y recordatorios: dependen de que haya gente que se anote.
       reminders: asistencia,
       requiredRole: asistencia,
+      // El cumpleaños se anuncia cuando empieza: no hay "publicar X días antes".
+      publishWindow: !esCumple,
       signup: !esCumple,
       signupEnabled: asistencia,
       wholeDay: esCumple,
@@ -16376,25 +16390,29 @@ function App() {
                                         <option value="months">Meses</option>
                                       </select>
                                     </label>
-                                    <label className="event-option-field">
-                                      <span>Publicar (días antes)</span>
-                                      <input
-                                        className="input"
-                                        max="365"
-                                        min="1"
-                                        onChange={(event) =>
-                                          setEventForm((current) => ({
-                                            ...current,
-                                            recurrencePublishDaysBefore:
-                                              event.target.value,
-                                          }))
-                                        }
-                                        type="number"
-                                        value={
-                                          eventForm.recurrencePublishDaysBefore
-                                        }
-                                      />
-                                    </label>
+                                    {/* El cumpleaños se anuncia el día: no hay
+                                        ventana que elegir. */}
+                                    {eventFormFields.publishWindow ? (
+                                      <label className="event-option-field">
+                                        <span>Publicar (días antes)</span>
+                                        <input
+                                          className="input"
+                                          max="365"
+                                          min="1"
+                                          onChange={(event) =>
+                                            setEventForm((current) => ({
+                                              ...current,
+                                              recurrencePublishDaysBefore:
+                                                event.target.value,
+                                            }))
+                                          }
+                                          type="number"
+                                          value={
+                                            eventForm.recurrencePublishDaysBefore
+                                          }
+                                        />
+                                      </label>
+                                    ) : null}
                                   </>
                                 ) : null}
                               </div>
@@ -16708,6 +16726,7 @@ function App() {
                           onOrderChange={setEventOrder}
                           onSearchChange={setEventSearch}
                           order={eventOrder}
+                          orderOptions={EVENT_ORDER_OPTIONS}
                           placeholder="Buscar evento…"
                           search={eventSearch}
                         />

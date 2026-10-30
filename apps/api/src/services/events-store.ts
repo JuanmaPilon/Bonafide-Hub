@@ -67,9 +67,15 @@ export function isEventPendingPublication(
     recurrenceEnabled: boolean;
     recurrencePublishDaysBefore?: number | null;
     startsAt: Date;
+    type?: string;
   },
   now = Date.now(),
 ): boolean {
+  // Un cumpleaños no espera publicación: la fecha se sabe de antemano y el hub
+  // tiene que mostrarlo como próximo. El aviso sale el día del cumpleaños.
+  if (event.type === BIRTHDAY_EVENT_TYPE) {
+    return false;
+  }
   if (!event.recurrenceEnabled || eventIsPublished(event)) {
     return false;
   }
@@ -569,8 +575,12 @@ function toEvent(
     // les mostraba roster e inscripción.
     signupEnabled:
       record.signupEnabled && record.type !== BIRTHDAY_EVENT_TYPE,
+    // Un cumpleaños se anuncia cuando empieza: su ventana de publicación es 0
+    // días. El scheduler lo usa también para decidir cuándo publicar.
     recurrencePublishDaysBefore:
-      record.recurrencePublishDaysBefore ?? undefined,
+      record.type === BIRTHDAY_EVENT_TYPE
+        ? 0
+        : (record.recurrencePublishDaysBefore ?? undefined),
     reminderMessageIds: record.reminderMessageIds,
     reminderHours: record.reminderHours,
     reminderSentHours: record.reminderSentHours,
@@ -598,6 +608,7 @@ function toEvent(
       recurrenceEnabled: record.recurrenceEnabled,
       recurrencePublishDaysBefore: record.recurrencePublishDaysBefore,
       startsAt: record.startsAt,
+      type: record.type,
     }),
   };
 }
@@ -1117,6 +1128,10 @@ export async function listEventsPendingAutoComplete(
 ): Promise<HubEvent[]> {
   const records = await prisma.hubEvent.findMany({
     where: {
+      // Un cumpleaños no se completa: se mueve solo a su próxima fecha (ver el
+      // scheduler de recurrencia). Completarlo lo congelaría en el día que pasó
+      // y la web no lo mostraría nunca más.
+      type: { not: BIRTHDAY_EVENT_TYPE },
       OR: [{ recurrenceEnabled: false }, { discordCleanupOnComplete: true }],
       paused: false,
       // Filtro grueso en SQL (descarta los que ni empezaron) y fino en memoria,

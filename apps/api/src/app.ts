@@ -114,6 +114,7 @@ import {
   refreshDiscordAttachmentUrls,
 } from "./services/discord-cdn.js";
 import {
+  BIRTHDAY_EVENT_TYPE,
   EVENT_TYPES,
   RAID_ROLES,
   SIGNUP_ROLES,
@@ -1757,6 +1758,45 @@ function startEventAutoCompleteSync(): void {
   }, EVENT_AUTO_COMPLETE_SYNC_INTERVAL_MS);
 }
 
+// Un cumpleaños no se completa: el mismo registro apunta siempre a su próxima
+// fecha. Cuando el día termina se mueve un período (12 meses) y se limpia el
+// rastro de la publicación, así el aviso del año que viene sale como mensaje
+// nuevo en vez de editar el del año pasado. Tampoco se archiva una ocurrencia:
+// no hay roster ni asistencia que guardar.
+async function rolloverBirthday(head: HubEvent): Promise<void> {
+  const step = recurrenceStep(head);
+  const ahora = Date.now();
+  let next = advanceByUnit(head.startsAt, step.count, step.unit);
+  // Si el API estuvo caído, saltamos las fechas que ya pasaron.
+  for (let guard = 0; guard < 64 && next.getTime() <= ahora; guard += 1) {
+    next = advanceByUnit(next, step.count, step.unit);
+  }
+
+  // El evento agendado de Discord apunta a la fecha que pasó: se borra siempre.
+  // El mensaje de saludo queda en el canal salvo que el staff haya pedido
+  // "Borrar al completar": es un saludo, no un aviso que haya que archivar.
+  const cleanup = await cleanupEventDiscord({
+    discordEventId: head.discordEventId,
+    discordMessageIds: head.discordCleanupOnComplete
+      ? head.discordMessageIds
+      : [],
+    guildId: head.guildId,
+    pollMessageId: head.discordPollMessageId,
+    publishChannelId: head.publishChannelId,
+    reminderMessageIds: [],
+  });
+
+  await resetEventOccurrence(head.guildId, head.id, {
+    recurrenceNextAt: advanceByUnit(next, step.count, step.unit),
+    signupDeadline: null,
+    startsAt: next,
+  });
+
+  console.log(
+    `[eventos] cumpleaños "${head.title}": movido a ${next.toISOString()}${cleanup.failed.length ? ` · fallos en Discord: ${cleanup.failed.join(" | ")}` : ""}`,
+  );
+}
+
 async function runEventRecurrenceSync(): Promise<void> {
   try {
     const series = await listRecurrenceSeries();
@@ -1765,9 +1805,13 @@ async function runEventRecurrenceSync(): Promise<void> {
       if (!head.recurrenceNextAt) {
         continue;
       }
-      // Cuántos días antes de la fecha del evento se publica la ocurrencia.
-      const publishBeforeMs =
-        Math.max(1, head.recurrencePublishDaysBefore ?? 1) * DAY_MS;
+      const esCumple = head.type === BIRTHDAY_EVENT_TYPE;
+      // Cuántos días antes de la fecha del evento se publica la ocurrencia. Un
+      // cumpleaños se anuncia el día: se saluda cuando empieza, no una semana
+      // antes (el cumpleaños que ya pasó se mueve en el paso 3).
+      const publishBeforeMs = esCumple
+        ? 0
+        : Math.max(1, head.recurrencePublishDaysBefore ?? 1) * DAY_MS;
       let nextAt = head.recurrenceNextAt;
       let changed = false;
 
@@ -1779,7 +1823,11 @@ async function runEventRecurrenceSync(): Promise<void> {
       if (
         headPending &&
         eventPublishesToDiscord(head) &&
-        head.startsAt.getTime() > Date.now() &&
+        // Con ventana 0 el aviso sale al empezar, así que vale mientras el
+        // evento siga vigente (el cumpleaños dura el día entero).
+        (publishBeforeMs > 0
+          ? head.startsAt.getTime() > Date.now()
+          : eventAutoCompleteAt(head).getTime() > Date.now()) &&
         head.startsAt.getTime() - publishBeforeMs <= Date.now()
       ) {
         const published = await publishSeriesHead(head);
@@ -1792,6 +1840,18 @@ async function runEventRecurrenceSync(): Promise<void> {
             `[eventos] recurrencia: publicada la ocurrencia de "${head.title}" para ${head.startsAt.toISOString()}`,
           );
         }
+      }
+
+      // Un cumpleaños no genera ocurrencias (los pasos 1 y 2 son para las
+      // series): la misma fila apunta siempre a su próxima fecha. Cuando el día
+      // termina se mueve un período y se limpia el rastro de la publicación, así
+      // el aviso del año que viene sale nuevo (si no se limpiara, editaría el
+      // mensaje del año pasado).
+      if (esCumple) {
+        if (eventAutoCompleteAt(head).getTime() <= Date.now()) {
+          await rolloverBirthday(head);
+        }
+        continue;
       }
 
       // 1) Ocurrencias cuya fecha ya pasó (API caída mucho tiempo): las
