@@ -601,6 +601,37 @@ function resolveEmbedImageUrl(
   return undefined;
 }
 
+// Color del aviso. Sale de la PRIMERA etiqueta del evento: ahí es donde el staff
+// pone la dificultad de la raid ("Heroico", "Mítico"…) con su color, y el mismo
+// criterio sirve para cualquier otro tipo de evento (las etiquetas son libres).
+// Los estados mandan sobre la etiqueta: pausado gris, inscripciones cerradas
+// rojo. Sin etiquetas queda el color de siempre.
+const EVENT_EMBED_COLOR = 0x6aa8ff;
+const EVENT_EMBED_PAUSED_COLOR = 0x8b93a7;
+const EVENT_EMBED_CLOSED_COLOR = 0xe5484d;
+
+// "#ff8a5c" → 0xff8a5c (Discord quiere el entero). null si no es un hex válido.
+function hexColorToInt(value: string | undefined): number | null {
+  const hex = (value ?? "").trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+    return null;
+  }
+  return Number.parseInt(hex, 16);
+}
+
+function eventEmbedColor(
+  input: { paused?: boolean; signupsClosed?: boolean; tags?: EventTag[] },
+  fallback: number,
+): number {
+  if (input.paused === true) {
+    return EVENT_EMBED_PAUSED_COLOR;
+  }
+  if (input.signupsClosed === true) {
+    return EVENT_EMBED_CLOSED_COLOR;
+  }
+  return hexColorToInt(input.tags?.[0]?.color) ?? fallback;
+}
+
 // Construye el/los embeds del aviso con info del evento + roster.
 export function buildEventAnnouncementEmbeds(input: {
   classLabel?: string;
@@ -664,7 +695,10 @@ export function buildEventAnnouncementEmbeds(input: {
 
     const simple: Record<string, unknown> = {
       title: input.title.slice(0, 250),
-      color: esCumple ? 0xff73fa : 0x6aa8ff,
+      color: eventEmbedColor(
+        { paused: input.paused, tags: input.tags },
+        esCumple ? 0xff73fa : EVENT_EMBED_COLOR,
+      ),
       description:
         [
           esCumple
@@ -980,8 +1014,10 @@ export function buildEventAnnouncementEmbeds(input: {
 
   const embed: Record<string, unknown> = {
     title: input.title.slice(0, 250),
-    // Gris si está pausado, rojo si ya no se puede anotar; azul el resto.
-    color: isPaused ? 0x8b93a7 : signupsClosed ? 0xe5484d : 0x6aa8ff,
+    color: eventEmbedColor(
+      { paused: isPaused, signupsClosed, tags: input.tags },
+      EVENT_EMBED_COLOR,
+    ),
     description: descriptionText,
     fields,
     footer: { text: footerText },

@@ -1148,6 +1148,14 @@ recordatorios y el pedido de personaje (es el mismo `signupEnabled` del párrafo
 anterior). La encuesta, que antes sólo aceptaba horas, ahora tiene selector de
 horas o días (el API sigue guardando horas).
 
+**El color del aviso es el de la primera etiqueta del evento.** Las etiquetas son
+libres, así que ahí es donde el staff pone la dificultad de la raid ("Heroico",
+"Mítico"…) y su color; el mismo criterio sirve para cualquier tipo de evento, y
+es el color que la web ya pinta en el chip de la tarjeta. Los **estados mandan**
+sobre la etiqueta: pausado gris, inscripciones cerradas rojo. Sin etiquetas queda
+el azul de siempre (rosa en un cumpleaños), que es lo que tenían todos los avisos
+antes. Lo resuelve `eventEmbedColor` en el publisher.
+
 **Íconos en vez de emojis.** En el hub los datos del evento (empieza, termina,
 cierre, repetición, ubicación, roster principal, Discord) y los tipos
 (`Sword` raid, `Key` M+, `Trophy` PvP, `Confetti` social) se dibujan con íconos de
