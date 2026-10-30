@@ -3254,6 +3254,38 @@ async function withDiscordRetry<T>(
   return null;
 }
 
+// Re-aplica el adorno del nick de uno o más miembros. Lo usa el barrido de
+// cumpleaños después de dar o sacar el rol: el sync de XP corre sólo cuando el
+// staff lo pide, así que el adorno configurado para ese rol no llegaría nunca
+// solo. Va por la cola de escrituras del miembro para no pisarse con el cambio
+// de rol.
+export async function refreshNicknamesForMembers(
+  guildId: string,
+  userIds: string[],
+): Promise<void> {
+  if (userIds.length === 0 || !isRemoteStoreEnabled()) {
+    return;
+  }
+  // Sin los niveles no se toca nada: applyNicknameForLevel con level 0 le
+  // sacaría el adorno de nivel que ya tenía.
+  const profiles = await fetchRemoteXpProfiles(guildId).catch(() => null);
+  if (!profiles) {
+    return;
+  }
+  const levelByUser = new Map(
+    profiles.map((profile) => [profile.userId, profile.level]),
+  );
+  for (const userId of userIds) {
+    await enqueueMemberWrite(guildId, userId, () =>
+      applyNicknameForLevel({
+        guildId,
+        level: levelByUser.get(userId) ?? 0,
+        userId,
+      }),
+    ).catch(() => undefined);
+  }
+}
+
 // Aplica los premios de nivel al miembro: PRIMERO los roles y después el
 // prefijo del nick. Va en serie a propósito: en paralelo, Discord rate-limita
 // una de las dos ediciones y el rango quedaba sin asignar.

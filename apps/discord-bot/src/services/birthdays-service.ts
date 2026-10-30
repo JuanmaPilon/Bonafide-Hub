@@ -33,6 +33,29 @@ type BirthdayEvent = {
 // Última fecha (YYYY-MM-DD) en la que corrió el anuncio, por guild: evita
 // repetir el saludo en cada tick del mismo día.
 const announced = new Map<string, string>();
+// Última fecha en la que se pidió la lista completa de miembros, por guild: es
+// lo más caro del barrido y para sacar un rol no hace falta repetirla cada 15
+// minutos.
+const listaCompletaPedida = new Map<string, string>();
+
+// El adorno del nick vive en index.ts (es donde están el cliente y el sync de
+// XP). El import es dinámico porque index.ts ya importa este módulo: uno
+// estático sería un ciclo.
+async function refreshNicknames(
+  guildId: string,
+  userIds: string[],
+): Promise<void> {
+  try {
+    const { refreshNicknamesForMembers } = await import("../index.js");
+    await refreshNicknamesForMembers(guildId, userIds);
+  } catch (error) {
+    console.warn(
+      `[cumpleaños] no se pudo actualizar el adorno del nick: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
 
 function createTimeoutController(timeoutMs: number): AbortController {
   const controller = new AbortController();
@@ -181,6 +204,7 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
 
   // Poner el rol a quien cumple hoy.
   let assigned = 0;
+  const tocarNick = new Set<string>();
   for (const userId of idsHoy) {
     const member =
       guild.members.cache.get(userId) ??
@@ -194,21 +218,32 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
     if (!member.roles.cache.has(role.roleId)) {
       await addRole(member, role.roleId);
       assigned += 1;
+      tocarNick.add(userId);
     }
   }
 
   // Quitarlo a quien lo tenga sin cumplir hoy: sin esto, al año siguiente medio
   // server sigue con el rol puesto.
   // El cache de miembros no viene completo (sólo los que el bot ya vio), así
-  // que la lista se pide al gateway antes de revisar.
-  if (guild.members.cache.size < guild.memberCount) {
-    await guild.members.fetch().catch((error: unknown) => {
-      console.warn(
-        `[cumpleaños] no se pudo leer la lista de miembros de ${guild.name}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    });
+  // que la lista se pide al gateway antes de revisar. La lista entera se pide
+  // una vez por día: es lo más caro del barrido y para sacar un rol no hace
+  // falta repetirlo cada 15 minutos.
+  const pedirListaCompleta = listaCompletaPedida.get(guild.id) !== hoy;
+  if (pedirListaCompleta && guild.members.cache.size < guild.memberCount) {
+    const listo = await guild.members.fetch().then(
+      () => true,
+      (error: unknown) => {
+        console.warn(
+          `[cumpleaños] no se pudo leer la lista de miembros de ${guild.name}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return false;
+      },
+    );
+    if (listo) {
+      listaCompletaPedida.set(guild.id, hoy);
+    }
   }
   for (const member of guild.members.cache.values()) {
     if (!member.roles.cache.has(role.roleId) || idsHoy.has(member.id)) {
@@ -216,13 +251,23 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
     }
     await member.roles
       .remove(role.roleId, "Cumpleaños terminado")
-      .catch((error: unknown) => {
-        console.warn(
-          `[cumpleaños] no se pudo quitar el rol a ${member.user.tag}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      });
+      .then(
+        () => tocarNick.add(member.id),
+        (error: unknown) => {
+          console.warn(
+            `[cumpleaños] no se pudo quitar el rol a ${member.user.tag}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        },
+      );
+  }
+
+  // El rol trae su adorno del nick (Admin → XP: los roles con multiplicador
+  // pueden llevar uno). El sync de XP sólo corre cuando el staff lo pide, así
+  // que sin esto el adorno nunca aparecía.
+  if (tocarNick.size > 0) {
+    await refreshNicknames(guild.id, [...tocarNick]);
   }
 
   // Resumen de la pasada: va al log (una línea) para poder ver en Railway que
