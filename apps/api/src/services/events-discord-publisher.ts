@@ -217,6 +217,26 @@ function nextSchedulableMinute(): Date {
   return new Date(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000);
 }
 
+// Pone el evento agendado "en curso". Los eventos de voz quedan en "Iniciará
+// pronto" hasta que alguien aprieta "Iniciar": cuando el evento ya empezó (un
+// cumpleaños de hoy, que empieza a las 00:00) lo arrancamos nosotros, si no
+// queda anunciado para siempre y nunca arranca.
+async function startScheduledEvent(input: {
+  discordEventId: string;
+  guildId: string;
+}): Promise<void> {
+  const response = await discordFetch(
+    `/guilds/${encodeURIComponent(input.guildId)}/scheduled-events/${encodeURIComponent(input.discordEventId)}`,
+    { method: "PATCH", body: { status: 2 } },
+  ).catch(() => null);
+  if (!response || response.ok || response.status === 404) {
+    return;
+  }
+  console.warn(
+    `[eventos] no se pudo iniciar el evento agendado ${input.discordEventId} (${response.status})`,
+  );
+}
+
 // Crea un Scheduled Event en la guild. Devuelve su id o un error.
 async function createScheduledEvent(input: {
   description?: string;
@@ -1401,9 +1421,14 @@ export async function syncEventToDiscord(input: {
     const existingId = input.existing?.discordEventId;
 
     if (existingId && started) {
-      // Ya existe y el evento ya arrancó: no se toca. Mover el inicio a "ahora"
-      // en cada sync (lo que hacía antes) lo dejaba "por empezar" para siempre.
+      // Ya existe y el evento ya arrancó: no se mueve el inicio (eso lo dejaba
+      // "por empezar" para siempre), pero sí se arranca: Discord lo deja en
+      // "Iniciará pronto" hasta que alguien aprieta "Iniciar".
       result.discordEventId = existingId;
+      await startScheduledEvent({
+        discordEventId: existingId,
+        guildId: input.guildId,
+      });
     } else if (!started || endsAt > now) {
       // Si la fecha ya pasó pero el evento sigue vigente (un cumpleaños cargado
       // el mismo día) el evento agendado arranca ahora y termina cuando termina
@@ -1450,6 +1475,15 @@ export async function syncEventToDiscord(input: {
           return result;
         }
         result.discordEventId = created.id;
+      }
+      // Si nació con la fecha ya pasada (evento cargado el mismo día) hay que
+      // arrancarlo: si no, queda "Iniciará pronto" hasta que alguien apriete
+      // "Iniciar" a mano.
+      if (started && result.discordEventId) {
+        await startScheduledEvent({
+          discordEventId: result.discordEventId,
+          guildId: input.guildId,
+        });
       }
     } else {
       // El evento ya terminó: no hay nada que agendar.

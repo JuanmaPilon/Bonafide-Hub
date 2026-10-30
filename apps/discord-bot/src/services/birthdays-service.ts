@@ -11,8 +11,10 @@ import { getGuildConfig } from "./guild-config-store.js";
 const remoteApiBaseUrl = env.BOT_CONFIG_API_URL?.trim().replace(/\/+$/, "");
 const remoteApiToken = env.BOT_CONFIG_API_TOKEN?.trim();
 const remoteTimeoutMs = 5000;
-// Una vez por hora alcanza: lo que importa es no saltearse el cambio de día.
-const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+// Cada cuarto de hora: el rol se da y se quita el mismo día, así que conviene
+// que reaccione rápido cuando alguien carga el cumpleaños a mitad del día (con
+// una hora de espera parecía que no funcionaba).
+const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 // Zona horaria de la celebración. El servidor corre en UTC, así que sin esto
 // alguien que cumple el 5 recibiría el rol a las 21:00 del 4.
 const BIRTHDAY_TIMEZONE = env.BIRTHDAY_TIMEZONE?.trim() || "America/Argentina/Buenos_Aires";
@@ -80,17 +82,36 @@ async function fetchBirthdayEvents(guildId: string): Promise<BirthdayEvent[]> {
   }
 }
 
-// El rol del cumpleaños: se reusa el guardado y, si ya no existe en el guild
-// (alguien lo borró a mano), se vuelve a crear.
+// ¿Es el rol del cumpleaños? Se compara por nombre sin el emoji, así engancha
+// tanto el que crea el bot ("🎂 Cumpleaños") como uno armado a mano
+// ("Cumpleaños"). Sirve para reusarlo en vez de crear un duplicado.
+function isBirthdayRoleName(name: string): boolean {
+  return (
+    name
+      .replace(/\p{Extended_Pictographic}/gu, "")
+      .trim()
+      .toLowerCase() === "cumpleaños"
+  );
+}
+
+// El rol del cumpleaños: se reusa el guardado, si no el que ya exista con ese
+// nombre (armado a mano) y, como último recurso, se crea. Reusar el que está
+// evita necesitar "Gestionar roles": alcanza con que el rol del bot esté arriba.
 async function ensureBirthdayRole(
   guild: Guild,
   savedRoleId: string | null | undefined,
-): Promise<{ created: boolean; roleId: string | null }> {
+): Promise<{ remember: boolean; roleId: string | null }> {
   if (savedRoleId) {
     const existing = guild.roles.cache.get(savedRoleId);
     if (existing) {
-      return { created: false, roleId: existing.id };
+      return { remember: false, roleId: existing.id };
     }
+  }
+  const byName = guild.roles.cache.find((role) =>
+    isBirthdayRoleName(role.name),
+  );
+  if (byName) {
+    return { remember: true, roleId: byName.id };
   }
   try {
     const role = await guild.roles.create({
@@ -99,7 +120,7 @@ async function ensureBirthdayRole(
       name: BIRTHDAY_ROLE_NAME,
       reason: "Rol temporal de cumpleaños (Bonafide Hub)",
     });
-    return { created: true, roleId: role.id };
+    return { remember: true, roleId: role.id };
   } catch (error) {
     // Lo habitual: al bot le falta "Gestionar roles" o su rol quedó por debajo
     // en la jerarquía. Se avisa una vez y el resto del barrido sigue.
@@ -108,7 +129,7 @@ async function ensureBirthdayRole(
         error instanceof Error ? error.message : String(error)
       } (revisá el permiso "Gestionar roles" y que el rol del bot esté arriba)`,
     );
-    return { created: false, roleId: null };
+    return { remember: false, roleId: null };
   }
 }
 
@@ -140,8 +161,8 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
   }
 
   const role = await ensureBirthdayRole(guild, config.birthdayRoleId);
-  if (role.created && role.roleId) {
-    // Se guarda para no recrearlo en el próximo tick ni al reiniciar.
+  if (role.remember && role.roleId) {
+    // Se guarda para no volver a buscarlo en el próximo tick ni al reiniciar.
     await fetch(
       `${remoteApiBaseUrl}/internal/guilds/${encodeURIComponent(guild.id)}/config`,
       {
@@ -159,13 +180,20 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
   }
 
   // Poner el rol a quien cumple hoy.
+  let assigned = 0;
   for (const userId of idsHoy) {
-    const member = await guild.members.fetch(userId).catch(() => null);
+    const member =
+      guild.members.cache.get(userId) ??
+      (await guild.members.fetch(userId).catch(() => null));
     if (!member) {
+      console.warn(
+        `[cumpleaños] ${userId} cumple hoy pero no está en el guild ${guild.name}`,
+      );
       continue;
     }
     if (!member.roles.cache.has(role.roleId)) {
       await addRole(member, role.roleId);
+      assigned += 1;
     }
   }
 
@@ -196,6 +224,12 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
         );
       });
   }
+
+  // Resumen de la pasada: va al log (una línea) para poder ver en Railway que
+  // encontró el cumpleaños y a quién le dio el rol, haya o no canal configurado.
+  console.log(
+    `[cumpleaños] ${guild.name}: ${idsHoy.size} hoy (${[...idsHoy].join(", ") || "nadie"}) · rol ${role.roleId} · ${assigned} asignado(s)`,
+  );
 
   // Saludo: una vez por día y sólo si hay canal.
   if (!config.birthdayChannelId || cumpleHoy.length === 0) {

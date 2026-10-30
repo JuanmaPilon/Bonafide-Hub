@@ -135,16 +135,21 @@ Detalles que no son obvios:
 7. Scheduler del loro → publica una frase aleatoria a intervalos aleatorios (relee config cada ~2 min)
 8. `MessageCreate`/`MessageUpdate` (Karuta) → detecta cartas raras (`kv`), su colección (`ka`) y transferencias (`kg`/grab) en el canal vigilado y las guarda en la API
 9. `PresenceUpdate` → juegos que se juegan en el server (ver abajo)
-10. Barrido de cumpleaños (`birthdays-service`) → una vez por hora mira qué
+10. Barrido de cumpleaños (`birthdays-service`) → cada 15 minutos mira qué
     eventos de la plantilla `cumple` caen hoy en la zona horaria configurada,
-    crea el rol `🎂 Cumpleaños` si hace falta (sólo cuando hay alguien que cumple
-    o cuando ya había un rol guardado al que hay que sacárselo), se lo pone a
-    quien cumple y se lo quita al resto, y saluda en el canal configurado. La
-    remoción pide la lista de miembros al gateway (`guild.members.fetch()`) antes
-    de revisar: el cache del bot no viene completo y alguien quedaba con el rol
-    puesto hasta el año siguiente. El saludo se reintenta: el día se marca recién
-    cuando el mensaje salió. Si al bot le falta *Gestionar roles* (o su rol quedó
-    por debajo), lo deja en el log y sigue con el resto.
+    resuelve el rol `🎂 Cumpleaños` y se lo pone a quien cumple y se lo quita al
+    resto; si hay canal configurado, además saluda. El rol se reusa: primero el
+    guardado en la config, después **uno que ya exista con ese nombre** (armado a
+    mano, con o sin emoji) y recién ahí se crea. Reusar el que está evita
+    depender de *Gestionar roles*: alcanza con que el rol del bot esté arriba en
+    la jerarquía. La remoción pide la lista de miembros al gateway
+    (`guild.members.fetch()`) antes de revisar: el cache del bot no viene
+    completo y alguien quedaba con el rol puesto hasta el año siguiente. El
+    saludo se reintenta: el día se marca recién cuando el mensaje salió. Cada
+    pasada deja una línea en el log (`N hoy · rol <id> · M asignado(s)`) para
+    poder ver en Railway que encontró el cumpleaños aunque no haya canal. Si al
+    bot le falta *Gestionar roles* (o su rol quedó por debajo), lo deja en el log
+    y sigue con el resto.
 
 ### Juegos que se juegan en el server
 

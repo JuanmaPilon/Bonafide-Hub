@@ -1100,8 +1100,11 @@ guardar el evento y en `rolloverBirthday`, que lo vuelve a crear para el próxim
 año. Si se crea cuando el evento **ya empezó pero sigue vigente** (un cumpleaños
 cargado el mismo día), el evento agendado arranca en el minuto siguiente y
 termina cuando termina el evento. Y si ya existía y el evento ya arrancó, **no se
-toca**: mover el inicio en cada sync era lo que lo dejaba "por empezar" para
-siempre. Pasado el fin del evento no se agenda nada.
+mueve el inicio** (moverlo en cada sync era lo que lo dejaba "por empezar" para
+siempre), pero sí se **arranca**: los eventos de voz quedan en "Iniciará pronto"
+hasta que alguien aprieta "Iniciar", así que cuando el evento ya empezó se manda
+`PATCH { status: 2 }` y queda "en curso". Pasado el fin del evento no se agenda
+nada.
 
 **El cumpleaños no desaparece del hub a las 00:00.** `listEvents` lo muestra
 hasta que **termina** (fin + la hora de gracia del cierre automático), no hasta
