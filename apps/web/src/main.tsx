@@ -9123,10 +9123,16 @@ function App() {
   // Menú del nav: los eventos abiertos (los próximos), del más cercano al más
   // lejano; los cerrados viven en Admin → Eventos. La lista completa se abre
   // clickeando "Eventos" en el nav. El submenú se scrollea si hay muchos.
+  // Un cumpleaños entra recién en su semana: la fecha existe desde que se carga
+  // (a veces falta un año) y en una lista de "próximos" sería una línea suelta.
+  // El staff lo sigue viendo en la grilla, con la etiqueta "Sin publicar".
   const navEventMenu = useMemo(
     () =>
       events
         .filter((entry) => entry.status !== "completed")
+        .filter(
+          (entry) => !(entry.type === "birthday" && entry.pendingPublication),
+        )
         .sort(
           (left, right) =>
             new Date(left.startsAt).getTime() -
@@ -16462,6 +16468,42 @@ function App() {
                                 {eventForm.discord.createScheduledEvent ||
                                 eventForm.discord.publishMessage ? (
                                   <div className="event-option-fields">
+                                    {/* La sala de voz va primero: es la que ya
+                                        estaba cuando sólo había Scheduled Event.
+                                        Con el canal de publicación delante, la
+                                        sala se corría a la derecha al prender
+                                        el aviso. */}
+                                    {eventForm.discord.createScheduledEvent ? (
+                                      <label className="event-option-field">
+                                        <span>Sala de voz</span>
+                                        <select
+                                          className="select"
+                                          onChange={(event) =>
+                                            setEventForm((current) => ({
+                                              ...current,
+                                              discord: {
+                                                ...current.discord,
+                                                voiceChannelId:
+                                                  event.target.value,
+                                              },
+                                            }))
+                                          }
+                                          value={eventForm.discord.voiceChannelId}
+                                        >
+                                          <option value="">
+                                            Seleccionar sala de voz…
+                                          </option>
+                                          {voiceChannels.map((channel) => (
+                                            <option
+                                              key={channel.id}
+                                              value={channel.id}
+                                            >
+                                              {channel.name}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    ) : null}
                                     {eventForm.discord.publishMessage ? (
                                       <label className="event-option-field">
                                         <span>Canal de publicación</span>
@@ -16485,37 +16527,6 @@ function App() {
                                             Seleccionar canal…
                                           </option>
                                           {textChannels.map((channel) => (
-                                            <option
-                                              key={channel.id}
-                                              value={channel.id}
-                                            >
-                                              {channel.name}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </label>
-                                    ) : null}
-                                    {eventForm.discord.createScheduledEvent ? (
-                                      <label className="event-option-field">
-                                        <span>Sala de voz</span>
-                                        <select
-                                          className="select"
-                                          onChange={(event) =>
-                                            setEventForm((current) => ({
-                                              ...current,
-                                              discord: {
-                                                ...current.discord,
-                                                voiceChannelId:
-                                                  event.target.value,
-                                              },
-                                            }))
-                                          }
-                                          value={eventForm.discord.voiceChannelId}
-                                        >
-                                          <option value="">
-                                            Seleccionar sala de voz…
-                                          </option>
-                                          {voiceChannels.map((channel) => (
                                             <option
                                               key={channel.id}
                                               value={channel.id}

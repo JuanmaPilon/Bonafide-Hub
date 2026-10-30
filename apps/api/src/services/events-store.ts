@@ -53,6 +53,11 @@ export function eventPublishesToDiscord(event: {
   );
 }
 
+// Días antes del cumpleaños en que aparece en el hub (la grilla y el menú del
+// nav). Es una fecha fija, no un evento que se publica: más lejos sería una
+// línea suelta en la lista de próximos, y el aviso en Discord sale el mismo día.
+export const BIRTHDAY_VISIBILITY_DAYS = 7;
+
 // Un evento está pendiente de publicación cuando es el molde de una serie que
 // publica en Discord y todavía no entró en su ventana (X días antes del inicio).
 // Es una sola fuente: el scheduler que publica y la API que lista usan esto, así
@@ -71,10 +76,10 @@ export function isEventPendingPublication(
   },
   now = Date.now(),
 ): boolean {
-  // Un cumpleaños no espera publicación: la fecha se sabe de antemano y el hub
-  // tiene que mostrarlo como próximo. El aviso sale el día del cumpleaños.
+  // Un cumpleaños no espera publicación (el aviso sale el día), pero tampoco se
+  // muestra desde que se carga: entra al hub en su semana.
   if (event.type === BIRTHDAY_EVENT_TYPE) {
-    return false;
+    return event.startsAt.getTime() - BIRTHDAY_VISIBILITY_DAYS * DAY_MS > now;
   }
   if (!event.recurrenceEnabled || eventIsPublished(event)) {
     return false;

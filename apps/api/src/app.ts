@@ -2377,6 +2377,7 @@ async function rosterCoverageFor(
 async function syncAndStoreEventDiscord(input: {
   discordOpts: EventDiscordOptions;
   event: {
+    birthdayUserId?: string;
     characterEnabled: boolean;
     description?: string;
     durationMinutes?: number;
@@ -2418,6 +2419,7 @@ async function syncAndStoreEventDiscord(input: {
   // Plantilla de encuesta: además del aviso, se publica el poll nativo.
   const poll = findEventTemplate(event.game)?.poll === true;
   const result = await syncEventToDiscord({
+    birthdayUserId: event.birthdayUserId,
     characterEnabled: event.characterEnabled !== false,
     classLabel: eventConfig.eventClassLabel,
     description: event.description,
@@ -2509,6 +2511,7 @@ async function refreshEventAnnouncement(
     const eventConfig = await getGuildConfig(guildId);
     const coverage = await rosterCoverageFor(guildId, event);
     const embeds = buildEventAnnouncementEmbeds({
+      birthdayUserId: event.birthdayUserId,
       characterEnabled: event.characterEnabled !== false,
       classLabel: eventConfig.eventClassLabel,
       description: event.description,
@@ -2562,6 +2565,7 @@ async function refreshEventAnnouncement(
       // etiquetado aunque el aviso sea viejo).
       content: await resolveAnnouncementContent({
         benchRoleId: benchRoleForGame(event.game, await benchRoleIdFor(guildId)),
+        birthdayUserId: event.birthdayUserId,
         channelId: event.publishChannelId,
         messageId,
         requiredRoleId: event.requiredRoleId,

@@ -377,12 +377,20 @@ async function fetchMessageContent(
 // Devuelve "" sin roles (limpia una mención vieja que haya quedado).
 export function announcementContent(input: {
   benchRoleId?: string;
+  // Cumpleaños: la persona a etiquetar. Una mención dentro del embed se dibuja
+  // pero NO notifica, así que tiene que ir en el contenido del mensaje.
+  birthdayUserId?: string;
   requiredRoleId?: string;
 }): string {
   const roles = [input.requiredRoleId, input.benchRoleId]
     .map((roleId) => roleId?.trim())
     .filter((roleId): roleId is string => Boolean(roleId));
-  return [...new Set(roles)].map((roleId) => `<@&${roleId}>`).join(" ");
+  const parts = [...new Set(roles)].map((roleId) => `<@&${roleId}>`);
+  const userId = input.birthdayUserId?.trim();
+  if (userId) {
+    parts.push(`<@${userId}>`);
+  }
+  return parts.join(" ");
 }
 
 // Contenido que DEBE tener el aviso. Devuelve `undefined` (no tocar) cuando el
@@ -392,6 +400,7 @@ export function announcementContent(input: {
 // `allowed_mentions: { parse: [] }`).
 export async function resolveAnnouncementContent(input: {
   benchRoleId?: string;
+  birthdayUserId?: string;
   channelId: string;
   messageId: string;
   requiredRoleId?: string;
@@ -641,6 +650,9 @@ export function buildEventAnnouncementEmbeds(input: {
   signupEnabled?: boolean;
   // Si el juego no usa personaje, el aviso no muestra el botón "Personaje".
   characterEnabled?: boolean;
+  // Cumpleaños: la persona a etiquetar en el aviso. Además del embed, viaja en
+  // el contenido del mensaje, que es lo único que notifica en Discord.
+  birthdayUserId?: string;
 }): Array<Record<string, unknown>> {
   const typeLabel = input.type ?? "evento";
   const timestamp = Math.floor(input.startsAt.getTime() / 1000);
@@ -651,20 +663,27 @@ export function buildEventAnnouncementEmbeds(input: {
   // conteo de asistencia, y en Discord no lleva botones.
   if (input.signupEnabled === false) {
     const esCumple = input.type === "birthday";
+    // La mención al cumpleañero va también en el texto del embed (ahí no
+    // notifica, pero se lee como su nombre); la notificación sale por el
+    // contenido del mensaje, ver announcementContent.
+    const saludo =
+      esCumple && input.birthdayUserId
+        ? `\n\n¡Feliz cumpleaños, <@${input.birthdayUserId}>! 🎉`
+        : "";
+
     const simple: Record<string, unknown> = {
       title: input.title.slice(0, 250),
       color: esCumple ? 0xff73fa : 0x6aa8ff,
-      description: [
-        esCumple
-          ? `🎂 **Todo el día · <t:${timestamp}:D>**`
-          : `🗓️ **<t:${timestamp}:F>**`,
-        input.description?.trim(),
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-      fields: esCumple
-        ? [{ name: "🎉", value: "¡Felicitalo cuando lo veas!" }]
-        : [],
+      description:
+        [
+          esCumple
+            ? `🎂 **Todo el día · <t:${timestamp}:D>**`
+            : `🗓️ **<t:${timestamp}:F>**`,
+          input.description?.trim(),
+        ]
+          .filter(Boolean)
+          .join("\n\n") + saludo,
+      fields: [],
       footer: { text: `Bonafide Hub · ${typeLabel}` },
       timestamp: new Date().toISOString(),
     };
@@ -1288,6 +1307,8 @@ export async function postEventPoll(input: {
 export async function syncEventToDiscord(input: {
   // Rol de Bench del roster: el aviso lo menciona junto al rol mínimo.
   benchRoleId?: string;
+  // Cumpleaños: la persona etiquetada en el aviso.
+  birthdayUserId?: string;
   characterEnabled?: boolean;
   classLabel?: string;
   description?: string;
@@ -1382,6 +1403,7 @@ export async function syncEventToDiscord(input: {
   if (options.publishMessage && options.publishChannelId) {
     const announcementInput = {
       benchRoleId: input.benchRoleId,
+      birthdayUserId: input.birthdayUserId,
       channelId: options.publishChannelId,
       characterEnabled: input.characterEnabled,
       classLabel: input.classLabel,
@@ -1425,6 +1447,7 @@ export async function syncEventToDiscord(input: {
       // quedó con decoración vieja (p. ej. `🛡️ <@&rol>`), sin re-notificar.
       const content = await resolveAnnouncementContent({
         benchRoleId: input.benchRoleId,
+        birthdayUserId: input.birthdayUserId,
         channelId: options.publishChannelId,
         messageId: previousMessages[0],
         requiredRoleId: input.requiredRoleId,

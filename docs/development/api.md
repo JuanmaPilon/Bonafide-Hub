@@ -1089,6 +1089,18 @@ scheduler publica mientras el evento siga vigente en vez de exigir que todavía 
 haya empezado. Como el inicio ya pasó, el evento agendado de Discord se crea con
 la hora actual: Discord rechaza una fecha de inicio en el pasado.
 
+**El aviso etiqueta a la persona.** La mención va en el **contenido** del mensaje
+(`<@id>`), que es lo único que notifica en Discord: una mención dentro del embed
+se dibuja pero no avisa. El embed además la repite en el texto
+(`¡Feliz cumpleaños, <@id>! 🎉`) para que se lea el nombre.
+
+**El cumpleaños entra al hub en su semana, no cuando se carga.** La fecha existe
+desde el primer día (a veces falta un año), pero en una lista de "próximos" sería
+una línea suelta: `isEventPendingPublication` lo marca pendiente hasta
+`BIRTHDAY_VISIBILITY_DAYS` (7) días antes, así que los miembros lo ven en su
+semana y el menú del nav —que es "qué viene"— no lo lista antes. El staff lo
+sigue viendo en la grilla con la etiqueta "Sin publicar" para poder editarlo.
+
 **`signupEnabled: false` = evento informativo.** Es el flag que separa un evento
 que convoca de uno que sólo avisa. Con el flag apagado el evento no tiene roster,
 ni botones de inscripción en Discord, ni cierre, ni conteo de asistencia; el embed
