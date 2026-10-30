@@ -1086,8 +1086,14 @@ afuera: completarlos los congelaría en la fecha que pasó.
 **El aviso de cumpleaños sale el día, no antes.** Su ventana de publicación es 0
 días (`toEvent` normaliza `recurrencePublishDaysBefore` a 0 para `birthday`) y el
 scheduler publica mientras el evento siga vigente en vez de exigir que todavía no
-haya empezado. Como el inicio ya pasó, el evento agendado de Discord se crea con
-la hora actual: Discord rechaza una fecha de inicio en el pasado.
+haya empezado.
+
+**Un evento agendado nunca puede crearse en el pasado.** Discord responde
+`Invalid Form Body (scheduled_start_time: Cannot schedule event in the past.)` y
+eso pasa de verdad: un cumpleaños se publica a las 00:00 de su día, justo cuando
+empieza. `schedulableStart` mueve el inicio al minuto siguiente cuando la fecha ya
+pasó, tanto al crear como al actualizar el evento agendado (las dos ramas comparten
+el mismo payload).
 
 **El aviso etiqueta a la persona.** La mención va en el **contenido** del mensaje
 (`<@id>`), que es lo único que notifica en Discord: una mención dentro del embed

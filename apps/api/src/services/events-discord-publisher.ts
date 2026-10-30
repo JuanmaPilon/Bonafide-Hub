@@ -207,6 +207,18 @@ export async function sendDirectMessage(
   }
 }
 
+// Fecha de inicio aceptable para un evento agendado de Discord: si el evento ya
+// empezó (el cumpleaños se anuncia a las 00:00 de su día) Discord rechaza la
+// fecha con "Cannot schedule event in the past", así que arranca en el minuto
+// siguiente. Se redondea al minuto para que el request no llegue justo pasado.
+function schedulableStart(startsAt: Date): Date {
+  const now = Date.now();
+  if (startsAt.getTime() > now) {
+    return startsAt;
+  }
+  return new Date(Math.ceil((now + 60_000) / 60_000) * 60_000);
+}
+
 // Crea un Scheduled Event en la guild. Devuelve su id o un error.
 async function createScheduledEvent(input: {
   description?: string;
@@ -219,17 +231,11 @@ async function createScheduledEvent(input: {
   title: string;
   voiceChannelId?: string;
 }): Promise<{ error?: string; id?: string }> {
-  // Un evento publicado cuando ya empezó (un cumpleaños se anuncia a las 00:00
-  // de su día) no puede mandar una fecha de inicio en el pasado: Discord la
-  // rechaza. El evento agendado arranca ahora y termina cuando termina el
-  // evento.
-  const startsAt =
-    input.startsAt.getTime() > Date.now() ? input.startsAt : new Date();
   const payload: ScheduledEventPayload = {
     entity_type: input.entityType === "voice" ? 2 : 3,
     name: input.title.slice(0, 100),
     privacy_level: 2,
-    scheduled_start_time: startsAt.toISOString(),
+    scheduled_start_time: input.startsAt.toISOString(),
   };
 
   if (input.description?.trim()) {
@@ -248,21 +254,18 @@ async function createScheduledEvent(input: {
   }
 
   // Para EXTERNAL el end time es obligatorio; para VOICE es opcional.
-  // Se calcula desde el inicio ya ajustado: si el evento arrancó y el inicio se
-  // movió a "ahora", un fin calculado sobre la fecha vieja quedaría antes del
-  // inicio y Discord lo rechaza.
   if (input.durationMinutes && input.durationMinutes > 0) {
     payload.scheduled_end_time = new Date(
-      startsAt.getTime() + input.durationMinutes * 60_000,
+      input.startsAt.getTime() + input.durationMinutes * 60_000,
     ).toISOString();
   } else if (input.entityType === "external") {
     // Sin duración explícita: una hora por defecto para eventos externos.
     payload.scheduled_end_time = new Date(
-      startsAt.getTime() + 60 * 60_000,
+      input.startsAt.getTime() + 60 * 60_000,
     ).toISOString();
   }
 
-  const rule = buildRecurrenceRule(startsAt, input.recurrence);
+  const rule = buildRecurrenceRule(input.startsAt, input.recurrence);
   if (rule) {
     payload.recurrence_rule = rule;
   }
@@ -1360,7 +1363,11 @@ export async function syncEventToDiscord(input: {
       guildId: input.guildId,
       location: options.location,
       recurrence: options.recurrence,
-      startsAt: input.startsAt,
+      // Discord rechaza un evento agendado con fecha de inicio en el pasado
+      // ("Cannot schedule event in the past"). Pasa de verdad: un cumpleaños se
+      // publica a las 00:00 de su día, o sea justo cuando empieza. En ese caso
+      // el evento agendado arranca en el minuto siguiente.
+      startsAt: schedulableStart(input.startsAt),
       title: input.title,
       voiceChannelId: options.voiceChannelId,
     };
