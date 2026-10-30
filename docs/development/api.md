@@ -1079,21 +1079,33 @@ cuando el día ya terminó, lo mueve un período con `rolloverBirthday`: borra e
 evento agendado de Discord (apunta a la fecha que pasó), deja el mensaje de saludo
 en el canal salvo que esté "Borrar al completar", limpia los ids guardados (para
 que el año que viene publique un mensaje **nuevo** en vez de editar el del año
-pasado) y mueve `startsAt` al próximo período. Tampoco se archiva una ocurrencia:
-no hay roster ni asistencia que guardar. `listEventsPendingAutoComplete` los deja
+pasado), mueve `startsAt` al próximo período y, si el evento tenía evento
+agendado, lo arma ya para la fecha nueva. Tampoco se archiva una ocurrencia: no
+hay roster ni asistencia que guardar. `listEventsPendingAutoComplete` los deja
 afuera: completarlos los congelaría en la fecha que pasó.
 
 **El aviso de cumpleaños sale el día, no antes.** Su ventana de publicación es 0
 días (`toEvent` normaliza `recurrencePublishDaysBefore` a 0 para `birthday`) y el
 scheduler publica mientras el evento siga vigente en vez de exigir que todavía no
-haya empezado.
+haya empezado. Para un cumpleaños lo que se espera es el **aviso**: el evento
+agendado de Discord se crea cuando se carga el evento (o al mover la serie a su
+próxima fecha), así que el scheduler mira los ids del mensaje, no los del evento
+agendado. Si mirara los dos, un cumpleaños cargado con "Scheduled Event" nunca
+publicaría el saludo.
 
-**Un evento agendado nunca puede crearse en el pasado.** Discord responde
-`Invalid Form Body (scheduled_start_time: Cannot schedule event in the past.)` y
-eso pasa de verdad: un cumpleaños se publica a las 00:00 de su día, justo cuando
-empieza. `schedulableStart` mueve el inicio al minuto siguiente cuando la fecha ya
-pasó, tanto al crear como al actualizar el evento agendado (las dos ramas comparten
-el mismo payload).
+**Un evento agendado nunca se crea con fecha pasada.** Discord responde
+`Invalid Form Body (scheduled_start_time: Cannot schedule event in the past.)`.
+Por eso el evento agendado se crea **mientras la fecha todavía es futura**: al
+guardar el cumpleaños y en `rolloverBirthday`, que lo vuelve a crear para el
+próximo año. Si al publicar el inicio ya pasó (un cumpleaños cargado el mismo
+día), no se agenda nada: se conserva el id que hubiera y el aviso sale igual.
+Antes se corría el inicio a "ahora" y, como el scheduler reintenta, el evento
+agendado quedaba para siempre "por empezar".
+
+**El bot ve los cumpleaños del día.** `GET /internal/guilds/:g/birthdays` usa
+`listBirthdayEvents`, no la lista del hub: la grilla esconde los cumpleaños cuya
+fecha ya pasó y el día del cumpleaños el evento ya empezó (00:00), justo cuando
+hay que dar el rol. Con la lista de la grilla el barrido no encontraba a nadie.
 
 **El aviso etiqueta a la persona.** La mención va en el **contenido** del mensaje
 (`<@id>`), que es lo único que notifica en Discord: una mención dentro del embed

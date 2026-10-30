@@ -131,6 +131,7 @@ import {
   archiveEventOccurrence,
   getEvent,
   getEventPlayerProfile,
+  listBirthdayEvents,
   listEventImages,
   listEvents,
   listEventsPendingAutoComplete,
@@ -1538,7 +1539,20 @@ async function publishSeriesHead(
   if (validationError) {
     return { error: validationError, event };
   }
-  const synced = await syncAndStoreEventDiscord({ discordOpts, event });
+  // Lo publicado que ya existe se actualiza en el lugar: si no, cada publicación
+  // de la serie crearía un evento agendado y un mensaje nuevos. Con un
+  // cumpleaños pasa siempre: el evento agendado se crea cuando se carga (la
+  // fecha todavía es futura) y el día del cumpleaños sólo falta el aviso.
+  const synced = await syncAndStoreEventDiscord({
+    discordOpts,
+    event,
+    existing: {
+      discordEventId: event.discordEventId,
+      messageIds: event.discordMessageIds,
+      pollMessageId: event.discordPollMessageId,
+      publishChannelId: event.publishChannelId,
+    },
+  });
   return { error: synced.discordError, event: synced.event ?? event };
 }
 
@@ -1786,11 +1800,41 @@ async function rolloverBirthday(head: HubEvent): Promise<void> {
     reminderMessageIds: [],
   });
 
-  await resetEventOccurrence(head.guildId, head.id, {
+  const updated = await resetEventOccurrence(head.guildId, head.id, {
     recurrenceNextAt: advanceByUnit(next, step.count, step.unit),
     signupDeadline: null,
     startsAt: next,
   });
+
+  // El evento agendado del año que viene se arma ya: la fecha recién movida está
+  // en el futuro (Discord no permite agendarlo en el pasado) y así el cumpleaños
+  // sigue apareciendo en Discord con anticipación, arrancando a las 00:00 del
+  // día. El aviso NO sale ahora: lo publica el scheduler el día del cumpleaños.
+  if (updated?.discordEventConfig?.createScheduledEvent) {
+    const synced = await syncAndStoreEventDiscord({
+      discordOpts: {
+        createScheduledEvent: true,
+        entityType: updated.discordEventConfig.entityType ?? "voice",
+        location: updated.discordEventConfig.location,
+        // Sin canal: sólo se crea el evento agendado, no el aviso.
+        publishMessage: false,
+        recurrence: "none",
+        voiceChannelId: updated.voiceChannelId,
+      },
+      event: updated,
+    });
+    // Ese sync guarda la config que le pasamos (sin aviso). Se repone la del
+    // evento, que es la que el scheduler lee para publicar el aviso el día.
+    await setEventDiscordInfo(head.guildId, head.id, {
+      discordEventConfig: head.discordEventConfig,
+      publishChannelId: head.publishChannelId ?? null,
+    });
+    if (synced.discordError) {
+      console.warn(
+        `[eventos] cumpleaños "${head.title}": no se pudo crear el evento agendado del año que viene (${synced.discordError})`,
+      );
+    }
+  }
 
   console.log(
     `[eventos] cumpleaños "${head.title}": movido a ${next.toISOString()}${cleanup.failed.length ? ` · fallos en Discord: ${cleanup.failed.join(" | ")}` : ""}`,
@@ -1818,8 +1862,13 @@ async function runEventRecurrenceSync(): Promise<void> {
       // 0) El molde quedó movido por el cierre de su ocurrencia: se publica
       // recién ahora, cuando entra en la ventana (X días antes). Sin esto la
       // serie se republicaba apenas terminaba la raid anterior.
-      const headPending =
-        (head.discordMessageIds ?? []).length === 0 && !head.discordEventId;
+      // En un cumpleaños lo que falta es el AVISO: el evento agendado de Discord
+      // se crea cuando se carga el evento (con la fecha todavía futura), así que
+      // mirar los ids del evento agendado dejaría el aviso sin publicar nunca.
+      const headPending = esCumple
+        ? (head.discordMessageIds ?? []).length === 0 &&
+          Boolean(head.publishChannelId)
+        : (head.discordMessageIds ?? []).length === 0 && !head.discordEventId;
       if (
         headPending &&
         eventPublishesToDiscord(head) &&
@@ -2423,6 +2472,9 @@ async function syncAndStoreEventDiscord(input: {
     characterEnabled: event.characterEnabled !== false,
     classLabel: eventConfig.eventClassLabel,
     description: event.description,
+    // Si no se pidió evento agendado se conserva el id que ya había: sin esto,
+    // publicar sólo el aviso borraba la referencia al evento de Discord.
+    discordEventId: input.existing?.discordEventId,
     durationMinutes: event.durationMinutes,
     eventId: event.id,
     expectedCount: coverage?.expectedCount,
@@ -3229,21 +3281,17 @@ export async function buildApp() {
       return reply.code(400).send({ ok: false, error: "Missing guildId" });
     }
 
-    const events = await listEvents(params.guildId);
+    const events = await listBirthdayEvents(params.guildId);
     return {
       ok: true,
       guildId: params.guildId,
-      events: events
-        .filter(
-          (event) => event.type === "birthday" && event.status === "scheduled",
-        )
-        .map((event) => ({
-          birthdayUserId: event.birthdayUserId,
-          id: event.id,
-          startsAt: event.startsAt.toISOString(),
-          title: event.title,
-          type: event.type,
-        })),
+      events: events.map((event) => ({
+        birthdayUserId: event.birthdayUserId,
+        id: event.id,
+        startsAt: event.startsAt.toISOString(),
+        title: event.title,
+        type: event.type,
+      })),
     };
   });
 

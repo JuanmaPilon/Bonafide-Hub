@@ -652,6 +652,19 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
   );
 }
 
+// Cumpleaños de la guild, para el bot: **sin** el filtro de fecha que usa la
+// grilla. El día del cumpleaños el evento ya empezó (00:00) y es justo el
+// momento en que el bot tiene que dar el rol; con la lista de la web (que
+// esconde los cumpleaños pasados) el barrido no veía a nadie.
+export async function listBirthdayEvents(guildId: string): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+    orderBy: { startsAt: "asc" },
+    where: { guildId, status: "scheduled", type: BIRTHDAY_EVENT_TYPE },
+  });
+  return records.map((record) => toEvent(record));
+}
+
 // Ruta pública de la portada de un evento. La imagen se guarda como data URL
 // (Discord la necesita así para el embed), pero mandarla embebida en cada
 // respuesta era el mayor gasto de egress del proyecto: una portada son hasta

@@ -207,18 +207,6 @@ export async function sendDirectMessage(
   }
 }
 
-// Fecha de inicio aceptable para un evento agendado de Discord: si el evento ya
-// empezó (el cumpleaños se anuncia a las 00:00 de su día) Discord rechaza la
-// fecha con "Cannot schedule event in the past", así que arranca en el minuto
-// siguiente. Se redondea al minuto para que el request no llegue justo pasado.
-function schedulableStart(startsAt: Date): Date {
-  const now = Date.now();
-  if (startsAt.getTime() > now) {
-    return startsAt;
-  }
-  return new Date(Math.ceil((now + 60_000) / 60_000) * 60_000);
-}
-
 // Crea un Scheduled Event en la guild. Devuelve su id o un error.
 async function createScheduledEvent(input: {
   description?: string;
@@ -1356,49 +1344,59 @@ export async function syncEventToDiscord(input: {
 
   // 1) Scheduled Event (si se pidió). Si ya existía, lo parcheamos.
   if (options.createScheduledEvent) {
-    const payload = {
-      description: input.description,
-      durationMinutes: input.durationMinutes,
-      entityType: options.entityType,
-      guildId: input.guildId,
-      location: options.location,
-      recurrence: options.recurrence,
-      // Discord rechaza un evento agendado con fecha de inicio en el pasado
-      // ("Cannot schedule event in the past"). Pasa de verdad: un cumpleaños se
-      // publica a las 00:00 de su día, o sea justo cuando empieza. En ese caso
-      // el evento agendado arranca en el minuto siguiente.
-      startsAt: schedulableStart(input.startsAt),
-      title: input.title,
-      voiceChannelId: options.voiceChannelId,
-    };
-    if (input.existing?.discordEventId) {
-      const updated = await updateScheduledEvent({
-        ...payload,
-        discordEventId: input.existing.discordEventId,
-      });
-      if (updated.error && updated.error !== "not_found") {
-        result.error = updated.error;
-        return result;
-      }
-      // not_found: el evento agendado ya no está en Discord → creamos uno
-      // nuevo para que el evento vuelva a aparecer en la guild.
-      if (updated.error === "not_found") {
-        const recreated = await createScheduledEvent(payload);
-        if (recreated.error) {
-          result.error = recreated.error;
+    // Discord no permite agendar un evento en el pasado ("Cannot schedule event
+    // in the past"). Le pasa a un cumpleaños cargado el mismo día (empieza a las
+    // 00:00) y a cualquier evento con fecha vieja: no hay nada que agendar, así
+    // que se conserva el id que hubiera y el aviso sale igual. Antes se corría
+    // el inicio a "ahora", y como el scheduler reintenta, el evento agendado se
+    // quedaba para siempre "por empezar".
+    if (input.startsAt.getTime() <= Date.now()) {
+      result.discordEventId =
+        input.existing?.discordEventId ?? input.discordEventId;
+      console.warn(
+        `[eventos] sin evento agendado para "${input.title}": su inicio (${input.startsAt.toISOString()}) ya pasó`,
+      );
+    } else {
+      const payload = {
+        description: input.description,
+        durationMinutes: input.durationMinutes,
+        entityType: options.entityType,
+        guildId: input.guildId,
+        location: options.location,
+        recurrence: options.recurrence,
+        startsAt: input.startsAt,
+        title: input.title,
+        voiceChannelId: options.voiceChannelId,
+      };
+      if (input.existing?.discordEventId) {
+        const updated = await updateScheduledEvent({
+          ...payload,
+          discordEventId: input.existing.discordEventId,
+        });
+        if (updated.error && updated.error !== "not_found") {
+          result.error = updated.error;
           return result;
         }
-        result.discordEventId = recreated.id;
+        // not_found: el evento agendado ya no está en Discord → creamos uno
+        // nuevo para que el evento vuelva a aparecer en la guild.
+        if (updated.error === "not_found") {
+          const recreated = await createScheduledEvent(payload);
+          if (recreated.error) {
+            result.error = recreated.error;
+            return result;
+          }
+          result.discordEventId = recreated.id;
+        } else {
+          result.discordEventId = input.existing.discordEventId;
+        }
       } else {
-        result.discordEventId = input.existing.discordEventId;
+        const created = await createScheduledEvent(payload);
+        if (created.error) {
+          result.error = created.error;
+          return result;
+        }
+        result.discordEventId = created.id;
       }
-    } else {
-      const created = await createScheduledEvent(payload);
-      if (created.error) {
-        result.error = created.error;
-        return result;
-      }
-      result.discordEventId = created.id;
     }
   } else {
     // Ya no se pide scheduled event: conservamos el id previo (si venía) por
