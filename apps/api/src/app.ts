@@ -1809,25 +1809,23 @@ async function rolloverBirthday(head: HubEvent): Promise<void> {
   // El evento agendado del año que viene se arma ya: la fecha recién movida está
   // en el futuro (Discord no permite agendarlo en el pasado) y así el cumpleaños
   // sigue apareciendo en Discord con anticipación, arrancando a las 00:00 del
-  // día. El aviso NO sale ahora: lo publica el scheduler el día del cumpleaños.
+  // día. El aviso NO sale ahora (skipAnnouncement): lo publica el scheduler el
+  // día del cumpleaños.
   if (updated?.discordEventConfig?.createScheduledEvent) {
     const synced = await syncAndStoreEventDiscord({
       discordOpts: {
         createScheduledEvent: true,
         entityType: updated.discordEventConfig.entityType ?? "voice",
         location: updated.discordEventConfig.location,
-        // Sin canal: sólo se crea el evento agendado, no el aviso.
-        publishMessage: false,
+        publishChannelId: updated.publishChannelId,
+        publishMessage:
+          updated.discordEventConfig.publishMessage === true &&
+          Boolean(updated.publishChannelId),
         recurrence: "none",
         voiceChannelId: updated.voiceChannelId,
       },
       event: updated,
-    });
-    // Ese sync guarda la config que le pasamos (sin aviso). Se repone la del
-    // evento, que es la que el scheduler lee para publicar el aviso el día.
-    await setEventDiscordInfo(head.guildId, head.id, {
-      discordEventConfig: head.discordEventConfig,
-      publishChannelId: head.publishChannelId ?? null,
+      skipAnnouncement: true,
     });
     if (synced.discordError) {
       console.warn(
@@ -2456,6 +2454,9 @@ async function syncAndStoreEventDiscord(input: {
     pollMessageId?: string;
     publishChannelId?: string;
   };
+  // No publicar el aviso (el evento agendado se crea igual): lo usa el alta de
+  // un cumpleaños, cuyo aviso sale el día.
+  skipAnnouncement?: boolean;
 }): Promise<{
   discordError?: string;
   event: Awaited<ReturnType<typeof setEventDiscordInfo>>;
@@ -2485,6 +2486,7 @@ async function syncAndStoreEventDiscord(input: {
     gameLabel: resolveGameLabel(eventConfig, event.game),
     imageUrl: await getEventImageDataUrl(event.guildId, event.id),
     options: discordOpts,
+    skipAnnouncement: input.skipAnnouncement,
     ownRecurrenceEveryDays:
       event.recurrenceEnabled && event.recurrenceEveryDays
         ? event.recurrenceEveryDays
@@ -6806,7 +6808,15 @@ export async function buildApp() {
       if (validationError) {
         return reply.code(400).send({ ok: false, error: validationError });
       }
-      const synced = await syncAndStoreEventDiscord({ discordOpts, event });
+      // Un cumpleaños con fecha futura todavía no anuncia: el aviso sale el día.
+      // El evento agendado de Discord sí se crea ahora, con la fecha real.
+      const synced = await syncAndStoreEventDiscord({
+        discordOpts,
+        event,
+        skipAnnouncement:
+          event.type === BIRTHDAY_EVENT_TYPE &&
+          event.startsAt.getTime() > Date.now(),
+      });
       discordError = synced.discordError;
       if (synced.event) {
         savedEvent = synced.event;
@@ -7057,6 +7067,11 @@ export async function buildApp() {
         discordOpts,
         event,
         existing: existingPublication,
+        // Un cumpleaños con fecha futura todavía no anuncia: el aviso sale el
+        // día. El evento agendado de Discord se crea igual.
+        skipAnnouncement:
+          event.type === BIRTHDAY_EVENT_TYPE &&
+          event.startsAt.getTime() > Date.now(),
       });
       discordError = synced.discordError;
       if (synced.event) {

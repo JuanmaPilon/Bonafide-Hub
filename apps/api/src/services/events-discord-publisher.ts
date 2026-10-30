@@ -207,6 +207,16 @@ export async function sendDirectMessage(
   }
 }
 
+// Duración por defecto de un evento sin duración cargada (la misma que usa el
+// cierre automático): sirve para saber cuándo terminó.
+const DEFAULT_EVENT_DURATION_MINUTES = 180;
+
+// Próximo minuto exacto. Discord rechaza un evento agendado con el inicio en el
+// pasado, y redondear para arriba evita que el request llegue ya pasado.
+function nextSchedulableMinute(): Date {
+  return new Date(Math.ceil((Date.now() + 60_000) / 60_000) * 60_000);
+}
+
 // Crea un Scheduled Event en la guild. Devuelve su id o un error.
 async function createScheduledEvent(input: {
   description?: string;
@@ -1368,6 +1378,9 @@ export async function syncEventToDiscord(input: {
   signupDeadline?: Date;
   signupEnabled?: boolean;
   signups?: AnnouncementSignup[];
+  // No publicar (ni editar) el aviso: se usa cuando el evento todavía no entró
+  // en su ventana. El evento agendado se crea igual.
+  skipAnnouncement?: boolean;
   specLabel?: string;
   specs?: AnnouncementSpec[];
   startsAt: Date;
@@ -1380,34 +1393,39 @@ export async function syncEventToDiscord(input: {
 
   // 1) Scheduled Event (si se pidió). Si ya existía, lo parcheamos.
   if (options.createScheduledEvent) {
-    // Discord no permite agendar un evento en el pasado ("Cannot schedule event
-    // in the past"). Le pasa a un cumpleaños cargado el mismo día (empieza a las
-    // 00:00) y a cualquier evento con fecha vieja: no hay nada que agendar, así
-    // que se conserva el id que hubiera y el aviso sale igual. Antes se corría
-    // el inicio a "ahora", y como el scheduler reintenta, el evento agendado se
-    // quedaba para siempre "por empezar".
-    if (input.startsAt.getTime() <= Date.now()) {
-      result.discordEventId =
-        input.existing?.discordEventId ?? input.discordEventId;
-      console.warn(
-        `[eventos] sin evento agendado para "${input.title}": su inicio (${input.startsAt.toISOString()}) ya pasó`,
-      );
-    } else {
+    const now = Date.now();
+    const started = input.startsAt.getTime() <= now;
+    // Cuándo termina el evento: pasado eso no hay nada que agendar.
+    const durationMinutes = input.durationMinutes ?? DEFAULT_EVENT_DURATION_MINUTES;
+    const endsAt = input.startsAt.getTime() + durationMinutes * 60_000;
+    const existingId = input.existing?.discordEventId;
+
+    if (existingId && started) {
+      // Ya existe y el evento ya arrancó: no se toca. Mover el inicio a "ahora"
+      // en cada sync (lo que hacía antes) lo dejaba "por empezar" para siempre.
+      result.discordEventId = existingId;
+    } else if (!started || endsAt > now) {
+      // Si la fecha ya pasó pero el evento sigue vigente (un cumpleaños cargado
+      // el mismo día) el evento agendado arranca ahora y termina cuando termina
+      // el evento: Discord no acepta un inicio en el pasado.
+      const startsAt = started ? nextSchedulableMinute() : input.startsAt;
       const payload = {
         description: input.description,
-        durationMinutes: input.durationMinutes,
+        durationMinutes: started
+          ? Math.max(15, Math.round((endsAt - startsAt.getTime()) / 60_000))
+          : input.durationMinutes,
         entityType: options.entityType,
         guildId: input.guildId,
         location: options.location,
         recurrence: options.recurrence,
-        startsAt: input.startsAt,
+        startsAt,
         title: input.title,
         voiceChannelId: options.voiceChannelId,
       };
-      if (input.existing?.discordEventId) {
+      if (existingId) {
         const updated = await updateScheduledEvent({
           ...payload,
-          discordEventId: input.existing.discordEventId,
+          discordEventId: existingId,
         });
         if (updated.error && updated.error !== "not_found") {
           result.error = updated.error;
@@ -1423,7 +1441,7 @@ export async function syncEventToDiscord(input: {
           }
           result.discordEventId = recreated.id;
         } else {
-          result.discordEventId = input.existing.discordEventId;
+          result.discordEventId = existingId;
         }
       } else {
         const created = await createScheduledEvent(payload);
@@ -1433,6 +1451,13 @@ export async function syncEventToDiscord(input: {
         }
         result.discordEventId = created.id;
       }
+    } else {
+      // El evento ya terminó: no hay nada que agendar.
+      result.discordEventId =
+        input.existing?.discordEventId ?? input.discordEventId;
+      console.warn(
+        `[eventos] sin evento agendado para "${input.title}": terminó (${new Date(endsAt).toISOString()})`,
+      );
     }
   } else {
     // Ya no se pide scheduled event: conservamos el id previo (si venía) por
@@ -1440,8 +1465,12 @@ export async function syncEventToDiscord(input: {
     result.discordEventId = input.discordEventId;
   }
 
-  // 2) Aviso en canal (si se pidió).
-  if (options.publishMessage && options.publishChannelId) {
+  // 2) Aviso en canal (si se pidió y todavía no toca publicarlo).
+  if (
+    options.publishMessage &&
+    options.publishChannelId &&
+    input.skipAnnouncement !== true
+  ) {
     const announcementInput = {
       benchRoleId: input.benchRoleId,
       birthdayUserId: input.birthdayUserId,
@@ -1533,6 +1562,9 @@ export async function syncEventToDiscord(input: {
         result.messageIds = [announcement.messageId];
       }
     }
+  } else if (input.skipAnnouncement === true) {
+    // Todavía no toca publicar el aviso: se conservan los ids que hubiera.
+    result.messageIds = input.existing?.messageIds ?? [];
   }
 
   // 3) Encuesta nativa (plantilla "encuesta"): va como mensaje aparte del

@@ -641,13 +641,15 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
   return (
     records
       .map((record) => toEvent(record, roster))
-      // El molde de una serie de cumpleaños se queda con la fecha original
-      // (nadie lo completa a mano), así que al año siguiente quedaría visible
-      // como un cumpleaños de hace meses. La ocurrencia vigente la crea la
-      // recurrencia; una vez que la fecha pasó, el molde deja de mostrarse.
+      // El cumpleaños es una fecha, no una ocurrencia que se archiva: se muestra
+      // hasta que TERMINA (el día entero y la hora de gracia), no hasta que
+      // empieza. Antes desaparecía a las 00:00 del propio día y el hub se quedaba
+      // sin el cumpleaños justo cuando había que festejarlo. Después lo mueve el
+      // scheduler a su próxima fecha (rolloverBirthday) y vuelve a aparecer.
       .filter(
         (event) =>
-          event.type !== "birthday" || event.startsAt.getTime() >= now,
+          event.type !== BIRTHDAY_EVENT_TYPE ||
+          eventAutoCompleteAt(event).getTime() > now,
       )
   );
 }

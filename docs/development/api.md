@@ -1096,11 +1096,23 @@ publicaría el saludo.
 **Un evento agendado nunca se crea con fecha pasada.** Discord responde
 `Invalid Form Body (scheduled_start_time: Cannot schedule event in the past.)`.
 Por eso el evento agendado se crea **mientras la fecha todavía es futura**: al
-guardar el cumpleaños y en `rolloverBirthday`, que lo vuelve a crear para el
-próximo año. Si al publicar el inicio ya pasó (un cumpleaños cargado el mismo
-día), no se agenda nada: se conserva el id que hubiera y el aviso sale igual.
-Antes se corría el inicio a "ahora" y, como el scheduler reintenta, el evento
-agendado quedaba para siempre "por empezar".
+guardar el evento y en `rolloverBirthday`, que lo vuelve a crear para el próximo
+año. Si se crea cuando el evento **ya empezó pero sigue vigente** (un cumpleaños
+cargado el mismo día), el evento agendado arranca en el minuto siguiente y
+termina cuando termina el evento. Y si ya existía y el evento ya arrancó, **no se
+toca**: mover el inicio en cada sync era lo que lo dejaba "por empezar" para
+siempre. Pasado el fin del evento no se agenda nada.
+
+**El cumpleaños no desaparece del hub a las 00:00.** `listEvents` lo muestra
+hasta que **termina** (fin + la hora de gracia del cierre automático), no hasta
+que empieza: si no, el día del cumpleaños la grilla se quedaba sin evento justo
+cuando había que festejarlo. Después `rolloverBirthday` lo mueve a su próxima
+fecha y vuelve a aparecer.
+
+**El aviso de un cumpleaños futuro espera al día.** El alta publica el evento
+agendado de Discord (la fecha todavía es futura, así que arranca a las 00:00) pero
+**no** el aviso: `skipAnnouncement` deja el mensaje para el scheduler, el día. El
+aviso de un cumpleaños que se carga el mismo día sale en el acto.
 
 **El bot ve los cumpleaños del día.** `GET /internal/guilds/:g/birthdays` usa
 `listBirthdayEvents`, no la lista del hub: la grilla esconde los cumpleaños cuya
