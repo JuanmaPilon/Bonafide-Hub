@@ -4300,9 +4300,12 @@ function EventSummaryCard({
   const durationHours = event.durationMinutes
     ? `${hoursFromMinutes(event.durationMinutes)} hs`
     : undefined;
-  // Evento informativo (cumpleaños): sin inscripción, sin conteos y sin hora.
-  const signupEnabled = event.signupEnabled !== false;
-  const allDay = (event.durationMinutes ?? 0) >= WHOLE_DAY_MINUTES;
+  // Evento informativo: el cumpleaños lo es por definición (aunque el registro
+  // guardado tenga la inscripción abierta) y el resto cuando se apaga "Pedir
+  // asistencia". Sin inscripción no hay roster ni conteos.
+  const esCumple = event.type === "birthday";
+  const signupEnabled = event.signupEnabled !== false && !esCumple;
+  const allDay = esCumple || (event.durationMinutes ?? 0) >= WHOLE_DAY_MINUTES;
 
   return (
     <button
@@ -4880,9 +4883,11 @@ function EventCard({
   const paused = event.paused === true;
   const pending = event.pendingPublication === true;
   const isPoll = eventPoll === true;
-  // Evento informativo (cumpleaños): no hay inscripción ni roster.
-  const signupEnabled = event.signupEnabled !== false;
-  const allDay = (event.durationMinutes ?? 0) >= WHOLE_DAY_MINUTES;
+  // Evento informativo: el cumpleaños lo es por definición y el resto cuando se
+  // apaga "Pedir asistencia". Sin inscripción no hay roster ni conteos.
+  const esCumple = event.type === "birthday";
+  const signupEnabled = event.signupEnabled !== false && !esCumple;
+  const allDay = esCumple || (event.durationMinutes ?? 0) >= WHOLE_DAY_MINUTES;
   const signupsClosed =
     paused ||
     pending ||
@@ -9236,9 +9241,6 @@ function App() {
       // Rol mínimo y recordatorios: dependen de que haya gente que se anote.
       reminders: asistencia,
       requiredRole: asistencia,
-      // Un cumpleaños no crea un evento de Discord (aparecería como "interesado"
-      // en la pestaña Eventos): sólo se publica el aviso.
-      scheduledEvent: !esCumple,
       signup: !esCumple,
       signupEnabled: asistencia,
       wholeDay: esCumple,
@@ -10949,8 +10951,7 @@ function App() {
       : minutesFromHours(eventForm.durationHours);
 
     const discordPayload: EventDiscordOptions = {
-      createScheduledEvent:
-        eventFormFields.scheduledEvent && eventForm.discord.createScheduledEvent,
+      createScheduledEvent: eventForm.discord.createScheduledEvent,
       entityType: eventForm.discord.entityType,
       location: eventForm.discord.location.trim() || undefined,
       publishChannelId: eventForm.discord.publishChannelId || undefined,
@@ -16029,10 +16030,6 @@ function App() {
                                   // preajusta para no tener que armarlo a mano.
                                   ...(template?.birthday
                                     ? {
-                                        discord: {
-                                          ...current.discord,
-                                          createScheduledEvent: false,
-                                        },
                                         recurrenceEnabled: true,
                                         recurrenceEvery: "12",
                                         recurrenceUnit: "months",
@@ -16405,23 +16402,19 @@ function App() {
                             <div className="event-option-row">
                               <span className="event-option-label">Discord</span>
                               <div className="event-option-controls">
-                                {eventFormFields.scheduledEvent ? (
-                                  <FormSwitch
-                                    checked={
-                                      eventForm.discord.createScheduledEvent
-                                    }
-                                    label="Scheduled Event"
-                                    onChange={(checked) =>
-                                      setEventForm((current) => ({
-                                        ...current,
-                                        discord: {
-                                          ...current.discord,
-                                          createScheduledEvent: checked,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                ) : null}
+                                <FormSwitch
+                                  checked={eventForm.discord.createScheduledEvent}
+                                  label="Scheduled Event"
+                                  onChange={(checked) =>
+                                    setEventForm((current) => ({
+                                      ...current,
+                                      discord: {
+                                        ...current.discord,
+                                        createScheduledEvent: checked,
+                                      },
+                                    }))
+                                  }
+                                />
                                 <FormSwitch
                                   checked={eventForm.discord.publishMessage}
                                   label="Aviso en un canal"
@@ -16435,8 +16428,7 @@ function App() {
                                     }))
                                   }
                                 />
-                                {(eventFormFields.scheduledEvent &&
-                                  eventForm.discord.createScheduledEvent) ||
+                                {eventForm.discord.createScheduledEvent ||
                                 eventForm.discord.publishMessage ? (
                                   <FormSwitch
                                     checked={eventForm.discordCleanupOnComplete}
@@ -16449,8 +16441,7 @@ function App() {
                                     }
                                   />
                                 ) : null}
-                                {(eventFormFields.scheduledEvent &&
-                                  eventForm.discord.createScheduledEvent) ||
+                                {eventForm.discord.createScheduledEvent ||
                                 eventForm.discord.publishMessage ? (
                                   <div className="event-option-fields">
                                     {eventForm.discord.publishMessage ? (
@@ -16486,8 +16477,7 @@ function App() {
                                         </select>
                                       </label>
                                     ) : null}
-                                    {eventFormFields.scheduledEvent &&
-                                    eventForm.discord.createScheduledEvent ? (
+                                    {eventForm.discord.createScheduledEvent ? (
                                       <label className="event-option-field">
                                         <span>Sala de voz</span>
                                         <select

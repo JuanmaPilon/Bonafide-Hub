@@ -1057,21 +1057,27 @@ listar, porque el molde no se completa a mano y quedaría mostrando un cumpleañ
 de meses atrás.
 
 **`signupEnabled: false` = evento informativo.** Es el flag que separa un evento
-que convoca de uno que sólo avisa (un cumpleaños es siempre informativo). Con el
-flag apagado el evento no tiene roster, ni botones de inscripción en Discord, ni
-cierre, ni conteo de asistencia; el embed sale en su molde simple (fecha + texto)
-y la web esconde la asistencia, la inscripción y el cierre tanto en la tarjeta
-como en el detalle. El default es `true`, así que todo evento existente sigue
-funcionando igual. En los cumpleaños además dura **todo el día**: el formulario no
-pide hora (manda `T00:00` local) y guarda `durationMinutes: 1440`, y no se ofrece
-"Scheduled Event" porque un cumpleaños no es un evento de Discord.
+que convoca de uno que sólo avisa. Con el flag apagado el evento no tiene roster,
+ni botones de inscripción en Discord, ni cierre, ni conteo de asistencia; el embed
+sale en su molde simple (fecha + texto) y la web esconde la asistencia, la
+inscripción y el cierre tanto en la tarjeta como en el detalle. El default es
+`true`, así que todo evento existente sigue funcionando igual.
+
+Un **cumpleaños es informativo siempre**, tenga el flag que tenga: `toEvent`
+fuerza `signupEnabled: false` cuando `type === "birthday"`. Sin eso, los eventos
+creados antes de que existiera la columna quedaban con la inscripción abierta y
+la web les mostraba roster y botones. Además dura **todo el día**: el formulario
+no pide hora (manda `T00:00` local) y guarda `durationMinutes: 1440`. Lo que sí
+puede hacer es publicarse como Scheduled Event de Discord o como aviso en un
+canal, igual que cualquier otro evento: lo informativo es la inscripción, no la
+publicación.
 
 **Cada plantilla declara qué campos del formulario tienen sentido.** El alta de
 un evento es una sola y mostraba todo siempre: un cumpleaños pedía personaje,
 recordatorios, rol mínimo y una duración en horas, cuando dura el día entero y no
 se anota nadie. La web deriva `eventFormFields` de la plantilla (`birthday` /
 `poll`) y esconde lo que no aplica: en cumpleaños quedan título, tipo, fecha,
-"Cumpleaños de", repetición, aviso en un canal e imagen. Además el `type` del
+"Cumpleaños de", repetición, Discord (Scheduled Event y aviso) e imagen. Además el `type` del
 evento sale de la plantilla (si no, el cumpleaños se guardaba como `raid`) y la
 repetición se preajusta a 12 meses. Un evento que no es cumpleaños tiene el
 switch **"Pedir asistencia"**: al apagarlo se van el cierre, el rol mínimo, los

@@ -120,6 +120,10 @@ export type RaidRole = (typeof RAID_ROLES)[number];
 export type CombatRole = RaidRole;
 export type EventType = (typeof EVENT_TYPES)[number];
 
+// Tipo del evento de cumpleaños: se usa para forzar el modo informativo aunque
+// el registro guardado tenga la inscripción abierta.
+export const BIRTHDAY_EVENT_TYPE = "birthday";
+
 // Estados posibles de una inscripción. "tentative" queda como default
 // (legacy) pero la UI ofrece todos los estados.
 export const SIGNUP_STATUSES = [
@@ -560,7 +564,11 @@ function toEvent(
     recurrenceEvery: record.recurrenceEvery ?? undefined,
     recurrenceUnit: record.recurrenceUnit ?? undefined,
     recurrenceNextAt: record.recurrenceNextAt ?? undefined,
-    signupEnabled: record.signupEnabled,
+    // Un cumpleaños es informativo por definición, tenga el flag que tenga: los
+    // que se crearon antes de existir `signupEnabled` quedaron en true y la web
+    // les mostraba roster e inscripción.
+    signupEnabled:
+      record.signupEnabled && record.type !== BIRTHDAY_EVENT_TYPE,
     recurrencePublishDaysBefore:
       record.recurrencePublishDaysBefore ?? undefined,
     reminderMessageIds: record.reminderMessageIds,
@@ -857,7 +865,8 @@ export async function createEvent(input: {
       signupDeadline: input.signupDeadline
         ? new Date(input.signupDeadline)
         : null,
-      signupEnabled: input.signupEnabled !== false,
+      signupEnabled:
+        input.signupEnabled !== false && input.type !== BIRTHDAY_EVENT_TYPE,
       startsAt: new Date(input.startsAt),
       tags: normalizeEventTags(input.tags),
       title: input.title,
