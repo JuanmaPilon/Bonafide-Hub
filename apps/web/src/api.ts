@@ -1925,22 +1925,6 @@ export async function createEvent(
   return { discordError: data.discordError, event: data.event };
 }
 
-// Cumpleaños: crea el evento de la plantilla "cumple" con la persona y la fecha.
-// El API arma la repetición anual y deja el evento sin anotación.
-export async function createBirthday(
-  guildId: string,
-  input: { day: number; month: number; userId: string },
-): Promise<HubEvent> {
-  const data = await requestJson<{ event: HubEvent }>(
-    `/guilds/${guildId}/birthdays`,
-    {
-      method: "POST",
-      body: JSON.stringify(input),
-    },
-  );
-  return data.event;
-}
-
 export async function updateEvent(
   guildId: string,
   eventId: string,

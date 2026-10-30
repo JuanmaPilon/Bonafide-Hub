@@ -1047,14 +1047,14 @@ próxima fecha **sin publicar nada en Discord**; el scheduler
 aviso en el acto, así que la serie aparecía de nuevo apenas terminaba la raid.
 
 **Cumpleaños.** Es un evento más (`type: "birthday"`) de la plantilla `cumple`,
-no un módulo aparte: aparece en la misma grilla, calendario y búsqueda. Se crea
-con `POST /guilds/:g/birthdays { userId, day, month }`, que arma el resto (sin
-anotación, sin recordatorios, repetición de 12 meses, publicación 7 días antes).
-`birthdayUserId` es el vínculo entre la fecha y la persona, y **se copia a cada
-ocurrencia**: sin eso la copia nace sin dueño y el bot no sabe a quién darle el
-rol. El campo `birthdayUserId` viaja en el evento y el bot lee los del día con
-`GET /internal/guilds/:g/birthdays`. Una fecha pasada se deja de listar, porque
-el molde no se completa a mano y quedaría mostrando un cumpleaños de meses atrás.
+no un módulo aparte: aparece en la misma grilla, calendario y búsqueda, y se crea
+con el alta normal de eventos eligiendo esa plantilla (la repetición de 12 meses
+se preajusta sola). `birthdayUserId` es el vínculo entre la fecha y la persona, y
+**se copia a cada ocurrencia**: sin eso la copia nace sin dueño y el bot no sabe a
+quién darle el rol. El campo `birthdayUserId` viaja en el evento y el bot lee los
+del día con `GET /internal/guilds/:g/birthdays`. Una fecha pasada se deja de
+listar, porque el molde no se completa a mano y quedaría mostrando un cumpleaños
+de meses atrás.
 
 **`signupEnabled: false` = evento informativo.** Es el flag que separa un evento
 que convoca de uno que sólo avisa (un cumpleaños es siempre informativo). Con el
