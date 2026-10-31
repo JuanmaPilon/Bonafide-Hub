@@ -681,6 +681,32 @@ export async function listBirthdayEvents(guildId: string): Promise<HubEvent[]> {
   return records.map((record) => toEvent(record));
 }
 
+// Cumpleaños EN CURSO (empezaron y todavía no terminó el día), de todas las
+// guilds en una sola consulta. Es lo que mira el barrido del aviso cada minuto:
+// así el costo es una consulta chica y acotada por fecha, no una por guild ni un
+// escaneo de la tabla entera.
+export async function listBirthdaysInProgress(
+  now: Date = new Date(),
+): Promise<HubEvent[]> {
+  const records = await prisma.hubEvent.findMany({
+    include: { signups: { orderBy: { createdAt: "asc" } } },
+    orderBy: { startsAt: "asc" },
+    where: {
+      // Ventana en SQL (gruesa y con índice por startsAt): lo fino lo hace
+      // birthdayWindowEnd en memoria, porque depende del día y no de la duración.
+      startsAt: {
+        gt: new Date(now.getTime() - DAY_MS - EVENT_AUTO_COMPLETE_GRACE_MS),
+        lte: now,
+      },
+      status: "scheduled",
+      type: BIRTHDAY_EVENT_TYPE,
+    },
+  });
+  return records
+    .map((record) => toEvent(record))
+    .filter((event) => birthdayWindowEnd(event).getTime() > now.getTime());
+}
+
 // Ruta pública de la portada de un evento. La imagen se guarda como data URL
 // (Discord la necesita así para el embed), pero mandarla embebida en cada
 // respuesta era el mayor gasto de egress del proyecto: una portada son hasta

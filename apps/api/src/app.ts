@@ -133,6 +133,7 @@ import {
   getEvent,
   getEventPlayerProfile,
   listBirthdayEvents,
+  listBirthdaysInProgress,
   listEventImages,
   listEvents,
   listEventsPendingAutoComplete,
@@ -1965,34 +1966,23 @@ const startedScheduledEvents = new Set<string>();
 
 async function runBirthdayAnnouncements(): Promise<void> {
   try {
-    const guildIds = await listGuildIdsWithEvents();
-    for (const guildId of guildIds) {
-      const events = await listBirthdayEvents(guildId).catch(() => []);
-      const ahora = Date.now();
-      for (const event of events) {
-        // Ventana del cumpleaños: desde que empieza (00:00) hasta que termina el
-        // día. No se usa eventAutoCompleteAt: un cumpleaños sin duración cargada
-        // cerraba la ventana a las 03:00.
-        if (event.startsAt.getTime() > ahora) {
-          continue;
+    // Una sola consulta acotada por fecha (no una por guild): el barrido corre
+    // cada minuto y así no se nota en el uso. Sin cumpleaños en curso no se
+    // hace nada más: ni llamadas a Discord ni escrituras.
+    const events = await listBirthdaysInProgress().catch(() => []);
+    for (const event of events) {
+      const yaAnunciado = (event.discordMessageIds ?? []).length > 0;
+      if (!yaAnunciado && event.publishChannelId) {
+        const published = await announceBirthday(event);
+        if (published) {
+          console.log(
+            `[eventos] cumpleaños "${event.title}": aviso publicado y evento agendado al día`,
+          );
         }
-        if (birthdayWindowEnd(event).getTime() <= ahora) {
-          continue;
-        }
-
-        const yaAnunciado = (event.discordMessageIds ?? []).length > 0;
-        if (!yaAnunciado && event.publishChannelId) {
-          const published = await announceBirthday(event);
-          if (published) {
-            console.log(
-              `[eventos] cumpleaños "${event.title}": aviso publicado y evento agendado al día`,
-            );
-          }
-          continue;
-        }
-        if (event.discordEventId) {
-          await ensureScheduledEventStarted(event);
-        }
+        continue;
+      }
+      if (event.discordEventId) {
+        await ensureScheduledEventStarted(event);
       }
     }
   } catch (error) {

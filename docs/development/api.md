@@ -1128,6 +1128,13 @@ cumpleaños de la guild, y para los que están **en curso** (empezaron y no
 terminó el día) publica el aviso si falta y arranca el evento agendado. La
 recurrencia sólo se ocupa de mover la fecha al año siguiente.
 
+**El costo del barrido es una consulta por minuto, no una por guild.**
+`listBirthdaysInProgress` trae los cumpleaños en curso de todas las guilds en una
+sola consulta acotada por `startsAt` (ventana de 25 h), y lo fino (el final del
+día) se resuelve en memoria. Sin cumpleaños en curso no hay llamadas a Discord ni
+escrituras. Es del mismo orden que los otros schedulers que ya corrían cada
+minuto (cierre de inscripciones, recurrencia, cierre automático).
+
 **El bot ve los cumpleaños del día.** `GET /internal/guilds/:g/birthdays` usa
 `listBirthdayEvents`, no la lista del hub: la grilla esconde los cumpleaños cuya
 fecha ya pasó y el día del cumpleaños el evento ya empezó (00:00), justo cuando
