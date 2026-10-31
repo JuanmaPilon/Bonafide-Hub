@@ -119,6 +119,7 @@ import {
   RAID_ROLES,
   SIGNUP_ROLES,
   SIGNUP_STATUSES,
+  birthdayWindowEnd,
   createEvent,
   createEventImage,
   createRaidSpec,
@@ -188,6 +189,7 @@ import {
   fetchGuildIconUrl,
   resolveAnnouncementContent,
   sendDirectMessage,
+  startDiscordScheduledEvent,
   syncEventToDiscord,
   updateEventAnnouncement,
   type AnnouncementSignup,
@@ -1447,6 +1449,10 @@ function startEventCloseSync(): void {
 // venció: crea una COPIA del evento (con su propia publicación en Discord) y
 // avanza la serie. Si el evento está pausado, no se genera nada.
 const EVENT_RECURRENCE_SYNC_INTERVAL_MS = 60 * 1000;
+// El aviso de cumpleaños sale al empezar el día, así que se mira seguido: una
+// consulta por guild y por minuto (no hay llamadas a Discord si no hay nada que
+// hacer).
+const EVENT_BIRTHDAY_ANNOUNCE_INTERVAL_MS = 60 * 1000;
 // Tope de copias por tick: si el server estuvo caído mucho tiempo, evita
 // crear de golpe decenas de eventos.
 const EVENT_RECURRENCE_MAX_CATCHUP = 5;
@@ -1857,24 +1863,27 @@ async function runEventRecurrenceSync(): Promise<void> {
       let nextAt = head.recurrenceNextAt;
       let changed = false;
 
+      // Un cumpleaños no pasa por acá: su aviso lo publica su propio barrido
+      // (runBirthdayAnnouncements), que recorre TODOS los cumpleaños y no sólo
+      // las series. Si se cargó sin "Repetir" no está en esta lista y el aviso
+      // quedaba pendiente para siempre. Lo único que se hace acá es moverlo a su
+      // próxima fecha cuando el día ya terminó.
+      if (esCumple) {
+        if (birthdayWindowEnd(head).getTime() <= Date.now()) {
+          await rolloverBirthday(head);
+        }
+        continue;
+      }
+
       // 0) El molde quedó movido por el cierre de su ocurrencia: se publica
       // recién ahora, cuando entra en la ventana (X días antes). Sin esto la
       // serie se republicaba apenas terminaba la raid anterior.
-      // En un cumpleaños lo que falta es el AVISO: el evento agendado de Discord
-      // se crea cuando se carga el evento (con la fecha todavía futura), así que
-      // mirar los ids del evento agendado dejaría el aviso sin publicar nunca.
-      const headPending = esCumple
-        ? (head.discordMessageIds ?? []).length === 0 &&
-          Boolean(head.publishChannelId)
-        : (head.discordMessageIds ?? []).length === 0 && !head.discordEventId;
+      const headPending =
+        (head.discordMessageIds ?? []).length === 0 && !head.discordEventId;
       if (
         headPending &&
         eventPublishesToDiscord(head) &&
-        // Con ventana 0 el aviso sale al empezar, así que vale mientras el
-        // evento siga vigente (el cumpleaños dura el día entero).
-        (publishBeforeMs > 0
-          ? head.startsAt.getTime() > Date.now()
-          : eventAutoCompleteAt(head).getTime() > Date.now()) &&
+        head.startsAt.getTime() > Date.now() &&
         head.startsAt.getTime() - publishBeforeMs <= Date.now()
       ) {
         const published = await publishSeriesHead(head);
@@ -1887,18 +1896,6 @@ async function runEventRecurrenceSync(): Promise<void> {
             `[eventos] recurrencia: publicada la ocurrencia de "${head.title}" para ${head.startsAt.toISOString()}`,
           );
         }
-      }
-
-      // Un cumpleaños no genera ocurrencias (los pasos 1 y 2 son para las
-      // series): la misma fila apunta siempre a su próxima fecha. Cuando el día
-      // termina se mueve un período y se limpia el rastro de la publicación, así
-      // el aviso del año que viene sale nuevo (si no se limpiara, editaría el
-      // mensaje del año pasado).
-      if (esCumple) {
-        if (eventAutoCompleteAt(head).getTime() <= Date.now()) {
-          await rolloverBirthday(head);
-        }
-        continue;
       }
 
       // 1) Ocurrencias cuya fecha ya pasó (API caída mucho tiempo): las
@@ -1952,6 +1949,113 @@ function startEventRecurrenceSync(): void {
   eventRecurrenceTimer = setInterval(() => {
     void runEventRecurrenceSync();
   }, EVENT_RECURRENCE_SYNC_INTERVAL_MS);
+}
+
+// ── Aviso de cumpleaños ─────────────────────────────────────────────
+// Tiene su propio barrido y NO pasa por la recurrencia: un cumpleaños puede
+// cargarse sin "Repetir" y entonces no está en la lista de series, y el alta lo
+// deja pendiente a propósito hasta el día. Mirando sólo las series, el aviso
+// quedaba sin publicar para siempre y el evento agendado nunca arrancaba.
+// Además del aviso, arranca el evento agendado de Discord: los de voz quedan en
+// "Iniciará pronto" hasta que alguien aprieta "Iniciar".
+let birthdayAnnounceTimer: NodeJS.Timeout | null = null;
+// Eventos agendados que ya arrancamos en este proceso: mandar "Iniciar" dos
+// veces devuelve 400 (transición inválida) y ensucia el log.
+const startedScheduledEvents = new Set<string>();
+
+async function runBirthdayAnnouncements(): Promise<void> {
+  try {
+    const guildIds = await listGuildIdsWithEvents();
+    for (const guildId of guildIds) {
+      const events = await listBirthdayEvents(guildId).catch(() => []);
+      const ahora = Date.now();
+      for (const event of events) {
+        // Ventana del cumpleaños: desde que empieza (00:00) hasta que termina el
+        // día. No se usa eventAutoCompleteAt: un cumpleaños sin duración cargada
+        // cerraba la ventana a las 03:00.
+        if (event.startsAt.getTime() > ahora) {
+          continue;
+        }
+        if (birthdayWindowEnd(event).getTime() <= ahora) {
+          continue;
+        }
+
+        const yaAnunciado = (event.discordMessageIds ?? []).length > 0;
+        if (!yaAnunciado && event.publishChannelId) {
+          const published = await announceBirthday(event);
+          if (published) {
+            console.log(
+              `[eventos] cumpleaños "${event.title}": aviso publicado y evento agendado al día`,
+            );
+          }
+          continue;
+        }
+        if (event.discordEventId) {
+          await ensureScheduledEventStarted(event);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("[eventos] birthday announce sync failed", error);
+  }
+}
+
+// Publica el aviso del cumpleaños respetando lo que ya está publicado en
+// Discord (se edita en el lugar) y conserva la config del evento: el evento
+// agendado no se recrea, pero si existe y el cumpleaños ya empezó, se arranca.
+async function announceBirthday(event: HubEvent): Promise<boolean> {
+  const discordOpts: EventDiscordOptions = {
+    createScheduledEvent: event.discordEventConfig?.createScheduledEvent === true,
+    entityType: event.discordEventConfig?.entityType ?? "voice",
+    location: event.discordEventConfig?.location,
+    publishChannelId: event.publishChannelId,
+    // El canal elegido ES la intención de anunciar: si está, se publica.
+    publishMessage: true,
+    recurrence: "none",
+    voiceChannelId: event.voiceChannelId,
+  };
+  const synced = await syncAndStoreEventDiscord({
+    discordOpts,
+    event,
+    existing: {
+      discordEventId: event.discordEventId,
+      messageIds: event.discordMessageIds,
+      pollMessageId: event.discordPollMessageId,
+      publishChannelId: event.publishChannelId,
+    },
+  });
+  if (synced.discordError) {
+    console.error(
+      `[eventos] cumpleaños "${event.title}": ${synced.discordError}`,
+    );
+    return false;
+  }
+  // El sync ya lo arrancó (o lo acaba de crear y arrancar): marcarlo evita
+  // mandar "Iniciar" otra vez en la próxima pasada.
+  const id = synced.event?.discordEventId;
+  if (id) {
+    startedScheduledEvents.add(id);
+  }
+  return true;
+}
+
+async function ensureScheduledEventStarted(event: HubEvent): Promise<void> {
+  const id = event.discordEventId;
+  if (!id || startedScheduledEvents.has(id)) {
+    return;
+  }
+  startedScheduledEvents.add(id);
+  await startDiscordScheduledEvent({ discordEventId: id, guildId: event.guildId });
+}
+
+function startBirthdayAnnounceSync(): void {
+  if (birthdayAnnounceTimer) {
+    return;
+  }
+  void runBirthdayAnnouncements();
+  birthdayAnnounceTimer = setInterval(() => {
+    void runBirthdayAnnouncements();
+  }, EVENT_BIRTHDAY_ANNOUNCE_INTERVAL_MS);
 }
 
 // ── Imágenes de álbumes de Karuta ───────────────────────────────────
@@ -10374,6 +10478,7 @@ export async function buildApp() {
 
   startEventCloseSync();
   startEventRecurrenceSync();
+  startBirthdayAnnounceSync();
   startEventAutoCompleteSync();
   startKarutaAlbumImageSync();
   startKarutaCardImageSync();

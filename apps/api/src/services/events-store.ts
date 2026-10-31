@@ -25,6 +25,10 @@ export const normalizeEventTags = normalizeTags;
 export type EventTag = Tag;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Margen que se le da a un evento después de su hora de fin antes de cerrarlo
+// solo (ver eventAutoCompleteAt). Vive acá arriba porque también marca el final
+// del día de un cumpleaños.
+const EVENT_AUTO_COMPLETE_GRACE_MS = 60 * 60 * 1000;
 
 // ¿Ya salió a la luz? Un evento cuenta como publicado cuando tiene el aviso en
 // Discord o el evento agendado. Los que no publican nada (evento sólo del hub)
@@ -57,6 +61,16 @@ export function eventPublishesToDiscord(event: {
 // nav). Es una fecha fija, no un evento que se publica: más lejos sería una
 // línea suelta en la lista de próximos, y el aviso en Discord sale el mismo día.
 export const BIRTHDAY_VISIBILITY_DAYS = 7;
+
+// Cuándo termina un cumpleaños: el día entero (+ la misma hora de gracia del
+// cierre automático). NO se usa la duración guardada: los cumpleaños viejos no
+// tienen `durationMinutes` y con el default de 3 h la ventana se cerraba a las
+// 03:00, así que ni el aviso salía ni el evento quedaba visible el resto del día.
+export function birthdayWindowEnd(event: { startsAt: Date }): Date {
+  return new Date(
+    event.startsAt.getTime() + DAY_MS + EVENT_AUTO_COMPLETE_GRACE_MS,
+  );
+}
 
 // Un evento está pendiente de publicación cuando es el molde de una serie que
 // publica en Discord y todavía no entró en su ventana (X días antes del inicio).
@@ -642,14 +656,14 @@ export async function listEvents(guildId: string): Promise<HubEvent[]> {
     records
       .map((record) => toEvent(record, roster))
       // El cumpleaños es una fecha, no una ocurrencia que se archiva: se muestra
-      // hasta que TERMINA (el día entero y la hora de gracia), no hasta que
-      // empieza. Antes desaparecía a las 00:00 del propio día y el hub se quedaba
-      // sin el cumpleaños justo cuando había que festejarlo. Después lo mueve el
-      // scheduler a su próxima fecha (rolloverBirthday) y vuelve a aparecer.
+      // hasta que TERMINA el día, no hasta que empieza. Antes desaparecía a las
+      // 00:00 del propio día (o a las 03:00, con la duración por defecto) y el
+      // hub se quedaba sin el cumpleaños justo cuando había que festejarlo.
+      // Después lo mueve el scheduler a su próxima fecha (rolloverBirthday).
       .filter(
         (event) =>
           event.type !== BIRTHDAY_EVENT_TYPE ||
-          eventAutoCompleteAt(event).getTime() > now,
+          birthdayWindowEnd(event).getTime() > now,
       )
   );
 }
@@ -1122,7 +1136,6 @@ export async function listEventsPendingCloseAnnouncement(
 
 // Margen después del final para dar por terminado un evento (por si se
 // estira) y duración asumida cuando el evento no la tiene cargada.
-const EVENT_AUTO_COMPLETE_GRACE_MS = 60 * 60 * 1000;
 const EVENT_DEFAULT_DURATION_MINUTES = 180;
 
 // Momento en que el evento ya terminó: inicio + duración (o 3 h) + 1 h. Es la

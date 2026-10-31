@@ -221,7 +221,7 @@ function nextSchedulableMinute(): Date {
 // pronto" hasta que alguien aprieta "Iniciar": cuando el evento ya empezó (un
 // cumpleaños de hoy, que empieza a las 00:00) lo arrancamos nosotros, si no
 // queda anunciado para siempre y nunca arranca.
-async function startScheduledEvent(input: {
+export async function startDiscordScheduledEvent(input: {
   discordEventId: string;
   guildId: string;
 }): Promise<void> {
@@ -1425,7 +1425,7 @@ export async function syncEventToDiscord(input: {
       // "por empezar" para siempre), pero sí se arranca: Discord lo deja en
       // "Iniciará pronto" hasta que alguien aprieta "Iniciar".
       result.discordEventId = existingId;
-      await startScheduledEvent({
+      await startDiscordScheduledEvent({
         discordEventId: existingId,
         guildId: input.guildId,
       });
@@ -1480,7 +1480,7 @@ export async function syncEventToDiscord(input: {
       // arrancarlo: si no, queda "Iniciará pronto" hasta que alguien apriete
       // "Iniciar" a mano.
       if (started && result.discordEventId) {
-        await startScheduledEvent({
+        await startDiscordScheduledEvent({
           discordEventId: result.discordEventId,
           guildId: input.guildId,
         });

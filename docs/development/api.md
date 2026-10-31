@@ -1107,15 +1107,26 @@ hasta que alguien aprieta "Iniciar", así que cuando el evento ya empezó se man
 nada.
 
 **El cumpleaños no desaparece del hub a las 00:00.** `listEvents` lo muestra
-hasta que **termina** (fin + la hora de gracia del cierre automático), no hasta
-que empieza: si no, el día del cumpleaños la grilla se quedaba sin evento justo
-cuando había que festejarlo. Después `rolloverBirthday` lo mueve a su próxima
-fecha y vuelve a aparecer.
+hasta que **termina el día** (`birthdayWindowEnd`: 24 h + la hora de gracia del
+cierre automático), no hasta que empieza: si no, el día del cumpleaños la grilla
+se quedaba sin evento justo cuando había que festejarlo. Ojo: no se usa
+`eventAutoCompleteAt` porque depende de `durationMinutes`, y un cumpleaños sin
+duración cargada cerraba la ventana a las 03:00. Después `rolloverBirthday` lo
+mueve a su próxima fecha y vuelve a aparecer.
 
 **El aviso de un cumpleaños futuro espera al día.** El alta publica el evento
 agendado de Discord (la fecha todavía es futura, así que arranca a las 00:00) pero
-**no** el aviso: `skipAnnouncement` deja el mensaje para el scheduler, el día. El
+**no** el aviso: `skipAnnouncement` deja el mensaje para el barrido del día. El
 aviso de un cumpleaños que se carga el mismo día sale en el acto.
+
+**El aviso de cumpleaños tiene su propio barrido** (`runBirthdayAnnouncements`,
+cada minuto). No pasa por `runEventRecurrenceSync`: ese scheduler sólo recorre
+eventos con `recurrenceEnabled`, así que un cumpleaños cargado **sin "Repetir"**
+no aparecía nunca en su lista y el aviso quedaba pendiente para siempre (y el
+evento agendado nunca se arrancaba). El barrido de cumpleaños recorre todos los
+cumpleaños de la guild, y para los que están **en curso** (empezaron y no
+terminó el día) publica el aviso si falta y arranca el evento agendado. La
+recurrencia sólo se ocupa de mover la fecha al año siguiente.
 
 **El bot ve los cumpleaños del día.** `GET /internal/guilds/:g/birthdays` usa
 `listBirthdayEvents`, no la lista del hub: la grilla esconde los cumpleaños cuya
