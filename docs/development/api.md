@@ -1328,7 +1328,12 @@ data URL.
 
 Auth: header `x-bot-token` == `BOT_API_TOKEN`.
 
-1. `GET/PUT /internal/guilds/:guildId/config`
+1. `GET/PUT /internal/guilds/:guildId/config`. El PUT sólo acepta los campos de
+   `BOT_CONFIG_FIELDS` **y además cada uno tiene que estar mapeado en
+   `replaceGuildConfig`**: lo que no está en el payload de Prisma se descarta en
+   silencio. Pasó con `birthdayRoleId` / `birthdayChannelId`: el bot los guardaba
+   en cada barrido y el API los tiraba, así que el bot nunca supo qué rol sacar y
+   el rol de cumpleaños quedaba puesto para siempre.
 2. `GET /internal/guilds/:guildId/xp-config`
 3. `POST /internal/guilds/:guildId/xp/add`
 4. `POST /internal/guilds/:guildId/xp/level`

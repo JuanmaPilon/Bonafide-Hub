@@ -117,6 +117,24 @@ function isBirthdayRoleName(name: string): boolean {
   );
 }
 
+// Busca el rol del cumpleaños SIN crear nada: el guardado en la config o, si no
+// está, uno que ya exista con ese nombre (armado a mano, con o sin emoji).
+// Para sacar el rol alcanza con esto: no hace falta tenerlo anotado.
+function findBirthdayRoleId(
+  guild: Guild,
+  savedRoleId: string | null | undefined,
+): string | null {
+  if (savedRoleId) {
+    const saved = guild.roles.cache.get(savedRoleId);
+    if (saved) {
+      return saved.id;
+    }
+  }
+  return (
+    guild.roles.cache.find((role) => isBirthdayRoleName(role.name))?.id ?? null
+  );
+}
+
 // El rol del cumpleaños: se reusa el guardado, si no el que ya exista con ese
 // nombre (armado a mano) y, como último recurso, se crea. Reusar el que está
 // evita necesitar "Gestionar roles": alcanza con que el rol del bot esté arriba.
@@ -124,17 +142,9 @@ async function ensureBirthdayRole(
   guild: Guild,
   savedRoleId: string | null | undefined,
 ): Promise<{ remember: boolean; roleId: string | null }> {
-  if (savedRoleId) {
-    const existing = guild.roles.cache.get(savedRoleId);
-    if (existing) {
-      return { remember: false, roleId: existing.id };
-    }
-  }
-  const byName = guild.roles.cache.find((role) =>
-    isBirthdayRoleName(role.name),
-  );
-  if (byName) {
-    return { remember: true, roleId: byName.id };
+  const existing = findBirthdayRoleId(guild, savedRoleId);
+  if (existing) {
+    return { remember: existing !== savedRoleId, roleId: existing };
   }
   try {
     const role = await guild.roles.create({
@@ -176,14 +186,18 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
       .filter((id): id is string => Boolean(id)),
   );
 
-  // Sin rol guardado y sin nadie que cumpla hoy no hay nada que hacer: crearlo
-  // antes de saberlo dejaba un rol vacío en guilds que nunca usan cumpleaños.
-  // Con un rol guardado sí se sigue: hay que sacárselo a quien quedó con él.
-  if (!config.birthdayRoleId && idsHoy.size === 0) {
+  // Si no hay nadie que cumpla hoy, sólo hay algo que hacer si EXISTE el rol (hay
+  // que sacárselo a quien lo tenga). Se busca sin crear: un rol con ese nombre
+  // alcanza, no hace falta tenerlo anotado en la config (los que se asignaron
+  // antes de que se guardara el id también tienen que perderlo).
+  const rolExistente = findBirthdayRoleId(guild, config.birthdayRoleId);
+  if (idsHoy.size === 0 && !rolExistente) {
     return;
   }
 
-  const role = await ensureBirthdayRole(guild, config.birthdayRoleId);
+  const role = rolExistente
+    ? { remember: rolExistente !== config.birthdayRoleId, roleId: rolExistente }
+    : await ensureBirthdayRole(guild, config.birthdayRoleId);
   if (role.remember && role.roleId) {
     // Se guarda para no volver a buscarlo en el próximo tick ni al reiniciar.
     await fetch(
@@ -245,6 +259,7 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
       listaCompletaPedida.set(guild.id, hoy);
     }
   }
+  let removidos = 0;
   for (const member of guild.members.cache.values()) {
     if (!member.roles.cache.has(role.roleId) || idsHoy.has(member.id)) {
       continue;
@@ -252,12 +267,16 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
     await member.roles
       .remove(role.roleId, "Cumpleaños terminado")
       .then(
-        () => tocarNick.add(member.id),
+        () => {
+          removidos += 1;
+          tocarNick.add(member.id);
+        },
         (error: unknown) => {
+          const status = (error as { status?: number }).status;
           console.warn(
             `[cumpleaños] no se pudo quitar el rol a ${member.user.tag}: ${
               error instanceof Error ? error.message : String(error)
-            }`,
+            }${status === 50013 ? " · el rol del bot tiene que estar POR ENCIMA del rol de cumpleaños" : ""}`,
           );
         },
       );
@@ -271,9 +290,10 @@ async function runGuildBirthdays(guild: Guild): Promise<void> {
   }
 
   // Resumen de la pasada: va al log (una línea) para poder ver en Railway que
-  // encontró el cumpleaños y a quién le dio el rol, haya o no canal configurado.
+  // encontró el cumpleaños, a quién le dio el rol y a quién se lo sacó, haya o
+  // no canal configurado.
   console.log(
-    `[cumpleaños] ${guild.name}: ${idsHoy.size} hoy (${[...idsHoy].join(", ") || "nadie"}) · rol ${role.roleId} · ${assigned} asignado(s)`,
+    `[cumpleaños] ${guild.name}: ${idsHoy.size} hoy (${[...idsHoy].join(", ") || "nadie"}) · rol ${role.roleId} · ${assigned} asignado(s) · ${removidos} quitado(s)`,
   );
 
   // Saludo: una vez por día y sólo si hay canal.

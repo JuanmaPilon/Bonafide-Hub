@@ -249,6 +249,11 @@ export function resolveGameLabel(
 export type GuildConfig = {
   adminRoleModules?: AdminRoleRule[];
   bannedVoiceRoleIds?: string[];
+  // Rol temporal que el bot crea/usa el día del cumpleaños y canal del saludo.
+  // Se guardan porque el rol vive en Discord: sin persistirlos el bot volvía a
+  // crearlo (o no sabía cuál sacar) en cada barrido.
+  birthdayChannelId?: string;
+  birthdayRoleId?: string;
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled?: boolean;
   dailyMessagesMaxMinutes?: number;
@@ -297,6 +302,8 @@ export type GuildConfig = {
 function toGuildConfig(
   record: {
     bannedVoiceRoleIds: string[];
+    birthdayChannelId: string | null;
+    birthdayRoleId: string | null;
     dailyMessagesChannelId: string | null;
     dailyMessagesEnabled: boolean;
     dailyMessagesMaxMinutes: number;
@@ -349,6 +356,8 @@ function toGuildConfig(
   return {
     adminRoleModules,
     bannedVoiceRoleIds: record.bannedVoiceRoleIds,
+    birthdayChannelId: record.birthdayChannelId ?? undefined,
+    birthdayRoleId: record.birthdayRoleId ?? undefined,
     dailyMessagesChannelId: record.dailyMessagesChannelId ?? undefined,
     dailyMessagesEnabled: record.dailyMessagesEnabled,
     dailyMessagesMaxMinutes: record.dailyMessagesMaxMinutes,
@@ -395,6 +404,8 @@ function toGuildConfig(
 type NormalizedGuildConfig = {
   adminRoleModules: AdminRoleRule[];
   bannedVoiceRoleIds: string[];
+  birthdayChannelId?: string;
+  birthdayRoleId?: string;
   dailyMessagesChannelId?: string;
   dailyMessagesEnabled: boolean;
   dailyMessagesMaxMinutes: number;
@@ -452,6 +463,8 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
       roleId: rule.roleId,
     })),
     bannedVoiceRoleIds: config.bannedVoiceRoleIds ?? [],
+    birthdayChannelId: config.birthdayChannelId,
+    birthdayRoleId: config.birthdayRoleId,
     dailyMessagesChannelId: config.dailyMessagesChannelId,
     dailyMessagesEnabled: config.dailyMessagesEnabled ?? false,
     dailyMessagesMaxMinutes: maxMinutes,
@@ -528,6 +541,8 @@ export async function replaceGuildConfig(
         guildId,
         rosterRanks: normalized.rosterRanks,
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
+        birthdayChannelId: normalized.birthdayChannelId,
+        birthdayRoleId: normalized.birthdayRoleId,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,
@@ -570,6 +585,8 @@ export async function replaceGuildConfig(
       update: {
         rosterRanks: normalized.rosterRanks,
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
+        birthdayChannelId: normalized.birthdayChannelId,
+        birthdayRoleId: normalized.birthdayRoleId,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
         dailyMessagesEnabled: normalized.dailyMessagesEnabled,
         dailyMessagesMaxMinutes: normalized.dailyMessagesMaxMinutes,

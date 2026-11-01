@@ -142,7 +142,11 @@ Detalles que no son obvios:
     guardado en la config, después **uno que ya exista con ese nombre** (armado a
     mano, con o sin emoji) y recién ahí se crea. Reusar el que está evita
     depender de *Gestionar roles*: alcanza con que el rol del bot esté arriba en
-    la jerarquía. Después de dar o sacar el rol se **re-aplica el adorno del nick**
+    la jerarquía. **La búsqueda por nombre también se usa para quitar**: si no
+    hay nadie que cumpla hoy pero el rol existe, el barrido entra igual a
+    sacárselo a quien lo tenga (antes dependía de que el id estuviera guardado en
+    la config, y cuando el API no lo persistía el rol quedaba puesto para
+    siempre). Después de dar o sacar el rol se **re-aplica el adorno del nick**
     de esa persona (`refreshNicknamesForMembers`): el adorno de un rol se configura
     en Admin → XP y el sync de XP sólo corre cuando el staff lo pide, así que sin
     esto nunca aparecía. La remoción pide la lista completa de miembros al gateway
