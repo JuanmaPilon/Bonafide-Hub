@@ -244,10 +244,15 @@ Rules:
     nav items widens the header first — check it still fits on one line before
     bumping the variable, and cap what grows with the width (the event banner
     stops at 460px).
-11. **Admin lives inside the profile dropdown**, not in the nav: the user chip
-    (`.nav-item--profile`) opens a menu with "Mi perfil" on top and the Admin
-    sections below, grouped under a `nav-submenu-label` and anchored to the right
-    (`right: 0`) so it doesn't leave the screen. The nav holds only modules.
+11. **The profile chip is a link to the profile; Admin is its hover menu.** The
+    user chip says "Mi perfil" and clicking it opens the profile (never a menu):
+    a chip that has to be clicked twice to reach the profile reads as a mystery
+    button. The Admin sections live in the menu that appears on **hover**, only
+    for those who have access, grouped under a `nav-submenu-label` and anchored to
+    the right (`right: 0`) so it doesn't leave the screen. Below 1024px there is no
+    hover, so the same sections are offered in the nav panel
+    (`.nav-admin-mobile`) and the hover menu is hidden. The nav outside the panel
+    holds only modules.
 12. **Reuse before creating.** Before writing a button, field, chip, card, row or
     modal, find the existing one (`grep` the class in `styles.css` and the
     component in `main.tsx`) and use it. A new class is only justified when no

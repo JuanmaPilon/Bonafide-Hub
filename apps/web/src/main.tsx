@@ -9509,7 +9509,6 @@ function App() {
   // tocarlo (en táctil no hay hover, así que el submenú no puede depender de él).
   const [navOpen, setNavOpen] = useState(false);
   const [navExpanded, setNavExpanded] = useState<HubTab | null>(null);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
     null,
   );
@@ -9521,10 +9520,10 @@ function App() {
   const loading = loadingSession || loadingGuildData;
   const importFileRef = useRef<HTMLInputElement | null>(null);
 
-  // Cerrar los menús del topbar al tocar afuera o con Escape. Se registra sólo
-  // mientras hay algo abierto para no dejar un listener global siempre activo.
+  // Cerrar el panel del topbar al tocar afuera o con Escape. Se registra sólo
+  // mientras está abierto para no dejar un listener global siempre activo.
   useEffect(() => {
-    if (!navOpen && !profileOpen) {
+    if (!navOpen) {
       return undefined;
     }
     const close = (event: Event): void => {
@@ -9533,12 +9532,10 @@ function App() {
         return;
       }
       setNavOpen(false);
-      setProfileOpen(false);
     };
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         setNavOpen(false);
-        setProfileOpen(false);
       }
     };
     document.addEventListener("pointerdown", close);
@@ -9547,7 +9544,7 @@ function App() {
       document.removeEventListener("pointerdown", close);
       document.removeEventListener("keydown", onKey);
     };
-  }, [navOpen, profileOpen]);
+  }, [navOpen]);
 
   const pushToast = useCallback(
     (message: string, kind: ToastKind = "success"): void => {
@@ -13137,6 +13134,28 @@ function App() {
       ACCESS_TIER_ORDER[right.tier ?? "subofficer"],
   );
 
+  // Las secciones de Admin. Viven en el desplegable del perfil (hover, sólo
+  // admin) y también en el panel angosto, donde no hay hover: ahí se tocan.
+  const renderAdminSections = (afterPick: () => void): ReactNode =>
+    adminSections.map((section) => (
+      <button
+        className={`nav-sublink${activeTab === "admin" && sectionFor("admin") === section.key ? " active" : ""}`}
+        key={section.key}
+        onClick={() => {
+          goToSection("admin", section.key);
+          afterPick();
+        }}
+        type="button"
+      >
+        {section.label}
+        {section.tier ? (
+          <span className={`admin-nav-tier tier-${section.tier}`}>
+            {accessTierLabel(section.tier)}
+          </span>
+        ) : null}
+      </button>
+    ));
+
   // Un tab de la barra. Se usa dos veces: los módulos van en el nav y Admin va
   // al lado del perfil, separado de ellos.
   const renderNavTab = (tab: HubTab): ReactNode => {
@@ -13300,6 +13319,15 @@ function App() {
 
           <nav className="top-nav" id="hub-nav">
             {visibleTabs.map(renderNavTab)}
+            {/* Admin en el panel angosto: el desplegable del perfil se abre con
+                hover y en táctil no existe, así que las secciones se ofrecen acá.
+                En pantalla ancha no se muestra (ver .nav-admin-mobile). */}
+            {adminSections.length > 0 ? (
+              <div className="nav-admin-mobile">
+                <span className="nav-submenu-label">Admin</span>
+                {renderAdminSections(() => setNavOpen(false))}
+              </div>
+            ) : null}
           </nav>
 
           <div className="topbar-user">
@@ -13319,18 +13347,21 @@ function App() {
                 ))}
               </select>
             ) : null}
-            {/* El perfil es el desplegable del panel: adentro van "Mi perfil" y
-                las secciones del Admin. Antes Admin era un ítem más del nav y
-                ocupaba lugar en la barra para algo que se usa cada tanto. */}
-            <div
-              className={`nav-item nav-item--profile${profileOpen ? " nav-item--open" : ""}`}
-            >
+            {/* El chip ES el perfil: dice "Mi perfil" y al clickearlo te lleva
+                ahí. El desplegable de Admin, para quien lo tiene, sigue saliendo
+                al pasar el mouse (en el panel angosto está en el nav). */}
+            <div className="nav-item nav-item--profile">
               <button
                 className={`user-chip user-chip-link${myTier ? ` user-chip--${myTier}` : ""}`}
-                onClick={() => setProfileOpen((open) => !open)}
+                onClick={() => {
+                  setProfileUserId(null);
+                  setActiveTab("perfil");
+                  setNavOpen(false);
+                  setNavExpanded(null);
+                  window.scrollTo({ top: 0 });
+                }}
                 type="button"
-                title="Mi perfil y Admin"
-                aria-expanded={profileOpen}
+                title={`Mi perfil de ${username}`}
               >
                 {me?.avatar ? (
                   <img
@@ -13346,49 +13377,19 @@ function App() {
                     {username.slice(0, 1).toUpperCase()}
                   </span>
                 )}
-                {username}
+                Mi perfil
                 {adminSections.length > 0 ? (
                   <span aria-hidden="true" className="nav-caret">
                     ▾
                   </span>
                 ) : null}
               </button>
-              <div className="nav-submenu nav-submenu-profile">
-                <button
-                  className={`nav-sublink${activeTab === "perfil" ? " active" : ""}`}
-                  onClick={() => {
-                    setProfileUserId(null);
-                    setActiveTab("perfil");
-                    setProfileOpen(false);
-                  }}
-                  type="button"
-                >
-                  Mi perfil
-                </button>
-                {adminSections.length > 0 ? (
-                  <>
-                    <span className="nav-submenu-label">Admin</span>
-                    {adminSections.map((section) => (
-                      <button
-                        className={`nav-sublink${activeTab === "admin" && sectionFor("admin") === section.key ? " active" : ""}`}
-                        key={section.key}
-                        onClick={() => {
-                          goToSection("admin", section.key);
-                          setProfileOpen(false);
-                        }}
-                        type="button"
-                      >
-                        {section.label}
-                        {section.tier ? (
-                          <span className={`admin-nav-tier tier-${section.tier}`}>
-                            {accessTierLabel(section.tier)}
-                          </span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </>
-                ) : null}
-              </div>
+              {adminSections.length > 0 ? (
+                <div className="nav-submenu nav-submenu-profile">
+                  <span className="nav-submenu-label">Admin</span>
+                  {renderAdminSections(() => undefined)}
+                </div>
+              ) : null}
             </div>
             <button
               className="theme-toggle"

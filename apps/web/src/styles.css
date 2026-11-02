@@ -380,9 +380,17 @@ a:hover {
 
 /* El desplegable del perfil: el chip ES el disparador, así que el ítem no puede
    heredar el alto de un nav-link. Se abre a la derecha y con aire de sobra para
-   que el chip siga siendo una pastilla. */
+   que el chip siga siendo una pastilla. Sólo lleva las secciones de Admin: el
+   perfil se abre clickeando el chip. */
 .nav-item--profile {
   display: flex;
+}
+
+/* Admin dentro del panel angosto. En pantalla ancha estas secciones viven en el
+   desplegable del perfil (hover); en táctil no hay hover, así que ahí se tocan
+   desde el panel del nav. */
+.nav-admin-mobile {
+  display: none;
 }
 
 .nav-submenu-profile {
@@ -11894,15 +11902,22 @@ select.list-order {
     transform: none;
   }
 
-  .nav-item--expanded > .nav-submenu,
-  .nav-item--open > .nav-submenu {
+  .nav-item--expanded > .nav-submenu {
     display: grid;
   }
 
-  /* En táctil el hover no existe: el submenú del perfil lo abre el click. */
-  .nav-item:hover > .nav-submenu {
-    opacity: 1;
-    visibility: visible;
+  /* El desplegable del perfil no se usa acá: las secciones de Admin están en el
+     panel del nav (.nav-admin-mobile). */
+  .nav-submenu-profile {
+    display: none;
+  }
+
+  .nav-admin-mobile {
+    display: grid;
+    gap: 2px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line-mid);
   }
 
   .nav-item--profile {
