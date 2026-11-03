@@ -127,10 +127,19 @@ Comunicados:
 (`mention-resolver`) traduce `@usuario`, `@Rol` y `#canal` a `<@id>`, `<@&id>` y
 `<#id>` antes de partir el texto en mensajes, tanto al publicar como al editar.
 Es best-effort: el nombre que no existe se deja como está, y si una consulta a
-Discord falla sólo se pierde esa lista (las otras se resuelven igual). El `#`
-se toma como canal únicamente cuando no viene pegado a una palabra o a la barra
-de una URL (`pagina#ancla` y `C#` quedan intactos) y con algo detrás (`# Título`
-es un heading). Los canales enlazables son texto, anuncios y foro.
+Discord falla sólo se pierde esa lista (las otras se resuelven igual).
+
+**Los nombres se comparan sin decoración.** En el servidor los canales y los
+roles se llaman `🗯️︱general` y `🔰Raid Officer`, así que además del nombre real
+se registra una versión limpia (sin emojis ni separadores) y se resuelve contra
+las dos: `#general` y `@Raid Officer` funcionan sin escribir los adornos. Ese
+alias limpio pierde contra un nombre real exacto, y los roles con espacios se
+resuelven antes que el token de `@` y del nombre más largo al más corto
+(`@Grand Master` no se lee como `@Master`).
+
+El `#` se toma como canal únicamente cuando no viene pegado a una palabra o a la
+barra de una URL (`pagina#ancla` y `C#` quedan intactos) y con algo detrás
+(`# Título` es un heading). Los canales enlazables son texto, anuncios y foro.
 
 Mensajes diarios (loro de Karpindomo):
 

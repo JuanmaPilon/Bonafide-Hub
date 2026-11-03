@@ -11,19 +11,25 @@ type DiscordMember = {
   user?: { id: string; username: string } | null;
 };
 
-type DiscordRole = {
-  id: string;
-  name: string;
-};
+type Named = { id: string; name: string };
 
-type DiscordChannel = {
-  id: string;
-  name: string;
-  type: number;
+type DiscordChannel = Named & { type: number };
+
+type MentionNames = {
+  // Nombres con espacios ("🔰Raid Officer"), del más largo al más corto.
+  multiWord: Array<{ alias: string; mention: string }>;
+  names: Map<string, string>;
 };
 
 // Texto, anuncios y foro: los que se pueden enlazar con <#id>.
 const MENTIONABLE_CHANNEL_TYPES = new Set([0, 5, 15]);
+
+// En Discord los nombres vienen decorados ("🗯️︱general", "🔰Raid Officer"),
+// así que además del nombre real se registra la versión limpia: sin emojis ni
+// separadores, que es lo que la gente escribe.
+const DECORATION =
+  /[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\u20E3]/gu;
+const NOT_NAME_CHAR = /[^\p{L}\p{N}._-]+/gu;
 
 // Un "#" o "@" que no venga pegado a una palabra, a otra mención o a la barra
 // de una URL (`pagina#ancla`, `contacto@dominio`), que no esté escapado con "\"
@@ -47,8 +53,8 @@ async function discordFetch<T>(path: string, token: string): Promise<T> {
 async function fetchMembersForMentions(
   guildId: string,
   token: string,
-): Promise<Map<string, string>> {
-  const byUsername = new Map<string, string>();
+): Promise<Named[]> {
+  const members: Named[] = [];
   let after: string | undefined;
 
   for (let page = 0; page < 10; page += 1) {
@@ -57,72 +63,128 @@ async function fetchMembersForMentions(
       query.set("after", after);
     }
 
-    const members = await discordFetch<DiscordMember[]>(
+    const page_ = await discordFetch<DiscordMember[]>(
       `/guilds/${encodeURIComponent(guildId)}/members?${query.toString()}`,
       token,
     );
 
-    for (const member of members) {
+    for (const member of page_) {
       if (member.user?.username) {
-        byUsername.set(member.user.username.toLowerCase(), member.user.id);
+        members.push({ id: member.user.id, name: member.user.username });
       }
     }
 
-    if (members.length < 1000) {
+    if (page_.length < 1000) {
       break;
     }
-    after = members[members.length - 1]?.user?.id;
+    after = page_[page_.length - 1]?.user?.id;
     if (!after) {
       break;
     }
   }
 
-  return byUsername;
+  return members;
 }
 
-// role name -> roleId (en minúsculas).
 async function fetchRolesForMentions(
   guildId: string,
   token: string,
-): Promise<Map<string, string>> {
-  const byName = new Map<string, string>();
-  const roles = await discordFetch<DiscordRole[]>(
+): Promise<Named[]> {
+  const roles = await discordFetch<Array<Named & { name: string }>>(
     `/guilds/${encodeURIComponent(guildId)}/roles`,
     token,
   );
-  for (const role of roles) {
-    byName.set(role.name.toLowerCase(), role.id);
-  }
-  return byName;
+  return roles.map((role) => ({ id: role.id, name: role.name }));
 }
 
-// channel name -> channelId (en minúsculas). Los nombres de canal no llevan
-// espacios, así que "#general" es un token limpio.
 async function fetchChannelsForMentions(
   guildId: string,
   token: string,
-): Promise<Map<string, string>> {
-  const byName = new Map<string, string>();
+): Promise<Named[]> {
   const channels = await discordFetch<DiscordChannel[]>(
     `/guilds/${encodeURIComponent(guildId)}/channels`,
     token,
   );
-  for (const channel of channels) {
-    if (MENTIONABLE_CHANNEL_TYPES.has(channel.type)) {
-      byName.set(channel.name.toLowerCase(), channel.id);
-    }
-  }
-  return byName;
+  return channels
+    .filter((channel) => MENTIONABLE_CHANNEL_TYPES.has(channel.type))
+    .map((channel) => ({ id: channel.id, name: channel.name }));
 }
 
 // Best-effort: si una consulta falla, esa lista queda vacía y el texto se
 // publica igual (sin arruinar la resolución de las otras).
-async function safeLoad(load: () => Promise<Map<string, string>>) {
+async function safeLoad<T>(load: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await load();
   } catch {
-    return new Map<string, string>();
+    return fallback;
   }
+}
+
+function cleanName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(DECORATION, " ")
+    .replace(NOT_NAME_CHAR, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Nombre tal cual (en minúsculas) primero, después las variantes limpias.
+function aliasesOf(name: string): string[] {
+  const lower = name.toLowerCase();
+  const cleaned = cleanName(name);
+  const aliases = [lower];
+  if (cleaned && cleaned !== lower) {
+    aliases.push(cleaned, cleaned.replace(/\s+/g, "-"));
+  }
+  return aliases;
+}
+
+function buildNames(
+  items: Named[],
+  mentionOf: (id: string) => string,
+): MentionNames {
+  const names = new Map<string, string>();
+  // Los nombres exactos se registran primero: si lo escrito coincide con un
+  // nombre real, gana sobre el alias limpio de otro.
+  for (const item of items) {
+    const key = item.name.toLowerCase();
+    if (!names.has(key)) {
+      names.set(key, item.id);
+    }
+  }
+  for (const item of items) {
+    for (const alias of aliasesOf(item.name)) {
+      if (!names.has(alias)) {
+        names.set(alias, item.id);
+      }
+    }
+  }
+
+  // Un nombre con espacios no entra en el token de "@", así que se resuelve
+  // aparte, del más largo al más corto: así "@Grand Master" no se lee como
+  // "@Master" y "@Raid Officer" no se lee como el rol "Raid".
+  const multiWord: MentionNames["multiWord"] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    for (const alias of aliasesOf(item.name)) {
+      if (!alias.includes(" ") || seen.has(alias)) {
+        continue;
+      }
+      seen.add(alias);
+      multiWord.push({ alias, mention: mentionOf(item.id) });
+    }
+  }
+  multiWord.sort((a, b) => b.alias.length - a.alias.length);
+
+  return { multiWord, names };
+}
+
+function multiWordPattern(alias: string): RegExp {
+  const escaped = alias
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+  return new RegExp(`(?<![\\w<])@${escaped}(?![\\p{L}\\p{N}-])`, "giu");
 }
 
 // El nombre escrito no incluye la puntuación que lo sigue ("#general.", "…"),
@@ -159,40 +221,50 @@ export async function resolveMentions(
     return content;
   }
 
-  const [users, roles, channels] = await Promise.all([
+  const [members, roles, channels] = await Promise.all([
     wantsUsers
-      ? safeLoad(() => fetchMembersForMentions(guildId, token))
-      : Promise.resolve(new Map<string, string>()),
+      ? safeLoad(() => fetchMembersForMentions(guildId, token), [] as Named[])
+      : Promise.resolve([] as Named[]),
     wantsUsers
-      ? safeLoad(() => fetchRolesForMentions(guildId, token))
-      : Promise.resolve(new Map<string, string>()),
+      ? safeLoad(() => fetchRolesForMentions(guildId, token), [] as Named[])
+      : Promise.resolve([] as Named[]),
     wantsChannels
-      ? safeLoad(() => fetchChannelsForMentions(guildId, token))
-      : Promise.resolve(new Map<string, string>()),
+      ? safeLoad(() => fetchChannelsForMentions(guildId, token), [] as Named[])
+      : Promise.resolve([] as Named[]),
   ]);
+
+  const userNames = buildNames(members, (id) => `<@${id}>`);
+  const roleNames = buildNames(roles, (id) => `<@&${id}>`);
+  const channelNames = buildNames(channels, (id) => `<#${id}>`);
 
   let resolved = content;
 
-  // Los canales van primero: así el "<#id>" que queda ya no lo toca el
-  // reemplazo de usuarios.
-  if (channels.size > 0) {
+  // Los roles con espacios van primero: si el token de "@" los agarra antes,
+  // "@Raid Officer" queda como el rol "Raid" y " Officer" suelto.
+  for (const { alias, mention } of roleNames.multiWord) {
+    resolved = resolved.replace(multiWordPattern(alias), mention);
+  }
+
+  // Los canales van antes que los usuarios: el "<#id>" que queda ya no lo
+  // toca el reemplazo de "@".
+  if (channelNames.names.size > 0) {
     resolved = resolved.replace(
       CHANNEL_REFERENCE_ALL,
       (match, name: string) => {
-        const found = lookupName(channels, name);
+        const found = lookupName(channelNames.names, name);
         return found ? `<#${found.id}>${found.tail}` : match;
       },
     );
   }
 
-  if (users.size > 0 || roles.size > 0) {
-    // (?<!<) evita tocar menciones ya armadas como <@123> o <@&123>.
+  if (userNames.names.size > 0 || roleNames.names.size > 0) {
+    // (?<![\w<]) evita tocar menciones ya armadas como <@123> o <@&123>.
     resolved = resolved.replace(USER_REFERENCE, (match, name: string) => {
-      const role = lookupName(roles, name);
+      const role = lookupName(roleNames.names, name);
       if (role) {
         return `<@&${role.id}>${role.tail}`;
       }
-      const user = lookupName(users, name);
+      const user = lookupName(userNames.names, name);
       if (user) {
         return `<@${user.id}>${user.tail}`;
       }
