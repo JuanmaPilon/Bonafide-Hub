@@ -10222,23 +10222,50 @@ function App() {
         }
       })
       .catch(() => {});
-    const fetches: Array<Promise<GuildChannel[]>> = [];
-    if (missingVoice) {
-      fetches.push(getGuildVoiceChannels(selectedGuildId));
+    // Una promesa por lista, con su lugar fijo: cuando sólo faltaba una, el
+    // índice fijo (`lists[0]` / `lists[1]`) leía la posición equivocada y no
+    // guardaba nada.
+    if (missingVoice || missingText) {
+      Promise.all([
+        missingVoice
+          ? getGuildVoiceChannels(selectedGuildId)
+          : Promise.resolve(null),
+        missingText
+          ? getGuildTextChannels(selectedGuildId)
+          : Promise.resolve(null),
+      ])
+        .then(([voiceList, textList]) => {
+          if (cancelled) {
+            return;
+          }
+          if (voiceList) {
+            setVoiceChannels(voiceList);
+          }
+          if (textList) {
+            setTextChannels(textList);
+          }
+        })
+        .catch(() => {});
     }
-    if (missingText) {
-      fetches.push(getGuildTextChannels(selectedGuildId));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGuildId, activeTab, showEventForm]);
+
+  // Canales de texto para el editor de comunicados. El modal se abre desde la
+  // tab Comunicados, donde los canales no se cargan (eso pasa en Admin y en el
+  // form de eventos), así que el selector de "Canal de publicación" llegaba
+  // vacío y la única opción era "Sin canal (solo web)".
+  useEffect(() => {
+    if (!commEditor || !selectedGuildId || textChannels.length > 0) {
+      return;
     }
-    Promise.all(fetches)
-      .then((lists) => {
-        if (cancelled) {
-          return;
-        }
-        if (missingVoice && lists[0]) {
-          setVoiceChannels(lists[0]);
-        }
-        if (missingText && lists[1]) {
-          setTextChannels(lists[1]);
+    let cancelled = false;
+    getGuildTextChannels(selectedGuildId)
+      .then((channels) => {
+        if (!cancelled) {
+          setTextChannels(channels);
         }
       })
       .catch(() => {});
@@ -10246,7 +10273,7 @@ function App() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGuildId, activeTab, showEventForm]);
+  }, [commEditor, selectedGuildId, textChannels.length]);
 
   // Roles de la guild: si hay eventos con rol requerido, cargamos los roles
   // para poder mostrar el nombre del rol en la tarjeta (y no "un rol").
