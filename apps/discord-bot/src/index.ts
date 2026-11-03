@@ -2042,6 +2042,10 @@ async function handleRankingCommand(
   await interaction.reply({ embeds, files });
 }
 
+// Tope de nombres que se listan cuando la sala queda oculta para pocos. Con más
+// que esto el mensaje se vuelve un párrafo y el dato útil pasa a ser el rol.
+const MAX_NOMBRES_SIN_VER = 8;
+
 // Mensajes del mayordomo de Karpindomo al desperuanizar/reperuanizar una
 // sala de voz. {user} se reemplaza con la mención de quien ejecutó el comando.
 const BAN_CHANNEL_BUTLER_MESSAGES = [
@@ -2264,6 +2268,27 @@ async function handleVoiceBanCommand(
       ? BAN_CHANNEL_BUTLER_MESSAGES
       : UNBAN_CHANNEL_BUTLER_MESSAGES;
     const template = pickRandom(messages);
+    // Quiénes NO ven la sala después del cambio: los nombres. Es lo que responde
+    // "¿a quién dejé afuera?" al instante, sin abrir Discord a revisar uno por
+    // uno. Se calcula con la cache de miembros (sin llamadas extra a la API).
+    const miembros = [...interaction.guild.members.cache.values()];
+    const ven = miembros.filter((miembro) =>
+      channel
+        .permissionsFor(miembro)
+        ?.has(PermissionFlagsBits.ViewChannel),
+    ).length;
+    // Para la lista de nombres se saltean los bots: ocupan un lugar en el
+    // conteo pero a nadie le sirve leer "Karpindomo no puede verla".
+    const sinVer = miembros
+      .filter((miembro) => !miembro.user.bot)
+      .filter(
+        (miembro) =>
+          !channel
+            .permissionsFor(miembro)
+            ?.has(PermissionFlagsBits.ViewChannel),
+      )
+      .map((miembro) => miembro.displayName || miembro.user.username);
+
     // Detalle de lo que se hizo: sin esto, "la sala se ocultó de más gente" no
     // tenía cómo diagnosticarse desde Discord.
     const detalle: string[] = [];
@@ -2284,17 +2309,21 @@ async function handleVoiceBanCommand(
         "@everyone está en la lista y se ignoró: ocultaría la sala a todo el servidor.",
       );
     }
-    // Cuántos miembros ven la sala después del cambio: el número que responde
-    // "¿se ocultó de más gente?" sin abrir Discord. Se calcula con la cache de
-    // miembros (sin llamadas a la API).
-    const ven = [...interaction.guild.members.cache.values()].filter((miembro) =>
-      channel
-        .permissionsFor(miembro)
-        ?.has(PermissionFlagsBits.ViewChannel),
-    ).length;
-    const total = interaction.guild.members.cache.size;
+    // Cuántos miembros ven la sala y, si son pocos, QUIÉNES no la ven. La lista
+    // se corta para no armar un párrafo enorme: con muchos vetados conviene
+    // mirar los roles, y se dice cuántos quedaron afuera.
+    const total = miembros.length;
     if (total > 0) {
       detalle.push(`La ven ${ven} de ${total} miembros.`);
+      if (sinVer.length === 1) {
+        detalle.push(`${sinVer[0]} no puede verla ni entrar.`);
+      } else if (sinVer.length > 1 && sinVer.length <= MAX_NOMBRES_SIN_VER) {
+        detalle.push(`No pueden verla ni entrar: ${sinVer.join(", ")}.`);
+      } else if (sinVer.length > MAX_NOMBRES_SIN_VER) {
+        detalle.push(
+          `No pueden verla ni entrar ${sinVer.length} miembros (demasiados para listarlos: revisá los roles de arriba).`,
+        );
+      }
     }
     // Si la sala (o su categoría) ya oculta @everyone, mucha gente no la ve por
     // eso y no por los roles vetados: es la otra causa de "se ocultó de más".
