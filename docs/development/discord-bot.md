@@ -84,7 +84,14 @@ huérfanas de intentos anteriores.
 
 Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 
-1. `/desperuanizar` — oculta la sala a los roles vetados (`bannedVoiceRoleIds`); agrega el sufijo ` 🚫🇵🇪` al nombre.
+1. `/desperuanizar` — oculta la sala a los roles vetados (`bannedVoiceRoleIds`);
+   agrega el sufijo ` 🚫🇵🇪` al nombre. La respuesta del comando dice **a qué
+   roles** se les negó la vista, **cuántos miembros tiene cada uno**, **cuántos
+   miembros ven todavía la sala** y avisa si la sala **o su categoría ya
+   ocultaban `@everyone`** (ahí la gente no la ve por la categoría, no por el
+   comando). Nunca aplica el veto a `@everyone`, que ocultaría la sala a todo el
+   servidor, y cada rol se aplica por separado: uno que falle no deja al resto
+   sin hacer.
 2. `/reperuanizar` — revierte `/desperuanizar`; quita el sufijo.
 3. `/lock` — tranca la sala para `@everyone` (deniega Connect): los que ya están adentro se quedan, nadie nuevo puede entrar; agrega el sufijo ` 🔒`.
 4. `/unlock` — revierte `/lock`; quita el sufijo. También **libera el aforo** (`/limit`), porque una sala trancada y limitada queda cerrada dos veces.

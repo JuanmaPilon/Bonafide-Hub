@@ -10,6 +10,7 @@ import {
   GatewayIntentBits,
   Message,
   Options,
+  OverwriteType,
   Partials,
   PermissionFlagsBits,
   type Guild,
@@ -2155,14 +2156,58 @@ async function handleVoiceBanCommand(
       return;
     }
 
+    // Qué se tocó de verdad. Se muestra en la respuesta: si la sala se oculta
+    // "de más gente", acá se ve exactamente a qué roles se les negó la vista
+    // (y cuántos miembros tiene cada uno). Antes la respuesta era sólo el
+    // mensaje del mayordomo y no había forma de saberlo sin abrir Discord.
+    const rolesTocados: string[] = [];
+    const fallidos: string[] = [];
+    let salteadoEveryone = false;
+
     if (ban) {
       // Desperuanizar: ocultar el canal a los roles vetados. Serializamos y
       // esperamos entre edits para no disparar rate limits de Discord por
       // canal (limite de overwrites por segundo).
+      // La lista de miembros se pide (si falta) para poder decir CUÁNTOS
+      // miembros tiene cada rol ocultado: es el dato que explica un "se ocultó
+      // de más gente".
+      if (interaction.guild.members.cache.size < interaction.guild.memberCount) {
+        await interaction.guild.members.fetch().catch(() => undefined);
+      }
       for (const roleId of bannedRoleIds) {
-        await channel.permissionOverwrites.edit(roleId, {
-          ViewChannel: false,
-        });
+        const role = interaction.guild.roles.cache.get(roleId);
+        if (!role) {
+          // Un id que ya no es un rol (o de otro servidor): se saltea, no corta
+          // el resto. Antes lanzaba y dejaba la mitad de los roles sin ocultar.
+          fallidos.push(roleId);
+          continue;
+        }
+        if (role.id === interaction.guild.id) {
+          // @everyone ocultaría la sala para TODO el servidor: nunca es lo que
+          // se quiere con este comando.
+          salteadoEveryone = true;
+          continue;
+        }
+        try {
+          // `type` explícito: si el rol no está en cache, discord.js intentaba
+          // resolverlo como usuario y tiraba "User nor a Role".
+          await channel.permissionOverwrites.edit(
+            role.id,
+            { ViewChannel: false },
+            { reason: `Desperuanizada por ${interaction.user.tag}`, type: OverwriteType.Role },
+          );
+          rolesTocados.push(
+            `${role.name} (${role.members.size} ${role.members.size === 1 ? "miembro" : "miembros"})`,
+          );
+        } catch (error) {
+          console.warn("[discord-bot] no se pudo ocultar la sala a un rol", {
+            guildId: interaction.guildId,
+            channelId: voiceChannelId,
+            roleId: role.id,
+            error,
+          });
+          fallidos.push(role.name);
+        }
         await sleep(350);
       }
     } else {
@@ -2172,10 +2217,27 @@ async function handleVoiceBanCommand(
       // inconsistente.
       for (const roleId of bannedRoleIds) {
         const overwrite = channel.permissionOverwrites.cache.get(roleId);
-        if (overwrite) {
-          await channel.permissionOverwrites.delete(roleId);
-          await sleep(350);
+        if (!overwrite) {
+          continue;
         }
+        try {
+          await channel.permissionOverwrites.delete(
+            roleId,
+            `Reperuanizada por ${interaction.user.tag}`,
+          );
+          rolesTocados.push(
+            interaction.guild.roles.cache.get(roleId)?.name ?? roleId,
+          );
+        } catch (error) {
+          console.warn("[discord-bot] no se pudo volver a mostrar la sala a un rol", {
+            guildId: interaction.guildId,
+            channelId: voiceChannelId,
+            roleId,
+            error,
+          });
+          fallidos.push(interaction.guild.roles.cache.get(roleId)?.name ?? roleId);
+        }
+        await sleep(350);
       }
     }
 
@@ -2202,8 +2264,53 @@ async function handleVoiceBanCommand(
       ? BAN_CHANNEL_BUTLER_MESSAGES
       : UNBAN_CHANNEL_BUTLER_MESSAGES;
     const template = pickRandom(messages);
+    // Detalle de lo que se hizo: sin esto, "la sala se ocultó de más gente" no
+    // tenía cómo diagnosticarse desde Discord.
+    const detalle: string[] = [];
+    if (rolesTocados.length > 0) {
+      detalle.push(
+        `${ban ? "Oculta para" : "Visible para"}: ${rolesTocados.join(", ")}.`,
+      );
+    } else if (ban) {
+      detalle.push("No hay ningún rol válido que ocultar.");
+    }
+    if (fallidos.length > 0) {
+      detalle.push(
+        `No se pudo con ${fallidos.join(", ")} (revisá que el bot esté por encima de esos roles).`,
+      );
+    }
+    if (salteadoEveryone) {
+      detalle.push(
+        "@everyone está en la lista y se ignoró: ocultaría la sala a todo el servidor.",
+      );
+    }
+    // Cuántos miembros ven la sala después del cambio: el número que responde
+    // "¿se ocultó de más gente?" sin abrir Discord. Se calcula con la cache de
+    // miembros (sin llamadas a la API).
+    const ven = [...interaction.guild.members.cache.values()].filter((miembro) =>
+      channel
+        .permissionsFor(miembro)
+        ?.has(PermissionFlagsBits.ViewChannel),
+    ).length;
+    const total = interaction.guild.members.cache.size;
+    if (total > 0) {
+      detalle.push(`La ven ${ven} de ${total} miembros.`);
+    }
+    // Si la sala (o su categoría) ya oculta @everyone, mucha gente no la ve por
+    // eso y no por los roles vetados: es la otra causa de "se ocultó de más".
+    const everyoneCanSee =
+      channel
+        .permissionsFor(interaction.guild.roles.everyone)
+        ?.has(PermissionFlagsBits.ViewChannel) ?? true;
+    if (!everyoneCanSee) {
+      detalle.push(
+        "⚠️ La sala (o su categoría) ya oculta @everyone: quien no tenga un permiso explícito no la ve, y este comando no cambia eso.",
+      );
+    }
     await interaction.editReply({
-      content: template.replace("{user}", interaction.user.toString()),
+      content: [template.replace("{user}", interaction.user.toString()), ...detalle].join(
+        "\n",
+      ),
     });
   } catch (error) {
     console.error(
