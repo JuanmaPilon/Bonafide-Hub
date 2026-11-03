@@ -123,6 +123,15 @@ Comunicados:
 4. `DELETE /guilds/:guildId/communications/instances/:instanceId`
 5. `GET /guilds/:guildId/communications/published` (instancias para el hub)
 
+**El texto se publica con las menciones resueltas.** `resolveMentions`
+(`mention-resolver`) traduce `@usuario`, `@Rol` y `#canal` a `<@id>`, `<@&id>` y
+`<#id>` antes de partir el texto en mensajes, tanto al publicar como al editar.
+Es best-effort: el nombre que no existe se deja como está, y si una consulta a
+Discord falla sólo se pierde esa lista (las otras se resuelven igual). El `#`
+se toma como canal únicamente cuando no viene pegado a una palabra o a la barra
+de una URL (`pagina#ancla` y `C#` quedan intactos) y con algo detrás (`# Título`
+es un heading). Los canales enlazables son texto, anuncios y foro.
+
 Mensajes diarios (loro de Karpindomo):
 
 1. `GET/POST /guilds/:guildId/daily-messages`
