@@ -2160,11 +2160,8 @@ async function handleVoiceBanCommand(
       return;
     }
 
-    // Qué se tocó de verdad. Se muestra en la respuesta: si la sala se oculta
-    // "de más gente", acá se ve exactamente a qué roles se les negó la vista
-    // (y cuántos miembros tiene cada uno). Antes la respuesta era sólo el
-    // mensaje del mayordomo y no había forma de saberlo sin abrir Discord.
-    const rolesTocados: string[] = [];
+    // Lo que salió mal, para poder avisarlo en la respuesta (lo que salió bien
+    // no necesita detalle: el resumen es a quién le quedó oculta la sala).
     const fallidos: string[] = [];
     let salteadoEveryone = false;
 
@@ -2172,9 +2169,8 @@ async function handleVoiceBanCommand(
       // Desperuanizar: ocultar el canal a los roles vetados. Serializamos y
       // esperamos entre edits para no disparar rate limits de Discord por
       // canal (limite de overwrites por segundo).
-      // La lista de miembros se pide (si falta) para poder decir CUÁNTOS
-      // miembros tiene cada rol ocultado: es el dato que explica un "se ocultó
-      // de más gente".
+      // La lista de miembros se pide (si falta) para poder nombrar a quién le
+      // quedó oculta la sala.
       if (interaction.guild.members.cache.size < interaction.guild.memberCount) {
         await interaction.guild.members.fetch().catch(() => undefined);
       }
@@ -2199,9 +2195,6 @@ async function handleVoiceBanCommand(
             role.id,
             { ViewChannel: false },
             { reason: `Desperuanizada por ${interaction.user.tag}`, type: OverwriteType.Role },
-          );
-          rolesTocados.push(
-            `${role.name} (${role.members.size} ${role.members.size === 1 ? "miembro" : "miembros"})`,
           );
         } catch (error) {
           console.warn("[discord-bot] no se pudo ocultar la sala a un rol", {
@@ -2228,9 +2221,6 @@ async function handleVoiceBanCommand(
           await channel.permissionOverwrites.delete(
             roleId,
             `Reperuanizada por ${interaction.user.tag}`,
-          );
-          rolesTocados.push(
-            interaction.guild.roles.cache.get(roleId)?.name ?? roleId,
           );
         } catch (error) {
           console.warn("[discord-bot] no se pudo volver a mostrar la sala a un rol", {
@@ -2268,36 +2258,34 @@ async function handleVoiceBanCommand(
       ? BAN_CHANNEL_BUTLER_MESSAGES
       : UNBAN_CHANNEL_BUTLER_MESSAGES;
     const template = pickRandom(messages);
-    // Quiénes NO ven la sala después del cambio: los nombres. Es lo que responde
-    // "¿a quién dejé afuera?" al instante, sin abrir Discord a revisar uno por
-    // uno. Se calcula con la cache de miembros (sin llamadas extra a la API).
+    // Quiénes NO ven la sala después del cambio: los nombres. Es lo único que
+    // hace falta saber al ejecutar el comando ("a quién dejé afuera"), y se
+    // calcula con la cache de miembros, sin llamadas extra a la API.
     const miembros = [...interaction.guild.members.cache.values()];
-    const ven = miembros.filter((miembro) =>
+    const puedenVer = (miembro: GuildMember): boolean =>
       channel
         .permissionsFor(miembro)
-        ?.has(PermissionFlagsBits.ViewChannel),
-    ).length;
-    // Para la lista de nombres se saltean los bots: ocupan un lugar en el
-    // conteo pero a nadie le sirve leer "Karpindomo no puede verla".
+        ?.has(PermissionFlagsBits.ViewChannel) ?? false;
+    // Los bots no entran en la lista de nombres: a nadie le sirve leer que
+    // Karpindomo no puede ver la sala.
     const sinVer = miembros
-      .filter((miembro) => !miembro.user.bot)
-      .filter(
-        (miembro) =>
-          !channel
-            .permissionsFor(miembro)
-            ?.has(PermissionFlagsBits.ViewChannel),
-      )
+      .filter((miembro) => !miembro.user.bot && !puedenVer(miembro))
       .map((miembro) => miembro.displayName || miembro.user.username);
 
-    // Detalle de lo que se hizo: sin esto, "la sala se ocultó de más gente" no
-    // tenía cómo diagnosticarse desde Discord.
+    // Detalle de lo que se hizo. Un solo dato útil más los avisos de lo que
+    // salió mal: antes también listaba los roles con su cantidad de miembros y
+    // el total de "la ven 81 de 82", que era ruido para el uso real.
     const detalle: string[] = [];
-    if (rolesTocados.length > 0) {
-      detalle.push(
-        `${ban ? "Oculta para" : "Visible para"}: ${rolesTocados.join(", ")}.`,
-      );
-    } else if (ban) {
-      detalle.push("No hay ningún rol válido que ocultar.");
+    const nombres = (lista: string[]): string =>
+      lista.length <= MAX_NOMBRES_SIN_VER
+        ? lista.join(", ")
+        : `${lista.length} personas (son muchas para listarlas: revisá los roles vetados)`;
+    if (ban && sinVer.length > 0) {
+      detalle.push(`Oculta para: ${nombres(sinVer)}.`);
+    } else if (!ban && sinVer.length > 0) {
+      // Después de reperuanizar todavía hay gente sin ver: no es lo esperado, y
+      // el dato sirve para encontrarlo (suele ser la categoría, ver abajo).
+      detalle.push(`Sigue sin poder verla: ${nombres(sinVer)}.`);
     }
     if (fallidos.length > 0) {
       detalle.push(
@@ -2308,22 +2296,6 @@ async function handleVoiceBanCommand(
       detalle.push(
         "@everyone está en la lista y se ignoró: ocultaría la sala a todo el servidor.",
       );
-    }
-    // Cuántos miembros ven la sala y, si son pocos, QUIÉNES no la ven. La lista
-    // se corta para no armar un párrafo enorme: con muchos vetados conviene
-    // mirar los roles, y se dice cuántos quedaron afuera.
-    const total = miembros.length;
-    if (total > 0) {
-      detalle.push(`La ven ${ven} de ${total} miembros.`);
-      if (sinVer.length === 1) {
-        detalle.push(`${sinVer[0]} no puede verla ni entrar.`);
-      } else if (sinVer.length > 1 && sinVer.length <= MAX_NOMBRES_SIN_VER) {
-        detalle.push(`No pueden verla ni entrar: ${sinVer.join(", ")}.`);
-      } else if (sinVer.length > MAX_NOMBRES_SIN_VER) {
-        detalle.push(
-          `No pueden verla ni entrar ${sinVer.length} miembros (demasiados para listarlos: revisá los roles de arriba).`,
-        );
-      }
     }
     // Si la sala (o su categoría) ya oculta @everyone, mucha gente no la ve por
     // eso y no por los roles vetados: es la otra causa de "se ocultó de más".
