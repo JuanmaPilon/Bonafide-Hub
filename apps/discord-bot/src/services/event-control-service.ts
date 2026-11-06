@@ -384,18 +384,18 @@ async function processReport(
       .setDescription(`🗓️ ${formatEventDate(event.startsAt)}`)
       .addFields(
         {
-          name: "📊 Anotados",
+          name: "Anotados",
           value: `✅ ${confirmed} · 🪑 ${bench} · ⏰ ${late} · ❌ ${countNo}`,
         },
         {
-          name: `🛡️ No se anotaron (${missingCore.length} con el rol)`,
+          name: "⚔️ No se anotaron",
           value:
             missingCore.length > 0
               ? missingCore
                   .map((m) => `• ${m.displayName}`)
                   .join("\n")
                   .slice(0, 1024)
-              : "Nadie: todos con el rol respondieron. 🎉",
+              : "Todos se anotaron.",
         },
         // El bench cuenta como roster, pero se lista aparte para que no se lea
         // como si faltara el core.
