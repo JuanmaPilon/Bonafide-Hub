@@ -246,7 +246,7 @@ el bot maneja los clicks con mensajes efímeros y guarda por API interna:
    evento es de WoW: los dos roles suman a la hora de contar, avisar y listar,
    porque el bench es parte del roster. El informe lleva los conteos en
    `Anotados` (✅ confirmados · 🪑 bench · ⏰ tarde · ❌ no asisten), la lista de
-   `⚔️ No se anotaron` **sin el número en el título** —el título del core no se
+   `🐉 No se anotaron` **sin el número en el título** —el título del core no se
    cuenta, y cuando no falta nadie el campo dice *Todos se anotaron.*— y el bench
    en un campo aparte, con su cuenta, para que no se lea como si faltara el core.
    El **recordatorio manual**

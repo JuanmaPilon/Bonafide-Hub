@@ -388,7 +388,7 @@ async function processReport(
           value: `✅ ${confirmed} · 🪑 ${bench} · ⏰ ${late} · ❌ ${countNo}`,
         },
         {
-          name: "⚔️ No se anotaron",
+          name: "🐉 No se anotaron",
           value:
             missingCore.length > 0
               ? missingCore
