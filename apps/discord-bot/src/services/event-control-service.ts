@@ -388,6 +388,8 @@ async function processReport(
           value: `✅ ${confirmed} · 🪑 ${bench} · ⏰ ${late} · ❌ ${countNo}`,
         },
         {
+          // El ícono de raid del servidor es el dragón: el mismo que el tipo
+          // "raid" del catálogo de la web.
           name: "🐉 No se anotaron",
           value:
             missingCore.length > 0

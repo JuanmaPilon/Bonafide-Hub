@@ -1468,7 +1468,10 @@ export const EVENT_TYPES: Array<{
   key: string;
   label: string;
 }> = [
-  { emoji: "⚔️", key: "raid", label: "Raid" },
+  // El raid va con el dragón, igual que el rol del servidor y el informe de
+  // asistencia del bot (event-control-service): los tres tienen que decir lo
+  // mismo.
+  { emoji: "🐉", key: "raid", label: "Raid" },
   { emoji: "🗝️", key: "mplus", label: "M+" },
   { emoji: "🏆", key: "pvp", label: "PvP" },
   { emoji: "🎉", key: "social", label: "Social" },
