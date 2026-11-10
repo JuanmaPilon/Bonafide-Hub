@@ -199,6 +199,12 @@ El costo sale del cómputo de los servicios siempre encendidos: `API`, `Bot` y
    El `soft` avisa por email; el `hard` corta. El hard no puede ser menor al soft.
 3. El consumo se sigue en la misma pantalla de Usage.
 
+**El tope es la protección real contra un mes caro.** El trabajo de memoria baja la
+factura, pero no evita que un mes con muchos deploys o una sesión larga de
+análisis se vaya arriba: un `hard` en un par de dólares por encima de lo normal
+convierte una factura sorpresa en un corte que se ve venir. Sin ese tope, la única
+señal es el mail de *soft*, que llega cuando el gasto ya pasó.
+
 #### Memory: lo que hay que mirar
 
 La memoria es la línea más cara del proyecto. Los dos consumidores con
@@ -249,6 +255,26 @@ se aplica al heap, que ya está chico—. Lo que ocupa el resto es memoria nativ
 Por eso, cuando `heapUsed` está muy por debajo de `rss`, el camino no es el GC:
 es la memoria nativa. Y cuando `heapUsed` **sí** acompaña al `rss`, ahí sí el
 tope del heap y la búsqueda de leaks tienen sentido.
+
+**Lo que midió el cambio.** Un despliegue después (pool de Prisma a 5, sync de
+logs sin materializar todo, caché de análisis a 3 y `MALLOC_ARENA_MAX=2`), el
+mismo servicio quedó así:
+
+| | Antes | Después |
+| --- | --- | --- |
+| `rssMb` | 392 | 216–233 estable |
+| `heapUsedMb` | 68 | 17–27 |
+
+Son **~160 MB menos**, o sea ≈ $1,60/mes de la línea de memoria
+(`0,159 GB × 43.200 min × $0,000231`). Los cuatro cambios entraron en el mismo
+deploy, así que no se puede aislar cuánto puso cada uno; lo que importa es que el
+conjunto se sostiene.
+
+Dos cosas para leer bien la serie: el `rss` **arranca bajo y sube** durante las
+primeras horas, así que una muestra de una hora no es el techo —hay que mirar al
+día siguiente—, y hay picos periódicos de ~50 MB (18:00 y 18:05 marcan 275 y 281
+con `heapUsed` en 27) que vuelven a bajar. Para comparar sirve el **promedio**,
+no el pico.
 
 #### La cuenta es "GB de RAM × 10"
 
