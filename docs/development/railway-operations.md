@@ -226,6 +226,56 @@ Ojo con el tamaño relativo: en el acumulado de un mes el **API** pesa ~4,5 vece
 más que el bot (≈236 MB promedio contra ≈53 MB), así que un escalón del bot es
 chico al lado del mismo escalón en el API.
 
+#### La cuenta es "GB de RAM × 10"
+
+Medido en un período de *Usage* real:
+
+| Línea | Consumo | Costo | % |
+| --- | --- | --- | --- |
+| **Memory** | 1435 GB·min | $0,3322 | **97%** |
+| CPU | 13,3 vCPU·min | $0,0062 | 2% |
+| Egress | 0,07 GB | $0,0036 | 1% |
+| Volume | 225 GB·min | $0,0008 | — |
+| Backup | 61 GB·min | $0,0002 | — |
+
+La tarifa de memoria es `$0,000231 / GB / minuto`, o sea **≈ $10 por GB por
+mes**. Por eso la factura se estima así:
+
+```text
+cuenta ≈ GB de RAM promedio × 10 + $5 del plan
+```
+
+El Hobby son **$5 de suscripción que incluyen $5 de uso**: mientras el uso quede
+por debajo de $5 se paga $5, y cada peso que lo pasa se suma. El objetivo
+concreto para no pagar más de $5 es **menos de 0,5 GB de RAM promedio en total**.
+Y como la memoria es casi todo, mirar CPU, egress o disco para bajar la factura
+es perseguir el número equivocado.
+
+Reparto por servicio en ese mismo período: **API 69%**, PRD_DB 18%, Bot 7%,
+Web 5%. El API solo es más de dos tercios.
+
+#### El pool de conexiones de Prisma
+
+`new PrismaClient()` sin `connection_limit` usa el default de Prisma:
+`núcleos físicos × 2 + 1`. Dentro de un contenedor `os.cpus()` devuelve los
+núcleos del **host**, no los asignados, así que el API podía abrir 30+
+conexiones. Cada conexión ocupa memoria en el API **y** crea un proceso backend
+en Postgres, que se factura en la línea de `PRD_DB`.
+
+En `db/prisma.ts` la URL se completa con `connection_limit=5` y
+`pool_timeout=20` (si la variable ya trae los parámetros, se respetan: permite
+probar otro valor sin deploy). El valor resuelto se puede ver en
+`prisma._engineConfig.overrideDatasources`.
+
+#### Qué se materializa en cada pasada
+
+El sync de logs de raid corre cada 5 minutos y antes pedía `listRaidLogs`, que
+trae **todas** las noches guardadas con su resumen de pulls y el texto
+publicado, para después usar una o dos filas. Ahora consulta sólo las que están
+en curso (`status` en `new`/`live`) y sólo las columnas que usa. Lo mismo con la
+lista de guilds: era un `findMany` de todas las filas para sacar los `guildId`
+distintos.
+
 #### Compresión: dejar la calidad de brotli donde está
 
 `@fastify/compress` **no** usa la calidad 11 de zlib: trae `BROTLI_PARAM_QUALITY:

@@ -1,5 +1,5 @@
 import { prisma } from "../db/prisma.js";
-import { listRaidLogs, refreshRaidLog } from "./raid-logs-store.js";
+import { refreshRaidLog } from "./raid-logs-store.js";
 
 // Los reports en curso se refrescan solos: sin esto, el estado ("en vivo" /
 // terminado) y el "Actualizar log" solo avanzan si alguien aprieta Escanear.
@@ -14,39 +14,47 @@ const MAX_REFRESHES_PER_PASS = 4;
 // terminado (`synced`) no cambia por sí solo: bajarlo cada 5 minutos era el
 // gasto de egress más grande que tenía el proyecto (cada consulta descarga el
 // report completo). Los terminados se actualizan a mano con "Actualizar log".
-function isInProgress(status: string): boolean {
-  return status === "new" || status === "live";
-}
+const IN_PROGRESS_STATUSES = ["new", "live"];
 
 export async function syncActiveRaidLogs(): Promise<number> {
   const now = Date.now();
-  const guilds = await prisma.raidLog.findMany({
-    select: { guildId: true },
-    where: { hidden: false },
+  // Sólo los reports EN CURSO, y sólo las columnas que se usan: pedir la lista
+  // completa traía todas las noches guardadas (con el resumen de pulls y el
+  // texto publicado de cada una) cada 5 minutos para usar una o dos filas.
+  const active = await prisma.raidLog.findMany({
+    // Mismo orden de preferencia que el dedupe de la lista: si un report quedó
+    // guardado dos veces, se refresca la fila que la lista termina mostrando.
+    orderBy: [
+      { discordPosted: "desc" },
+      { fightCount: "desc" },
+      { createdAt: "desc" },
+    ],
+    select: {
+      fightCount: true,
+      id: true,
+      lastSyncedAt: true,
+      reportCode: true,
+    },
+    where: { hidden: false, status: { in: IN_PROGRESS_STATUSES } },
   });
+
+  const seen = new Set<string>();
   let refreshed = 0;
-  for (const guildId of [...new Set(guilds.map((row) => row.guildId))]) {
+  for (const log of active) {
     if (refreshed >= MAX_REFRESHES_PER_PASS) {
       break;
     }
-    const logs = await listRaidLogs(guildId);
-    for (const log of logs) {
-      if (refreshed >= MAX_REFRESHES_PER_PASS) {
-        break;
-      }
-      // Los publicados se actualizan a mano ("Actualizar log"); los que
-      // fallaron quedan para el escaneo manual.
-      if (log.status === "failed" || !isInProgress(log.status)) {
-        continue;
-      }
-      const stale =
-        !log.lastSyncedAt || now - log.lastSyncedAt.getTime() >= SYNC_STALE_MS;
-      if (!stale) {
-        continue;
-      }
-      await refreshRaidLog(log.id);
-      refreshed += 1;
+    if (seen.has(log.reportCode)) {
+      continue;
     }
+    seen.add(log.reportCode);
+    const stale =
+      !log.lastSyncedAt || now - log.lastSyncedAt.getTime() >= SYNC_STALE_MS;
+    if (!stale) {
+      continue;
+    }
+    await refreshRaidLog(log.id);
+    refreshed += 1;
   }
   return refreshed;
 }
