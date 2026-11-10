@@ -327,6 +327,23 @@ ALTER SYSTEM SET max_connections = 20;
 ALTER SYSTEM SET work_mem = '2MB';
 ```
 
+> ⚠️ **La consola SQL de Railway no sirve para esto.** Corre lo que le pegás
+> dentro de una transacción y Postgres rechaza `ALTER SYSTEM` con
+> `cannot run inside a transaction block`. `shared_buffers` y `max_connections`
+> son parámetros de arranque (sólo se pueden fijar en `postgresql.conf` /
+> `postgresql.auto.conf`), así que tampoco se pueden tocar con `SET` de sesión ni
+> con `ALTER DATABASE`: eso último sólo funciona con `work_mem`.
+
+Hay dos caminos que sí funcionan:
+
+1. **psql por CLI** (el estándar): `npm i -g @railway/cli`, `railway login`,
+   `railway link` y `railway connect Postgres`. Ahí `ALTER SYSTEM` corre fuera de
+   transacción.
+2. **Argumentos de arranque**: en `PRD_DB` → *Settings* → *Custom Start Command*,
+   agregar los flags al comando de Postgres
+   (`-c shared_buffers=64MB -c max_connections=20`). Queda persistente y no hace
+   falta `ALTER SYSTEM`.
+
 Los tres son parámetros de arranque: **no se aplican hasta reiniciar el
 servicio** (Railway → `PRD_DB` → *Settings* → *Restart*). `work_mem` es por
 operación, no por conexión, así que con 2 MB alcanza de sobra para este volumen.
