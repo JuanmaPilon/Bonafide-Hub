@@ -210,7 +210,7 @@ crecimiento no acotado eran:
    `MessageManager: 0` en `makeCache` no le saca nada.
 2. **El cache de análisis de raid logs** (API): cada entrada es una noche entera
    (pulls, daño por jugador, muertes y consumibles), varios MB. Se bajó de 100
-   entradas / 10 min a **8 / 5 min**.
+   entradas / 10 min a **3 / 5 min**.
 
 **El número de RAM que muestra Railway no baja nunca, y eso no es un leak.** Es el
 `rss`, el máximo que el proceso pidió al sistema; V8 no devuelve el heap que
@@ -275,6 +275,41 @@ publicado, para después usar una o dos filas. Ahora consulta sólo las que est�
 en curso (`status` en `new`/`live`) y sólo las columnas que usa. Lo mismo con la
 lista de guilds: era un `findMany` de todas las filas para sacar los `guildId`
 distintos.
+
+El cache de análisis de una noche bajó de 8 entradas a **3**: cada una es una
+noche entera (pulls, daño por jugador, muertes y consumibles) y se guarda para
+poder volver al informe sin bajarla de nuevo.
+
+#### Postgres: bajar el piso de memoria
+
+`PRD_DB` es el 18% de la factura de memoria y viene con valores pensados para un
+servidor grande: 128 MB de caché y 100 conexiones. El API es el único cliente y
+con el pool de 5 le sobra.
+
+Desde la consola SQL del servicio (Railway → `PRD_DB` → *Data*), primero mirar
+lo que hay:
+
+```sql
+SELECT name, setting, unit
+FROM pg_settings
+WHERE name IN ('shared_buffers', 'max_connections', 'work_mem', 'effective_cache_size');
+```
+
+Después:
+
+```sql
+ALTER SYSTEM SET shared_buffers = '64MB';
+ALTER SYSTEM SET max_connections = 20;
+ALTER SYSTEM SET work_mem = '2MB';
+```
+
+Los tres son parámetros de arranque: **no se aplican hasta reiniciar el
+servicio** (Railway → `PRD_DB` → *Settings* → *Restart*). `work_mem` es por
+operación, no por conexión, así que con 2 MB alcanza de sobra para este volumen.
+
+Bajar `shared_buffers` no hace que la base vaya más lenta acá: los datos son
+chicos y el sistema operativo cachea el resto. Lo que sí cambia es que ese
+colchón se descuenta de la memoria facturada del contenedor.
 
 #### Compresión: dejar la calidad de brotli donde está
 

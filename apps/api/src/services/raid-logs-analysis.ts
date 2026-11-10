@@ -217,9 +217,9 @@ type FightResult = {
 const ANALYSIS_CACHE_TTL_MS = 5 * 60 * 1000;
 // Cada entrada es el análisis de una noche entera (pulls, daño por jugador,
 // muertes y consumibles): varios MB en RAM. Guardar 100 era quedarse con
-// cientos de MB de noches que nadie está mirando; con 8 alcanza para las que se
-// abren seguidas.
-const ANALYSIS_CACHE_LIMIT = 8;
+// cientos de MB de noches que nadie está mirando; con 3 alcanza para abrir un
+// informe y volver a él, y la memoria es la línea más cara de Railway.
+const ANALYSIS_CACHE_LIMIT = 3;
 const ANALYSIS_CONCURRENCY = 3;
 // Dos reports de la misma noche marcan el mismo pull con unos segundos de
 // diferencia (cada uno arranca su reloj en un momento distinto).
