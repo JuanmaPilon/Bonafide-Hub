@@ -226,6 +226,30 @@ Ojo con el tamaño relativo: en el acumulado de un mes el **API** pesa ~4,5 vece
 más que el bot (≈236 MB promedio contra ≈53 MB), así que un escalón del bot es
 chico al lado del mismo escalón en el API.
 
+**Una muestra real, y lo que dice:**
+
+```json
+{"heapTotalMb":72,"heapUsedMb":68,"externalMb":3,"rssMb":392}
+```
+
+El heap de JS son **68 MB** y el `rss` **392 MB**: 324 MB que no son del heap de
+V8. Con ese reparto, **poner `--max-old-space-size` no sirve de nada** —el techo
+se aplica al heap, que ya está chico—. Lo que ocupa el resto es memoria nativa:
+
+1. **El motor de Prisma** (una librería en Rust mapeada en el proceso), que no
+   aparece en `external` porque no es un buffer de Node.
+2. **Las arenas de `malloc`.** glibc crea hasta `8 × núcleos` arenas y cada una
+   retiene lo que liberó. Dentro de un contenedor `os.cpus()` ve los núcleos del
+   host, así que el número de arenas es el del servidor físico, no el del plan.
+   Se acota con la variable de entorno **`MALLOC_ARENA_MAX=2`**, que es el ajuste
+   estándar para Node en contenedores con muchos núcleos: se lee al arrancar el
+   proceso, así que va en *Variables* del servicio y necesita redeploy.
+3. **El piso de Node + Fastify**, que no baja de ~50-60 MB.
+
+Por eso, cuando `heapUsed` está muy por debajo de `rss`, el camino no es el GC:
+es la memoria nativa. Y cuando `heapUsed` **sí** acompaña al `rss`, ahí sí el
+tope del heap y la búsqueda de leaks tienen sentido.
+
 #### La cuenta es "GB de RAM × 10"
 
 Medido en un período de *Usage* real:
