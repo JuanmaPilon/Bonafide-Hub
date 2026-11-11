@@ -289,6 +289,10 @@ El total da ≈ $5,2 de memoria más ~$0,35 de CPU y egress. O sea que el trabaj
 esta tanda llevó el proyecto de ~$11 a **~$5,5/mes**, y lo que falta para cruzar
 abajo de $5 son ~70 MB.
 
+Con `shared_buffers` en 64 MB (ver más abajo) la base baja a ~80 MB y el total a
+**~455 MB ≈ $4,9/mes**. Ese es el régimen al que hay que volver a medir: si en un
+mes estable la memoria promedio sube de 0,5 GB, algo volvió a crecer.
+
 #### La cuenta es "GB de RAM × 10"
 
 Medido en un período de *Usage* real:
