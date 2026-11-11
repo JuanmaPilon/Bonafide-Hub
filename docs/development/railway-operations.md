@@ -260,21 +260,34 @@ tope del heap y la búsqueda de leaks tienen sentido.
 logs sin materializar todo, caché de análisis a 3 y `MALLOC_ARENA_MAX=2`), el
 mismo servicio quedó así:
 
-| | Antes | Después |
+| | Antes | Al día siguiente |
 | --- | --- | --- |
-| `rssMb` | 392 | 216–233 estable |
-| `heapUsedMb` | 68 | 17–27 |
+| `rssMb` | 392 | 213–269, **promedio ~240** |
+| `heapUsedMb` | 68 | 27–28, **plano** |
 
-Son **~160 MB menos**, o sea ≈ $1,60/mes de la línea de memoria
-(`0,159 GB × 43.200 min × $0,000231`). Los cuatro cambios entraron en el mismo
+Son **~150 MB menos** y, sobre todo, **plano**: `heapUsed` no crece entre muestras
+separadas por horas, así que no hay leak. Los cuatro cambios entraron en el mismo
 deploy, así que no se puede aislar cuánto puso cada uno; lo que importa es que el
 conjunto se sostiene.
 
-Dos cosas para leer bien la serie: el `rss` **arranca bajo y sube** durante las
-primeras horas, así que una muestra de una hora no es el techo —hay que mirar al
-día siguiente—, y hay picos periódicos de ~50 MB (18:00 y 18:05 marcan 275 y 281
-con `heapUsed` en 27) que vuelven a bajar. Para comparar sirve el **promedio**,
-no el pico.
+Dos cosas para leer bien la serie: el `rss` **arranca bajo y sube** las primeras
+horas, así que una muestra de una hora no es el techo —hay que mirar al día
+siguiente—, y hay picos de ~50 MB que vuelven a bajar. Para comparar sirve el
+**promedio**, no el pico.
+
+**Con el API en 240 MB, el reparto cambia.** En régimen (24 h con los cambios):
+
+| Servicio | RAM | Costo |
+| --- | --- | --- |
+| API | ~240 MB | $2,39 |
+| **PRD_DB** | **~144 MB** | **$1,44** |
+| Web | ~69 MB | $0,69 |
+| Discord_BOT | ~66 MB | $0,66 |
+| **Total** | **~519 MB** | **~$5,2** |
+
+El total da ≈ $5,2 de memoria más ~$0,35 de CPU y egress. O sea que el trabajo de
+esta tanda llevó el proyecto de ~$11 a **~$5,5/mes**, y lo que falta para cruzar
+abajo de $5 son ~70 MB.
 
 #### La cuenta es "GB de RAM × 10"
 
@@ -292,17 +305,19 @@ La tarifa de memoria es `$0,000231 / GB / minuto`, o sea **≈ $10 por GB por
 mes**. Por eso la factura se estima así:
 
 ```text
-cuenta ≈ GB de RAM promedio × 10 + $5 del plan
+uso ≈ GB de RAM promedio × 10
 ```
 
-El Hobby son **$5 de suscripción que incluyen $5 de uso**: mientras el uso quede
-por debajo de $5 se paga $5, y cada peso que lo pasa se suma. El objetivo
-concreto para no pagar más de $5 es **menos de 0,5 GB de RAM promedio en total**.
+El Hobby cobra **$5 de plan y acredita $5 de uso incluido**: en la factura los dos
+se cancelan, así que lo que se paga sigue al uso. Pagar $5 significa consumir
+~$5. El objetivo concreto es **menos de 0,5 GB de RAM promedio en total**.
+
 Y como la memoria es casi todo, mirar CPU, egress o disco para bajar la factura
 es perseguir el número equivocado.
 
-Reparto por servicio en ese mismo período: **API 69%**, PRD_DB 18%, Bot 7%,
-Web 5%. El API solo es más de dos tercios.
+El reparto **antes** de esta tanda era API 69%, PRD_DB 18%, Bot 7%, Web 5%: el API
+solo era más de dos tercios. Después del cambio el API bajó a ~46% y la base pasó
+a pesar 28%, que es lo que convierte a Postgres en el próximo objetivo.
 
 #### El pool de conexiones de Prisma
 
@@ -332,9 +347,13 @@ poder volver al informe sin bajarla de nuevo.
 
 #### Postgres: bajar el piso de memoria
 
-`PRD_DB` es el 18% de la factura de memoria y viene con valores pensados para un
-servidor grande: 128 MB de caché y 100 conexiones. El API es el único cliente y
-con el pool de 5 le sobra.
+En régimen `PRD_DB` es el **segundo consumidor** (~144 MB, 28% de la memoria) y
+casi todo es `shared_buffers`: el default son 128 MB fijos al arrancar, más ~16 MB
+de overhead y los backends. El API es el único cliente y con el pool de 5 le sobra.
+
+Por eso, una vez que el API bajó a 240 MB, este es el recorte que decide si el mes
+cruza abajo de $5: **64 MB ≈ $0,64/mes**, más que cualquier cosa que quede del
+lado del código.
 
 Desde la consola SQL del servicio (Railway → `PRD_DB` → *Data*), primero mirar
 lo que hay:
