@@ -364,13 +364,9 @@ FROM pg_settings
 WHERE name IN ('shared_buffers', 'max_connections', 'work_mem', 'effective_cache_size');
 ```
 
-Después:
-
-```sql
-ALTER SYSTEM SET shared_buffers = '64MB';
-ALTER SYSTEM SET max_connections = 20;
-ALTER SYSTEM SET work_mem = '2MB';
-```
+Los valores que traía la base: **`shared_buffers` 128 MB** (16384 × 8 kB),
+`max_connections` **500** y `work_mem` 4 MB. `effective_cache_size` (4 GB) es sólo
+un dato para el planificador, no reserva memoria.
 
 > ⚠️ **La consola SQL de Railway no sirve para esto.** Corre lo que le pegás
 > dentro de una transacción y Postgres rechaza `ALTER SYSTEM` con
@@ -379,19 +375,38 @@ ALTER SYSTEM SET work_mem = '2MB';
 > `postgresql.auto.conf`), así que tampoco se pueden tocar con `SET` de sesión ni
 > con `ALTER DATABASE`: eso último sólo funciona con `work_mem`.
 
-Hay dos caminos que sí funcionan:
+Lo que sí funcionó, de punta a punta:
 
-1. **psql por CLI** (el estándar): `npm i -g @railway/cli`, `railway login`,
-   `railway link` y `railway connect Postgres`. Ahí `ALTER SYSTEM` corre fuera de
-   transacción.
-2. **Argumentos de arranque**: en `PRD_DB` → *Settings* → *Custom Start Command*,
-   agregar los flags al comando de Postgres
-   (`-c shared_buffers=64MB -c max_connections=20`). Queda persistente y no hace
-   falta `ALTER SYSTEM`.
+```bash
+npm i -g @railway/cli          # el postinstall de npm viene bloqueado:
+                               # hay que repetirlo con --allow-scripts=@railway/cli
+railway login
+railway link --project <id> --environment <id> --service PRD_DB
+railway ssh config -s PRD_DB --alias rw-prddb -i ~/.ssh/id_ed25519_rw
+ssh rw-prddb 'psql -U postgres -d railway -c "ALTER SYSTEM SET shared_buffers = ''64MB''"'
+```
 
-Los tres son parámetros de arranque: **no se aplican hasta reiniciar el
-servicio** (Railway → `PRD_DB` → *Settings* → *Restart*). `work_mem` es por
-operación, no por conexión, así que con 2 MB alcanza de sobra para este volumen.
+Tres trampas de ese camino:
+
+1. **Una sentencia por `-c`.** Con dos `ALTER SYSTEM` en el mismo `-c`, psql manda
+   todo en una transacción y falla con el mismo error de la consola web.
+2. **La clave SSH no puede tener passphrase**, o el `ssh` desatendido no la ofrece
+   (`Permission denied ... no-ssh-key-offered`) y `railway connect` se queda
+   colgado. Se registra con `railway ssh keys add -k <ruta>.pub`.
+3. **`railway connect` necesita `psql` instalado localmente**; `railway ssh` no,
+   porque ejecuta el cliente dentro del contenedor.
+
+Después, reiniciar el servicio (`railway redeploy --service PRD_DB --yes` o
+*Settings → Restart*). Los parámetros **no se aplican hasta ese reinicio**, y los
+datos no se tocan: viven en el volumen.
+
+**El reinicio se nota pero se recupera solo.** El API registra
+`prisma:error Error in PostgreSQL connection: Error { kind: Closed }` mientras la
+base está abajo y sigue operando después sin intervención: al minuto siguiente el
+bot vuelve a consultar y recibe `200`.
+
+Quedó aplicado `shared_buffers = 64MB` y `max_connections = 40` (con el pool de 5
+sobran 8×; el 500 original sólo reservaba memoria de sobra).
 
 Bajar `shared_buffers` no hace que la base vaya más lenta acá: los datos son
 chicos y el sistema operativo cachea el resto. Lo que sí cambia es que ese
