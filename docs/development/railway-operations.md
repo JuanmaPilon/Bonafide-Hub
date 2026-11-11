@@ -225,8 +225,17 @@ noche de raid) sube la marca y el escalón queda hasta el próximo reinicio. Par
 distinguir las dos cosas el API escribe `[mem]` cada 5 minutos con cuatro
 números: `heapUsedMb` (lo que el GC puede soltar — si crece **sin tráfico**, hay
 leak), `heapTotalMb` (lo reservado), `externalMb` (buffers nativos: Prisma,
-zlib) y `rssMb` (lo que se cobra). Un leak crece en reposo; una marca de agua
-queda plana cuando no hay tráfico.
+zlib) y `rssMb` (la marca del proceso).
+
+> ⚠️ **`rssMb` no es exactamente lo que se cobra.** Railway factura la memoria del
+> contenedor (el `cgroup`), que resultó **más baja** que el `rss` del proceso:
+> medido en el mismo momento, el API reportaba `rssMb=240` y el cgroup marcaba
+> **160 MB** — las páginas compartidas (binario y librerías) se cuentan una sola
+> vez en el `cgroup` y enteras en el `rss` de cada proceso. Para el gasto manda el
+> cgroup; el `rss` sirve para comparar el mismo servicio consigo mismo. Se lee
+> desde el contenedor con
+> `cat /sys/fs/cgroup/memory.current` (`railway ssh --service API`).
+
 
 Ojo con el tamaño relativo: en el acumulado de un mes el **API** pesa ~4,5 veces
 más que el bot (≈236 MB promedio contra ≈53 MB), así que un escalón del bot es
@@ -292,6 +301,20 @@ abajo de $5 son ~70 MB.
 Con `shared_buffers` en 64 MB (ver más abajo) la base baja a ~80 MB y el total a
 **~455 MB ≈ $4,9/mes**. Ese es el régimen al que hay que volver a medir: si en un
 mes estable la memoria promedio sube de 0,5 GB, algo volvió a crecer.
+
+Medido en los contenedores después de todo (cgroup, que es lo que se factura):
+
+| Servicio | Antes | Después |
+| --- | --- | --- |
+| API | 392 | **160 MB** |
+| PRD_DB | 144 | **94 MB** |
+| Web | — | ~58 MB |
+| Discord_BOT | — | ~77 MB |
+| **Total** | ~0,67 GB | **~0,39 GB** |
+
+Eso da ≈ **$3,9/mes** de memoria, ~$4,3 con CPU y egress. La proyección del panel
+quedó en **$4,85** porque incluye los primeros días del ciclo, que corrieron a la
+memoria vieja.
 
 #### La cuenta es "GB de RAM × 10"
 
