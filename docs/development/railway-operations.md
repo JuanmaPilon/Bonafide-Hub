@@ -292,7 +292,9 @@ días.
 
 **Web y Postgres no tienen código nuestro**, así que no pueden auto-reiniciarse.
 Los recicla un workflow programado (`.github/workflows/memory-restart.yml`,
-lunes 05:00 UTC) que llama a `railway redeploy` para los dos. Necesita el secret
+lunes 06:00 UTC, o sea **lunes 03:00 en Argentina**) que llama a `railway redeploy`
+para los dos. El cron de GitHub va siempre en UTC: la hora local se calcula
+sumando 3. Necesita el secret
 `RAILWAY_TOKEN` (token de proyecto: *Project Settings → Tokens*); el job falla
 con un mensaje claro si falta. También se puede lanzar a mano desde *Actions →
 Memory Restart → Run workflow*.

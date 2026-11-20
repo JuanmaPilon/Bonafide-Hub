@@ -12,8 +12,10 @@ name: Memory Restart
 
 on:
   schedule:
-    # Lunes 05:00 UTC (02:00 en Argentina): nadie esta jugando.
-    - cron: "0 5 * * 1"
+    # Lunes 06:00 UTC = 03:00 en Argentina (UTC-3, sin horario de verano).
+    # El cron de GitHub siempre va en UTC, así que la hora local se calcula
+    # sumando 3.
+    - cron: "0 6 * * 1"
   # Para probarlo sin esperar al lunes.
   workflow_dispatch:
 
