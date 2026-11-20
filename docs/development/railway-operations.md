@@ -236,6 +236,44 @@ zlib) y `rssMb` (la marca del proceso).
 > desde el contenedor con
 > `cat /sys/fs/cgroup/memory.current` (`railway ssh --service API`).
 
+#### La caché de archivos se factura y no se libera sola
+
+Esto es lo que hace que la factura suba aunque no haya leaks. `memory.current`
+incluye `file` (la caché de páginas que el kernel guarda de los archivos leídos:
+`node_modules`, el build, los WAL de Postgres). Medido el 2026-11-20:
+
+| Servicio | `anon` (uso real) | `file` (caché) | `memory.current` |
+| --- | --- | --- | --- |
+| API | 212 MB | 64 MB | 284 MB |
+| Discord_BOT | 97 MB | **287 MB** | **396 MB** |
+| PRD_DB | 26 MB | 167 MB | 201 MB |
+| Web | 76 MB | 13 MB | 102 MB |
+| **Total** | **411 MB** | **531 MB** | **983 MB** |
+
+El proceso del bot medía **126 MB** de `Rss` mientras su contenedor facturaba
+396 MB. Esa caché **es descartable** (se vuelve a leer del disco), pero el kernel
+sólo la suelta bajo presión de memoria, y sin límite nunca hay presión: crece
+hasta el próximo reinicio. Del 11 al 20 de noviembre el total pasó de 389 MB a
+983 MB, o sea **~63 MB por día**.
+
+**Cómo se libera: reiniciando el servicio.** Es la única forma. Dentro del
+contenedor `memory.reclaim` es de sólo lectura (`Read-only file system`), y
+`/proc/sys/vm/drop_caches` necesita privilegios que el contenedor no tiene. Un
+`railway redeploy --service <svc> --yes` (o *Restart* en la UI) deja la caché en
+cero; los datos no se tocan. Medido: API 284 → 104, Bot 396 → 123, Web 102 → 60,
+DB 201 → 122.
+
+**Cómo se evita que vuelva: Replica Limits.** En *servicio → Settings → Deploy →
+Replica Limits* se fija un techo de memoria por réplica. Al acercarse, el kernel
+recicla la caché en vez de dejar crecer el contenedor. **El límite pasa a ser el
+techo de la factura**, porque la caché vuelve a llenar hasta ahí: no es un
+"ahorro automático", es un tope. Hay que dejarlo por encima del uso real (`anon`)
+con margen, o el servicio se cae por falta de memoria.
+
+Los dos caminos no se excluyen: los límites ponen el techo y el reinicio
+ocasional recupera el piso.
+
+
 
 Ojo con el tamaño relativo: en el acumulado de un mes el **API** pesa ~4,5 veces
 más que el bot (≈236 MB promedio contra ≈53 MB), así que un escalón del bot es
