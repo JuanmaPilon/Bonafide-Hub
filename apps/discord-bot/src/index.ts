@@ -76,6 +76,7 @@ import {
   withSuffix,
 } from "./services/nickname-mark.js";
 import { startEventControlScheduler } from "./services/event-control-service.js";
+import { startMemoryGuard } from "./services/memory-guard.js";
 import {
   addRemoteXp,
   computeXpMultiplier,
@@ -5508,6 +5509,14 @@ function trackGuildPresencesAtStartup(readyClient: Client<true>): void {
 if (env.BOT_DISABLED) {
   console.log("[discord-bot] BOT_DISABLED is enabled. Skipping Discord login.");
 } else {
+  // La caché de archivos del contenedor se factura y no se libera sola: cuando
+  // pasa el tope, el proceso se reinicia y Railway lo levanta con la caché en
+  // cero. Se registra después del login para no matar un arranque fallido.
+  startMemoryGuard({
+    limitMb: env.MEMORY_RESTART_MB,
+    name: "bot",
+    shutdown: () => client.destroy(),
+  });
   client.login(env.DISCORD_BOT_TOKEN!).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : "Unknown error";
 

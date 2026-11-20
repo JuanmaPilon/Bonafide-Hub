@@ -21,6 +21,9 @@ const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1).optional(),
   CORS_ORIGINS: z.string().default("http://localhost:5173"),
   COOKIE_SAME_SITE: z.enum(["Lax", "Strict", "None"]).default("Lax"),
+  // Tope de memoria del contenedor a partir del cual el API se reinicia para
+  // liberar la caché de archivos que Railway factura. 0 o vacío lo apaga.
+  MEMORY_RESTART_MB: z.coerce.number().int().min(0).default(320),
   FRONTEND_APP_URL: z
     .string()
     .url("FRONTEND_APP_URL must be a valid URL")

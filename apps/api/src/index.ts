@@ -2,6 +2,7 @@ import { buildApp, refreshAllPublishedAnnouncements } from "./app.js";
 import { env } from "./config/env.js";
 import { migrateCommunicationInstances } from "./services/communications-migration.js";
 import { migrateLegacyEventRoles } from "./services/event-games-migration.js";
+import { startMemoryGuard } from "./services/memory-guard.js";
 import { backfillRaidLogDetails } from "./services/raid-logs-store.js";
 
 // Muestra de memoria cada 5 minutos. Sirve para distinguir un leak de una marca
@@ -59,6 +60,15 @@ async function main(): Promise<void> {
   refreshAllPublishedAnnouncements();
 
   logMemorySample(app);
+
+  // La caché de archivos del contenedor se factura y no se libera sola (ver
+  // memory-guard): cuando pasa el tope, el proceso se reinicia y Railway lo
+  // levanta de nuevo con la caché en cero.
+  startMemoryGuard({
+    limitMb: env.MEMORY_RESTART_MB,
+    name: "api",
+    shutdown: () => app.close(),
+  });
 
   // Los logs guardados antes de que la tarjeta supiera identificar un pull
   // (boss + hora) no tienen esos datos: se refrescan una vez, en segundo plano,

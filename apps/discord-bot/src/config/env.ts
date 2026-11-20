@@ -29,6 +29,9 @@ const envSchema = z.object({
   // valor usa la de la guild del proyecto: el servidor corre en UTC y sin esto
   // el rol se daría el día anterior a la noche.
   BIRTHDAY_TIMEZONE: z.string().optional(),
+  // Tope de memoria del contenedor a partir del cual el bot se reinicia para
+  // liberar la caché de archivos que Railway factura. 0 lo apaga.
+  MEMORY_RESTART_MB: z.coerce.number().int().min(0).default(256),
   YOUTUBE_COOKIE: z.string().optional(),
 });
 

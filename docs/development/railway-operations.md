@@ -270,6 +270,19 @@ techo de la factura**, porque la caché vuelve a llenar hasta ahí: no es un
 "ahorro automático", es un tope. Hay que dejarlo por encima del uso real (`anon`)
 con margen, o el servicio se cae por falta de memoria.
 
+**Cómo se evita que vuelva, sin depender de nadie: `memory-guard`.** El API y el
+bot miran su propio cgroup cada 5 minutos y, si pasan de `MEMORY_RESTART_MB`
+(API 320, bot 256; `0` lo apaga), cierran con código 1. Railway tiene
+`restartPolicyType: ON_FAILURE`, así que levanta un contenedor nuevo con la caché
+en cero. La decisión vive en `shouldRestart` (función pura, con tests) y tiene un
+piso de **20 minutos de uptime**: un umbral mal puesto no puede dejar el servicio
+en un bucle de reinicios, porque el proceso recién arrancado nunca se mata a sí
+mismo. En local no hace nada: no hay `cgroup` legible.
+
+El umbral es el punto de equilibrio entre las dos cosas: más bajo ahorra más y
+reinicia más seguido. Con lo medido (~20 MB/día en el API, ~30 en el bot), 320 y
+256 dan un reinicio cada una o dos semanas y dejan el promedio en ~450 MB.
+
 Los dos caminos no se excluyen: los límites ponen el techo y el reinicio
 ocasional recupera el piso.
 
