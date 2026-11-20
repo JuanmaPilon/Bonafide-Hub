@@ -1,0 +1,46 @@
+name: Memory Restart
+
+# Railway factura la memoria del contenedor, y esa cifra incluye la cache de
+# archivos del kernel. Esa cache no se libera sola: crece hasta que el
+# contenedor se reinicia (adentro, memory.reclaim es de solo lectura).
+#
+# El API y el bot se auto-reinician por umbral (ver memory-guard en cada app),
+# pero Web y Postgres no tienen codigo nuestro, asi que se reciclan desde aca.
+#
+# Requiere el secret RAILWAY_TOKEN: Railway -> Project Settings -> Tokens ->
+# Create Token. Es un token de proyecto, no de cuenta.
+
+on:
+  schedule:
+    # Lunes 05:00 UTC (02:00 en Argentina): nadie esta jugando.
+    - cron: "0 5 * * 1"
+  # Para probarlo sin esperar al lunes.
+  workflow_dispatch:
+
+concurrency:
+  group: memory-restart
+  cancel-in-progress: false
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Restart Web and PRD_DB
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 9d0c57e7-82d7-4556-973c-c255f1ac7db1
+          RAILWAY_ENVIRONMENT_ID: 0a0252c9-b424-4203-bbe6-c314c17ee8ef
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "Falta el secret RAILWAY_TOKEN (Railway -> Project Settings -> Tokens)"
+            exit 1
+          fi
+          for service in Web PRD_DB; do
+            echo "Reiniciando $service"
+            railway redeploy --service "$service" --yes \
+              --project "$RAILWAY_PROJECT_ID" \
+              --environment "$RAILWAY_ENVIRONMENT_ID"
+          done

@@ -20,6 +20,8 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 4. `BOT_CONFIG_API_URL`
 5. `BOT_CONFIG_API_TOKEN`
 6. `BOT_DISABLED`
+7. `MEMORY_RESTART_MB` — tope de memoria del contenedor que dispara el
+   auto-reinicio (ver *Memory*). Sin valor usa 256; en producción está en 224.
 
 ### API
 
@@ -41,6 +43,8 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 16. `PUBLIC_API_URL` — URL pública de esta API (por ejemplo
     `https://tu-api.up.railway.app`), para que Discord pueda bajar la imagen de un
     evento. Si no está, se usa `RAILWAY_PUBLIC_DOMAIN`, que Railway expone solo.
+17. `MEMORY_RESTART_MB` — tope de memoria del contenedor que dispara el
+    auto-reinicio (ver *Memory*). Sin valor usa 320; en producción está en 224.
 
 ### Web
 
@@ -281,7 +285,23 @@ mismo. En local no hace nada: no hay `cgroup` legible.
 
 El umbral es el punto de equilibrio entre las dos cosas: más bajo ahorra más y
 reinicia más seguido. Con lo medido (~20 MB/día en el API, ~30 en el bot), 320 y
-256 dan un reinicio cada una o dos semanas y dejan el promedio en ~450 MB.
+256 daban un reinicio cada una o dos semanas. En producción quedaron en **224
+para los dos** (`MEMORY_RESTART_MB` en las Variables del servicio, no en el
+código): el promedio baja a ~165 MB cada uno y el reinicio pasa a ser cada pocos
+días.
+
+**Web y Postgres no tienen código nuestro**, así que no pueden auto-reiniciarse.
+Los recicla un workflow programado (`.github/workflows/memory-restart.yml`,
+lunes 05:00 UTC) que llama a `railway redeploy` para los dos. Necesita el secret
+`RAILWAY_TOKEN` (token de proyecto: *Project Settings → Tokens*); el job falla
+con un mensaje claro si falta. También se puede lanzar a mano desde *Actions →
+Memory Restart → Run workflow*.
+
+**El piso de la arquitectura actual es ~429 MB ≈ $4,3/mes:** API 124 + bot 123 +
+Web 60 + base 122, que es lo que ocupan recién reiniciados. Para bajar de ahí hay
+que sacar servicios o motores, no ajustar umbrales: servir la Web desde el API
+libera ~60 MB y reemplazar el motor de Prisma por `@prisma/adapter-pg` libera
+~90 MB del API.
 
 Los dos caminos no se excluyen: los límites ponen el techo y el reinicio
 ocasional recupera el piso.
