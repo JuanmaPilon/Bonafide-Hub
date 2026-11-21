@@ -295,9 +295,14 @@ Los recicla un workflow programado (`.github/workflows/memory-restart.yml`,
 lunes 06:00 UTC, o sea **lunes 03:00 en Argentina**) que llama a `railway redeploy`
 para los dos. El cron de GitHub va siempre en UTC: la hora local se calcula
 sumando 3. Necesita el secret
-`RAILWAY_TOKEN` (token de proyecto: *Project Settings → Tokens*); el job falla
+`RAILWAY_TOKEN` (**project token**: *proyecto → Settings → Tokens*); el job falla
 con un mensaje claro si falta. También se puede lanzar a mano desde *Actions →
 Memory Restart → Run workflow*.
+
+Un project token queda atado a un proyecto y un entorno, así que el CLI resuelve
+las dos cosas solo; el workflow igual reintenta con `--project`/`--environment`
+por si la versión del CLI las exige. La creación de tokens **no** se puede hacer
+desde el CLI (responde `Not Authorized`), sólo desde el panel.
 
 **El piso de la arquitectura actual es ~429 MB ≈ $4,3/mes:** API 124 + bot 123 +
 Web 60 + base 122, que es lo que ocupan recién reiniciados. Para bajar de ahí hay

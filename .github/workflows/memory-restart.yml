@@ -37,11 +37,18 @@ jobs:
           RAILWAY_ENVIRONMENT_ID: 0a0252c9-b424-4203-bbe6-c314c17ee8ef
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "Falta el secret RAILWAY_TOKEN (Railway -> Project Settings -> Tokens)"
+            echo "::error::Falta el secret RAILWAY_TOKEN (Railway -> proyecto -> Settings -> Tokens)"
             exit 1
           fi
           for service in Web PRD_DB; do
             echo "Reiniciando $service"
+            # Un project token ya viene atado a un proyecto y un entorno, así que
+            # el CLI lo resuelve solo. Si esa versión del CLI exige las banderas,
+            # se reintenta con ellas para no fallar el lunes por esto.
+            if railway redeploy --service "$service" --yes; then
+              continue
+            fi
+            echo "Reintentando $service con --project/--environment"
             railway redeploy --service "$service" --yes \
               --project "$RAILWAY_PROJECT_ID" \
               --environment "$RAILWAY_ENVIRONMENT_ID"
