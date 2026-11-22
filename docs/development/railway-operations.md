@@ -325,6 +325,12 @@ libera ~60 MB y reemplazar el motor de Prisma por `@prisma/adapter-pg` libera
 Los dos caminos no se excluyen: los límites ponen el techo y el reinicio
 ocasional recupera el piso.
 
+**Verificado el 2026-11-21**, con el auto-reinicio, los umbrales en 224 y el
+workflow corriendo: API 121 MB, bot 94, Web 60 y base 88 = **363 MB ≈ $3,6/mes**,
+el piso de la arquitectura actual. Los cuatro servicios respondieron (`/health`
+200, web 200, bot online) y la base conservó `shared_buffers = 64MB`, así que el
+reciclado no toca configuración ni datos.
+
 
 
 Ojo con el tamaño relativo: en el acumulado de un mes el **API** pesa ~4,5 veces
