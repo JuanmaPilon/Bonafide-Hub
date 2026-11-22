@@ -7,8 +7,17 @@ name: Memory Restart
 # El API y el bot se auto-reinician por umbral (ver memory-guard en cada app),
 # pero Web y Postgres no tienen codigo nuestro, asi que se reciclan desde aca.
 #
-# Requiere el secret RAILWAY_TOKEN: Railway -> Project Settings -> Tokens ->
-# Create Token. Es un token de proyecto, no de cuenta.
+# Requiere UNO de estos secrets (el que sea mas facil de crear):
+#
+#   RAILWAY_API_TOKEN  -> token de workspace. Se crea en
+#                         https://railway.com/account/tokens eligiendo el
+#                         workspace en el desplegable. Recomendado, porque la
+#                         pagina existe y se llega derecho.
+#   RAILWAY_TOKEN      -> token de proyecto. Se crea en los settings del
+#                         proyecto, en la seccion Tokens. Es el de menor
+#                         alcance, pero esta mas escondido en la UI.
+#
+# La creacion de tokens NO se puede hacer desde el CLI: responde Not Authorized.
 
 on:
   schedule:
@@ -33,22 +42,32 @@ jobs:
       - name: Restart Web and PRD_DB
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_PROJECT_ID: 9d0c57e7-82d7-4556-973c-c255f1ac7db1
           RAILWAY_ENVIRONMENT_ID: 0a0252c9-b424-4203-bbe6-c314c17ee8ef
         run: |
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "::error::Falta el secret RAILWAY_TOKEN (Railway -> proyecto -> Settings -> Tokens)"
+          # El token de proyecto ya viene atado a un proyecto y un entorno, así
+          # que el CLI lo resuelve solo. El de workspace no: ese necesita las
+          # banderas explícitas.
+          if [ -n "$RAILWAY_TOKEN" ]; then
+            echo "Usando token de proyecto (RAILWAY_TOKEN)"
+            CON_FLAGS=""
+          elif [ -n "$RAILWAY_API_TOKEN" ]; then
+            echo "Usando token de workspace (RAILWAY_API_TOKEN)"
+            CON_FLAGS="--project $RAILWAY_PROJECT_ID --environment $RAILWAY_ENVIRONMENT_ID"
+          else
+            echo "::error::Falta un secret: RAILWAY_API_TOKEN (https://railway.com/account/tokens) o RAILWAY_TOKEN (settings del proyecto, seccion Tokens)"
             exit 1
           fi
           for service in Web PRD_DB; do
             echo "Reiniciando $service"
-            # Un project token ya viene atado a un proyecto y un entorno, así que
-            # el CLI lo resuelve solo. Si esa versión del CLI exige las banderas,
-            # se reintenta con ellas para no fallar el lunes por esto.
-            if railway redeploy --service "$service" --yes; then
+            # shellcheck disable=SC2086 # CON_FLAGS se expande a propósito.
+            if railway redeploy --service "$service" --yes $CON_FLAGS; then
               continue
             fi
-            echo "Reintentando $service con --project/--environment"
+            # Si esa versión del CLI pide lo contrario de lo que se dedujo, se
+            # reintenta con las banderas para no fallar el lunes por esto.
+            echo "Reintentando $service con --project/--environment explícitos"
             railway redeploy --service "$service" --yes \
               --project "$RAILWAY_PROJECT_ID" \
               --environment "$RAILWAY_ENVIRONMENT_ID"

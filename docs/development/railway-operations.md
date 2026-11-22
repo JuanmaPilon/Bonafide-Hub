@@ -294,15 +294,22 @@ días.
 Los recicla un workflow programado (`.github/workflows/memory-restart.yml`,
 lunes 06:00 UTC, o sea **lunes 03:00 en Argentina**) que llama a `railway redeploy`
 para los dos. El cron de GitHub va siempre en UTC: la hora local se calcula
-sumando 3. Necesita el secret
-`RAILWAY_TOKEN` (**project token**: *proyecto → Settings → Tokens*); el job falla
-con un mensaje claro si falta. También se puede lanzar a mano desde *Actions →
-Memory Restart → Run workflow*.
+sumando 3. También se puede lanzar a mano desde *Actions → Memory Restart → Run
+workflow*.
 
-Un project token queda atado a un proyecto y un entorno, así que el CLI resuelve
-las dos cosas solo; el workflow igual reintenta con `--project`/`--environment`
-por si la versión del CLI las exige. La creación de tokens **no** se puede hacer
-desde el CLI (responde `Not Authorized`), sólo desde el panel.
+El workflow acepta **cualquiera de los dos secretos**:
+
+| Secret | Tipo de token | Dónde se crea |
+| --- | --- | --- |
+| `RAILWAY_API_TOKEN` | workspace | <https://railway.com/account/tokens>, eligiendo el workspace |
+| `RAILWAY_TOKEN` | project | settings del proyecto, sección **Tokens** |
+
+El de **proyecto** tiene el menor alcance (un proyecto, un entorno) y es el
+preferido; el de **workspace** es más fácil de encontrar en la UI. El workflow
+detecta cuál hay: con el de proyecto el CLI resuelve proyecto y entorno solo, con
+el de workspace pasa `--project`/`--environment` explícitos. Si falta los dos,
+falla con un `::error::` que dice dónde crearlos. **La creación de tokens no se
+puede hacer desde el CLI**: responde `Not Authorized` incluso con sesión iniciada.
 
 **El piso de la arquitectura actual es ~429 MB ≈ $4,3/mes:** API 124 + bot 123 +
 Web 60 + base 122, que es lo que ocupan recién reiniciados. Para bajar de ahí hay
