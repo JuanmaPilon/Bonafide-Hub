@@ -304,12 +304,17 @@ El workflow acepta **cualquiera de los dos secretos**:
 | `RAILWAY_API_TOKEN` | workspace | <https://railway.com/account/tokens>, eligiendo el workspace |
 | `RAILWAY_TOKEN` | project | settings del proyecto, sección **Tokens** |
 
-El de **proyecto** tiene el menor alcance (un proyecto, un entorno) y es el
-preferido; el de **workspace** es más fácil de encontrar en la UI. El workflow
-detecta cuál hay: con el de proyecto el CLI resuelve proyecto y entorno solo, con
-el de workspace pasa `--project`/`--environment` explícitos. Si falta los dos,
-falla con un `::error::` que dice dónde crearlos. **La creación de tokens no se
-puede hacer desde el CLI**: responde `Not Authorized` incluso con sesión iniciada.
+> ⚠️ **El CLI elige el tipo por el NOMBRE de la variable, no por el contenido.**
+> Un workspace token dentro de `RAILWAY_TOKEN` se rechaza con
+> `Invalid RAILWAY_TOKEN` aunque se le pasen `--project`/`--environment`; y al
+> revés, un project token en `RAILWAY_API_TOKEN` tampoco sirve. Por eso el
+> workflow no confía en el nombre: prueba las dos combinaciones con el primer
+> servicio y, con la que anda, reinicia el resto. Los cuatro escenarios
+> (workspace bajo el nombre equivocado, project token, sin secret, token roto)
+> están probados con un `railway` simulado.
+
+**La creación de tokens no se puede hacer desde el CLI**: responde `Not Authorized`
+incluso con sesión iniciada.
 
 **El piso de la arquitectura actual es ~429 MB ≈ $4,3/mes:** API 124 + bot 123 +
 Web 60 + base 122, que es lo que ocupan recién reiniciados. Para bajar de ahí hay
