@@ -631,12 +631,18 @@ distinta de la otra (el editor de XP fue el primero en usarlo):
   campo —las opciones del multi-select de roles—, que heredaban `display: grid` y
   el tamaño de rótulo: la lista se veía como chips apilados en vez de filas
   checkbox + nombre. Lo mismo con `.form-grid > label > span`.
-- `role-multiselect` — multi-select de roles (roles vetados, rol cárcel). El
-  disparador tiene que medir lo mismo que un `.select` (47 px, radio 14, padding
-  11/12 y el mismo tamaño de texto): con medidas propias se veía de otro
-  componente al lado de los selects. Cada opción reusa el chip compartido de rol
-  (`role-chip`), que ya resuelve el brillo por tema; con el color inline el
-  nombre quedaba lavado en tema claro.
+- `role-multiselect` — multi-select de roles (roles vetados, rol cárcel). Usa el
+  **mismo patrón que `EmojiSelect`**: el disparador es un `<button>` con la clase
+  `.select` (mide igual que un select: 47 px, radio 14, padding 11/12 y el mismo
+  texto) y la lista va por **portal** con `position: fixed` anclado al
+  disparador. Antes era un `<details>` que crecía dentro del flujo: abrirlo
+  empujaba todo el panel hacia abajo. Un `<button>` maqueta su contenido 2 px más
+  bajo que un `<select>` nativo, así que el disparador lleva `min-height: 47px`
+  para que ambos coincidan. Los `<label>` de las opciones quedan fuera de
+  `.form-grid`, así que no heredan las reglas de campo. Cada opción reusa el chip
+  compartido de rol (`role-chip`), que ya resuelve el brillo por tema; con el
+  color inline el nombre quedaba lavado en tema claro. No cierra al elegir: es
+  multi-selección.
 - `admin-switch-field` — un campo cuyo control es un interruptor (`+ su chip de
   estado`), con el mismo padding vertical que los controles: el switch entra
   como un campo más y queda alineado con el select de al lado. Los encendidos

@@ -6117,11 +6117,77 @@ function RoleMultiSelect({
   onChange: (next: string[]) => void;
   emptyText: string;
 }) {
+  const [open, setOpen] = useState(false);
+  // Menú por portal con `position: fixed`, igual que `EmojiSelect`: abrir el
+  // desplegable NO puede cambiar el alto del campo, o se corre todo el panel
+  // (y el `overflow` de las tarjetas lo recortaría).
+  const [anchor, setAnchor] = useState<{
+    left: number;
+    top: number;
+    width: number;
+  } | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
   const selectedNames = value
     .map((id) => roles.find((role) => role.id === id)?.name)
     .filter((name): name is string => Boolean(name));
 
-  const toggle = (roleId: string): void => {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+    const onMove = (): void => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (rect) {
+        setAnchor({
+          left: rect.left,
+          top: rect.bottom + 6,
+          width: rect.width,
+        });
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onMove);
+      window.removeEventListener("scroll", onMove, true);
+    };
+  }, [open]);
+
+  const toggleOpen = (): void => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (rect) {
+      setAnchor({ left: rect.left, top: rect.bottom + 6, width: rect.width });
+    }
+    setOpen(true);
+  };
+
+  // No cierra al elegir: es multi-selección, y cerrar en cada click obliga a
+  // reabrir por cada rol.
+  const toggleRole = (roleId: string): void => {
     onChange(
       value.includes(roleId)
         ? value.filter((id) => id !== roleId)
@@ -6129,47 +6195,65 @@ function RoleMultiSelect({
     );
   };
 
+  const menu = (
+    <div
+      aria-multiselectable="true"
+      className="emoji-select-menu role-multiselect-menu"
+      ref={menuRef}
+      role="listbox"
+      style={
+        anchor
+          ? { left: anchor.left, top: anchor.top, width: anchor.width }
+          : undefined
+      }
+    >
+      {roles.length === 0 ? (
+        <div className="role-multiselect-empty">No hay roles disponibles.</div>
+      ) : (
+        roles.map((role) => {
+          const checked = value.includes(role.id);
+          return (
+            <label className="role-multiselect-option" key={role.id}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleRole(role.id)}
+              />
+              {/* El chip compartido de roles: ya resuelve el brillo por tema
+                  (`.role-chip--pale` en claro), que con el color inline se
+                  perdía y quedaba lavado. */}
+              <span
+                className={`${roleChipClass(role)} role-multiselect-option-name`}
+                style={roleChipStyle(role)}
+              >
+                <span className="role-chip-name">{role.name}</span>
+              </span>
+            </label>
+          );
+        })
+      )}
+    </div>
+  );
+
   return (
-    <label className="role-multiselect-field">
+    <div className="role-multiselect-field" ref={rootRef}>
       <span>{label}</span>
-      <details className="role-multiselect">
-        <summary className="role-multiselect-summary">
-          <span className="role-multiselect-value">
-            {selectedNames.length > 0 ? selectedNames.join(", ") : emptyText}
-          </span>
-          <span className="comunicado-acc-chevron" aria-hidden="true">
-            ▸
-          </span>
-        </summary>
-        <div className="role-multiselect-options">
-          {roles.length === 0 ? (
-            <div className="muted-text">No hay roles disponibles.</div>
-          ) : (
-            roles.map((role) => {
-              const checked = value.includes(role.id);
-              return (
-                <label className="role-multiselect-option" key={role.id}>
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggle(role.id)}
-                  />
-                  {/* El chip compartido de roles: ya resuelve el brillo por
-                      tema (`.role-chip--pale` en claro), que con el color
-                      inline se perdía y quedaba lavado. */}
-                  <span
-                    className={`${roleChipClass(role)} role-multiselect-option-name`}
-                    style={roleChipStyle(role)}
-                  >
-                    <span className="role-chip-name">{role.name}</span>
-                  </span>
-                </label>
-              );
-            })
-          )}
-        </div>
-      </details>
-    </label>
+      <button
+        aria-expanded={open}
+        aria-label={label}
+        className={`select role-multiselect-trigger${selectedNames.length > 0 ? "" : " empty"}`}
+        onClick={toggleOpen}
+        type="button"
+      >
+        <span className="role-multiselect-value">
+          {selectedNames.length > 0 ? selectedNames.join(", ") : emptyText}
+        </span>
+        <span aria-hidden="true" className="emoji-select-caret">
+          ▾
+        </span>
+      </button>
+      {open ? createPortal(menu, document.body) : null}
+    </div>
   );
 }
 

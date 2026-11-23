@@ -6106,7 +6106,8 @@ textarea {
   max-width: 100%;
 }
 
-/* Campo multi-select de roles: título arriba + dropdown debajo (como el resto) */
+/* Campo multi-select de roles: rótulo arriba + disparador que mide igual que un
+   `.select` (el disparador lleva las dos clases). */
 .role-multiselect-field {
   display: grid;
   gap: 8px;
@@ -6117,29 +6118,20 @@ textarea {
   font-size: 0.84rem;
 }
 
-/* Dropdown multi-select de roles (estilo acordeón) */
-.role-multiselect {
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(10, 16, 31, 0.88);
-  color: var(--text);
-}
-
-.role-multiselect-summary {
+.role-multiselect-trigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  /* Mismas medidas que un `.select`: el borde lo pone `.role-multiselect`, así
-     que el alto interno es 45 para que el total dé los 47 de los otros campos. */
-  min-height: 45px;
-  padding: 11px 12px;
+  gap: 8px;
+  /* Un `<button>` maqueta su contenido más bajo que un `<select>` nativo (45
+     contra 47 con el mismo padding), así que se fija el alto del `.select` para
+     que los dos midan igual al estar uno al lado del otro. */
+  min-height: 47px;
+  text-align: left;
   cursor: pointer;
-  list-style: none;
 }
 
-.role-multiselect-summary::-webkit-details-marker {
-  display: none;
+.role-multiselect-trigger.empty {
+  color: var(--muted);
 }
 
 .role-multiselect-value {
@@ -6148,24 +6140,13 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* `inherit` y no 0.9rem: con el tamaño propio el texto quedaba más chico que
-     el de los selects de al lado. */
-  font-size: inherit;
-  color: var(--text);
 }
 
-.role-multiselect-options {
-  display: grid;
-  gap: 4px;
-  padding: 10px 14px 12px;
-  border-top: 1px solid rgba(133, 156, 212, 0.12);
-  max-height: 240px;
-  overflow-y: auto;
-}
+/* La lista vive en un portal con `position: fixed` (reusa `.emoji-select-menu`),
+   así abrirla no agrega alto al campo ni corre el panel. */
 
-/* Filas de la lista: checkbox + nombre, en una línea. El selector lleva las dos
-   clases porque `.form-grid > label` (campos) no tiene que ganarle. */
-.role-multiselect .role-multiselect-option {
+/* Filas de la lista: checkbox + nombre, en una línea. */
+.role-multiselect-option {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -6183,6 +6164,12 @@ textarea {
   height: 16px;
   accent-color: var(--accent);
   flex-shrink: 0;
+}
+
+.role-multiselect-empty {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 /* El chip de la lista reusa `.role-chip` (borde, tinte y brillo por tema); acá
@@ -10824,7 +10811,6 @@ select.list-order {
 /* Inputs y campos -> claros */
 :root[data-theme="light"] .select,
 :root[data-theme="light"] input,
-:root[data-theme="light"] .role-multiselect,
 :root[data-theme="light"] .comm-form input,
 :root[data-theme="light"] .comm-form .select,
 :root[data-theme="light"] .comm-form .textarea,
@@ -11032,6 +11018,14 @@ select.list-order {
 
 :root[data-theme="light"] .emoji-select-option:hover {
   background: rgba(60, 85, 130, 0.1);
+}
+
+:root[data-theme="light"] .role-multiselect-option:hover {
+  background: rgba(60, 85, 130, 0.1);
+}
+
+:root[data-theme="light"] .role-multiselect-trigger.empty {
+  color: var(--muted);
 }
 
 :root[data-theme="light"] .emoji-select-option.active {
