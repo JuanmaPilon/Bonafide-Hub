@@ -6154,18 +6154,14 @@ function RoleMultiSelect({
                     checked={checked}
                     onChange={() => toggle(role.id)}
                   />
+                  {/* El chip compartido de roles: ya resuelve el brillo por
+                      tema (`.role-chip--pale` en claro), que con el color
+                      inline se perdía y quedaba lavado. */}
                   <span
-                    className="role-multiselect-option-name"
-                    style={
-                      role.color
-                        ? {
-                            borderColor: `#${role.color.toString(16).padStart(6, "0")}`,
-                            color: `#${role.color.toString(16).padStart(6, "0")}`,
-                          }
-                        : undefined
-                    }
+                    className={`${roleChipClass(role)} role-multiselect-option-name`}
+                    style={roleChipStyle(role)}
                   >
-                    {role.name}
+                    <span className="role-chip-name">{role.name}</span>
                   </span>
                 </label>
               );

@@ -6056,7 +6056,11 @@ textarea {
   align-items: start;
 }
 
-.form-grid label {
+/* Sólo las etiquetas de CAMPO del grid (hijas directas). Con el selector suelto
+   (`.form-grid label`) también entraban las opciones del multi-select de roles,
+   que son `<label>` anidados: heredaban `display: grid` y el tamaño de la
+   etiqueta, así que la lista se veía como chips apilados en vez de filas. */
+.form-grid > label {
   display: grid;
   gap: 8px;
 }
@@ -6090,7 +6094,7 @@ textarea {
   }
 }
 
-.form-grid label span {
+.form-grid > label > span {
   color: #bdd8d2;
   font-size: 0.84rem;
 }
@@ -6126,7 +6130,10 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
+  /* Mismas medidas que un `.select`: el borde lo pone `.role-multiselect`, así
+     que el alto interno es 45 para que el total dé los 47 de los otros campos. */
+  min-height: 45px;
+  padding: 11px 12px;
   cursor: pointer;
   list-style: none;
 }
@@ -6141,7 +6148,9 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.9rem;
+  /* `inherit` y no 0.9rem: con el tamaño propio el texto quedaba más chico que
+     el de los selects de al lado. */
+  font-size: inherit;
   color: var(--text);
 }
 
@@ -6154,7 +6163,9 @@ textarea {
   overflow-y: auto;
 }
 
-.role-multiselect-option {
+/* Filas de la lista: checkbox + nombre, en una línea. El selector lleva las dos
+   clases porque `.form-grid > label` (campos) no tiene que ganarle. */
+.role-multiselect .role-multiselect-option {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -6174,12 +6185,19 @@ textarea {
   flex-shrink: 0;
 }
 
+/* El chip de la lista reusa `.role-chip` (borde, tinte y brillo por tema); acá
+   sólo se lo deja encogerse si el nombre es largo. */
 .role-multiselect-option-name {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  font-size: 0.85rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.role-multiselect-option-name .role-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .empty-state {
@@ -10891,7 +10909,7 @@ select.list-order {
 }
 
 /* Etiquetas de formulario (verde claro) -> más oscuras */
-:root[data-theme="light"] .form-grid label span,
+:root[data-theme="light"] .form-grid > label > span,
 :root[data-theme="light"] .event-date-field > span,
 :root[data-theme="light"] .role-multiselect-field > span,
 :root[data-theme="light"] .comm-form label span,
