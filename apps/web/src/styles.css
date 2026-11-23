@@ -26,6 +26,9 @@
   --accent: #6aa8ff;
   --accent-strong: #ff7043;
   --danger: #fca5a5;
+  /* Color del tilde del checkbox: el acento del tema oscuro es claro, así que
+     el tilde va oscuro para que se lea. En el tema claro se invierte. */
+  --checkbox-mark: #0b1020;
 
   /* Bordes y divisores, en cuatro intensidades. Existen porque el tema claro no
      puede usar los mismos rgba translúcidos que el oscuro: un azul claro al 16%
@@ -6047,6 +6050,73 @@ textarea {
   padding: 11px 12px;
 }
 
+/* Checkbox de toda la app: uno solo, redondo. Antes convivían tres looks (el
+   nativo con `accent-color`, un cuadrado de 5 px en Permisos y otro nativo más
+   chico en el multi-select) y ninguno seguía el tema. Los interruptores usan un
+   input invisible como overlay (`.module-switch`, `.raid-watcher-toggle`,
+   `.suggestion-tier-chip`) y no se ven afectados: su selector pesa más. */
+input[type="checkbox"] {
+  appearance: none;
+  /* La regla de arriba (`input { width: 100% }`) rompe los checkboxes. */
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 0;
+  /* La regla de `.select, input, textarea` le mete 11/12 de padding: con eso la
+     caja no baja de 26x24 aunque se fije el tamaño. */
+  padding: 0;
+  display: inline-grid;
+  place-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* El tilde se dibuja con dos bordes rotados: sin imágenes y escala con el
+   tamaño de la caja. */
+input[type="checkbox"]::before {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid var(--checkbox-mark);
+  border-bottom: 2px solid var(--checkbox-mark);
+  transform: rotate(-45deg) scale(0);
+  transition: transform 140ms ease;
+  /* Centrado óptico: el tilde no es simétrico y sin esto queda bajo. */
+  margin-top: -2px;
+}
+
+input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+input[type="checkbox"]:checked::before {
+  transform: rotate(-45deg) scale(1);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  /* Sin `opacity`: los interruptores (`module-switch`, `raid-watcher-toggle`,
+     `suggestion-tier-chip`) son un input invisible con `opacity: 0` y esta
+     regla pesa más que su `opacity`, así que el overlay asomaba encima del
+     switch deshabilitado. */
+  border-color: var(--line-mid);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6159,10 +6229,8 @@ textarea {
   background: rgba(133, 156, 212, 0.1);
 }
 
+/* El look lo pone la regla global; acá sólo el tamaño dentro de la lista. */
 .role-multiselect-option input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -6992,10 +7060,6 @@ select.list-order {
 }
 
 .roster-pick-box {
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: var(--accent);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -8263,7 +8327,6 @@ select.list-order {
 
 .form-check input {
   margin-top: 2px;
-  accent-color: var(--accent);
 }
 
 .event-discord-status {
@@ -9463,47 +9526,10 @@ select.list-order {
   cursor: pointer;
 }
 
-/* La regla global `input { width: 100% }` rompe los checkboxes. */
-.role-permission-check input {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  margin: 0;
-  border: 1px solid rgba(148, 172, 228, 0.42);
-  border-radius: 5px;
-  background: rgba(10, 16, 31, 0.72);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease;
-}
-
-.role-permission-check input:hover {
-  border-color: rgba(106, 168, 255, 0.85);
-}
-
-.role-permission-check input:checked {
-  border-color: var(--accent);
-  background-color: var(--accent);
-  background-image: linear-gradient(
-    135deg,
-    transparent 42%,
-    #0b1020 42% 52%,
-    transparent 52%
-  );
-  box-shadow: 0 0 0 3px rgba(106, 168, 255, 0.14);
-}
-
-.role-permission-check input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
+/* El look lo pone la regla global de `input[type="checkbox"]`; acá sólo el
+   layout de la fila. */
 .role-permission-check span {
-  cursor: pointer;
-}
+  cursor: pointer;}
 
 .role-controls-row {
   display: flex;
@@ -9546,10 +9572,6 @@ select.list-order {
 
 .role-list-panel .role-list {
   margin-top: 8px;
-}
-
-.role-permission-check input {
-  flex: 0 0 auto;
 }
 
 .role-compare-toolbar {
@@ -10478,6 +10500,8 @@ select.list-order {
   --accent: #1d4ec4;
   --accent-strong: #b84712;
   --danger: #a8261c;
+  /* Sobre el azul oscuro del tema claro, el tilde va blanco. */
+  --checkbox-mark: #ffffff;
   /* Bordes en el tema claro: los mismos cuatro niveles que el oscuro, pero
      oscuros y más opacos, que es lo que se ve sobre blanco. El nivel fuerte
      apunta a 3:1 contra el panel (el mínimo de la WCAG para el borde de un
@@ -10808,9 +10832,11 @@ select.list-order {
   color: #b3261e;
 }
 
-/* Inputs y campos -> claros */
+/* Inputs y campos -> claros. Los checkbox quedan afuera: su relleno lo pinta la
+   regla global (`.select`/`input` les pondría fondo blanco y el tilde blanco
+   desaparecería en tema claro). */
 :root[data-theme="light"] .select,
-:root[data-theme="light"] input,
+:root[data-theme="light"] input:not([type="checkbox"]),
 :root[data-theme="light"] .comm-form input,
 :root[data-theme="light"] .comm-form .select,
 :root[data-theme="light"] .comm-form .textarea,

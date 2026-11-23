@@ -631,6 +631,18 @@ distinta de la otra (el editor de XP fue el primero en usarlo):
   campo —las opciones del multi-select de roles—, que heredaban `display: grid` y
   el tamaño de rótulo: la lista se veía como chips apilados en vez de filas
   checkbox + nombre. Lo mismo con `.form-grid > label > span`.
+- **Checkbox: uno solo para toda la app** (`input[type="checkbox"]`): redondo de
+  18 px, borde `--line-strong`, relleno `--accent` con el tilde en
+  `--checkbox-mark` (oscuro en dark, blanco en light, porque el acento de cada
+  tema tiene luminancia opuesta). Antes convivían tres looks —el nativo con
+  `accent-color`, un cuadrado de 5 px en Permisos y otro más chico en el
+  multi-select— y ninguno seguía el tema. Tres trampas: hay que resetear
+  `padding: 0` (la regla `.select, input, textarea` le mete 11/12 y la caja no
+  baja de 26×24), el tema claro pintaba `input { background }` y borraba el
+  relleno (se excluye con `:not([type="checkbox"])`) y **no** se puede usar
+  `opacity` en `:disabled`: los interruptores son un input invisible con
+  `opacity: 0` y esa regla pesa más, así que el overlay asomaba encima del
+  switch.
 - `role-multiselect` — multi-select de roles (roles vetados, rol cárcel). Usa el
   **mismo patrón que `EmojiSelect`**: el disparador es un `<button>` con la clase
   `.select` (mide igual que un select: 47 px, radio 14, padding 11/12 y el mismo
