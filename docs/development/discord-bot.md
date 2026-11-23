@@ -84,6 +84,38 @@ huérfanas de intentos anteriores.
 
 Solo funcionan dentro de la sala de voz temporal propia (creada por Karpindomo).
 
+### Rol cárcel (`jailedVoiceRoleIds`)
+
+Es un rol de **solo restricción**: no da permisos, se los quita en las salas
+dinámicas. Quien lo tiene no ve, no entra, no habla (ni transmite) y no escribe
+en el chat de **ninguna** sala dinámica; la única excepción es **la sala que creó
+él mismo**, que sigue siendo suya. No puede ver las de los demás, así que no hay
+forma de que lo inviten: para compartir con alguien, el dueño tendría que sacarle
+el rol.
+
+A diferencia de los roles vetados (`bannedVoiceRoleIds`), que `/desperuanizar`
+aplica **a mano y sala por sala**, esto es **global y automático**:
+
+1. **Al crear una sala** se le niegan `ViewChannel`, `Connect`, `Speak` y
+   `SendMessages` a cada rol cárcel, y se le da al creador un permiso **de
+   miembro** que los vuelve a permitir. El permiso de miembro gana sobre el de
+   rol en la resolución de Discord, así que "tiene un overwrite propio que le
+   permite ver" es la marca de "es su sala" — no hace falta guardar el dueño.
+   Se aplica **antes** de mover al creador: si no, entraría a una sala que
+   todavía lo bloquea y el propio evento de voz lo expulsaría.
+2. **Si entra a una sala ajena** (por ejemplo porque un mod lo movió, que
+   Discord permite aunque no pueda entrar solo) se lo **desconecta**.
+3. **Al arrancar** se barre las salas registradas y se les aplica el bloqueo, para
+   no esperar a que cada una se recree. En ese barrido, un miembro cárcel que esté
+   **solo** en una sala se reconoce como dueño (se le deja el permiso) y no se lo
+   expulsa; si está acompañado, se lo saca.
+
+El campo se edita en Admin → Configuraciones → "Rol cárcel", junto al de roles
+vetados. El bot sólo lo **lee**: no está en `BOT_CONFIG_FIELDS`, así que su
+guardado interno nunca lo pisa.
+
+### Comandos de la sala
+
 1. `/desperuanizar` — oculta la sala a los roles vetados (`bannedVoiceRoleIds`);
    agrega el sufijo ` 🚫🇵🇪` al nombre. La respuesta del comando dice, en una
    sola línea, **a quién le quedó oculta**: `Oculta para: Raru` (hasta 8 nombres;

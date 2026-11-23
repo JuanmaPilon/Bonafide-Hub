@@ -13876,6 +13876,19 @@ function App() {
                             emptyText="Ningún rol desperuanizado"
                           />
 
+                          <RoleMultiSelect
+                            label="Rol cárcel"
+                            roles={guildRoles}
+                            value={config.jailedVoiceRoleIds ?? []}
+                            onChange={(next) =>
+                              editConfig((current) => ({
+                                ...current,
+                                jailedVoiceRoleIds: next,
+                              }))
+                            }
+                            emptyText="Ningún rol cárcel"
+                          />
+
                           <label>
                             <span>Canal creador de salas</span>
                             <select

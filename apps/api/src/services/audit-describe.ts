@@ -355,6 +355,14 @@ export function describeGuildConfigChanges(
         (roleId) => roleText(names, roleId) ?? roleId,
       ),
     ),
+    auditNoteChange(
+      "rol cárcel",
+      describeListDelta(
+        previous.jailedVoiceRoleIds,
+        next.jailedVoiceRoleIds,
+        (roleId) => roleText(names, roleId) ?? roleId,
+      ),
+    ),
     {
       after: next.suggestionsDmTiers,
       before: previous.suggestionsDmTiers,

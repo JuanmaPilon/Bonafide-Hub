@@ -9680,6 +9680,10 @@ export async function buildApp() {
       allowedBody.bannedVoiceRoleIds = body.bannedVoiceRoleIds;
     }
 
+    if (body.jailedVoiceRoleIds !== undefined) {
+      allowedBody.jailedVoiceRoleIds = body.jailedVoiceRoleIds;
+    }
+
     if (isOwner && body.suggestionsDmTiers !== undefined) {
       allowedBody.suggestionsDmTiers = body.suggestionsDmTiers;
     }

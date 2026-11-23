@@ -78,6 +78,13 @@ import {
 import { startEventControlScheduler } from "./services/event-control-service.js";
 import { startMemoryGuard } from "./services/memory-guard.js";
 import {
+  applyJailToChannel,
+  enforceJailOnJoin,
+  memberHasJailRole,
+  sweepJailedRooms,
+} from "./services/voice-jail.js";
+import type { VoiceBasedChannel } from "discord.js";
+import {
   addRemoteXp,
   computeXpMultiplier,
   fetchRemoteXpConfig,
@@ -396,6 +403,17 @@ function buildTemporaryVoiceChannelName(displayName: string): string {
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+// Un canal traído con `fetch` viene como `unknown` en los tipos angostos de acá:
+// esto lo angosta al tipo real de discord.js para poder editarle los permisos.
+function isVoiceChannelLike(value: unknown): value is VoiceBasedChannel {
+  return (
+    isObjectRecord(value) &&
+    typeof (value as { isVoiceBased?: unknown }).isVoiceBased === "function" &&
+    (value as { isVoiceBased: () => boolean }).isVoiceBased() &&
+    isObjectRecord((value as { permissionOverwrites?: unknown }).permissionOverwrites)
+  );
 }
 
 function hasDeleteMethod(
@@ -886,6 +904,16 @@ async function createDynamicVoiceChannelForMember(newState: {
       }>;
       fetch: (channelId: string) => Promise<unknown>;
     };
+    members?: {
+      cache?: {
+        get: (
+          memberId: string,
+        ) =>
+          | { roles: { cache: { has: (roleId: string) => boolean } } }
+          | null
+          | undefined;
+      };
+    };
   };
   channelId: string | null;
   channel: {
@@ -895,20 +923,20 @@ async function createDynamicVoiceChannelForMember(newState: {
   } | null;
   member?: { displayName: string; id: string } | null;
   setChannel: (channelId: string) => Promise<unknown>;
-}): Promise<void> {
+}): Promise<string | null> {
   if (!newState.channelId || !newState.member) {
-    return;
+    return null;
   }
 
   const guildConfig = await getGuildConfig(newState.guild.id);
   const creatorChannelId = guildConfig.dynamicVoiceCreateChannelId;
   if (!creatorChannelId || newState.channelId !== creatorChannelId) {
-    return;
+    return null;
   }
 
   const creatorChannel = newState.channel;
   if (!creatorChannel || !creatorChannel.isVoiceBased()) {
-    return;
+    return null;
   }
 
   const fetchChannel = (channelId: string): Promise<unknown> =>
@@ -958,6 +986,35 @@ async function createDynamicVoiceChannelForMember(newState: {
     type: ChannelType.GuildVoice,
     reason: `Dynamic voice room for ${newState.member.id}`,
   });
+
+  // Rol cárcel: se aplica ACÁ, antes de moverlo, porque si no el creador entra
+  // a una sala que todavía lo bloquea y el propio VoiceStateUpdate lo expulsa.
+  // El allow de miembro deja su sala por encima del deny del rol, y sólo se pone
+  // si el creador tiene el rol: si no, no hace falta un permiso de más.
+  const jailRoleIds = guildConfig.jailedVoiceRoleIds ?? [];
+  if (jailRoleIds.length > 0 && newState.member) {
+      const creator =
+        newState.guild.members?.cache?.get(newState.member.id) ?? null;
+      if (memberHasJailRole(creator, jailRoleIds)) {
+        const created = await fetchChannel(createdChannel.id).catch(() => null);
+        if (isVoiceChannelLike(created)) {
+          const jail = await applyJailToChannel(created, jailRoleIds, {
+            ownerId: newState.member.id,
+            reason: "Rol cárcel (sala nueva)",
+          }).catch(() => ({ failed: [] }));
+          if (jail.failed.length > 0) {
+            console.warn(
+              "[discord-bot] no se pudo aplicar el rol cárcel a una sala nueva",
+              {
+                guildId: newState.guild.id,
+                channelId: createdChannel.id,
+                failed: jail.failed,
+              },
+            );
+          }
+      }
+    }
+  }
 
   // 1) A la categoría del creador.
   if (parentId && hasSetParent(createdChannel)) {
@@ -1071,7 +1128,7 @@ async function createDynamicVoiceChannelForMember(newState: {
     .catch(() => false);
 
   if (moved) {
-    return;
+    return createdChannel.id;
   }
 
   const channelToDelete = await newState.guild.channels
@@ -1083,6 +1140,7 @@ async function createDynamicVoiceChannelForMember(newState: {
   }
 
   await removeTemporaryVoiceChannelId(newState.guild.id, createdChannel.id);
+  return null;
 }
 
 async function maybeDeleteTemporaryVoiceChannel(channelState: {
@@ -1185,6 +1243,29 @@ async function sweepOrphanTemporaryVoiceChannels(guild: Guild): Promise<void> {
   } catch (error: unknown) {
     console.warn(
       `[discord-bot] no se pudo barrer las salas dinamicas: ${getErrorMessage(error)}`,
+    );
+  }
+}
+
+// Rol cárcel: al arrancar, las salas que ya existían quedan bloqueadas para esos
+// roles (las nuevas nacen bloqueadas). Sin esto había que esperar a que cada
+// sala se reciclara para que la restricción se aplicara.
+async function sweepVoiceJail(guild: Guild): Promise<void> {
+  try {
+    const config = await getGuildConfig(guild.id);
+    const roleIds = config.jailedVoiceRoleIds ?? [];
+    const channelIds = config.temporaryVoiceChannelIds ?? [];
+    if (roleIds.length === 0 || channelIds.length === 0) {
+      return;
+    }
+    const result = await sweepJailedRooms(guild, roleIds, channelIds);
+    console.log(
+      `[discord-bot] rol carcel: ${result.blocked} sala/s bloqueadas, ${result.kicked} expulsado/s (guild ${guild.id})`,
+      result.failed.length > 0 ? { fallidos: result.failed } : undefined,
+    );
+  } catch (error: unknown) {
+    console.warn(
+      `[discord-bot] no se pudo aplicar el rol carcel: ${getErrorMessage(error)}`,
     );
   }
 }
@@ -1327,6 +1408,7 @@ client.once(Events.ClientReady, (readyClient) => {
   trackGuildPresencesAtStartup(readyClient);
   for (const guild of readyClient.guilds.cache.values()) {
     void sweepOrphanTemporaryVoiceChannels(guild);
+    void sweepVoiceJail(guild);
   }
 });
 
@@ -5418,6 +5500,28 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
       const isAfkChannel = newChannelId === newState.guild.afkChannelId;
       if (!isBot && !isAfkChannel) {
         openVoiceSession(guildId, userId, newChannelId);
+      }
+    }
+  }
+
+  // Rol cárcel: sólo puede estar en la sala que creó. Va antes de crear salas
+  // para que un miembro cárcel que entra al canal creador no genere la suya y
+  // después quede bloqueado en ella.
+  if (
+    newChannelId &&
+    newChannelId !== oldChannelId &&
+    newState.member &&
+    newState.channel
+  ) {
+    const jailRoleIds = (await getGuildConfig(guildId)).jailedVoiceRoleIds ?? [];
+    if (jailRoleIds.length > 0) {
+      const isTemporary = await isTemporaryVoiceChannel(guildId, newChannelId);
+      if (isTemporary && newState.channel.isVoiceBased()) {
+        await enforceJailOnJoin(
+          newState.channel,
+          newState.member,
+          jailRoleIds,
+        ).catch(() => false);
       }
     }
   }

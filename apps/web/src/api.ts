@@ -28,6 +28,9 @@ export type GuildConfig = {
   eventReportChannelId?: string;
   eventReportRoleId?: string;
   eventRoles?: EventRoleOption[];
+  // Roles "cárcel": no ven, no entran ni hablan en ninguna sala dinámica; sólo
+  // la que crean ellos mismos.
+  jailedVoiceRoleIds?: string[];
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
   karutaRareWishlistMin?: number;

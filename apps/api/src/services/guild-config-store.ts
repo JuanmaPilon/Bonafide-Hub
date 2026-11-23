@@ -275,6 +275,10 @@ export type GuildConfig = {
   eventRoles?: EventRoleOption[];
   eventSpecEnabled?: boolean;
   eventSpecLabel?: string;
+  // Roles "cárcel": no ven, no entran ni hablan en NINGUNA sala dinámica; sólo
+  // la que crean ellos mismos. Es global, a diferencia de bannedVoiceRoleIds,
+  // que /desperuanizar aplica sala por sala.
+  jailedVoiceRoleIds?: string[];
   karutaBotUserId?: string;
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
@@ -321,6 +325,7 @@ function toGuildConfig(
     eventRoles: unknown;
     eventSpecEnabled: boolean;
     eventSpecLabel: string | null;
+    jailedVoiceRoleIds: string[];
     karutaBotUserId: string | null;
     karutaChannelId: string | null;
     karutaRarePrintMax: number;
@@ -376,6 +381,7 @@ function toGuildConfig(
     eventRoles: normalizeEventRoles(record.eventRoles) ?? undefined,
     eventSpecEnabled: record.eventSpecEnabled,
     eventSpecLabel: record.eventSpecLabel ?? undefined,
+    jailedVoiceRoleIds: record.jailedVoiceRoleIds,
     karutaBotUserId: record.karutaBotUserId ?? undefined,
     karutaChannelId: record.karutaChannelId ?? undefined,
     karutaRarePrintMax: record.karutaRarePrintMax,
@@ -423,6 +429,7 @@ type NormalizedGuildConfig = {
   eventRoles?: EventRoleOption[];
   eventSpecEnabled: boolean;
   eventSpecLabel?: string;
+  jailedVoiceRoleIds: string[];
   karutaBotUserId?: string;
   karutaChannelId?: string;
   karutaRarePrintMax: number;
@@ -484,6 +491,9 @@ function normalizeGuildConfig(config: GuildConfig): NormalizedGuildConfig {
     eventRoles: normalizeEventRoles(config.eventRoles) ?? [],
     eventSpecEnabled: config.eventSpecEnabled ?? true,
     eventSpecLabel: config.eventSpecLabel?.trim().slice(0, 24) || undefined,
+    jailedVoiceRoleIds: (config.jailedVoiceRoleIds ?? []).filter(
+      (roleId) => typeof roleId === "string" && roleId.length > 0,
+    ),
     karutaBotUserId: config.karutaBotUserId,
     karutaChannelId: config.karutaChannelId,
     karutaRarePrintMax: config.karutaRarePrintMax ?? 10,
@@ -541,6 +551,7 @@ export async function replaceGuildConfig(
         guildId,
         rosterRanks: normalized.rosterRanks,
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
+        jailedVoiceRoleIds: normalized.jailedVoiceRoleIds,
         birthdayChannelId: normalized.birthdayChannelId,
         birthdayRoleId: normalized.birthdayRoleId,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,
@@ -585,6 +596,7 @@ export async function replaceGuildConfig(
       update: {
         rosterRanks: normalized.rosterRanks,
         bannedVoiceRoleIds: normalized.bannedVoiceRoleIds,
+        jailedVoiceRoleIds: normalized.jailedVoiceRoleIds,
         birthdayChannelId: normalized.birthdayChannelId,
         birthdayRoleId: normalized.birthdayRoleId,
         dailyMessagesChannelId: normalized.dailyMessagesChannelId,

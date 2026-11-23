@@ -1352,6 +1352,12 @@ Auth: header `x-bot-token` == `BOT_API_TOKEN`.
    silencio. Pasó con `birthdayRoleId` / `birthdayChannelId`: el bot los guardaba
    en cada barrido y el API los tiraba, así que el bot nunca supo qué rol sacar y
    el rol de cumpleaños quedaba puesto para siempre.
+
+   Al revés también importa: un campo que **sólo escribe el hub** no va en
+   `BOT_CONFIG_FIELDS`, porque entonces el guardado interno del bot puede pisarlo
+   con una copia vieja. `jailedVoiceRoleIds` (rol cárcel) es de ese caso: se
+   administra en Admin y el bot únicamente lo lee; `upsertGuildConfig` mezcla
+   (`{...current, ...partial}`), así que el PUT del bot lo preserva.
 2. `GET /internal/guilds/:guildId/xp-config`
 3. `POST /internal/guilds/:guildId/xp/add`
 4. `POST /internal/guilds/:guildId/xp/level`

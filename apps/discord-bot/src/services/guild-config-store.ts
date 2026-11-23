@@ -14,6 +14,9 @@ type GuildConfig = {
   defaultRoleId?: string;
   dynamicVoiceCreateChannelId?: string;
   dynamicVoiceCategoryId?: string;
+  // Roles "cárcel": no ven, no entran ni hablan en ninguna sala dinámica; sólo
+  // la que crean ellos mismos.
+  jailedVoiceRoleIds?: string[];
   karutaBotUserId?: string;
   karutaChannelId?: string;
   karutaRarePrintMax?: number;
@@ -62,6 +65,7 @@ function normalizeGuildConfig(input: GuildConfig): GuildConfig {
     defaultRoleId: input.defaultRoleId,
     dynamicVoiceCreateChannelId: input.dynamicVoiceCreateChannelId,
     dynamicVoiceCategoryId: input.dynamicVoiceCategoryId,
+    jailedVoiceRoleIds: input.jailedVoiceRoleIds ?? [],
     karutaBotUserId: input.karutaBotUserId,
     karutaChannelId: input.karutaChannelId,
     karutaRarePrintMax: input.karutaRarePrintMax ?? 10,
