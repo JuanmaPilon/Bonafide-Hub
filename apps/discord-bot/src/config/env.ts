@@ -19,6 +19,9 @@ const envSchema = z.object({
   BOT_CONFIG_API_URL: z.string().url().optional(),
   BOT_CONFIG_API_TOKEN: z.string().min(16).optional(),
   BOT_DISABLED: z.string().optional(),
+  // La música la lleva un bot externo (Jockie): con esto en "true" los comandos
+  // de audio (play, pause, queue…) responden redirigiendo en vez de reproducir.
+  MUSIC_DISABLED: z.string().optional(),
   // Opcional: prefix de los comandos de chat ("oe derek"). Sin valor usa "oe".
   BOT_PREFIX: z.string().optional(),
   // Opcional: cuántos mensajes del canal de Karuta se revisan al arrancar para

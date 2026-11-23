@@ -48,6 +48,16 @@
 
 ### Música
 
+> ⚠️ **Desactivada en producción.** La música la lleva un bot externo (**Jockie**),
+> que anda mejor que el streaming propio (YouTube desde una IP de datacenter da
+> 403 y obligaba a caer a SoundCloud). Con `MUSIC_DISABLED` los comandos siguen
+> **registrados** pero responden un aviso ephemeral que redirige a Jockie: si se
+> desregistraran, Discord contestaría "comando desconocido" y no habría forma de
+> explicar qué usar. El aviso etiqueta a Jockie si está en el servidor (se lo
+> busca por username, `bot` + `/jockie/i`); si no, lo nombra en texto. Los botones
+> del player (⏯️ ⏭️ …) también redirigen, por si queda algún mensaje viejo con
+> botones. Sin la variable, todo funciona como antes.
+
 1. `/play cancion:<texto o URL> [fuente:youtube|soundcloud]` — reproduce o encola un tema (YouTube por defecto; SoundCloud funciona desde IPs de datacenter, YouTube no)
 2. `/pause`, `/resume`
 3. `/skip`

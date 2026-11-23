@@ -20,7 +20,9 @@ de la web incluye `allowedHosts` para `bonafide-cum.com` y sus subdominios.
 4. `BOT_CONFIG_API_URL`
 5. `BOT_CONFIG_API_TOKEN`
 6. `BOT_DISABLED`
-7. `MEMORY_RESTART_MB` — tope de memoria del contenedor que dispara el
+7. `MUSIC_DISABLED` — con `true`, los comandos de audio responden redirigiendo a
+   Jockie en vez de reproducir (ver *Música*)
+8. `MEMORY_RESTART_MB` — tope de memoria del contenedor que dispara el
    auto-reinicio (ver *Memory*). Sin valor usa 256; en producción está en 224.
 
 ### API

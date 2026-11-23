@@ -77,6 +77,7 @@ import {
 } from "./services/nickname-mark.js";
 import { startEventControlScheduler } from "./services/event-control-service.js";
 import { startMemoryGuard } from "./services/memory-guard.js";
+import { musicDisabledMessage, replyMusicDisabled } from "./services/music-redirect.js";
 import {
   applyJailToChannel,
   enforceJailOnJoin,
@@ -2745,6 +2746,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isButton()) {
     // Botones del player de música (estilo Rythm).
     if (interaction.customId.startsWith("music:")) {
+      if (env.MUSIC_DISABLED) {
+        await interaction
+          .reply({
+            content: musicDisabledMessage(interaction.guild),
+            ephemeral: true,
+          })
+          .catch(() => undefined);
+        return;
+      }
       await handleMusicButton(interaction);
     }
     return;
@@ -3068,6 +3078,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     interaction.commandName === "stop" ||
     interaction.commandName === "leave"
   ) {
+    // La música la lleva Jockie: el comando sigue registrado para poder
+    // explicar qué usar en vez de dejar un "comando desconocido".
+    if (env.MUSIC_DISABLED) {
+      await replyMusicDisabled(interaction);
+      return;
+    }
     await handleMusicCommand(interaction);
     return;
   }
