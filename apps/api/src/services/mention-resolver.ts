@@ -19,10 +19,16 @@ type MentionNames = {
   // Nombres con espacios ("🔰Raid Officer"), del más largo al más corto.
   multiWord: Array<{ alias: string; mention: string }>;
   names: Map<string, string>;
+  // id -> nombre real del recurso. Para las categorías es lo que se muestra:
+  // Discord no las puede enlazar, así que se escribe su nombre real.
+  nameById: Map<string, string>;
 };
 
-// Texto, anuncios y foro: los que se pueden enlazar con <#id>.
-const MENTIONABLE_CHANNEL_TYPES = new Set([0, 5, 15]);
+// Texto, voz, anuncios, escenario y foro: los que se pueden enlazar con <#id>.
+// Las CATEGORÍAS (4) quedan afuera a propósito: no tienen vista propia, así que
+// un `<#id>` de categoría no lleva a ningún lado. Se resuelven a su nombre.
+const MENTIONABLE_CHANNEL_TYPES = new Set([0, 2, 5, 13, 15]);
+const CATEGORY_CHANNEL_TYPE = 4;
 
 // En Discord los nombres vienen decorados ("🗯️︱general", "🔰Raid Officer"),
 // así que además del nombre real se registra la versión limpia: sin emojis ni
@@ -100,14 +106,23 @@ async function fetchRolesForMentions(
 async function fetchChannelsForMentions(
   guildId: string,
   token: string,
-): Promise<Named[]> {
+): Promise<{ categories: Named[]; mentionable: Named[] }> {
   const channels = await discordFetch<DiscordChannel[]>(
     `/guilds/${encodeURIComponent(guildId)}/channels`,
     token,
   );
-  return channels
-    .filter((channel) => MENTIONABLE_CHANNEL_TYPES.has(channel.type))
-    .map((channel) => ({ id: channel.id, name: channel.name }));
+  const toNamed = (channel: DiscordChannel): Named => ({
+    id: channel.id,
+    name: channel.name,
+  });
+  return {
+    categories: channels
+      .filter((channel) => channel.type === CATEGORY_CHANNEL_TYPE)
+      .map(toNamed),
+    mentionable: channels
+      .filter((channel) => MENTIONABLE_CHANNEL_TYPES.has(channel.type))
+      .map(toNamed),
+  };
 }
 
 // Best-effort: si una consulta falla, esa lista queda vacía y el texto se
@@ -145,9 +160,11 @@ function buildNames(
   mentionOf: (id: string) => string,
 ): MentionNames {
   const names = new Map<string, string>();
+  const nameById = new Map<string, string>();
   // Los nombres exactos se registran primero: si lo escrito coincide con un
   // nombre real, gana sobre el alias limpio de otro.
   for (const item of items) {
+    nameById.set(item.id, item.name);
     const key = item.name.toLowerCase();
     if (!names.has(key)) {
       names.set(key, item.id);
@@ -177,7 +194,7 @@ function buildNames(
   }
   multiWord.sort((a, b) => b.alias.length - a.alias.length);
 
-  return { multiWord, names };
+  return { multiWord, nameById, names };
 }
 
 function multiWordPattern(alias: string): RegExp {
@@ -221,7 +238,7 @@ export async function resolveMentions(
     return content;
   }
 
-  const [members, roles, channels] = await Promise.all([
+  const [members, roles, channelLists] = await Promise.all([
     wantsUsers
       ? safeLoad(() => fetchMembersForMentions(guildId, token), [] as Named[])
       : Promise.resolve([] as Named[]),
@@ -229,13 +246,17 @@ export async function resolveMentions(
       ? safeLoad(() => fetchRolesForMentions(guildId, token), [] as Named[])
       : Promise.resolve([] as Named[]),
     wantsChannels
-      ? safeLoad(() => fetchChannelsForMentions(guildId, token), [] as Named[])
-      : Promise.resolve([] as Named[]),
+      ? safeLoad(() => fetchChannelsForMentions(guildId, token), {
+          categories: [] as Named[],
+          mentionable: [] as Named[],
+        })
+      : Promise.resolve({ categories: [] as Named[], mentionable: [] as Named[] }),
   ]);
 
   const userNames = buildNames(members, (id) => `<@${id}>`);
   const roleNames = buildNames(roles, (id) => `<@&${id}>`);
-  const channelNames = buildNames(channels, (id) => `<#${id}>`);
+  const channelNames = buildNames(channelLists.mentionable, (id) => `<#${id}>`);
+  const categoryNames = buildNames(channelLists.categories, (id) => `<#${id}>`);
 
   let resolved = content;
 
@@ -247,12 +268,23 @@ export async function resolveMentions(
 
   // Los canales van antes que los usuarios: el "<#id>" que queda ya no lo
   // toca el reemplazo de "@".
-  if (channelNames.names.size > 0) {
+  if (channelNames.names.size > 0 || categoryNames.names.size > 0) {
     resolved = resolved.replace(
       CHANNEL_REFERENCE_ALL,
       (match, name: string) => {
         const found = lookupName(channelNames.names, name);
-        return found ? `<#${found.id}>${found.tail}` : match;
+        if (found) {
+          return `<#${found.id}>${found.tail}`;
+        }
+        // Una categoría NO se puede enlazar en Discord (no tiene vista propia),
+        // así que se escribe su nombre real en negrita: quien lee sabe cómo se
+        // llama la categoría exacta en la barra lateral, con emoji incluido.
+        const category = lookupName(categoryNames.names, name);
+        if (category) {
+          const real = categoryNames.nameById.get(category.id) ?? name;
+          return `**${real}**${category.tail}`;
+        }
+        return match;
       },
     );
   }

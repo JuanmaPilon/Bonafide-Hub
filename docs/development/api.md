@@ -139,7 +139,22 @@ resuelven antes que el token de `@` y del nombre más largo al más corto
 
 El `#` se toma como canal únicamente cuando no viene pegado a una palabra o a la
 barra de una URL (`pagina#ancla` y `C#` quedan intactos) y con algo detrás
-(`# Título` es un heading). Los canales enlazables son texto, anuncios y foro.
+(`# Título` es un heading).
+
+**Qué tipos se enlazan y cuáles no.** Se resuelven a `<#id>` los que Discord
+puede abrir: texto, **voz**, anuncios, escenario y foro. Los de voz entraron
+después porque en un servidor de WoW lo natural es `#Raid` o `#Salas`.
+
+Las **categorías no se pueden enlazar**: no tienen vista propia, así que un
+`<#id>` de categoría no lleva a ningún lado. En vez de dejar algo roto, el
+nombre se escribe con el **nombre real en negrita**: `#Voz` → `**Voz🔊**`. Así
+quien lee ve cómo se llama la categoría exacta en la barra lateral, con emoji
+incluido.
+
+Si un canal y una categoría se llaman igual, **gana el canal**: `#Admin` enlaza a
+`🗝️︱admin` (clickeable) y `#Admin🔐` escribe la categoría en negrita. La
+precedencia está fija a propósito: el enlace sirve, el nombre de la categoría
+sólo informa.
 
 Mensajes diarios (loro de Karpindomo):
 
