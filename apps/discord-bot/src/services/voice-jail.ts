@@ -146,21 +146,32 @@ export async function sweepJailedRooms(
     const jailMembers = [...channel.members.values()].filter((member) =>
       memberHasJailRole(member, roleIds),
     );
-    const ownerId =
+    // Dueño de la sala, en orden de confianza:
+    // 1. Tiene el permiso de miembro que se pone al CREAR la sala (la marca
+    //    buena). Importante leerlo ANTES de aplicar el bloqueo: si está
+    //    acompañado, el bloqueo no le da allow a nadie y la marca se perdería.
+    // 2. Es el único que queda adentro (salas creadas antes de esta función,
+    //    que no tienen la marca).
+    const owners = new Set(
+      jailMembers
+        .filter((member) => hasOwnerAllow(channel, member.id))
+        .map((member) => member.id),
+    );
+    const soloUnCarcel =
       jailMembers.length === 1 && channel.members.size === 1
         ? jailMembers[0].id
         : null;
 
     const result = await applyJailToChannel(channel, roleIds, {
-      ownerId,
+      ownerId: owners.size > 0 ? [...owners][0] : soloUnCarcel,
       reason: "Rol cárcel (barrido automático)",
     });
     failed.push(...result.failed);
     blocked += 1;
 
-    // Con más gente en la sala, el cárcel no tiene por qué estar: se lo saca.
+    // Cualquier otro cárcel no tiene por qué estar: se lo saca.
     for (const member of jailMembers) {
-      if (member.id === ownerId) {
+      if (owners.has(member.id) || member.id === soloUnCarcel) {
         continue;
       }
       const ok = await member.voice

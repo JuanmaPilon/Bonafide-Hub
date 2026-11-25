@@ -116,9 +116,13 @@ aplica **a mano y sala por sala**, esto es **global y automático**:
 2. **Si entra a una sala ajena** (por ejemplo porque un mod lo movió, que
    Discord permite aunque no pueda entrar solo) se lo **desconecta**.
 3. **Al arrancar** se barre las salas registradas y se les aplica el bloqueo, para
-   no esperar a que cada una se recree. En ese barrido, un miembro cárcel que esté
-   **solo** en una sala se reconoce como dueño (se le deja el permiso) y no se lo
-   expulsa; si está acompañado, se lo saca.
+   no esperar a que cada una se recree. A quién se reconoce como dueño, en ese
+   orden: **primero** el que ya tiene el permiso de miembro que se pone al crear
+   la sala (la marca buena, y hay que leerla **antes** de aplicar el bloqueo), y
+   si no hay marca, el que está **solo** en la sala. A los dueños no se los toca;
+   al resto de los cárcel se los desconecta. Sin la marca, un cárcel que esté en
+   su propia sala **con alguien más** se llevaría un expulsión indebida al
+   reiniciar el bot.
 
 El campo se edita en Admin → Configuraciones → "Rol cárcel", junto al de roles
 vetados. El bot sólo lo **lee**: no está en `BOT_CONFIG_FIELDS`, así que su
