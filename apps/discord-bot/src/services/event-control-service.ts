@@ -240,6 +240,21 @@ export function computeMissingMembers(
   return rosterMembers.filter((member) => !signedUserIds.has(member.id));
 }
 
+// Lista de un campo del informe. Un field de Discord no acepta valor vacío, así
+// que con la lista vacía va un guion: el "(0)" del título ya dice que no falta
+// nadie.
+function missingList(
+  members: Array<{ bench: boolean; displayName: string; id: string }>,
+): string {
+  if (members.length === 0) {
+    return "—";
+  }
+  return members
+    .map((member) => `• ${member.displayName}`)
+    .join("\n")
+    .slice(0, 1024);
+}
+
 function formatEventDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -389,29 +404,17 @@ async function processReport(
         },
         {
           // El ícono de raid del servidor es el dragón: el mismo que el tipo
-          // "raid" del catálogo de la web.
-          name: "🐉 No se anotaron",
-          value:
-            missingCore.length > 0
-              ? missingCore
-                  .map((m) => `• ${m.displayName}`)
-                  .join("\n")
-                  .slice(0, 1024)
-              : "Todos se anotaron.",
+          // "raid" del catálogo de la web. El campo va siempre (con "(0)" si no
+          // falta nadie): esconderlo hacía pensar que el informe estaba roto.
+          name: `🐉 Raid sin anotarse (${missingCore.length})`,
+          value: missingList(missingCore),
         },
-        // El bench cuenta como roster, pero se lista aparte para que no se lea
-        // como si faltara el core.
-        ...(missingBench.length > 0
-          ? [
-              {
-                name: `🪑 Bench sin anotarse (${missingBench.length})`,
-                value: missingBench
-                  .map((m) => `• ${m.displayName}`)
-                  .join("\n")
-                  .slice(0, 1024),
-              },
-            ]
-          : []),
+        {
+          // El bench se lista aparte del raid para que no se lea como si
+          // faltara el core.
+          name: `🪑 Bench sin anotarse (${missingBench.length})`,
+          value: missingList(missingBench),
+        },
       )
       .setFooter({ text: "Bonafide Hub · Informe de asistencia" });
 

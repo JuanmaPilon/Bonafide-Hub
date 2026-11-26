@@ -291,11 +291,14 @@ el bot maneja los clicks con mensajes efímeros y guarda por API interna:
    evento de ese payload trae `benchRoleId` (el rol de Bench del roster) cuando el
    evento es de WoW: los dos roles suman a la hora de contar, avisar y listar,
    porque el bench es parte del roster. El informe lleva los conteos en
-   `Anotados` (✅ confirmados · 🪑 bench · ⏰ tarde · ❌ no asisten), la lista de
-   `🐉 No se anotaron` **sin el número en el título** —el título del core no se
-   cuenta, y cuando no falta nadie el campo dice *Todos se anotaron.*— y el bench
-   en un campo aparte, con su cuenta, para que no se lea como si faltara el core.
-   El **recordatorio manual**
+   `Anotados` (✅ confirmados · 🪑 bench · ⏰ tarde · ❌ no asisten) y **dos campos
+   simétricos**, uno por grupo: `🐉 Raid sin anotarse (N)` y
+   `🪑 Bench sin anotarse (N)`, cada uno con la cuenta en el título y la lista de
+   nombres abajo. Los dos van **siempre**, aunque la cuenta sea 0: esconder el
+   que quedaba vacío hacía pensar que el informe estaba roto. Un field de
+   Discord no acepta valor vacío, así que con 0 el valor es `—`. El raid y el
+   bench se listan aparte para que un bench sin anotarse no se lea como si
+   faltara el core. El **recordatorio manual**
    de "anotate" (`POST .../events/:eventId/remind`) no pasa por acá: lo manda el
    API con `sendDirectMessage` (token del bot) cuando el staff lo pide desde el
    control del roster.
