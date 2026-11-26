@@ -1125,6 +1125,16 @@ próxima fecha **sin publicar nada en Discord**; el scheduler
 (`recurrencePublishDaysBefore`). Antes `resetSeriesOccurrence` republicaba el
 aviso en el acto, así que la serie aparecía de nuevo apenas terminaba la raid.
 
+**La fecha del título archivado se calcula en la zona de la guild.** Al archivar
+la ocurrencia, la copia del historial se llama `<título> - <dd/mm/yyyy>` (con el
+día de la semana delante si el título no lo nombra: "Raid MIERCOLES - 25/11/2026"
+en vez de "Raid MIERCOLES - MIÉRCOLES 25/11/2026", que se lee como un rango). El
+servidor corre en UTC y la raid arranca 21:00, así que formatear en otra zona
+movía la fecha al día siguiente: estaba en `Europe/Madrid` y un raid del miércoles
+se archivaba como "JUEVES 26/11". La zona vive en un solo lugar,
+`GUILD_TIME_ZONE` de [guild-time.ts](../../apps/api/src/services/guild-time.ts),
+compartido por el store de eventos, el publicador y los logs de raid. Un informe
+de asistencia que muestre una fecha corrida un día es este bug, no el informe.
 **Cumpleaños.** Es un evento más (`type: "birthday"`) de la plantilla `cumple`,
 no un módulo aparte: aparece en la misma grilla, calendario y búsqueda, y se crea
 con el alta normal de eventos eligiendo esa plantilla (la repetición de 12 meses

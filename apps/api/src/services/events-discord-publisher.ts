@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { env } from "../config/env.js";
 import { formatDurationHours } from "./duration.js";
 import type { EventTag } from "./events-store.js";
+import { GUILD_TIME_ZONE } from "./guild-time.js";
 
 // ── Publicación de eventos del Módulo X en Discord ──────────────────
 // El API habla directo con Discord usando el token del bot (igual que la
@@ -16,8 +17,6 @@ import type { EventTag } from "./events-store.js";
 // tiene un estilo de timestamp que sea "día + hora" (los suyos son fecha
 // completa o sólo la hora), así que el día se calcula acá en la zona de la guild
 // y la hora viaja como timestamp de Discord, que se localiza sola para cada uno.
-const GUILD_TIME_ZONE = "America/Argentina/Buenos_Aires";
-
 function weekdayName(date: Date): string {
   const name = new Intl.DateTimeFormat("es-AR", {
     timeZone: GUILD_TIME_ZONE,

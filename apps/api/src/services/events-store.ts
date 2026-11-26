@@ -1,4 +1,5 @@
 import { Prisma, prisma } from "../db/prisma.js";
+import { GUILD_TIME_ZONE } from "./guild-time.js";
 import {
   advanceByUnit,
   parseRecurrenceUnit,
@@ -1561,18 +1562,40 @@ export async function deleteSignup(
   return result.count > 0;
 }
 
+// Sin tildes y en mayúsculas: el título lo escribe una persona ("MIERCOLES")
+// y el día que devuelve Intl viene con tilde ("miércoles").
+function normalizeDay(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
 function archivedEventTitle(title: string, startsAt: Date): string {
-  const dateParts = new Intl.DateTimeFormat("es-ES", {
+  // En la zona de la guild: el servidor corre en UTC y un evento de las 21:00
+  // cae en el día siguiente si se formatea en otra zona (el raid del miércoles
+  // se archivaba como jueves).
+  const dateParts = new Intl.DateTimeFormat("es-AR", {
     day: "2-digit",
     month: "2-digit",
-    timeZone: "Europe/Madrid",
+    timeZone: GUILD_TIME_ZONE,
     weekday: "long",
     year: "numeric",
   }).formatToParts(startsAt);
   const getPart = (type: string): string =>
     dateParts.find((part) => part.type === type)?.value ?? "";
 
-  return `${title.trim()} - ${getPart("weekday").toUpperCase()} ${getPart("day")}/${getPart("month")}/${getPart("year")}`;
+  const cleaned = title.trim();
+  const date = `${getPart("day")}/${getPart("month")}/${getPart("year")}`;
+  const weekday = getPart("weekday").toUpperCase();
+
+  // "Raid MIERCOLES - MIÉRCOLES 25/11" se lee como un rango de dos días: si el
+  // título ya dice el día, la fecha sola alcanza para distinguir la ocurrencia.
+  if (normalizeDay(cleaned).includes(normalizeDay(weekday))) {
+    return `${cleaned} - ${date}`;
+  }
+
+  return `${cleaned} - ${weekday} ${date}`;
 }
 
 // Archiva la ocurrencia que terminó: crea una fila "completed" con los datos de

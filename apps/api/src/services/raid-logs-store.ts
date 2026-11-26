@@ -1,5 +1,6 @@
 import { prisma } from "../db/prisma.js";
 import { env } from "../config/env.js";
+import { GUILD_TIME_ZONE } from "./guild-time.js";
 
 export type RaidFightSummary = {
   // Id de encuentro de Warcraft Logs: es la identidad del boss, porque el
@@ -172,7 +173,7 @@ export function raidTitleWithDate(
   const date = firstFightAt.toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
-    timeZone: "America/Argentina/Buenos_Aires",
+    timeZone: GUILD_TIME_ZONE,
     year: "numeric",
   });
   return `${clean} · ${date}`;
